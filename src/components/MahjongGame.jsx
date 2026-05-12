@@ -15,7 +15,7 @@ const TILE_TYPES = [
 ];
 
 const COLS = 8;
-const TOTAL_PAIRS = 36;
+const TOTAL_PAIRS = 35;
 
 function seededRand(seed) {
   let s = (seed || 42) % 2147483647;
@@ -39,10 +39,13 @@ function buildTiles(seed) {
 }
 
 function isFree(tiles, idx) {
-  if (tiles[idx].matched) return false;
+  const tile = tiles[idx];
+  if (!tile || tile.matched) return false;
   const col = idx % COLS;
-  const hasLeft = col > 0 && !tiles[idx - 1].matched;
-  const hasRight = col < COLS - 1 && !tiles[idx + 1].matched;
+  const leftTile = col > 0 ? tiles[idx - 1] : null;
+  const rightTile = col < COLS - 1 ? tiles[idx + 1] : null;
+  const hasLeft = leftTile != null && !leftTile.matched;
+  const hasRight = rightTile != null && !rightTile.matched;
   return !(hasLeft && hasRight);
 }
 

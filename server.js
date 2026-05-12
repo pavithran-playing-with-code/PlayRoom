@@ -48,6 +48,9 @@ app.use(cors({
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+// ── Trust proxy (fixes express-rate-limit X-Forwarded-For warning)
+app.set("trust proxy", 1);
+
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 app.use("/api/", rateLimit({
   windowMs: 15 * 60 * 1000,

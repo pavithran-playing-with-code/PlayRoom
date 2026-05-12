@@ -1,70 +1,160 @@
-# Getting Started with Create React App
+# 🎮 PlayRoom — Multi-Game Platform  v1.0
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React + Express + MySQL in a **single project folder** — just like your dEpr project.
+
+---
+
+## Project Structure
+
+```
+PlayRoom/                     ← one folder, one npm project
+├── .vscode/
+│   └── launch.json           ← F5 starts the backend (node server.js)
+├── config/
+│   ├── db.js                 ← MySQL2 connection pool
+│   └── setupDb.js            ← run once to create all tables
+├── middleware/
+│   ├── auth.js               ← JWT verifyToken
+│   └── errorHandler.js
+├── routes/
+│   ├── auth.js               ← /api/auth  (register, login, me)
+│   ├── rooms.js              ← /api/rooms (create, join, start, poll, chat, score)
+│   ├── games.js              ← /api/games (list game types)
+│   └── leaderboard.js        ← /api/leaderboard
+├── public/
+│   └── index.html            ← React entry HTML
+├── src/                      ← React frontend (CRA)
+│   ├── components/
+│   │   ├── Navbar.jsx
+│   │   ├── ProtectedRoute.jsx
+│   │   ├── MahjongGame.jsx   ← Mahjong solitaire (offline + online)
+│   │   └── MemoryGame.jsx    ← Memory card match (offline + online)
+│   ├── pages/
+│   │   ├── Home.jsx
+│   │   ├── Login.jsx
+│   │   ├── Register.jsx
+│   │   ├── Lobby.jsx         ← Browse / create / join rooms
+│   │   ├── Room.jsx          ← Waiting room + launches game
+│   │   └── Leaderboard.jsx
+│   ├── utils/
+│   │   ├── api.js            ← apiFetch helper
+│   │   └── AuthContext.js    ← React auth context
+│   ├── App.js
+│   ├── index.js
+│   └── index.css
+├── server.js                 ← Express API (port 4321)
+├── package.json              ← single package.json for everything
+├── .env.example              ← copy to .env
+└── .gitignore
+```
+
+---
+
+## Quick Start
+
+### Step 1 — Install dependencies
+```bash
+npm install
+```
+
+### Step 2 — Configure environment
+```bash
+# Copy the example and fill in your values
+copy .env.example .env        # Windows
+cp .env.example .env          # Mac / Linux
+```
+Open `.env` and set:
+- `DB_PASSWORD` — your MySQL root password
+- `JWT_SECRET`  — any long random string
+
+### Step 3 — Create the database
+```bash
+node config/setupDb.js
+```
+This creates the `playroom` database and all 7 tables automatically.
+
+### Step 4 — Start the backend
+```bash
+node server.js          # or press F5 in VS Code
+```
+Backend runs at **http://localhost:4321**
+
+### Step 5 — Start the frontend (new terminal)
+```bash
+npm start
+```
+React dev server runs at **http://localhost:**  
+API calls to `/api/*` are automatically proxied to port 4321.
+
+---
+
+## VS Code F5
+The `.vscode/launch.json` is pre-configured:
+- Press **F5** → runs `node server.js` with `NODE_ENV=development`
+- Restart on file change is enabled (`"restart": true`)
+
+---
 
 ## Available Scripts
 
-In the project directory, you can run:
+| Script | What it does |
+|--------|-------------|
+| `npm start` | Start React dev server (port ) |
+| `npm run build` | Build React for production into `/build` |
+| `node server.js` | Start Express backend (port 4321) |
+| `npm run dev` | Start backend with nodemon (auto-reload) |
+| `node config/setupDb.js` | Create database + tables + seed data |
 
-### `npm start`
+---
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Database Tables
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+| Table | Purpose |
+|-------|---------|
+| `users` | Accounts — username, email, bcrypt password, avatar |
+| `game_types` | Mahjong, Memory, Trivia (seeded on setup) |
+| `rooms` | Game rooms with 6-char room codes |
+| `room_players` | Who is in each room + live scores |
+| `game_sessions` | Completed game records |
+| `leaderboard` | Global scores (upserted after each game) |
+| `chat_messages` | In-room chat messages |
 
-### `npm test`
+---
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## API Endpoints
 
-### `npm run build`
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/auth/register` | — | Create account |
+| POST | `/api/auth/login` | — | Login → JWT |
+| GET  | `/api/auth/me` | ✓ | Current user |
+| GET  | `/api/games` | — | List game types |
+| GET  | `/api/rooms` | ✓ | Open public rooms |
+| POST | `/api/rooms` | ✓ | Create room |
+| POST | `/api/rooms/join` | ✓ | Join by room code |
+| GET  | `/api/rooms/:code` | ✓ | Room detail + players |
+| PATCH | `/api/rooms/:code/start` | ✓ | Host starts game |
+| PATCH | `/api/rooms/:code/score` | ✓ | Submit score update |
+| GET  | `/api/rooms/:code/poll` | ✓ | Poll status + chat |
+| POST | `/api/rooms/:code/chat` | ✓ | Send chat message |
+| GET  | `/api/leaderboard` | — | Global rankings |
+| POST | `/api/leaderboard/update` | ✓ | Update score after game |
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+---
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Production Deployment
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+npm run build           # builds React into /build
+NODE_ENV=production node server.js
+```
+In production, Express serves the React build from `/build` automatically.
 
-### `npm run eject`
+---
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## V2 Roadmap
+- WebSockets (Socket.io) — real-time instead of polling
+- Trivia Quiz game
+- Player profiles + match history
+- Private room passwords
+- Mobile PWA support

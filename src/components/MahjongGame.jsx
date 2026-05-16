@@ -76,7 +76,7 @@ function GameOverOverlay({ score, pairs, won, onPlayAgain, onExit }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function MahjongGame({ roomCode, seed, players, currentUser, onGameEnd }) {
+export default function MahjongGame({ roomCode, seed, players, currentUser, onGameEnd, isSpectator = false, spectatorState = null, spectatorWatching = null }) {
   const isOnline = !!roomCode;
   const TIMER_INIT = isOnline ? 300 : 600;
 
@@ -96,9 +96,19 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
   const timerRef = useRef(null);
   const syncRef = useRef(null);
   const msgRef = useRef(null);
+  const stateRef = useRef({ score, pairs, moves, tiles });
+  useEffect(() => { stateRef.current = { score, pairs, moves, tiles }; }, [score, pairs, moves, tiles]);
 
-  // Timer
+  // Spectator: rebuild tile.matched from the watched player's state.
   useEffect(() => {
+    if (!isSpectator || !spectatorState) return;
+    const matched = new Set((spectatorState.matched || []).map(Number));
+    setTiles(prev => prev.map((t, i) => ({ ...t, matched: matched.has(i) })));
+  }, [isSpectator, spectatorState]);
+
+  // Timer (player only)
+  useEffect(() => {
+    if (isSpectator) return;
     timerRef.current = setInterval(() => {
       setTimerSec(t => {
         if (t <= 1) { clearInterval(timerRef.current); setGameOver(true); setWon(false); return 0; }
@@ -106,14 +116,19 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
-  }, []);
+  }, [isSpectator]);
 
-  // Online sync
+  // Online sync (player only)
   useEffect(() => {
-    if (!isOnline) return;
+    if (!isOnline || isSpectator) return;
     syncRef.current = setInterval(async () => {
       try {
-        await api.patch(`/api/rooms/${roomCode}/score`, { score, pairs_matched: pairs, moves });
+        const s = stateRef.current;
+        const matchedIdx = s.tiles.map((t, i) => t.matched ? i : -1).filter(i => i >= 0);
+        await api.patch(`/api/rooms/${roomCode}/score`, {
+          score: s.score, pairs_matched: s.pairs, moves: s.moves,
+          game_state: JSON.stringify({ matched: matchedIdx }),
+        });
         const res = await api.get(`/api/rooms/${roomCode}/poll`);
         const data = await res.json();
         if (data.success) {
@@ -124,9 +139,9 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
           setOppData(opp);
         }
       } catch { /* silent */ }
-    }, 3000);
+    }, 2000);
     return () => clearInterval(syncRef.current);
-  }, [isOnline, roomCode, score, pairs, moves, currentUser]);
+  }, [isOnline, isSpectator, roomCode, currentUser]);
 
   const showMsg = useCallback((text, type = "info") => {
     setMsg({ text, type });
@@ -139,7 +154,7 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
   }
 
   function clickTile(idx) {
-    if (gameOver) return;
+    if (isSpectator || gameOver) return;
     const tile = tiles[idx];
     if (tile.matched) return;
     if (!isFree(tiles, idx)) { showMsg("Tile is blocked!", "error"); return; }
@@ -264,16 +279,20 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
             background: "var(--surface2)", borderRadius: 20, padding: "3px 12px",
             fontSize: "0.75rem", color: "var(--muted)"
           }}>
-            {isOnline ? "ONLINE" : "OFFLINE"} · MAHJONG
+            {isSpectator ? `👀 WATCHING ${spectatorWatching?.username || ""}` : (isOnline ? "ONLINE" : "OFFLINE") + " · MAHJONG"}
           </span>
         </div>
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-          {[
+          {(isSpectator ? [
+            { v: (spectatorWatching?.score ?? 0).toLocaleString(), l: "Score" },
+            { v: `${spectatorWatching?.pairs_matched ?? 0}/${TOTAL_PAIRS}`, l: "Pairs" },
+            { v: spectatorWatching?.moves ?? 0, l: "Moves" },
+          ] : [
             { v: score.toLocaleString(), l: "Score" },
             { v: `${pairs}/${TOTAL_PAIRS}`, l: "Pairs" },
             { v: fmt(timerSec), l: "Time", urgent: timerSec <= 30 },
             { v: moves, l: "Moves" },
-          ].map(s => (
+          ]).map(s => (
             <div key={s.l} style={{ textAlign: "center" }}>
               <div style={{ fontSize: "1.2rem", fontWeight: 700, color: s.urgent ? "var(--red)" : "var(--accent)" }}>
                 {s.v}
@@ -284,7 +303,9 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
             </div>
           ))}
         </div>
-        <button style={ctrlBtn} onClick={() => onGameEnd && onGameEnd(score, pairs, moves, won)}>🚪 Quit</button>
+        <button style={ctrlBtn} onClick={() => onGameEnd && onGameEnd(score, pairs, moves, won)}>
+          {isSpectator ? "← Leave" : "🚪 Quit"}
+        </button>
       </div>
 
       {/* ── Opponents bar (online) ── */}
@@ -374,13 +395,13 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
         display: "flex", gap: 10, padding: "10px 16px", background: "var(--surface)",
         borderTop: "1px solid var(--surface2)", justifyContent: "center", flexWrap: "wrap", flexShrink: 0
       }}>
-        <button style={ctrlBtn} onClick={hint}>💡 Hint</button>
-        <button style={ctrlBtn} onClick={shuffle}>🔀 Shuffle</button>
-        <button style={ctrlBtn} onClick={undo}>↩ Undo</button>
+        {!isSpectator && <button style={ctrlBtn} onClick={hint}>💡 Hint</button>}
+        {!isSpectator && <button style={ctrlBtn} onClick={shuffle}>🔀 Shuffle</button>}
+        {!isSpectator && <button style={ctrlBtn} onClick={undo}>↩ Undo</button>}
       </div>
 
       {/* ── Game over overlay ── */}
-      {gameOver && (
+      {gameOver && !isSpectator && (
         <GameOverOverlay
           score={score} pairs={pairs} won={won}
           onPlayAgain={resetGame}

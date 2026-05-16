@@ -5,21 +5,29 @@ const jwt     = require("jsonwebtoken");
 const db      = require("../config/db");
 const { verifyToken } = require("../middleware/auth");
 
+const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,32}$/;
+const EMAIL_RE    = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const AVATAR_MAX  = 8; // emoji can be multi-codepoint; keep generous but bounded
+
 // POST /api/auth/register
 router.post("/register", async (req, res, next) => {
   try {
     const { username, email, password, avatar = "🎮" } = req.body;
 
-    // Validation
-    if (!username || !email || !password)
+    if (typeof username !== "string" || typeof email !== "string" || typeof password !== "string")
       return res.status(400).json({ success: false, message: "username, email and password are required." });
-    if (username.trim().length < 3 || username.trim().length > 32)
-      return res.status(400).json({ success: false, message: "Username must be 3–32 characters." });
-    if (password.length < 6)
-      return res.status(400).json({ success: false, message: "Password must be at least 6 characters." });
 
     const cleanUsername = username.trim();
     const cleanEmail    = email.toLowerCase().trim();
+
+    if (!USERNAME_RE.test(cleanUsername))
+      return res.status(400).json({ success: false, message: "Username must be 3–32 chars: letters, numbers, _ . -" });
+    if (!EMAIL_RE.test(cleanEmail) || cleanEmail.length > 120)
+      return res.status(400).json({ success: false, message: "Please provide a valid email." });
+    if (password.length < 6 || password.length > 200)
+      return res.status(400).json({ success: false, message: "Password must be 6–200 characters." });
+    if (typeof avatar !== "string" || avatar.length > AVATAR_MAX)
+      return res.status(400).json({ success: false, message: "Invalid avatar." });
 
     const hash = await bcrypt.hash(password, 12);
 
@@ -57,8 +65,10 @@ router.post("/register", async (req, res, next) => {
 router.post("/login", async (req, res, next) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password)
+    if (typeof username !== "string" || typeof password !== "string" || !username || !password)
       return res.status(400).json({ success: false, message: "username and password are required." });
+    if (username.length > 120 || password.length > 200)
+      return res.status(400).json({ success: false, message: "Invalid credentials." });
 
     const [rows] = await db.execute(
       `SELECT id, username, email, password, avatar, total_score, games_played, games_won

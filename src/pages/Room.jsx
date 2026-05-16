@@ -21,8 +21,15 @@ export default function Room() {
   const [starting,  setStarting]  = useState(false);
   const [copied,    setCopied]    = useState(false);
 
-  const chatRef = useRef(null);
-  const pollRef = useRef(null);
+  const [friends,        setFriends]        = useState([]);
+  const [showInvite,     setShowInvite]     = useState(false);
+  const [inviteToast,    setInviteToast]    = useState("");
+  const [invitedIds,     setInvitedIds]     = useState(new Set());
+
+  const chatRef    = useRef(null);
+  const pollRef    = useRef(null);
+  const leftRef    = useRef(false);     // make sure we only call /leave once
+  const inviteRef  = useRef(null);
 
   const fetchRoom = useCallback(async () => {
     try {
@@ -46,16 +53,85 @@ export default function Room() {
     } catch { /* silent */ }
   }, [code]);
 
+  // Single leave helper — idempotent, used on tab close + explicit Quit/Back.
+  const leaveRoom = useCallback(() => {
+    if (leftRef.current) return;
+    leftRef.current = true;
+    // keepalive lets the request complete even if the tab is closing.
+    try {
+      const token = localStorage.getItem("pr_token");
+      fetch(`/api/rooms/${code}/leave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        keepalive: true,
+      });
+    } catch { /* silent */ }
+  }, [code]);
+
+  const exitToLobby = useCallback(() => {
+    leaveRoom();
+    navigate("/lobby");
+  }, [leaveRoom, navigate]);
+
   useEffect(() => {
     fetchRoom();
     poll();
     pollRef.current = setInterval(poll, 2000);
-    return () => clearInterval(pollRef.current);
-  }, [fetchRoom, poll]);
+    const onUnload = () => leaveRoom();
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      clearInterval(pollRef.current);
+      window.removeEventListener("beforeunload", onUnload);
+      // NOTE: do NOT call leaveRoom() here — React 18 StrictMode double-invokes
+      // effects in dev (mount → unmount → mount) which would mark the room
+      // abandoned the instant it's created. Leave is fired explicitly on
+      // user-intent actions (back button, quit) + beforeunload (tab close).
+    };
+  }, [fetchRoom, poll, leaveRoom]);
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [chat]);
+
+  // Load friend list once for the invite picker.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res  = await api.get("/api/friends");
+        const data = await res.json();
+        if (!cancelled && data.success) setFriends(data.friends);
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Close invite popover on outside click / escape.
+  useEffect(() => {
+    if (!showInvite) return;
+    const onClick = (e) => { if (inviteRef.current && !inviteRef.current.contains(e.target)) setShowInvite(false); };
+    const onKey   = (e) => { if (e.key === "Escape") setShowInvite(false); };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [showInvite]);
+
+  async function sendInvite(friendId) {
+    setInviteToast("");
+    try {
+      const res  = await api.post(`/api/rooms/${code}/invite`, { user_id: friendId });
+      const data = await res.json();
+      if (data.success) {
+        setInvitedIds(prev => new Set(prev).add(friendId));
+        setInviteToast("Invite sent!");
+      } else {
+        setInviteToast(data.message || "Could not send invite.");
+      }
+    } catch { setInviteToast("Invite failed."); }
+  }
 
   async function handleStart() {
     setStarting(true);
@@ -80,23 +156,91 @@ export default function Room() {
     });
   }
 
-  const isHost   = players.find(p => p.user_id === user?.id)?.is_host;
-  const canStart = isHost && players.length >= 1 && status === "waiting";
+  const me           = players.find(p => p.user_id === user?.id);
+  const isHost       = !!me?.is_host;
+  const isSpectator  = !!me?.is_spectator;
+  const seatedPlayers    = players.filter(p => !p.is_spectator);
+  const watchingPlayers  = players.filter(p =>  p.is_spectator);
+  const canStart     = isHost && seatedPlayers.length >= 1 && status === "waiting";
+
+  // ── Room ended ────────────────────────────────────────────────────────────
+  if (status === "abandoned" || status === "finished") {
+    return (
+      <div style={{ minHeight:"100vh", padding:"32px 20px", background:"var(--bg)" }}>
+        <div style={{ maxWidth:520, margin:"0 auto" }}>
+          <div className="card" style={{ textAlign:"center" }}>
+            <div style={{ fontSize:"3rem", marginBottom:12 }}>
+              {status === "abandoned" ? "🚪" : "🏁"}
+            </div>
+            <h1 style={{ fontSize:"1.4rem", fontWeight:900, marginBottom:8 }}>
+              {status === "abandoned" ? "Room closed" : "Game finished"}
+            </h1>
+            <p style={{ color:"var(--muted)", marginBottom:20 }}>
+              {status === "abandoned"
+                ? "The host left or the room was abandoned."
+                : "This room's game has ended."}
+            </p>
+            <button className="btn btn-primary btn-full" onClick={() => navigate("/lobby")}>
+              ← Back to Lobby
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── In-game ───────────────────────────────────────────────────────────────
-  if (status === "in_progress" && seed !== null) {
+  if (status === "in_progress" && seed !== null && !isSpectator) {
     clearInterval(pollRef.current);
     const GameComponent = room?.game_slug === "memory" ? MemoryGame : MahjongGame;
     return (
       <GameComponent
         roomCode={code}
         seed={seed}
-        players={players}
+        players={seatedPlayers}
         currentUser={user}
-        onGameEnd={async (score, pairs, moves, won) => {
-          try { await api.post("/api/leaderboard/update", { score, won: !!won }); } catch { /* silent */ }
-          navigate("/lobby");
+        onGameEnd={async (_score, _pairs, _moves, won) => {
+          // Server reads the validated score from room_players; we only signal win/loss + room.
+          try { await api.post("/api/leaderboard/update", { room_code: code, won: !!won }); } catch { /* silent */ }
+          exitToLobby();
         }}
+      />
+    );
+  }
+
+  // ── Spectator view (game in progress, I'm watching) ───────────────────────
+  if (status === "in_progress" && isSpectator && seed !== null) {
+    const watched = seatedPlayers.find(p => p.is_host) || seatedPlayers[0];
+    let parsedState = null;
+    try { parsedState = watched?.game_state ? JSON.parse(watched.game_state) : null; } catch { parsedState = null; }
+
+    if (!watched) {
+      return (
+        <div style={{ minHeight:"100vh", padding:"32px 20px", background:"var(--bg)" }}>
+          <div style={{ maxWidth:520, margin:"0 auto" }}>
+            <div className="card" style={{ textAlign:"center" }}>
+              <div style={{ fontSize:"3rem", marginBottom:12 }}>👀</div>
+              <p style={{ color:"var(--muted)", marginBottom:20 }}>Waiting for a player to watch…</p>
+              <button className="btn btn-outline btn-full" onClick={exitToLobby}>
+                ← Leave Spectator Mode
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const GameComponent = room?.game_slug === "memory" ? MemoryGame : MahjongGame;
+    return (
+      <GameComponent
+        roomCode={code}
+        seed={seed}
+        players={seatedPlayers}
+        currentUser={user}
+        isSpectator
+        spectatorState={parsedState}
+        spectatorWatching={watched}
+        onGameEnd={exitToLobby}
       />
     );
   }
@@ -141,18 +285,18 @@ export default function Room() {
 
           {/* Player slots */}
           <h3 style={{ color:"var(--muted)", fontSize:"0.8rem", textTransform:"uppercase", letterSpacing:1, fontWeight:600, marginBottom:14 }}>
-            Players ({players.length}/{room?.max_players || 2})
+            Players ({seatedPlayers.length}/{room?.max_players || 2})
           </h3>
           <div style={{ display:"flex", gap:12, marginBottom:24, flexWrap:"wrap" }}>
             {Array.from({ length: room?.max_players || 2 }).map((_, i) => {
-              const p = players[i];
+              const p = seatedPlayers[i];
               return p ? (
                 <div key={i} style={{ flex:1, minWidth:130, background:"rgba(78,203,113,0.08)",
                   border:"1.5px solid rgba(78,203,113,0.35)", borderRadius:14, padding:16, textAlign:"center" }}>
                   <div style={{ width:48, height:48, borderRadius:"50%", margin:"0 auto 8px",
                     background:"linear-gradient(135deg,var(--accent),var(--accent2))",
-                    display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.5rem" }}>
-                    {p.avatar}
+                    display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.5rem", lineHeight:1 }}>
+                    <span style={{ lineHeight:1 }}>{p.avatar}</span>
                   </div>
                   <div style={{ fontWeight:700, fontSize:"0.95rem" }}>{p.username}</div>
                   {p.is_host        && <div style={{ color:"var(--accent)", fontSize:"0.75rem", marginTop:4 }}>👑 Host</div>}
@@ -170,18 +314,88 @@ export default function Room() {
             })}
           </div>
 
+          {/* Spectators */}
+          {watchingPlayers.length > 0 && (
+            <>
+              <h3 style={{ color:"var(--muted)", fontSize:"0.78rem", textTransform:"uppercase", letterSpacing:1, fontWeight:600, marginBottom:10 }}>
+                👀 Watching ({watchingPlayers.length})
+              </h3>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:20 }}>
+                {watchingPlayers.map(p => (
+                  <div key={p.user_id} style={{ background:"var(--surface2)", borderRadius:20,
+                    padding:"4px 12px", fontSize:"0.85rem", display:"flex", alignItems:"center", gap:6 }}>
+                    <span>{p.avatar}</span>
+                    <span>{p.username}{p.user_id === user?.id && " (You)"}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Invite friends */}
+          {status === "waiting" && me && (
+            <div ref={inviteRef} style={{ position:"relative", marginBottom:12 }}>
+              <button className="btn btn-outline btn-full" onClick={() => setShowInvite(s => !s)}>
+                👥 Invite Friends
+              </button>
+              {showInvite && (
+                <div style={{ position:"absolute", top:"calc(100% + 8px)", left:0, right:0, zIndex:50,
+                  background:"var(--surface)", border:"1.5px solid var(--surface2)", borderRadius:12,
+                  padding:8, maxHeight:260, overflowY:"auto", boxShadow:"0 10px 30px rgba(0,0,0,0.4)" }}>
+                  {friends.length === 0 ? (
+                    <div style={{ padding:14, textAlign:"center", color:"var(--muted)", fontSize:"0.88rem" }}>
+                      No friends yet. <a href="/friends" style={{ color:"var(--accent)" }}>Find some →</a>
+                    </div>
+                  ) : friends.map(f => {
+                    const inRoom = players.some(p => p.user_id === f.id);
+                    const sent   = invitedIds.has(f.id);
+                    return (
+                      <div key={f.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px" }}>
+                        <div style={{ width:32, height:32, borderRadius:"50%",
+                          background:"linear-gradient(135deg,var(--accent),var(--accent2))",
+                          display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1rem", lineHeight:1 }}>
+                          <span style={{ lineHeight:1 }}>{f.avatar}</span>
+                        </div>
+                        <div style={{ flex:1, fontSize:"0.9rem", fontWeight:600 }}>{f.username}</div>
+                        {inRoom ? (
+                          <span style={{ color:"var(--muted)", fontSize:"0.8rem" }}>In room</span>
+                        ) : sent ? (
+                          <span style={{ color:"var(--green)", fontSize:"0.8rem" }}>✓ Invited</span>
+                        ) : (
+                          <button className="btn btn-primary btn-sm" onClick={() => sendInvite(f.id)}>
+                            Invite
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {inviteToast && (
+                <div style={{ marginTop:8, color:"var(--muted)", fontSize:"0.82rem", textAlign:"center" }}>
+                  {inviteToast}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Actions */}
           {canStart && (
             <button className="btn btn-primary btn-full" onClick={handleStart} disabled={starting} style={{ marginBottom:12 }}>
               {starting ? "Starting…" : "🚀 Start Game!"}
             </button>
           )}
-          {!isHost && status === "waiting" && (
+          {isSpectator && status === "waiting" && (
+            <div className="alert alert-info" style={{ marginBottom:12 }}>
+              👀 You're spectating — you'll see live scores when the game begins.
+            </div>
+          )}
+          {!isHost && !isSpectator && status === "waiting" && (
             <div className="alert alert-info" style={{ marginBottom:12 }}>
               ⏳ Waiting for the host to start the game…
             </div>
           )}
-          <button className="btn btn-outline btn-full" onClick={() => navigate("/lobby")}>
+          <button className="btn btn-outline btn-full" onClick={exitToLobby}>
             ← Back to Lobby
           </button>
 

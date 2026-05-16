@@ -42,7 +42,7 @@ function GameOverOverlay({ score, pairs, won, onPlayAgain, onExit }) {
   );
 }
 
-export default function MemoryGame({ roomCode, seed, players, currentUser, onGameEnd }) {
+export default function MemoryGame({ roomCode, seed, players, currentUser, onGameEnd, isSpectator = false, spectatorState = null, spectatorWatching = null }) {
   const isOnline   = !!roomCode;
   const TIMER_INIT = 180;
 
@@ -58,8 +58,20 @@ export default function MemoryGame({ roomCode, seed, players, currentUser, onGam
 
   const timerRef = useRef(null);
   const syncRef  = useRef(null);
+  // Latest live values for the sync interval — avoids stale closures.
+  const stateRef = useRef({ score, pairs, moves, cards });
+  useEffect(() => { stateRef.current = { score, pairs, moves, cards }; }, [score, pairs, moves, cards]);
+
+  // Spectator: rebuild cards each render to match the watched player's matched set.
+  useEffect(() => {
+    if (!isSpectator || !spectatorState) return;
+    const matched = new Set((spectatorState.matched || []).map(Number));
+    setCards(prev => prev.map(c => ({ ...c, matched: matched.has(c.id), flipped: matched.has(c.id) })));
+  }, [isSpectator, spectatorState]);
 
   useEffect(() => {
+    // Players run the countdown; spectators don't (they piggyback on the player).
+    if (isSpectator) return;
     timerRef.current = setInterval(() => {
       setTimerSec(t => {
         if (t <= 1) { clearInterval(timerRef.current); setGameOver(true); return 0; }
@@ -67,19 +79,23 @@ export default function MemoryGame({ roomCode, seed, players, currentUser, onGam
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
-  }, []);
+  }, [isSpectator]);
 
   useEffect(() => {
-    if (!isOnline) return;
-    syncRef.current = setInterval(async () => {
-      try { await api.patch(`/api/rooms/${roomCode}/score`, { score, pairs_matched: pairs, moves }); }
-      catch { /* silent */ }
-    }, 3000);
+    if (!isOnline || isSpectator) return;
+    syncRef.current = setInterval(() => {
+      const s = stateRef.current;
+      const matchedIds = s.cards.filter(c => c.matched).map(c => c.id);
+      api.patch(`/api/rooms/${roomCode}/score`, {
+        score: s.score, pairs_matched: s.pairs, moves: s.moves,
+        game_state: JSON.stringify({ matched: matchedIds }),
+      }).catch(() => {});
+    }, 2000);
     return () => clearInterval(syncRef.current);
-  }, [isOnline, roomCode, score, pairs, moves]);
+  }, [isOnline, isSpectator, roomCode]);
 
   function clickCard(idx) {
-    if (blocked || gameOver) return;
+    if (isSpectator || blocked || gameOver) return;
     const card = cards[idx];
     if (card.flipped || card.matched) return;
 
@@ -148,22 +164,28 @@ export default function MemoryGame({ roomCode, seed, players, currentUser, onGam
         <span style={{ fontSize:"1.2rem", fontWeight:900,
           background:"linear-gradient(90deg,var(--accent),var(--accent2))",
           WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
-          PlayRoom · Memory 🃏
+          {isSpectator ? `👀 Watching ${spectatorWatching?.username || ""}` : "PlayRoom · Memory 🃏"}
         </span>
         <div style={{ display:"flex", gap:20 }}>
-          {[
+          {(isSpectator ? [
+            { v: (spectatorWatching?.score ?? 0).toLocaleString(), l:"Score" },
+            { v: `${spectatorWatching?.pairs_matched ?? 0}/${TOTAL_PAIRS}`, l:"Pairs" },
+            { v: spectatorWatching?.moves ?? 0, l:"Moves" },
+          ] : [
             { v: score.toLocaleString(), l:"Score" },
             { v: `${pairs}/${TOTAL_PAIRS}`, l:"Pairs" },
             { v: fmt(timerSec), l:"Time", urgent: timerSec <= 30 },
             { v: moves, l:"Moves" },
-          ].map(s => (
+          ]).map(s => (
             <div key={s.l} style={{ textAlign:"center" }}>
               <div style={{ fontSize:"1.2rem", fontWeight:700, color: s.urgent ? "var(--red)" : "var(--accent)" }}>{s.v}</div>
               <div style={{ fontSize:"0.68rem", color:"var(--muted)", textTransform:"uppercase", letterSpacing:1 }}>{s.l}</div>
             </div>
           ))}
         </div>
-        <button style={ctrlBtn} onClick={() => onGameEnd && onGameEnd(score, pairs, moves, won)}>🚪 Quit</button>
+        <button style={ctrlBtn} onClick={() => onGameEnd && onGameEnd(score, pairs, moves, won)}>
+          {isSpectator ? "← Leave" : "🚪 Quit"}
+        </button>
       </div>
 
       {/* Board */}
@@ -185,7 +207,7 @@ export default function MemoryGame({ roomCode, seed, players, currentUser, onGam
       </div>
 
       {/* Game over */}
-      {gameOver && (
+      {gameOver && !isSpectator && (
         <GameOverOverlay
           score={score} pairs={pairs} won={won}
           onPlayAgain={resetGame}

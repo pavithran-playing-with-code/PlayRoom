@@ -13,8 +13,9 @@ export async function apiFetch(endpoint, options = {}) {
     ...(options.headers || {}),
   };
 
+  // Bearer tokens travel in the Authorization header; no cookies needed.
+  // (credentials:"include" forces tighter CORS + sends cookies we don't use.)
   const res = await fetch(BASE + endpoint, {
-    credentials: "include",
     ...options,
     headers,
   });

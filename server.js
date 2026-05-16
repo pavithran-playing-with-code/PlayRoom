@@ -6,6 +6,11 @@
 
 require("dotenv").config();
 
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
+  console.error("❌ JWT_SECRET is missing or too short (need at least 16 chars). Set it in .env before starting.");
+  process.exit(1);
+}
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -13,12 +18,14 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 
 const errorHandler = require("./middleware/errorHandler");
+const db           = require("./config/db");
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 const authRoutes = require("./routes/auth");
 const roomRoutes = require("./routes/rooms");
 const gameRoutes = require("./routes/games");
 const leaderboardRoutes = require("./routes/leaderboard");
+const friendsRoutes     = require("./routes/friends");
 
 const app = express();
 const PORT = process.env.PORT || 4321;
@@ -70,6 +77,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/games", gameRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
+app.use("/api/friends",     friendsRoutes);
 
 // ── Serve React production build ──────────────────────────────────────────────
 // Dev  → React runs on :3333, proxies /api/* here automatically (package.json proxy)
@@ -86,6 +94,29 @@ app.use((req, res) =>
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use(errorHandler);
+
+// ── Stale-room sweep ──────────────────────────────────────────────────────────
+// Without WebSockets there is no disconnect event, so rooms can sit forever
+// after the host walks away. Sweep every 5 min:
+//   • waiting   > 30 min  → abandoned
+//   • in_progress > 2 hr → abandoned (game probably crashed)
+async function sweepStaleRooms() {
+  try {
+    const [w] = await db.execute(
+      "UPDATE rooms SET status = 'abandoned' WHERE status = 'waiting' AND created_at < NOW() - INTERVAL 30 MINUTE"
+    );
+    const [p] = await db.execute(
+      "UPDATE rooms SET status = 'abandoned', finished_at = NOW() WHERE status = 'in_progress' AND started_at < NOW() - INTERVAL 2 HOUR"
+    );
+    if (w.affectedRows || p.affectedRows)
+      console.log(`🧹 Stale rooms swept: ${w.affectedRows} waiting, ${p.affectedRows} in-progress`);
+  } catch (err) {
+    console.error("Stale-room sweep failed:", err.message);
+  }
+}
+if (process.env.NODE_ENV !== "test") {
+  setInterval(sweepStaleRooms, 5 * 60 * 1000).unref();
+}
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {

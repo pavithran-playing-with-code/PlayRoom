@@ -39,15 +39,20 @@ function TileFace({ tileKey, dim }) {
   const num   = tileKey.slice(1);
   const style = SUIT_STYLE[suit];
   const color = dim ? "#5b7a4f" : style.color;
+  // Fluid font sizes scale with viewport so big-screen tiles aren't tiny.
+  const bigF   = "clamp(1.05rem, 4.2vw, 2rem)";
+  const honorF = "clamp(1.0rem,  3.8vw, 1.85rem)";
+  const subF   = "clamp(0.45rem, 1.2vw, 0.7rem)";
+  const iconF  = "clamp(0.65rem, 1.7vw, 1.05rem)";
 
   if (suit === "h") {
     const face = HONOR_FACE[tileKey];
     return (
       <div style={{ display:"flex", flexDirection:"column", alignItems:"center", lineHeight:1, gap:2 }}>
-        <span style={{ fontSize: face.glyph.length > 1 ? "1.55rem" : "1.4rem", fontWeight:900, color }}>
+        <span style={{ fontSize: honorF, fontWeight:900, color }}>
           {face.glyph}
         </span>
-        <span style={{ fontSize:"0.55rem", color, opacity:0.75, textTransform:"uppercase", letterSpacing:1 }}>
+        <span style={{ fontSize:subF, color, opacity:0.75, textTransform:"uppercase", letterSpacing:1 }}>
           {face.sub}
         </span>
       </div>
@@ -55,15 +60,25 @@ function TileFace({ tileKey, dim }) {
   }
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", lineHeight:1, gap:3 }}>
-      <span style={{ fontSize:"1.6rem", fontWeight:900, color, fontFamily:"system-ui,sans-serif" }}>{num}</span>
-      <span style={{ fontSize: suit === "m" ? "0.8rem" : "0.9rem", color, opacity:0.85 }}>
+      <span style={{ fontSize:bigF, fontWeight:900, color, fontFamily:"system-ui,sans-serif" }}>{num}</span>
+      <span style={{ fontSize:iconF, color, opacity:0.85 }}>
         {style.icon}
       </span>
     </div>
   );
 }
 
-const COLS = 8;
+// 70 tiles total. We pick a column count to match the viewport so the
+// board uses horizontal space on desktop and stays portrait on mobile.
+// 70 factors cleanly into 7 / 10 / 14 — all give complete rows.
+function pickColsForViewport() {
+  if (typeof window === "undefined") return 10;
+  const w = window.innerWidth;
+  if (w < 600)  return 7;   // mobile portrait  → 10 rows
+  if (w < 1000) return 10;  // tablet / narrow  → 7 rows
+  return 14;                // desktop laptop+  → 5 rows
+}
+
 const TOTAL_PAIRS = 35;
 
 function seededRand(seed) {
@@ -87,12 +102,12 @@ function buildTiles(seed) {
   return raw;
 }
 
-function isFree(tiles, idx) {
+function isFree(tiles, idx, cols) {
   const tile = tiles[idx];
   if (!tile || tile.matched) return false;
-  const col = idx % COLS;
+  const col = idx % cols;
   const leftTile = col > 0 ? tiles[idx - 1] : null;
-  const rightTile = col < COLS - 1 ? tiles[idx + 1] : null;
+  const rightTile = col < cols - 1 ? tiles[idx + 1] : null;
   const hasLeft = leftTile != null && !leftTile.matched;
   const hasRight = rightTile != null && !rightTile.matched;
   return !(hasLeft && hasRight);
@@ -128,6 +143,24 @@ function GameOverOverlay({ score, pairs, won, onPlayAgain, onExit }) {
 export default function MahjongGame({ roomCode, seed, players, currentUser, onGameEnd, isSpectator = false, spectatorState = null, spectatorWatching = null }) {
   const isOnline = !!roomCode;
   const TIMER_INIT = isOnline ? 300 : 600;
+
+  // Column count tracks viewport class (mobile/tablet/desktop).
+  // Reacts to resize so DevTools / orientation changes reflow the board.
+  // Note: changing COLS mid-game shifts which tiles are spatially adjacent,
+  // so a tile's "free/blocked" status can change — acceptable trade-off.
+  const [cols, setCols] = useState(() => pickColsForViewport());
+  useEffect(() => {
+    const onResize = () => {
+      const next = pickColsForViewport();
+      setCols(c => (c === next ? c : next));
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
 
   const [tiles, setTiles] = useState(() => buildTiles(seed));
   const [selected, setSelected] = useState(null);
@@ -206,7 +239,7 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     if (isSpectator || gameOver) return;
     const tile = tiles[idx];
     if (tile.matched) return;
-    if (!isFree(tiles, idx)) { showMsg("Tile is blocked!", "error"); return; }
+    if (!isFree(tiles, idx, cols)) { showMsg("Tile is blocked!", "error"); return; }
     setHintIdx([]);
 
     if (selected === null) {
@@ -242,7 +275,7 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
   }
 
   function hint() {
-    const free = tiles.map((t, i) => (!t.matched && isFree(tiles, i) ? i : -1)).filter(i => i !== -1);
+    const free = tiles.map((t, i) => (!t.matched && isFree(tiles, i, cols) ? i : -1)).filter(i => i !== -1);
     for (let a = 0; a < free.length; a++) {
       for (let b = a + 1; b < free.length; b++) {
         if (tiles[free[a]].k === tiles[free[b]].k) {
@@ -257,7 +290,7 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
   }
 
   function shuffle() {
-    const freeIdx = tiles.map((t, i) => (!t.matched && isFree(tiles, i) ? i : -1)).filter(i => i !== -1);
+    const freeIdx = tiles.map((t, i) => (!t.matched && isFree(tiles, i, cols) ? i : -1)).filter(i => i !== -1);
     const copy = freeIdx.map(i => ({ ...tiles[i] }));
     for (let i = copy.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -297,8 +330,12 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     }, 1000);
   }
 
-  const opponents = isOnline
-    ? (players || []).filter(p => p.user_id !== currentUser?.id)
+  // Robust filter: coerce both ids to numbers, and bail entirely if we don't
+  // know our own id yet (otherwise the player sees themselves as their own
+  // opponent — that's the "Pavithran 0 pts" strip bug).
+  const myId = Number(currentUser?.id);
+  const opponents = (isOnline && Number.isFinite(myId))
+    ? (players || []).filter(p => Number(p.user_id) !== myId)
     : [];
 
   const msgColors = { success: "var(--green)", error: "var(--red)", info: "var(--blue)" };
@@ -313,7 +350,7 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
       {/* ── Header ── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "10px 20px", background: "var(--surface)", borderBottom: "1px solid var(--surface2)",
+        padding: "8px clamp(12px,2vw,20px)", background: "var(--surface)", borderBottom: "1px solid var(--surface2)",
         flexShrink: 0, flexWrap: "wrap", gap: 8
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -399,13 +436,35 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
 
       {/* ── Board (felt-table vibe to make the cream tiles pop) ── */}
       <div style={{
-        flex: 1, overflowY: "auto", padding: 24,
-        display: "flex", justifyContent: "center", alignItems: "flex-start",
+        flex: 1, minHeight: 0, overflow: "hidden",
+        // Vertical padding stays meaningful on mobile (tile calc reserves
+        // for it); horizontal grows on larger screens.
+        padding: "clamp(20px, 3vw, 36px) clamp(12px, 3vw, 32px)",
+        display: "flex", justifyContent: "center", alignItems: "center",
         background: "radial-gradient(ellipse at center, #1f5a3a 0%, #143928 55%, #0a1f17 100%)",
       }}>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS},auto)`, gap: 6 }}>
+        <div style={{
+          display: "grid",
+          // Tile height is the limiting dimension; width follows the aspect ratio.
+          // We pick the smaller of (height-fit) and (width-fit) so the whole
+          // board fits the available viewport without scrolling.
+          "--rows": String(Math.ceil(70 / cols)),
+          "--cols": String(cols),
+          // Reserved chrome height: header (~50) + optional opponents bar
+          // (~62) + controls (~52) + felt padding top+bottom (~64) + safety.
+          // Caps lowered slightly so smaller screens always leave breathing room
+          // between the tiles and the felt edges.
+          "--tile-h": `min(
+            clamp(32px, calc((100dvh - 280px) / var(--rows) - 8px), 78px),
+            clamp(44px, calc((100vw - 80px) / var(--cols) * 1.32 - 10px), 100px)
+          )`,
+          gridTemplateColumns: `repeat(${cols}, calc(var(--tile-h) * 0.78))`,
+          gridAutoRows: "var(--tile-h)",
+          gap: "clamp(5px, 0.8vw, 10px)",
+          maxWidth: "100%",
+        }}>
           {tiles.map((tile, idx) => {
-            const free = !tile.matched && isFree(tiles, idx);
+            const free = !tile.matched && isFree(tiles, idx, cols);
             const isSel = selected === idx;
             const isHint = hintIdx.includes(idx);
 
@@ -443,12 +502,13 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
             return (
               <div key={idx} onClick={() => clickTile(idx)} style={{
                 position:"relative",
-                width: 54, height: 70, background: bg, border, borderRadius: 8,
+                width: "100%", height: "100%",
+                background: bg, border, borderRadius: 8,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor, transition: "transform 0.12s, box-shadow 0.12s, opacity 0.12s",
                 boxShadow: extraGlow ? `${shadow}, ${extraGlow}` : shadow,
                 transform, opacity, filter,
-                userSelect: "none", flexShrink: 0,
+                userSelect: "none",
               }}>
                 <TileFace tileKey={tile.k} dim={dimFace} />
               </div>
@@ -459,7 +519,7 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
 
       {/* ── Controls ── */}
       <div style={{
-        display: "flex", gap: 10, padding: "10px 16px", background: "var(--surface)",
+        display: "flex", gap: 10, padding: "8px 16px", background: "var(--surface)",
         borderTop: "1px solid var(--surface2)", justifyContent: "center", flexWrap: "wrap", flexShrink: 0
       }}>
         {!isSpectator && <button style={ctrlBtn} onClick={hint}>💡 Hint</button>}

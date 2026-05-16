@@ -75,3 +75,30 @@ input, select, textarea { font-family: inherit; }
 .alert-error   { background: rgba(232,84,84,0.15);  color: var(--red);   border: 1px solid rgba(232,84,84,0.3); }
 .alert-success { background: rgba(78,203,113,0.15); color: var(--green); border: 1px solid rgba(78,203,113,0.3); }
 .alert-info    { background: rgba(91,156,246,0.15); color: var(--blue);  border: 1px solid rgba(91,156,246,0.3); }
+
+/* ── Responsive ─────────────────────────────────────────────────────────── */
+
+/* Leaderboard table: drop the Games + Win% columns on phones */
+.lb-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 90px 70px 70px;
+  align-items: center;
+  padding: 13px 20px;
+}
+.lb-row.lb-header {
+  padding: 10px 20px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .lb-row { grid-template-columns: 44px 1fr 90px; padding: 12px 14px; gap: 8px; }
+  .lb-row .lb-games, .lb-row .lb-win { display: none; }
+  .card { padding: 18px; }
+}
+@media (max-width: 420px) {
+  .card { padding: 14px; }
+  .btn { padding: 11px 18px; font-size: 0.95rem; }
+}

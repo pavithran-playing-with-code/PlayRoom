@@ -53,13 +53,11 @@ export default function Leaderboard() {
         {/* Table */}
         <div style={{ background:"var(--surface)", border:"1.5px solid var(--surface2)", borderRadius:16, overflow:"hidden" }}>
           {/* Header row */}
-          <div style={{ display:"grid", gridTemplateColumns:"52px 1fr 90px 70px 70px",
-            padding:"10px 20px", borderBottom:"1px solid var(--surface2)",
-            color:"var(--muted)", fontSize:"0.75rem", textTransform:"uppercase", letterSpacing:1, fontWeight:600 }}>
+          <div className="lb-row lb-header" style={{ borderBottom:"1px solid var(--surface2)" }}>
             <span>#</span><span>Player</span>
             <span style={{ textAlign:"right" }}>Score</span>
-            <span style={{ textAlign:"right" }}>Games</span>
-            <span style={{ textAlign:"right" }}>Win%</span>
+            <span className="lb-games" style={{ textAlign:"right" }}>Games</span>
+            <span className="lb-win"   style={{ textAlign:"right" }}>Win%</span>
           </div>
 
           {loading ? (
@@ -72,17 +70,16 @@ export default function Leaderboard() {
           ) : board.map((row, i) => {
             const isMe = row.user_id === user?.id;
             return (
-              <div key={row.user_id} style={{ display:"grid", gridTemplateColumns:"52px 1fr 90px 70px 70px",
-                padding:"13px 20px", alignItems:"center",
+              <div key={row.user_id} className="lb-row" style={{
                 borderBottom: i < board.length - 1 ? "1px solid var(--surface2)" : "none",
                 background: isMe ? "rgba(247,201,72,0.05)" : "transparent" }}>
                 <span style={{ fontSize: i < 3 ? "1.25rem" : "0.9rem", fontWeight:700,
                   color: i < 3 ? "var(--accent)" : "var(--muted)" }}>
                   {i < 3 ? MEDAL[i] : `#${row.rank}`}
                 </span>
-                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
                   <span style={{ fontSize:"1.15rem" }}>{row.avatar}</span>
-                  <span style={{ fontWeight:600, fontSize:"0.95rem" }}>
+                  <span style={{ fontWeight:600, fontSize:"0.95rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                     {row.username}
                     {isMe && <span style={{ marginLeft:6, color:"var(--accent)", fontSize:"0.72rem" }}>(you)</span>}
                   </span>
@@ -90,10 +87,10 @@ export default function Leaderboard() {
                 <span style={{ textAlign:"right", fontWeight:700, color:"var(--accent)" }}>
                   {Number(row.total_score).toLocaleString()}
                 </span>
-                <span style={{ textAlign:"right", color:"var(--muted)", fontSize:"0.88rem" }}>
+                <span className="lb-games" style={{ textAlign:"right", color:"var(--muted)", fontSize:"0.88rem" }}>
                   {row.games_played}
                 </span>
-                <span style={{ textAlign:"right", color:"var(--green)", fontSize:"0.88rem", fontWeight:600 }}>
+                <span className="lb-win" style={{ textAlign:"right", color:"var(--green)", fontSize:"0.88rem", fontWeight:600 }}>
                   {row.win_rate}%
                 </span>
               </div>

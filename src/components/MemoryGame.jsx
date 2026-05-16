@@ -46,6 +46,23 @@ export default function MemoryGame({ roomCode, seed, players, currentUser, onGam
   const isOnline   = !!roomCode;
   const TIMER_INIT = 180;
 
+  // 4 cols on phones, 8 on bigger screens. Memory has no spatial adjacency
+  // rule so reflowing mid-game is fully safe.
+  const pickMemCols = () => (typeof window !== "undefined" && window.innerWidth < 600) ? 4 : 8;
+  const [memCols, setMemCols] = useState(pickMemCols);
+  useEffect(() => {
+    const onResize = () => {
+      const next = pickMemCols();
+      setMemCols(c => (c === next ? c : next));
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
+
   const [cards,    setCards]    = useState(() => buildCards(seed));
   const [flipped,  setFlipped]  = useState([]);
   const [score,    setScore]    = useState(0);
@@ -188,13 +205,22 @@ export default function MemoryGame({ roomCode, seed, players, currentUser, onGam
         </button>
       </div>
 
-      {/* Board */}
-      <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:20, overflowY:"auto" }}>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,auto)", gap:12 }}>
+      {/* Board — 4 cols on phones, 8 cols on tablet/desktop so it uses width */}
+      <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:"clamp(8px,2vw,24px)", overflow:"auto" }}>
+        <div style={{
+          display:"grid",
+          "--mem-cols": String(memCols),
+          gridTemplateColumns: "repeat(var(--mem-cols), clamp(48px, calc((100vw - 48px) / var(--mem-cols) - 12px), 108px))",
+          gridAutoRows: "clamp(60px, calc((100vw - 48px) / var(--mem-cols) * 1.2), 130px)",
+          gap: "clamp(6px, 1vw, 14px)",
+          maxWidth: "100%",
+        }}>
           {cards.map((card, idx) => (
             <div key={card.id} onClick={() => clickCard(idx)} style={{
-              width:80, height:100, borderRadius:12, cursor: card.matched || card.flipped ? "default" : "pointer",
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:"2.2rem",
+              width:"100%", height:"100%", borderRadius:12,
+              cursor: card.matched || card.flipped ? "default" : "pointer",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:"clamp(1.4rem, 4.5vw, 2.6rem)",
               transition:"all 0.2s", userSelect:"none",
               background: card.matched ? "rgba(78,203,113,0.18)" : card.flipped ? "var(--surface)" : "var(--surface2)",
               border: card.matched ? "2px solid var(--green)" : card.flipped ? "2px solid var(--accent)" : "2px solid var(--surface2)",

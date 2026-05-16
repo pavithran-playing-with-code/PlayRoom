@@ -14,6 +14,55 @@ const TILE_TYPES = [
   { e: "🀄", k: "h5" }, { e: "🀅", k: "h6" }, { e: "🀆", k: "h7" }, { e: "🎴", k: "h8" },
 ];
 
+// Custom tile art — the Unicode mahjong glyphs render as nearly-invisible
+// outlines at small sizes, so we draw our own: big colored numeral + suit
+// icon, color-coded by suit family.
+const SUIT_STYLE = {
+  c: { color: "#1f6dd2", icon: "●",  label: "Circles"    },
+  b: { color: "#0a8d3d", icon: "🎋", label: "Bamboo"     },
+  m: { color: "#c92a2a", icon: "萬", label: "Characters" },
+  h: { color: "#a37b00", icon: "★",  label: "Honors"     },
+};
+const HONOR_FACE = {
+  h1: { glyph: "E",  sub: "East"   },
+  h2: { glyph: "S",  sub: "South"  },
+  h3: { glyph: "W",  sub: "West"   },
+  h4: { glyph: "N",  sub: "North"  },
+  h5: { glyph: "中", sub: "Red"    },
+  h6: { glyph: "發", sub: "Green"  },
+  h7: { glyph: "白", sub: "White"  },
+  h8: { glyph: "🌸", sub: "Flower" },
+};
+
+function TileFace({ tileKey, dim }) {
+  const suit  = tileKey[0];
+  const num   = tileKey.slice(1);
+  const style = SUIT_STYLE[suit];
+  const color = dim ? "#5b7a4f" : style.color;
+
+  if (suit === "h") {
+    const face = HONOR_FACE[tileKey];
+    return (
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", lineHeight:1, gap:2 }}>
+        <span style={{ fontSize: face.glyph.length > 1 ? "1.55rem" : "1.4rem", fontWeight:900, color }}>
+          {face.glyph}
+        </span>
+        <span style={{ fontSize:"0.55rem", color, opacity:0.75, textTransform:"uppercase", letterSpacing:1 }}>
+          {face.sub}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", lineHeight:1, gap:3 }}>
+      <span style={{ fontSize:"1.6rem", fontWeight:900, color, fontFamily:"system-ui,sans-serif" }}>{num}</span>
+      <span style={{ fontSize: suit === "m" ? "0.8rem" : "0.9rem", color, opacity:0.85 }}>
+        {style.icon}
+      </span>
+    </div>
+  );
+}
+
 const COLS = 8;
 const TOTAL_PAIRS = 35;
 
@@ -348,42 +397,60 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
         </div>
       )}
 
-      {/* ── Board ── */}
-      <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS},auto)`, gap: 4 }}>
+      {/* ── Board (felt-table vibe to make the cream tiles pop) ── */}
+      <div style={{
+        flex: 1, overflowY: "auto", padding: 24,
+        display: "flex", justifyContent: "center", alignItems: "flex-start",
+        background: "radial-gradient(ellipse at center, #1f5a3a 0%, #143928 55%, #0a1f17 100%)",
+      }}>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${COLS},auto)`, gap: 6 }}>
           {tiles.map((tile, idx) => {
             const free = !tile.matched && isFree(tiles, idx);
             const isSel = selected === idx;
             const isHint = hintIdx.includes(idx);
 
-            let bg = "#fff8e7";
-            let border = "2px solid #c8a84b";
-            let transform = "translateY(0)";
-            let shadow = "0 4px 0 #8b6914";
-            let opacity = 1;
-            let cursor = "pointer";
+            // Layered, dimensional tile look — gradient face + colored side
+            // for a "physical" stack feel, plus high-contrast states.
+            let bg          = "linear-gradient(180deg,#fffaeb 0%, #f3e3b8 100%)";
+            let border      = "1.5px solid #b8923a";
+            let transform   = "translateY(0)";
+            let shadow      = "0 5px 0 #8b6914, 0 6px 12px rgba(0,0,0,0.35)";
+            let opacity     = 1;
+            let cursor      = "pointer";
+            let filter      = "none";
+            let extraGlow   = null;
+            const dimFace   = false;
 
             if (tile.matched) {
-              bg = "#b8f0c8"; border = "2px solid #4ecb71";
-              opacity = 0.45; shadow = "none"; cursor = "default";
+              bg = "linear-gradient(180deg,#d9f8e1 0%, #b4ecc4 100%)";
+              border = "1.5px solid #4ecb71";
+              opacity = 0.55; shadow = "0 1px 0 #2f8a4a"; cursor = "default";
             } else if (isSel) {
-              bg = "#ffe066"; border = "2px solid #e8a900";
-              transform = "translateY(-6px)";
-              shadow = "0 10px 0 #8b6914, 0 0 16px rgba(247,201,72,0.4)";
+              bg = "linear-gradient(180deg,#fff4b8 0%, #ffd84d 100%)";
+              border = "2px solid #e8a900";
+              transform = "translateY(-8px)";
+              shadow = "0 13px 0 #8b6914, 0 0 22px rgba(255,213,80,0.55)";
             } else if (isHint) {
-              bg = "#ffd1ec"; border = "2px solid var(--accent2)";
+              bg = "linear-gradient(180deg,#ffe0f0 0%, #ffb1d8 100%)";
+              border = "2px solid var(--accent2,#ff6dba)";
+              extraGlow = "0 0 14px rgba(255,109,186,0.55)";
             } else if (!free) {
-              opacity = 0.65; cursor = "not-allowed";
+              opacity = 0.82; cursor = "not-allowed";
+              filter = "grayscale(35%)";
+              shadow = "0 3px 0 #8b6914, 0 3px 6px rgba(0,0,0,0.25)";
             }
 
             return (
               <div key={idx} onClick={() => clickTile(idx)} style={{
-                width: 52, height: 68, background: bg, border, borderRadius: 6,
+                position:"relative",
+                width: 54, height: 70, background: bg, border, borderRadius: 8,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: "1.55rem", cursor, transition: "all 0.12s",
-                boxShadow: shadow, transform, opacity, userSelect: "none", flexShrink: 0,
+                cursor, transition: "transform 0.12s, box-shadow 0.12s, opacity 0.12s",
+                boxShadow: extraGlow ? `${shadow}, ${extraGlow}` : shadow,
+                transform, opacity, filter,
+                userSelect: "none", flexShrink: 0,
               }}>
-                {tile.e}
+                <TileFace tileKey={tile.k} dim={dimFace} />
               </div>
             );
           })}

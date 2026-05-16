@@ -200,6 +200,64 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     return () => clearInterval(timerRef.current);
   }, [isSpectator]);
 
+  // Helpers declared here (above the auto-shuffle effect) so they're
+  // initialized before any effect that depends on them — avoids TDZ.
+  const showMsg = useCallback((text, type = "info") => {
+    setMsg({ text, type });
+    clearTimeout(msgRef.current);
+    msgRef.current = setTimeout(() => setMsg(null), 2200);
+  }, []);
+
+  // Returns true if any pair of same-kind free tiles exists.
+  const hasAvailableMatch = useCallback((tileArr, c) => {
+    const free = [];
+    for (let i = 0; i < tileArr.length; i++) {
+      if (!tileArr[i].matched && isFree(tileArr, i, c)) free.push(i);
+    }
+    for (let a = 0; a < free.length; a++) {
+      for (let b = a + 1; b < free.length; b++) {
+        if (tileArr[free[a]].k === tileArr[free[b]].k) return true;
+      }
+    }
+    return false;
+  }, []);
+
+  // Auto-shuffle when the board is deadlocked. Capped at 5 attempts since
+  // the last successful match so we don't loop forever on a true dead board.
+  const autoShuffleAttemptsRef = useRef(0);
+  useEffect(() => { autoShuffleAttemptsRef.current = 0; }, [pairs]);
+  useEffect(() => {
+    if (gameOver || isSpectator) return;
+    if (selected !== null) return;            // wait for current selection
+    if (pairs >= TOTAL_PAIRS) return;
+    // Debounce so we don't fire during the mid-click transient state.
+    const t = setTimeout(() => {
+      if (hasAvailableMatch(tiles, cols)) return;
+      if (autoShuffleAttemptsRef.current >= 5) {
+        showMsg("⚠️ Board appears stuck — try Undo.", "error");
+        return;
+      }
+      autoShuffleAttemptsRef.current++;
+      const freeIdx = [];
+      for (let i = 0; i < tiles.length; i++) {
+        if (!tiles[i].matched && isFree(tiles, i, cols)) freeIdx.push(i);
+      }
+      if (freeIdx.length < 2) return;
+      const copy = freeIdx.map(i => ({ ...tiles[i] }));
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      setTiles(prev => {
+        const next = [...prev];
+        freeIdx.forEach((idx, i) => { next[idx] = copy[i]; });
+        return next;
+      });
+      showMsg("⚡ No matches — auto-shuffled!", "info");
+    }, 500);
+    return () => clearTimeout(t);
+  }, [tiles, cols, gameOver, isSpectator, selected, pairs, hasAvailableMatch, showMsg]);
+
   // Online sync (player only)
   useEffect(() => {
     if (!isOnline || isSpectator) return;
@@ -224,12 +282,6 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     }, 2000);
     return () => clearInterval(syncRef.current);
   }, [isOnline, isSpectator, roomCode, currentUser]);
-
-  const showMsg = useCallback((text, type = "info") => {
-    setMsg({ text, type });
-    clearTimeout(msgRef.current);
-    msgRef.current = setTimeout(() => setMsg(null), 2200);
-  }, []);
 
   function fmt(sec) {
     return `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
@@ -286,11 +338,15 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
         }
       }
     }
-    showMsg("No free matches — try shuffling!", "error");
+    showMsg("No free matches — auto-shuffling…", "error");
+    doShuffle(true);  // auto-shuffle so the player isn't stuck
   }
 
-  function shuffle() {
+  // Internal: shuffles the free tiles in-place. `auto=true` skips the score
+  // penalty (used when the player is deadlocked through no fault of theirs).
+  function doShuffle(auto = false) {
     const freeIdx = tiles.map((t, i) => (!t.matched && isFree(tiles, i, cols) ? i : -1)).filter(i => i !== -1);
+    if (freeIdx.length < 2) return; // nothing to shuffle
     const copy = freeIdx.map(i => ({ ...tiles[i] }));
     for (let i = copy.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -301,9 +357,12 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
       freeIdx.forEach((idx, i) => { next[idx] = copy[i]; });
       return next;
     });
-    setScore(s => Math.max(0, s - 50));
-    showMsg("🔀 Shuffled! (−50 pts)", "info");
+    if (!auto) {
+      setScore(s => Math.max(0, s - 50));
+      showMsg("🔀 Shuffled! (−50 pts)", "info");
+    }
   }
+  function shuffle() { doShuffle(false); }
 
   function undo() {
     if (!lastPair) { showMsg("Nothing to undo!", "error"); return; }

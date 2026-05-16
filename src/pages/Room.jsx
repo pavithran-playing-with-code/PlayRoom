@@ -25,6 +25,8 @@ export default function Room() {
   const [showInvite,     setShowInvite]     = useState(false);
   const [inviteToast,    setInviteToast]    = useState("");
   const [invitedIds,     setInvitedIds]     = useState(new Set());
+  const [notFound,       setNotFound]       = useState(false);
+  const [redirectIn,     setRedirectIn]     = useState(4);
 
   const chatRef    = useRef(null);
   const pollRef    = useRef(null);
@@ -35,7 +37,7 @@ export default function Room() {
     try {
       const res  = await api.get(`/api/rooms/${code}`);
       const data = await res.json();
-      if (!data.success) { setError("Room not found."); return; }
+      if (!data.success) { setNotFound(true); setError(data.message || "Room not found."); return; }
       setRoom(data.room);
       setPlayers(data.room.players || []);
     } catch { setError("Could not load room."); }
@@ -45,7 +47,10 @@ export default function Room() {
     try {
       const res  = await api.get(`/api/rooms/${code}/poll`);
       const data = await res.json();
-      if (!data.success) return;
+      if (!data.success) {
+        if (res.status === 404) setNotFound(true);
+        return;
+      }
       setStatus(data.status);
       setSeed(data.seed);
       setPlayers(data.players || []);
@@ -73,7 +78,22 @@ export default function Room() {
     navigate("/lobby");
   }, [leaveRoom, navigate]);
 
+  // Countdown + auto-redirect when the room doesn't exist.
   useEffect(() => {
+    if (!notFound) return;
+    if (pollRef.current) clearInterval(pollRef.current);  // stop hammering /poll
+    setRedirectIn(4);
+    const t = setInterval(() => {
+      setRedirectIn(n => {
+        if (n <= 1) { clearInterval(t); navigate("/lobby"); return 0; }
+        return n - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [notFound, navigate]);
+
+  useEffect(() => {
+    if (notFound) return;       // don't start polling for a known-bad room
     fetchRoom();
     poll();
     pollRef.current = setInterval(poll, 2000);
@@ -162,6 +182,30 @@ export default function Room() {
   const seatedPlayers    = players.filter(p => !p.is_spectator);
   const watchingPlayers  = players.filter(p =>  p.is_spectator);
   const canStart     = isHost && seatedPlayers.length >= 1 && status === "waiting";
+
+  // ── Room not found ────────────────────────────────────────────────────────
+  if (notFound) {
+    return (
+      <div style={{ minHeight:"100vh", padding:"32px 20px", background:"var(--bg)",
+        display:"flex", alignItems:"center" }}>
+        <div style={{ maxWidth:480, margin:"0 auto", width:"100%" }}>
+          <div className="card" style={{ textAlign:"center" }}>
+            <div style={{ fontSize:"3.2rem", marginBottom:12 }}>🔍</div>
+            <h1 style={{ fontSize:"1.5rem", fontWeight:900, marginBottom:8 }}>Room not found</h1>
+            <p style={{ color:"var(--muted)", marginBottom:6 }}>
+              No room with code <strong style={{ color:"var(--accent)", letterSpacing:2 }}>{code}</strong>.
+            </p>
+            <p style={{ color:"var(--muted)", fontSize:"0.85rem", marginBottom:24 }}>
+              Double-check the code with whoever shared it. Returning to lobby in <strong>{redirectIn}s</strong>…
+            </p>
+            <button className="btn btn-primary btn-full" onClick={() => navigate("/lobby")}>
+              ← Back to Lobby
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Room ended ────────────────────────────────────────────────────────────
   if (status === "abandoned" || status === "finished") {

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../utils/AuthContext";
 import { api } from "../utils/api";
+import Logo from "./Logo";
 
 export default function Navbar() {
   const { user, isLoggedIn, logout } = useAuth();
@@ -51,8 +52,8 @@ export default function Navbar() {
     <nav style={{ background:"var(--surface)", borderBottom:"1px solid var(--surface2)", padding:"0 20px", position:"sticky", top:0, zIndex:100 }}>
       <div style={{ maxWidth:1100, margin:"0 auto", display:"flex", alignItems:"center", justifyContent:"space-between", height:60 }}>
 
-        <Link to="/" style={{ fontSize:"1.4rem", fontWeight:900, background:"linear-gradient(90deg,var(--accent),var(--accent2))", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text", letterSpacing:"-1px" }}>
-          PlayRoom 🎮
+        <Link to="/" aria-label="PlayRoom home" style={{ display:"inline-flex" }}>
+          <Logo size="md" />
         </Link>
 
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>

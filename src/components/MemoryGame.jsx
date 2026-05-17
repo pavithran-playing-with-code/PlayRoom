@@ -1,6 +1,7 @@
 // src/components/MemoryGame.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { api } from "../utils/api";
+import Logo from "./Logo";
 
 const EMOJIS     = ["🎮","🀄","🃏","🧩","🎯","🎲","🏆","⚡","🔥","🌟","🐉","🦊","🎪","🎨","🎵","🎸"];
 const TOTAL_PAIRS = 16;
@@ -178,11 +179,21 @@ export default function MemoryGame({ roomCode, seed, players, currentUser, onGam
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
         padding:"10px 20px", background:"var(--surface)", borderBottom:"1px solid var(--surface2)",
         flexShrink:0, flexWrap:"wrap", gap:8 }}>
-        <span style={{ fontSize:"1.2rem", fontWeight:900,
-          background:"linear-gradient(90deg,var(--accent),var(--accent2))",
-          WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
-          {isSpectator ? `👀 Watching ${spectatorWatching?.username || ""}` : "PlayRoom · Memory 🃏"}
-        </span>
+        {isSpectator ? (
+          <span style={{ fontSize:"1.05rem", fontWeight:900,
+            background:"linear-gradient(90deg,var(--accent),var(--accent2))",
+            WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
+            👀 Watching {spectatorWatching?.username || ""}
+          </span>
+        ) : (
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <Logo size="sm" />
+            <span style={{ background:"var(--surface2)", borderRadius:20, padding:"3px 12px",
+              fontSize:"0.75rem", color:"var(--muted)" }}>
+              MEMORY
+            </span>
+          </div>
+        )}
         <div style={{ display:"flex", gap:20 }}>
           {(isSpectator ? [
             { v: (spectatorWatching?.score ?? 0).toLocaleString(), l:"Score" },

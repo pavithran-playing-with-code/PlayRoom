@@ -1,6 +1,7 @@
 // src/components/MahjongGame.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../utils/api";
+import Logo from "./Logo";
 
 // ── Tile definitions ─────────────────────────────────────────────────────────
 const TILE_TYPES = [
@@ -413,13 +414,7 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
         flexShrink: 0, flexWrap: "wrap", gap: 8
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{
-            fontSize: "1.2rem", fontWeight: 900,
-            background: "linear-gradient(90deg,var(--accent),var(--accent2))",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text"
-          }}>
-            PlayRoom 🎮
-          </span>
+          <Logo size="sm" />
           <span style={{
             background: "var(--surface2)", borderRadius: 20, padding: "3px 12px",
             fontSize: "0.75rem", color: "var(--muted)"

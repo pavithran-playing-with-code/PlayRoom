@@ -2,6 +2,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../utils/AuthContext";
+import Logo from "../components/Logo";
 
 const GAMES = [
   { icon:"🀄", name:"Mahjong Solitaire", desc:"Match pairs of free tiles to clear the board. Solo or 1v1!",   players:"1–2" },
@@ -28,12 +29,10 @@ export default function Home() {
         🎮 Your Multi-Game Platform
       </div>
 
-      {/* Title */}
-      <h1 style={{ fontSize:"clamp(2.5rem,6vw,4.5rem)", fontWeight:900, lineHeight:1.1, marginBottom:16,
-        background:"linear-gradient(135deg,var(--accent) 0%,var(--accent2) 55%,var(--blue) 100%)",
-        WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", backgroundClip:"text" }}>
-        PlayRoom
-      </h1>
+      {/* Title — uses shared Logo so the icon stays consistent with the navbar */}
+      <div style={{ marginBottom:16, display:"flex", justifyContent:"center" }}>
+        <Logo size="xl" />
+      </div>
       <p style={{ fontSize:"clamp(1rem,2vw,1.2rem)", color:"var(--muted)", maxWidth:520, margin:"0 auto 40px", lineHeight:1.7 }}>
         Play classic games online or offline. Create a room, share the Room ID, and challenge your friends in real-time!
       </p>

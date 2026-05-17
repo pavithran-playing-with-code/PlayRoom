@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
+import Logo from "../components/Logo";
 
 const AVATARS = ["🎮", "🀄", "🃏", "🧩", "🎯", "🎲", "🏆", "⚡", "🔥", "🌟", "🐉", "🦊"];
 
@@ -32,15 +33,13 @@ export default function Register() {
       <div style={{ width: "100%", maxWidth: 460 }}>
 
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: "3rem", marginBottom: 8 }}>🎉</div>
-          <h1 style={{
-            fontSize: "1.8rem", fontWeight: 900, marginBottom: 6,
-            background: "linear-gradient(90deg,var(--accent),var(--accent2))",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text"
-          }}>
-            Create Account
+          <div style={{ display:"flex", justifyContent:"center", marginBottom: 14 }}>
+            <Logo size="lg" />
+          </div>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: 900, marginBottom: 6 }}>
+            Create your account
           </h1>
-          <p style={{ color: "var(--muted)" }}>Join PlayRoom for free</p>
+          <p style={{ color: "var(--muted)" }}>Join for free — no credit card</p>
         </div>
 
         <div className="card">

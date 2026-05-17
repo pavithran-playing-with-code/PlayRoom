@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
+import Logo from "../components/Logo";
 
 export default function Login() {
   const [form, setForm] = useState({ username: "", password: "" });
@@ -30,15 +31,13 @@ export default function Login() {
       <div style={{ width: "100%", maxWidth: 420 }}>
 
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ fontSize: "3rem", marginBottom: 8 }}>🎮</div>
-          <h1 style={{
-            fontSize: "1.8rem", fontWeight: 900, marginBottom: 6,
-            background: "linear-gradient(90deg,var(--accent),var(--accent2))",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text"
-          }}>
-            Welcome Back!
+          <div style={{ display:"flex", justifyContent:"center", marginBottom: 14 }}>
+            <Logo size="lg" />
+          </div>
+          <h1 style={{ fontSize: "1.4rem", fontWeight: 900, marginBottom: 6 }}>
+            Welcome back!
           </h1>
-          <p style={{ color: "var(--muted)" }}>Log in to PlayRoom</p>
+          <p style={{ color: "var(--muted)" }}>Log in to continue</p>
         </div>
 
         <div className="card">

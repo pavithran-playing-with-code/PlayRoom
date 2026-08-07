@@ -3,94 +3,109 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
-import Logo from "../components/Logo";
+import Detective, { useDetective } from "../components/characters/Detective";
+import { useToast } from "../components/ui";
 
-const AVATARS = ["🎮", "🀄", "🃏", "🧩", "🎯", "🎲", "🏆", "⚡", "🔥", "🌟", "🐉", "🦊"];
+const AVATARS = ["🎮", "🦊", "🐸", "🐙", "🐱", "🐲", "🐼", "🐾", "🀄", "🃏", "🎯", "🌟"];
 
 export default function Register() {
   const [form, setForm] = useState({ username: "", email: "", password: "", avatar: "🎮" });
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
+  const det = useDetective(true);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError(""); setLoading(true);
+    if (!form.username.trim()) { det.setMood("oops", 1800); toast.error("Pick a name first"); return; }
+    if (!form.password) { det.stopPeeking(); det.setMood("oops", 1800); toast.error("Password, please"); return; }
+
+    setLoading(true);
     try {
       const res = await api.post("/api/auth/register", form);
       const data = await res.json();
-      if (!data.success) { setError(data.message); return; }
+      if (!data.success) {
+        det.stopPeeking();
+        det.setMood("oops", 2200);
+        toast.error(data.message || "Could not create account.");
+        return;
+      }
+      det.stopPeeking();
+      det.setMood("cheer");
       login(data.user, data.token);
+      toast.success(`Welcome aboard, ${data.user.username}!`);
       navigate("/lobby");
     } catch {
-      setError("Server error — is the backend running on port 4321?");
+      det.stopPeeking();
+      det.setMood("oops", 2200);
+      toast.error("Server error — is the backend running on port 4321?");
     } finally { setLoading(false); }
   }
 
   return (
-    <div style={{ minHeight: "calc(100vh - 60px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ width: "100%", maxWidth: 460 }}>
-
-        <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ display:"flex", justifyContent:"center", marginBottom: 14 }}>
-            <Logo size="lg" />
+    <div className="wrap">
+      <div className="authwrap">
+        <div className="authart">
+          <Detective mood={det.mood} size={300} />
+          <div className="bubble" style={{ marginTop: 22, maxWidth: 340, textAlign: "left" }}>
+            {det.line}
           </div>
-          <h1 style={{ fontSize: "1.4rem", fontWeight: 900, marginBottom: 6 }}>
-            Create your account
-          </h1>
-          <p style={{ color: "var(--muted)" }}>Join for free — no credit card</p>
         </div>
 
-        <div className="card">
-          {error && <div className="alert alert-error">{error}</div>}
-          <form onSubmit={handleSubmit}>
+        <div className="pop" style={{ padding: 30 }}>
+          <h1 style={{ fontSize: "2rem", marginBottom: 6 }}>Join the club</h1>
+          <p className="muted" style={{ marginBottom: 24 }}>Takes about twenty seconds.</p>
 
-            {/* Avatar picker */}
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: "block", color: "var(--muted)", fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
-                Pick your avatar
-              </label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {AVATARS.map(av => (
-                  <button type="button" key={av} onClick={() => setForm(f => ({ ...f, avatar: av }))}
-                    style={{
-                      width: 44, height: 44, borderRadius: 10, fontSize: "1.3rem", cursor: "pointer", transition: "all 0.15s",
-                      border: form.avatar === av ? "2px solid var(--accent)" : "2px solid var(--surface2)",
-                      background: form.avatar === av ? "rgba(247,201,72,0.15)" : "var(--surface2)"
-                    }}>
+          <form onSubmit={handleSubmit}>
+            <div className="field">
+              <label htmlFor="rg-user">Username</label>
+              <input id="rg-user" type="text" placeholder="pick something fun" autoComplete="username"
+                required minLength={3} maxLength={32}
+                value={form.username}
+                onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+                {...det.nameProps} />
+            </div>
+
+            <div className="field">
+              <label>Pick your badge</label>
+              <div className="avpick">
+                {AVATARS.map((av) => (
+                  <button type="button" key={av}
+                    aria-pressed={form.avatar === av}
+                    onClick={() => { setForm((f) => ({ ...f, avatar: av })); det.setMood("watch", 1200); }}>
                     {av}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="input-group">
-              <label>Username</label>
-              <input type="text" placeholder="Choose a username…"
-                value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
-                required minLength={3} maxLength={32} />
-            </div>
-            <div className="input-group">
-              <label>Email</label>
-              <input type="email" placeholder="your@email.com"
-                value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
-            </div>
-            <div className="input-group">
-              <label>Password</label>
-              <input type="password" placeholder="At least 6 characters"
-                value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                required minLength={6} />
+            <div className="field">
+              <label htmlFor="rg-mail">Email</label>
+              <input id="rg-mail" type="email" placeholder="your@email.com" autoComplete="email" required
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                {...det.nameProps} />
             </div>
 
-            <button className="btn btn-primary btn-full" type="submit" disabled={loading}>
-              {loading ? "Creating account…" : "🎮 Join PlayRoom!"}
+            <div className="field">
+              <label htmlFor="rg-pass">Password</label>
+              <input id="rg-pass" type="password" placeholder="at least 6 characters" autoComplete="new-password"
+                required minLength={6}
+                value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                {...det.secretProps} />
+            </div>
+
+            <button type="submit" className="press p-mint lg full" style={{ marginTop: 6 }} disabled={loading}>
+              {loading ? "Filing your paperwork…" : "🎉 Create my account"}
             </button>
           </form>
-          <p style={{ textAlign: "center", marginTop: 20, color: "var(--muted)", fontSize: "0.9rem" }}>
-            Already have an account?{" "}
-            <Link to="/login" style={{ color: "var(--accent)", fontWeight: 700 }}>Log in</Link>
-          </p>
+
+          <div className="row" style={{ justifyContent: "center", gap: 8, marginTop: 20, flexWrap: "wrap" }}>
+            <span className="muted" style={{ fontSize: ".95rem" }}>Already have one?</span>
+            <Link to="/login" className="press p-white sm">Log in instead</Link>
+          </div>
         </div>
       </div>
     </div>

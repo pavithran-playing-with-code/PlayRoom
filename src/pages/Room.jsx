@@ -1,10 +1,10 @@
 // src/pages/Room.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
-import MahjongGame from "../components/MahjongGame";
-import MemoryGame  from "../components/MemoryGame";
+import { getGameComponent, GAME_MAP } from "../components/games/registry";
+import { Avatar } from "../components/ui";
 
 export default function Room() {
   const { code } = useParams();
@@ -15,6 +15,9 @@ export default function Room() {
   const [players,   setPlayers]   = useState([]);
   const [status,    setStatus]    = useState("waiting");
   const [seed,      setSeed]      = useState(null);
+  const [duration,  setDuration]  = useState(120);
+  const [startedAt, setStartedAt] = useState(null);
+  const [serverNow, setServerNow] = useState(null);
   const [chat,      setChat]      = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [error,     setError]     = useState("");
@@ -32,6 +35,15 @@ export default function Room() {
   const pollRef    = useRef(null);
   const leftRef    = useRef(false);     // make sure we only call /leave once
   const inviteRef  = useRef(null);
+
+  // Derived up here because the polling effect below needs isSpectator.
+  const me          = players.find(p => p.user_id === user?.id);
+  const isSpectator = !!me?.is_spectator;
+
+  // Pause the room poll while we're actually playing — the game component runs
+  // its own score/opponent sync loop, so a second timer is pure duplicate load.
+  // Spectators keep polling: their whole view is rendered from poll data.
+  const pausePolling = notFound || (status === "in_progress" && !isSpectator);
 
   const fetchRoom = useCallback(async () => {
     try {
@@ -53,6 +65,9 @@ export default function Room() {
       }
       setStatus(data.status);
       setSeed(data.seed);
+      if (data.duration_seconds) setDuration(data.duration_seconds);
+      setStartedAt(data.started_at || null);
+      setServerNow(data.server_now || null);
       setPlayers(data.players || []);
       setChat(data.chat || []);
     } catch { /* silent */ }
@@ -79,9 +94,9 @@ export default function Room() {
   }, [leaveRoom, navigate]);
 
   // Countdown + auto-redirect when the room doesn't exist.
+  // (Polling has already stopped — `pausePolling` covers notFound.)
   useEffect(() => {
     if (!notFound) return;
-    if (pollRef.current) clearInterval(pollRef.current);  // stop hammering /poll
     setRedirectIn(4);
     const t = setInterval(() => {
       setRedirectIn(n => {
@@ -92,22 +107,25 @@ export default function Room() {
     return () => clearInterval(t);
   }, [notFound, navigate]);
 
+  // Leave on tab close. Kept in its own effect so it stays armed even while
+  // polling is paused mid-game.
+  // NOTE: do NOT call leaveRoom() in the cleanup — React 18 StrictMode
+  // double-invokes effects in dev (mount → unmount → mount), which would mark
+  // the room abandoned the instant it's created. Leave fires only on explicit
+  // user intent (back button, quit) and on tab close.
   useEffect(() => {
-    if (notFound) return;       // don't start polling for a known-bad room
+    const onUnload = () => leaveRoom();
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, [leaveRoom]);
+
+  useEffect(() => {
+    if (pausePolling) return;
     fetchRoom();
     poll();
     pollRef.current = setInterval(poll, 2000);
-    const onUnload = () => leaveRoom();
-    window.addEventListener("beforeunload", onUnload);
-    return () => {
-      clearInterval(pollRef.current);
-      window.removeEventListener("beforeunload", onUnload);
-      // NOTE: do NOT call leaveRoom() here — React 18 StrictMode double-invokes
-      // effects in dev (mount → unmount → mount) which would mark the room
-      // abandoned the instant it's created. Leave is fired explicitly on
-      // user-intent actions (back button, quit) + beforeunload (tab close).
-    };
-  }, [fetchRoom, poll, leaveRoom]);
+    return () => clearInterval(pollRef.current);
+  }, [fetchRoom, poll, pausePolling]);
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -176,73 +194,56 @@ export default function Room() {
     });
   }
 
-  const me           = players.find(p => p.user_id === user?.id);
   const isHost       = !!me?.is_host;
-  const isSpectator  = !!me?.is_spectator;
   const seatedPlayers    = players.filter(p => !p.is_spectator);
   const watchingPlayers  = players.filter(p =>  p.is_spectator);
   const canStart     = isHost && seatedPlayers.length >= 1 && status === "waiting";
 
+  // A 1-seat room is a solo run: nobody else can join it (the API rejects joins
+  // and hides it from the open-room list), so every "get people in here" affordance
+  // — room code, invites, chat, empty seats — is noise and stays hidden.
+  const isSolo = (room?.max_players || 0) === 1;
+
   // ── Room not found ────────────────────────────────────────────────────────
   if (notFound) {
     return (
-      <div style={{ minHeight:"100vh", padding:"32px 20px", background:"var(--bg)",
-        display:"flex", alignItems:"center" }}>
-        <div style={{ maxWidth:480, margin:"0 auto", width:"100%" }}>
-          <div className="card" style={{ textAlign:"center" }}>
-            <div style={{ fontSize:"3.2rem", marginBottom:12 }}>🔍</div>
-            <h1 style={{ fontSize:"1.5rem", fontWeight:900, marginBottom:8 }}>Room not found</h1>
-            <p style={{ color:"var(--muted)", marginBottom:6 }}>
-              No room with code <strong style={{ color:"var(--accent)", letterSpacing:2 }}>{code}</strong>.
-            </p>
-            <p style={{ color:"var(--muted)", fontSize:"0.85rem", marginBottom:24 }}>
-              Double-check the code with whoever shared it. Returning to lobby in <strong>{redirectIn}s</strong>…
-            </p>
-            <button className="btn btn-primary btn-full" onClick={() => navigate("/lobby")}>
-              ← Back to Lobby
-            </button>
-          </div>
-        </div>
-      </div>
+      <Notice emoji="🔍" title="Room not found">
+        <p className="muted" style={{ marginBottom: 6 }}>
+          No room with the code <span className="display" style={{ letterSpacing: ".16em" }}>{code}</span>.
+        </p>
+        <p className="muted" style={{ fontSize: ".9rem", marginBottom: 22 }}>
+          Double-check it. Heading back to the lobby in <strong>{redirectIn}s</strong>…
+        </p>
+        <button className="press p-sun full" onClick={() => navigate("/lobby")}>← Back to lobby</button>
+      </Notice>
     );
   }
 
   // ── Room ended ────────────────────────────────────────────────────────────
   if (status === "abandoned" || status === "finished") {
     return (
-      <div style={{ minHeight:"100vh", padding:"32px 20px", background:"var(--bg)" }}>
-        <div style={{ maxWidth:520, margin:"0 auto" }}>
-          <div className="card" style={{ textAlign:"center" }}>
-            <div style={{ fontSize:"3rem", marginBottom:12 }}>
-              {status === "abandoned" ? "🚪" : "🏁"}
-            </div>
-            <h1 style={{ fontSize:"1.4rem", fontWeight:900, marginBottom:8 }}>
-              {status === "abandoned" ? "Room closed" : "Game finished"}
-            </h1>
-            <p style={{ color:"var(--muted)", marginBottom:20 }}>
-              {status === "abandoned"
-                ? "The host left or the room was abandoned."
-                : "This room's game has ended."}
-            </p>
-            <button className="btn btn-primary btn-full" onClick={() => navigate("/lobby")}>
-              ← Back to Lobby
-            </button>
-          </div>
-        </div>
-      </div>
+      <Notice emoji={status === "abandoned" ? "🚪" : "🏁"}
+        title={status === "abandoned" ? "Room closed" : "Game finished"}>
+        <p className="muted" style={{ marginBottom: 22 }}>
+          {status === "abandoned" ? "The host left or the room was abandoned." : "This room's game has ended."}
+        </p>
+        <button className="press p-sun full" onClick={() => navigate("/lobby")}>← Back to lobby</button>
+      </Notice>
     );
   }
 
   // ── In-game ───────────────────────────────────────────────────────────────
   if (status === "in_progress" && seed !== null && !isSpectator) {
-    clearInterval(pollRef.current);
-    const GameComponent = room?.game_slug === "memory" ? MemoryGame : MahjongGame;
+    const GameComponent = getGameComponent(room?.game_slug);
     return (
       <GameComponent
         roomCode={code}
         seed={seed}
         players={seatedPlayers}
         currentUser={user}
+        durationSeconds={duration}
+        startedAt={startedAt}
+        serverNow={serverNow}
         onGameEnd={async (_score, _pairs, _moves, won) => {
           // Server reads the validated score from room_players; we only signal win/loss + room.
           try { await api.post("/api/leaderboard/update", { room_code: code, won: !!won }); } catch { /* silent */ }
@@ -260,27 +261,23 @@ export default function Room() {
 
     if (!watched) {
       return (
-        <div style={{ minHeight:"100vh", padding:"32px 20px", background:"var(--bg)" }}>
-          <div style={{ maxWidth:520, margin:"0 auto" }}>
-            <div className="card" style={{ textAlign:"center" }}>
-              <div style={{ fontSize:"3rem", marginBottom:12 }}>👀</div>
-              <p style={{ color:"var(--muted)", marginBottom:20 }}>Waiting for a player to watch…</p>
-              <button className="btn btn-outline btn-full" onClick={exitToLobby}>
-                ← Leave Spectator Mode
-              </button>
-            </div>
-          </div>
-        </div>
+        <Notice emoji="👀" title="Nobody to watch yet">
+          <p className="muted" style={{ marginBottom: 22 }}>Waiting for a player to join the board…</p>
+          <button className="press p-white full" onClick={exitToLobby}>← Leave spectator mode</button>
+        </Notice>
       );
     }
 
-    const GameComponent = room?.game_slug === "memory" ? MemoryGame : MahjongGame;
+    const GameComponent = getGameComponent(room?.game_slug);
     return (
       <GameComponent
         roomCode={code}
         seed={seed}
         players={seatedPlayers}
         currentUser={user}
+        durationSeconds={duration}
+        startedAt={startedAt}
+        serverNow={serverNow}
         isSpectator
         spectatorState={parsedState}
         spectatorWatching={watched}
@@ -289,70 +286,71 @@ export default function Room() {
     );
   }
 
+
   // ── Waiting lobby ─────────────────────────────────────────────────────────
-  const inputStyle = {
-    flex:1, padding:"10px 14px", background:"var(--surface2)",
-    border:"1.5px solid #4a3070", borderRadius:10, color:"var(--text)",
-    outline:"none", fontSize:"0.9rem",
-  };
+  const mins = Math.round((duration || 120) / 60);
+  const seats = room?.max_players || 2;
+  const g = GAME_MAP[room?.game_slug];
+  const col = g?.col || "var(--mint)";
 
   return (
-    <div style={{ minHeight:"100vh", padding:"32px 20px", background:"var(--bg)" }}>
-      <div style={{ maxWidth:680, margin:"0 auto" }}>
+    <div className="wrap">
+      <div style={{ maxWidth: 820, margin: "0 auto" }}>
 
-        {error && <div className="alert alert-error" style={{ marginBottom:20 }}>{error}</div>}
+        <div className="row" style={{ justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
+          <button className="press p-white sm" onClick={exitToLobby}>← Leave</button>
+          <span className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+            <span className="chip c-sun">{room?.game_icon || "🎮"} {room?.game_name || "Loading…"}</span>
+            <span className="chip c-sky">⏱️ {mins} min</span>
+            {isSolo && <span className="chip c-coral">🧍 Solo run</span>}
+          </span>
+        </div>
 
-        <div className="card">
-          {/* Game icon + title */}
-          <div style={{ textAlign:"center", marginBottom:24 }}>
-            <div style={{ fontSize:"2.8rem", marginBottom:8 }}>{room?.game_icon || "🎮"}</div>
-            <h1 style={{ fontSize:"1.5rem", fontWeight:900, marginBottom:4 }}>
-              {room?.game_name || "Loading…"}
-            </h1>
-            <span style={{ color:"var(--muted)", fontSize:"0.9rem" }}>
-              {status === "waiting" ? "🟡 Waiting for players…" : "🟢 Game in progress"}
-            </span>
+        {error && (
+          <div className="note" style={{ background: "var(--coral)", color: "#fff", marginBottom: 18 }}>{error}</div>
+        )}
+
+        {/* Room code — only useful when someone else can actually join. Held back
+            until `room` loads so a solo run never flashes a code. */}
+        {!room ? null : isSolo ? (
+          <div className="pop" style={{ padding: 30, textAlign: "center", marginBottom: 22, background: col }}>
+            <div style={{ fontSize: "3rem", marginBottom: 8 }}>🎯</div>
+            <div style={{ fontSize: "1.05rem" }}>Just you and the clock — beat your own best score.</div>
           </div>
-
-          {/* Room code box */}
-          <div style={{ background:"var(--surface2)", borderRadius:14, padding:20, textAlign:"center", marginBottom:24 }}>
-            <div style={{ color:"var(--muted)", fontSize:"0.78rem", textTransform:"uppercase", letterSpacing:2, marginBottom:8 }}>
-              Room Code — Share with friends
+        ) : (
+          <div className="pop" style={{ padding: 30, textAlign: "center", marginBottom: 22, background: col }}>
+            <div className="eyebrow" style={{ marginBottom: 14 }}>Room code — send it to a friend</div>
+            <div className="code" style={{ justifyContent: "center", marginBottom: 18 }}>
+              {code.split("").map((ch, i) => <span key={i}>{ch}</span>)}
             </div>
-            <div style={{ fontSize:"2.4rem", fontWeight:900, color:"var(--accent)", letterSpacing:10 }}>
-              {code}
-            </div>
-            <button className="btn btn-outline btn-sm" style={{ marginTop:12 }} onClick={copyCode}>
-              {copied ? "✅ Copied!" : "📋 Copy Code"}
+            <button className="press p-white sm" onClick={copyCode}>
+              {copied ? "✅ Copied!" : "📋 Copy code"}
             </button>
           </div>
+        )}
 
-          {/* Player slots */}
-          <h3 style={{ color:"var(--muted)", fontSize:"0.8rem", textTransform:"uppercase", letterSpacing:1, fontWeight:600, marginBottom:14 }}>
-            Players ({seatedPlayers.length}/{room?.max_players || 2})
+        <div className="pop" style={{ padding: 26 }}>
+          <h3 style={{ fontSize: "1.25rem", marginBottom: 16 }}>
+            {isSolo ? "Ready to go" : `Who's here (${seatedPlayers.length} of ${seats})`}
           </h3>
-          <div style={{ display:"flex", gap:12, marginBottom:24, flexWrap:"wrap" }}>
-            {Array.from({ length: room?.max_players || 2 }).map((_, i) => {
+
+          <div className="row" style={{ gap: 14, flexWrap: "wrap", marginBottom: 24 }}>
+            {Array.from({ length: seats }).map((_, i) => {
               const p = seatedPlayers[i];
               return p ? (
-                <div key={i} style={{ flex:1, minWidth:130, background:"rgba(78,203,113,0.08)",
-                  border:"1.5px solid rgba(78,203,113,0.35)", borderRadius:14, padding:16, textAlign:"center" }}>
-                  <div style={{ width:48, height:48, borderRadius:"50%", margin:"0 auto 8px",
-                    background:"linear-gradient(135deg,var(--accent),var(--accent2))",
-                    display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.5rem", lineHeight:1 }}>
-                    <span style={{ lineHeight:1 }}>{p.avatar}</span>
+                <div key={i} className="slot filled">
+                  <div style={{ marginBottom: 10 }}>
+                    <Avatar emoji={p.avatar} size={56} seed={p.user_id} />
                   </div>
-                  <div style={{ fontWeight:700, fontSize:"0.95rem" }}>{p.username}</div>
-                  {p.is_host        && <div style={{ color:"var(--accent)", fontSize:"0.75rem", marginTop:4 }}>👑 Host</div>}
-                  {p.user_id === user?.id && <div style={{ color:"var(--green)",  fontSize:"0.75rem" }}>You</div>}
+                  <div style={{ fontSize: "1rem" }}>{p.username}</div>
+                  {/* "Host" is meaningless when you're the only player. */}
+                  {p.is_host && !isSolo && <div style={{ fontSize: ".8rem", marginTop: 3 }}>👑 Host</div>}
+                  {p.user_id === user?.id && <div className="muted" style={{ fontSize: ".8rem" }}>that's you</div>}
                 </div>
               ) : (
-                <div key={i} style={{ flex:1, minWidth:130, background:"var(--surface2)",
-                  border:"1.5px dashed #4a3070", borderRadius:14, padding:16, textAlign:"center" }}>
-                  <div style={{ width:48, height:48, borderRadius:"50%", margin:"0 auto 8px",
-                    background:"var(--surface)", border:"2px dashed #4a3070",
-                    display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.4rem", color:"var(--muted)" }}>?</div>
-                  <div style={{ color:"var(--muted)", fontSize:"0.85rem" }}>Waiting…</div>
+                <div key={i} className="slot">
+                  <div className="slot-empty">?</div>
+                  <div className="muted" style={{ fontSize: ".92rem" }}>empty seat</div>
                 </div>
               );
             })}
@@ -361,114 +359,109 @@ export default function Room() {
           {/* Spectators */}
           {watchingPlayers.length > 0 && (
             <>
-              <h3 style={{ color:"var(--muted)", fontSize:"0.78rem", textTransform:"uppercase", letterSpacing:1, fontWeight:600, marginBottom:10 }}>
-                👀 Watching ({watchingPlayers.length})
-              </h3>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:20 }}>
-                {watchingPlayers.map(p => (
-                  <div key={p.user_id} style={{ background:"var(--surface2)", borderRadius:20,
-                    padding:"4px 12px", fontSize:"0.85rem", display:"flex", alignItems:"center", gap:6 }}>
-                    <span>{p.avatar}</span>
-                    <span>{p.username}{p.user_id === user?.id && " (You)"}</span>
-                  </div>
+              <div className="muted eyebrow">👀 Watching ({watchingPlayers.length})</div>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+                {watchingPlayers.map((p) => (
+                  <span key={p.user_id} className="chip">
+                    {p.avatar} {p.username}{p.user_id === user?.id && " (you)"}
+                  </span>
                 ))}
               </div>
             </>
           )}
 
-          {/* Invite friends */}
-          {status === "waiting" && me && (
-            <div ref={inviteRef} style={{ position:"relative", marginBottom:12 }}>
-              <button className="btn btn-outline btn-full" onClick={() => setShowInvite(s => !s)}>
-                👥 Invite Friends
-              </button>
-              {showInvite && (
-                <div style={{ position:"absolute", top:"calc(100% + 8px)", left:0, right:0, zIndex:50,
-                  background:"var(--surface)", border:"1.5px solid var(--surface2)", borderRadius:12,
-                  padding:8, maxHeight:260, overflowY:"auto", boxShadow:"0 10px 30px rgba(0,0,0,0.4)" }}>
-                  {friends.length === 0 ? (
-                    <div style={{ padding:14, textAlign:"center", color:"var(--muted)", fontSize:"0.88rem" }}>
-                      No friends yet. <a href="/friends" style={{ color:"var(--accent)" }}>Find some →</a>
-                    </div>
-                  ) : friends.map(f => {
-                    const inRoom = players.some(p => p.user_id === f.id);
-                    const sent   = invitedIds.has(f.id);
-                    return (
-                      <div key={f.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px" }}>
-                        <div style={{ width:32, height:32, borderRadius:"50%",
-                          background:"linear-gradient(135deg,var(--accent),var(--accent2))",
-                          display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1rem", lineHeight:1 }}>
-                          <span style={{ lineHeight:1 }}>{f.avatar}</span>
-                        </div>
-                        <div style={{ flex:1, fontSize:"0.9rem", fontWeight:600 }}>{f.username}</div>
-                        {inRoom ? (
-                          <span style={{ color:"var(--muted)", fontSize:"0.8rem" }}>In room</span>
-                        ) : sent ? (
-                          <span style={{ color:"var(--green)", fontSize:"0.8rem" }}>✓ Invited</span>
-                        ) : (
-                          <button className="btn btn-primary btn-sm" onClick={() => sendInvite(f.id)}>
-                            Invite
-                          </button>
-                        )}
+          <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+            {/* Invite friends — never in a solo run, there's no seat to fill. */}
+            {status === "waiting" && me && !isSolo && (
+              <span ref={inviteRef} style={{ position: "relative", flex: 1, minWidth: 180 }}>
+                <button className="press p-white full" onClick={() => setShowInvite((s) => !s)}>
+                  👥 Invite friends
+                </button>
+                {showInvite && (
+                  <div className="menu" style={{ left: 0, right: 0, maxHeight: 260, overflowY: "auto" }}>
+                    {friends.length === 0 ? (
+                      <div className="muted" style={{ padding: 14, textAlign: "center", fontSize: ".9rem" }}>
+                        No friends yet. <Link to="/friends" style={{ textDecoration: "underline" }}>Find some →</Link>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-              {inviteToast && (
-                <div style={{ marginTop:8, color:"var(--muted)", fontSize:"0.82rem", textAlign:"center" }}>
-                  {inviteToast}
-                </div>
-              )}
-            </div>
-          )}
+                    ) : friends.map((f) => {
+                      const inRoom = players.some((p) => p.user_id === f.id);
+                      const sent = invitedIds.has(f.id);
+                      return (
+                        <div key={f.id} className="row" style={{ gap: 10, padding: "8px 10px" }}>
+                          <Avatar emoji={f.avatar} size={32} seed={f.id} />
+                          <span style={{ flex: 1, fontSize: ".92rem" }}>{f.username}</span>
+                          {inRoom ? <span className="muted" style={{ fontSize: ".78rem" }}>In room</span>
+                            : sent ? <span className="chip c-lime" style={{ fontSize: ".72rem" }}>✓ Invited</span>
+                            : <button className="press p-lime sm" onClick={() => sendInvite(f.id)}>Invite</button>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </span>
+            )}
 
-          {/* Actions */}
-          {canStart && (
-            <button className="btn btn-primary btn-full" onClick={handleStart} disabled={starting} style={{ marginBottom:12 }}>
-              {starting ? "Starting…" : "🚀 Start Game!"}
-            </button>
-          )}
+            {canStart && (
+              <button className="press p-coral lg" style={{ flex: 2, minWidth: 220 }}
+                onClick={handleStart} disabled={starting}>
+                {starting ? "Starting…" : isSolo ? "🎯 Start solo run!" : "🚀 Start the game!"}
+              </button>
+            )}
+          </div>
+
+          {inviteToast && <div className="muted" style={{ marginTop: 10, fontSize: ".82rem" }}>{inviteToast}</div>}
+
           {isSpectator && status === "waiting" && (
-            <div className="alert alert-info" style={{ marginBottom:12 }}>
+            <div className="note" style={{ background: "var(--sky)", marginTop: 20 }}>
               👀 You're spectating — you'll see live scores when the game begins.
             </div>
           )}
           {!isHost && !isSpectator && status === "waiting" && (
-            <div className="alert alert-info" style={{ marginBottom:12 }}>
+            <div className="note" style={{ background: "var(--paper2)", marginTop: 20 }}>
               ⏳ Waiting for the host to start the game…
             </div>
           )}
-          <button className="btn btn-outline btn-full" onClick={exitToLobby}>
-            ← Back to Lobby
-          </button>
 
-          {/* Chat */}
-          <div style={{ marginTop:28 }}>
-            <div style={{ fontWeight:700, marginBottom:10 }}>💬 Room Chat</div>
-            <div ref={chatRef} style={{ background:"var(--surface2)", borderRadius:14, padding:14,
-              maxHeight:200, overflowY:"auto", display:"flex", flexDirection:"column", gap:8 }}>
-              {chat.length === 0 ? (
-                <div style={{ textAlign:"center", color:"var(--muted)", fontSize:"0.85rem", padding:"10px 0" }}>
-                  No messages yet — say hi!
-                </div>
-              ) : chat.map((m, i) => (
-                <div key={i} style={{ background:"var(--surface)", borderRadius:8, padding:"8px 12px", fontSize:"0.85rem" }}>
-                  <div style={{ color:"var(--accent)", fontSize:"0.72rem", fontWeight:700, marginBottom:2 }}>
-                    {m.avatar} {m.username}
+          {/* Chat — hidden in a solo run; there's nobody to talk to. */}
+          {!isSolo && (
+            <div className="note" style={{ background: "var(--paper2)", marginTop: 24, boxShadow: "none" }}>
+              <div className="muted eyebrow">💬 Chat</div>
+              <div ref={chatRef} className="stack" style={{ gap: 10, marginBottom: 14, maxHeight: 210, overflowY: "auto" }}>
+                {chat.length === 0 ? (
+                  <div className="muted" style={{ fontSize: ".9rem", padding: "6px 0" }}>No messages yet — say hi!</div>
+                ) : chat.map((m, i) => (
+                  <div key={i} className="row" style={{ gap: 10, alignItems: "flex-start" }}>
+                    <Avatar emoji={m.avatar} size={34} seed={m.username} />
+                    <span style={{ fontSize: ".95rem" }}>
+                      <strong>{m.username}</strong> <span className="muted">{m.message}</span>
+                    </span>
                   </div>
-                  {m.message}
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="inline">
+                <input className="press p-white" style={{ justifyContent: "flex-start", fontFamily: "Nunito", fontWeight: 700 }}
+                  placeholder="Say something nice…" value={chatInput} maxLength={200}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && sendChat()} />
+                <button className="press p-sun" onClick={sendChat}>Send</button>
+              </div>
             </div>
-            <div style={{ display:"flex", gap:8, marginTop:10 }}>
-              <input style={inputStyle} placeholder="Type a message…"
-                value={chatInput} onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && sendChat()} maxLength={200} />
-              <button className="btn btn-secondary btn-sm" onClick={sendChat}>Send</button>
-            </div>
-          </div>
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Full-page message card — "room not found", "room closed" and the empty
+// spectator state are otherwise three copies of the same layout.
+function Notice({ emoji, title, children }) {
+  return (
+    <div className="wrap" style={{ display: "flex", alignItems: "center", minHeight: "100vh" }}>
+      <div className="pop" style={{ maxWidth: 440, margin: "0 auto", padding: 30, textAlign: "center" }}>
+        <div style={{ fontSize: "3.4rem", marginBottom: 10 }}>{emoji}</div>
+        <h1 style={{ fontSize: "1.7rem", marginBottom: 8 }}>{title}</h1>
+        {children}
       </div>
     </div>
   );

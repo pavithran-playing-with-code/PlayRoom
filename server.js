@@ -12,20 +12,23 @@ if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
 }
 
 const express = require("express");
+const http = require("http");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
 
 const errorHandler = require("./middleware/errorHandler");
-const db           = require("./config/db");
+const db = require("./config/db");
+const { initSocket } = require("./config/socket");
+const { corsOptions, assertProductionOrigins } = require("./config/cors");
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 const authRoutes = require("./routes/auth");
 const roomRoutes = require("./routes/rooms");
 const gameRoutes = require("./routes/games");
 const leaderboardRoutes = require("./routes/leaderboard");
-const friendsRoutes     = require("./routes/friends");
+const friendsRoutes = require("./routes/friends");
 
 const app = express();
 const PORT = process.env.PORT || 4321;
@@ -34,22 +37,9 @@ const PORT = process.env.PORT || 4321;
 app.use(helmet({ contentSecurityPolicy: false }));
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
-const allowed = [
-  process.env.FRONTEND_URL || "http://localhost:3333",
-];
-
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    const clean = origin.replace(/\/+$/, ""); // strip trailing slash
-    if (allowed.includes(clean)) return cb(null, true);
-    if (process.env.NODE_ENV !== "production" && /^http:\/\/localhost:\d+$/.test(clean)) return cb(null, true);
-    cb(new Error(`CORS blocked: ${origin}`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
+// Policy lives in config/cors.js and is shared with the Socket.io hub.
+assertProductionOrigins();
+app.use(cors(corsOptions));
 
 // ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: "5mb" }));
@@ -77,7 +67,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/games", gameRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
-app.use("/api/friends",     friendsRoutes);
+app.use("/api/friends", friendsRoutes);
 
 // ── Serve React production build ──────────────────────────────────────────────
 // Dev  → React runs on :3333, proxies /api/* here automatically (package.json proxy)
@@ -118,10 +108,18 @@ if (process.env.NODE_ENV !== "test") {
   setInterval(sweepStaleRooms, 5 * 60 * 1000).unref();
 }
 
+// ── Real-time (Socket.io) ───────────────────────────────────────────────────
+// Wrap the Express app in an HTTP server so Socket.io can share the port.
+// Routes reach the hub via req.app.get("io") to push room/presence events.
+const server = http.createServer(app);
+const io = initSocket(server);
+app.set("io", io);
+
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`\n🚀 PlayRoom backend   →  http://localhost:${PORT}`);
   console.log(`   Health check        →  http://localhost:${PORT}/api/health`);
+  console.log(`   WebSocket (Socket.io) ready on the same port`);
   console.log(`   React dev server    →  http://localhost:3333  (npm start)\n`);
 });
 

@@ -2,101 +2,113 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
+import { Avatar, Spinner, avatarColour } from "../components/ui";
 
-const MEDAL = ["🥇","🥈","🥉"];
+const MEDAL = ["🥇", "🥈", "🥉"];
+// Podium reading order is 2nd, 1st, 3rd — so the tallest block sits in the middle.
+const PODIUM_HEIGHTS = [96, 132, 74];
 
 export default function Leaderboard() {
   const { user } = useAuth();
-  const [board,   setBoard]   = useState([]);
+  const [board, setBoard] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.get("/api/leaderboard")
-      .then(r => r.json())
-      .then(d => { if (d.success) setBoard(d.leaderboard); })
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setBoard(d.leaderboard); })
       .finally(() => setLoading(false));
   }, []);
 
-  const myRow = board.find(r => r.user_id === user?.id);
+  const myRow = board.find((r) => r.user_id === user?.id);
+  const top3 = board.slice(0, 3);
+  const podium = [top3[1], top3[0], top3[2]].filter(Boolean);
 
   return (
-    <div style={{ minHeight:"calc(100vh - 60px)", padding:"32px 20px" }}>
-      <div style={{ maxWidth:720, margin:"0 auto" }}>
+    <div className="wrap">
+      <div style={{ maxWidth: 820, margin: "0 auto" }}>
 
-        <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ fontSize:"3rem", marginBottom:8 }}>🏆</div>
-          <h1 style={{ fontSize:"2rem", fontWeight:900, marginBottom:6 }}>Leaderboard</h1>
-          <p style={{ color:"var(--muted)" }}>Top players across all games</p>
+        <div style={{ textAlign: "center", marginBottom: 34 }}>
+          <div style={{ fontSize: "3.4rem" }}>🏆</div>
+          <h1 style={{ fontSize: "2.4rem" }}>Hall of Fame</h1>
+          <p className="muted">Everyone's best across all {board.length ? "" : "five "}games</p>
         </div>
 
-        {/* My rank highlight */}
-        {myRow && (
-          <div style={{ background:"rgba(247,201,72,0.08)", border:"1.5px solid rgba(247,201,72,0.3)",
-            borderRadius:14, padding:"14px 20px", marginBottom:24,
-            display:"flex", alignItems:"center", gap:16 }}>
-            <span style={{ fontSize:"1.5rem", fontWeight:900, color:"var(--accent)", minWidth:44 }}>
-              #{myRow.rank}
-            </span>
-            <span style={{ fontSize:"1.3rem" }}>{myRow.avatar}</span>
-            <div style={{ flex:1 }}>
-              <div style={{ fontWeight:700 }}>Your Rank</div>
-              <div style={{ color:"var(--muted)", fontSize:"0.83rem" }}>
-                {myRow.games_played} games · {myRow.win_rate}% win rate
+        {loading ? (
+          <div className="row" style={{ justifyContent: "center", padding: "70px 0" }}><Spinner size={38} /></div>
+        ) : board.length === 0 ? (
+          <div className="pop" style={{ padding: "56px 20px", textAlign: "center" }}>
+            <div style={{ fontSize: "3rem", marginBottom: 10 }}>🎮</div>
+            <p className="muted">No scores yet — play a game to claim the top spot!</p>
+          </div>
+        ) : (
+          <>
+            {/* Podium */}
+            {podium.length > 0 && (
+              <div className="row" style={{ alignItems: "flex-end", justifyContent: "center", gap: 14, marginBottom: 34 }}>
+                {podium.map((p, orderIdx) => {
+                  const place = board.indexOf(p);
+                  const col = avatarColour(p.user_id);
+                  return (
+                    <div key={p.user_id} style={{ flex: 1, maxWidth: 150, textAlign: "center" }}>
+                      <Avatar emoji={p.avatar} size={place === 0 ? 76 : 58} seed={p.user_id} />
+                      <div className="display" style={{ marginTop: 8, fontSize: "1.05rem" }}>{p.username}</div>
+                      <div style={{ fontSize: ".9rem" }}>{Number(p.total_score).toLocaleString()}</div>
+                      <div className="step" style={{ height: PODIUM_HEIGHTS[orderIdx], background: col, marginTop: 10 }}>
+                        {MEDAL[place]}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
-            <span style={{ fontWeight:900, fontSize:"1.15rem", color:"var(--accent)" }}>
-              {Number(myRow.total_score).toLocaleString()} pts
-            </span>
-          </div>
-        )}
+            )}
 
-        {/* Table */}
-        <div style={{ background:"var(--surface)", border:"1.5px solid var(--surface2)", borderRadius:16, overflow:"hidden" }}>
-          {/* Header row */}
-          <div className="lb-row lb-header" style={{ borderBottom:"1px solid var(--surface2)" }}>
-            <span>#</span><span>Player</span>
-            <span style={{ textAlign:"right" }}>Score</span>
-            <span className="lb-games" style={{ textAlign:"right" }}>Games</span>
-            <span className="lb-win"   style={{ textAlign:"right" }}>Win%</span>
-          </div>
-
-          {loading ? (
-            <div style={{ textAlign:"center", padding:"48px 20px", color:"var(--muted)" }}>Loading…</div>
-          ) : board.length === 0 ? (
-            <div style={{ textAlign:"center", padding:"48px 20px", color:"var(--muted)" }}>
-              <div style={{ fontSize:"2rem", marginBottom:10 }}>🎮</div>
-              No scores yet — play a game to appear here!
-            </div>
-          ) : board.map((row, i) => {
-            const isMe = row.user_id === user?.id;
-            return (
-              <div key={row.user_id} className="lb-row" style={{
-                borderBottom: i < board.length - 1 ? "1px solid var(--surface2)" : "none",
-                background: isMe ? "rgba(247,201,72,0.05)" : "transparent" }}>
-                <span style={{ fontSize: i < 3 ? "1.25rem" : "0.9rem", fontWeight:700,
-                  color: i < 3 ? "var(--accent)" : "var(--muted)" }}>
-                  {i < 3 ? MEDAL[i] : `#${row.rank}`}
-                </span>
-                <div style={{ display:"flex", alignItems:"center", gap:10, minWidth:0 }}>
-                  <span style={{ fontSize:"1.15rem" }}>{row.avatar}</span>
-                  <span style={{ fontWeight:600, fontSize:"0.95rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                    {row.username}
-                    {isMe && <span style={{ marginLeft:6, color:"var(--accent)", fontSize:"0.72rem" }}>(you)</span>}
+            {/* My rank — only worth a callout when I'm not already visible up top */}
+            {myRow && board.indexOf(myRow) > 2 && (
+              <div className="pop row" style={{ padding: "14px 18px", gap: 14, marginBottom: 20, background: "var(--sun)" }}>
+                <span className="rank" style={{ background: "#fff" }}>#{myRow.rank}</span>
+                <Avatar emoji={myRow.avatar} size={44} seed={myRow.user_id} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="display" style={{ display: "block", fontSize: "1.1rem" }}>Your rank</span>
+                  <span className="muted" style={{ fontSize: ".85rem" }}>
+                    {myRow.games_played} games · {myRow.win_rate}% win rate
                   </span>
-                </div>
-                <span style={{ textAlign:"right", fontWeight:700, color:"var(--accent)" }}>
-                  {Number(row.total_score).toLocaleString()}
                 </span>
-                <span className="lb-games" style={{ textAlign:"right", color:"var(--muted)", fontSize:"0.88rem" }}>
-                  {row.games_played}
-                </span>
-                <span className="lb-win" style={{ textAlign:"right", color:"var(--green)", fontSize:"0.88rem", fontWeight:600 }}>
-                  {row.win_rate}%
+                <span className="display" style={{ fontSize: "1.25rem" }}>
+                  {Number(myRow.total_score).toLocaleString()}
                 </span>
               </div>
-            );
-          })}
-        </div>
+            )}
+
+            {/* Full table */}
+            <div className="stack">
+              {board.map((row, i) => {
+                const isMe = row.user_id === user?.id;
+                const col = avatarColour(row.user_id);
+                return (
+                  <div key={row.user_id} className="pop row"
+                    style={{ padding: "14px 18px", gap: 14, background: isMe ? "var(--sun)" : undefined }}>
+                    <span className="rank" style={{ background: i < 3 ? col : "var(--paper2)" }}>
+                      {i < 3 ? MEDAL[i] : i + 1}
+                    </span>
+                    <Avatar emoji={row.avatar} size={44} seed={row.user_id} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span className="display" style={{ display: "block", fontSize: "1.1rem" }}>
+                        {row.username}{isMe && " (you)"}
+                      </span>
+                      <span className="muted" style={{ fontSize: ".85rem" }}>
+                        {row.games_played} games played · {row.win_rate}% wins
+                      </span>
+                    </span>
+                    <span className="display" style={{ fontSize: "1.25rem" }}>
+                      {Number(row.total_score).toLocaleString()}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,8 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./utils/AuthContext";
+import { SocketProvider } from "./utils/SocketContext";
+import { ToastProvider, FunLayer } from "./components/ui";
 import Navbar          from "./components/Navbar";
 import ProtectedRoute  from "./components/ProtectedRoute";
 import Home            from "./pages/Home";
@@ -15,6 +17,10 @@ import Friends         from "./pages/Friends";
 export default function App() {
   return (
     <AuthProvider>
+      <SocketProvider>
+      <ToastProvider>
+      {/* Sparkle trail + tap bursts + confetti, above everything, click-through */}
+      <FunLayer />
       <BrowserRouter>
         <Routes>
           {/* Room page has its own full-screen game layout — no Navbar */}
@@ -24,6 +30,8 @@ export default function App() {
           <Route path="/*" element={<WithNav />} />
         </Routes>
       </BrowserRouter>
+      </ToastProvider>
+      </SocketProvider>
     </AuthProvider>
   );
 }

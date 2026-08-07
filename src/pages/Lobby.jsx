@@ -1,32 +1,51 @@
 // src/pages/Lobby.jsx
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
+import { GAMES, GAME_MAP } from "../components/games/registry";
+import { useToast } from "../components/ui";
+import PeekBuddy from "../components/characters/PeekBuddy";
 
-const GAME_OPTS = [
-  { slug:"mahjong", label:"🀄 Mahjong Solitaire" },
-  { slug:"memory",  label:"🃏 Memory Match" },
+const DURATIONS = [
+  { s: 120, label: "2 min" },
+  { s: 180, label: "3 min" },
+  { s: 240, label: "4 min" },
+  { s: 300, label: "5 min" },
 ];
 
 export default function Lobby() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
 
-  const [rooms,        setRooms]        = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
 
-  const [createForm,  setCreateForm]  = useState({ game_slug:"mahjong", max_players:2, is_private:false });
-  const [creating,    setCreating]    = useState(false);
-  const [createError, setCreateError] = useState("");
+  const [game, setGame] = useState("mahjong");
+  const [maxPlayers, setMaxPlayers] = useState(2);
+  const [duration, setDuration] = useState(120);
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [creating, setCreating] = useState(false);
 
-  const [joinCode,  setJoinCode]  = useState("");
-  const [joining,   setJoining]   = useState(false);
-  const [joinError, setJoinError] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [joining, setJoining] = useState(false);
+  const codeRef = useRef(null);
+
+  const selected = GAME_MAP[game] || GAMES[0];
+  const playerChoices = Array.from({ length: selected.maxPlayers }, (_, i) => i + 1);
+  // Solo = 1 seat. Nobody can join, so the room is implicitly private and the
+  // privacy toggle is hidden rather than shown as a no-op.
+  const isSolo = maxPlayers === 1;
+
+  // Keep maxPlayers valid when switching games.
+  useEffect(() => {
+    setMaxPlayers((mp) => Math.min(mp, selected.maxPlayers));
+  }, [selected.maxPlayers]);
 
   const fetchRooms = useCallback(async () => {
     try {
-      const res  = await api.get("/api/rooms");
+      const res = await api.get("/api/rooms");
       const data = await res.json();
       if (data.success) setRooms(data.rooms);
     } catch { /* silent */ } finally { setLoadingRooms(false); }
@@ -38,163 +57,195 @@ export default function Lobby() {
     return () => clearInterval(t);
   }, [fetchRooms]);
 
-  async function handleCreate(e) {
-    e.preventDefault();
-    setCreateError(""); setCreating(true);
+  async function handleCreate() {
+    setCreating(true);
     try {
-      const res  = await api.post("/api/rooms", createForm);
+      const res = await api.post("/api/rooms", {
+        game_slug: game, max_players: maxPlayers,
+        is_private: isSolo ? true : isPrivate,   // solo rooms are never listed
+        duration_seconds: duration,
+      });
       const data = await res.json();
-      if (!data.success) { setCreateError(data.message); return; }
+      if (!data.success) { toast.error(data.message || "Failed to create room."); return; }
       navigate(`/room/${data.room.room_code}`);
-    } catch { setCreateError("Failed to create room."); }
+    } catch { toast.error("Failed to create room."); }
     finally { setCreating(false); }
   }
 
   async function handleJoin(e) {
-    e.preventDefault();
+    e?.preventDefault();
     if (!joinCode.trim()) return;
-    setJoinError(""); setJoining(true);
+    setJoining(true);
     try {
       const code = joinCode.trim().toUpperCase();
-      const res  = await api.post("/api/rooms/join", { room_code: code });
+      const res = await api.post("/api/rooms/join", { room_code: code });
       const data = await res.json();
-      if (!data.success) { setJoinError(data.message); return; }
+      if (!data.success) { toast.error(data.message || "Could not join."); return; }
       navigate(`/room/${code}`);
-    } catch { setJoinError("Failed to join room."); }
+    } catch { toast.error("Failed to join room."); }
     finally { setJoining(false); }
   }
 
   async function quickJoin(code) {
     try {
-      const res  = await api.post("/api/rooms/join", { room_code: code });
+      const res = await api.post("/api/rooms/join", { room_code: code });
       const data = await res.json();
       if (data.success) navigate(`/room/${code}`);
-    } catch { /* silent */ }
+      else toast.error(data.message || "Could not join.");
+    } catch { toast.error("Could not join."); }
   }
 
-  const panelStyle = {
-    background:"var(--surface)", border:"1.5px solid var(--surface2)",
-    borderRadius:16, padding:24,
-  };
+  const label = "muted";
+  const stepLabel = { fontSize: ".78rem", letterSpacing: ".09em", textTransform: "uppercase", marginBottom: 10 };
 
   return (
-    <div style={{ minHeight:"calc(100vh - 60px)", padding:"32px 20px" }}>
-      <div style={{ maxWidth:1000, margin:"0 auto" }}>
+    <div className="wrap">
+      <div className="mid">
 
-        {/* Header */}
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:28, flexWrap:"wrap", gap:12 }}>
-          <div>
-            <h1 style={{ fontSize:"1.8rem", fontWeight:900 }}>Game Lobby 🎮</h1>
-            <p style={{ color:"var(--muted)", marginTop:4 }}>Welcome back, {user?.avatar} {user?.username}!</p>
-          </div>
-          <button className="btn btn-outline btn-sm" onClick={fetchRooms}>🔄 Refresh</button>
-        </div>
-
-        {/* Create + Join panels */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:20, marginBottom:36 }}>
-
-          {/* Create */}
-          <div style={panelStyle}>
-            <h2 style={{ fontSize:"1.1rem", fontWeight:700, marginBottom:20 }}>✨ Create Room</h2>
-            {createError && <div className="alert alert-error">{createError}</div>}
-            <form onSubmit={handleCreate}>
-              <div className="input-group">
-                <label>Game</label>
-                <select value={createForm.game_slug}
-                  onChange={e => setCreateForm(f => ({ ...f, game_slug: e.target.value }))}>
-                  {GAME_OPTS.map(g => <option key={g.slug} value={g.slug}>{g.label}</option>)}
-                </select>
-              </div>
-              <div className="input-group">
-                <label>Players</label>
-                <select value={createForm.max_players}
-                  onChange={e => setCreateForm(f => ({ ...f, max_players: parseInt(e.target.value) }))}>
-                  <option value={1}>Solo (1 player)</option>
-                  <option value={2}>1v1 (2 players)</option>
-                </select>
-              </div>
-              <label style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20, cursor:"pointer", color:"var(--muted)", fontSize:"0.9rem" }}>
-                <input type="checkbox" checked={createForm.is_private}
-                  onChange={e => setCreateForm(f => ({ ...f, is_private: e.target.checked }))}
-                  style={{ width:16, height:16, accentColor:"var(--accent)" }} />
-                Private room (invite only)
-              </label>
-              <button className="btn btn-primary btn-full" type="submit" disabled={creating}>
-                {creating ? "Creating…" : "🚀 Create Room"}
-              </button>
-            </form>
-          </div>
-
-          {/* Join */}
-          <div style={panelStyle}>
-            <h2 style={{ fontSize:"1.1rem", fontWeight:700, marginBottom:20 }}>🔗 Join by Room Code</h2>
-            {joinError && <div className="alert alert-error">{joinError}</div>}
-            <form onSubmit={handleJoin}>
-              <div className="input-group">
-                <label>Room Code</label>
-                <input type="text" placeholder="e.g. ABC123"
-                  value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())}
-                  maxLength={8}
-                  style={{ textAlign:"center", letterSpacing:6, fontSize:"1.3rem", fontWeight:700 }} />
-              </div>
-              <button className="btn btn-secondary btn-full" type="submit" disabled={joining || !joinCode.trim()}>
-                {joining ? "Joining…" : "🔗 Join Room"}
-              </button>
-            </form>
-            <p style={{ marginTop:20, color:"var(--muted)", fontSize:"0.85rem", lineHeight:1.6 }}>
-              💡 Tip: Share your Room Code with a friend and they can join instantly!
-            </p>
-          </div>
-        </div>
-
-        {/* Open rooms */}
-        <h2 style={{ fontSize:"1.15rem", fontWeight:700, marginBottom:16 }}>
-          🌐 Open Rooms
-          {rooms.length > 0 && (
-            <span style={{ marginLeft:10, background:"var(--surface2)", borderRadius:20,
-              padding:"2px 10px", fontSize:"0.78rem", color:"var(--muted)", fontWeight:500 }}>
-              {rooms.length}
+        <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 26 }}>
+          <div className="row" style={{ gap: 14 }}>
+            <span className="face" style={{ width: 58, height: 58, fontSize: 29, background: "var(--sky)" }}>
+              <span style={{ lineHeight: 1 }}>{user?.avatar || "🎮"}</span>
             </span>
-          )}
-        </h2>
+            <div>
+              <h1 style={{ fontSize: "1.9rem" }}>Hey {user?.username}! 👋</h1>
+              <p className="muted">Who are we beating today?</p>
+            </div>
+          </div>
+          <button className="press p-white sm" onClick={fetchRooms}>🔄 Refresh</button>
+        </div>
 
-        {loadingRooms ? (
-          <p style={{ color:"var(--muted)", padding:"40px 0", textAlign:"center" }}>Loading rooms…</p>
-        ) : rooms.length === 0 ? (
-          <div style={{ textAlign:"center", padding:"56px 20px", color:"var(--muted)" }}>
-            <div style={{ fontSize:"3rem", marginBottom:12 }}>🪑</div>
-            <p>No open rooms right now.</p>
-            <p style={{ marginTop:8, fontSize:"0.9rem" }}>Create one and invite a friend!</p>
-          </div>
-        ) : (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:16 }}>
-            {rooms.map(room => (
-              <div key={room.id} onClick={() => quickJoin(room.room_code)}
-                style={{ background:"var(--surface)", border:"1.5px solid var(--surface2)", borderRadius:14,
-                  padding:"18px 20px", cursor:"pointer", transition:"all 0.15s" }}
-                onMouseEnter={e => { e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.borderColor="var(--accent)"; }}
-                onMouseLeave={e => { e.currentTarget.style.transform=""; e.currentTarget.style.borderColor="var(--surface2)"; }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                  <span style={{ fontSize:"1.4rem" }}>{room.game_icon}</span>
-                  <span style={{ background:"var(--surface2)", borderRadius:20, padding:"3px 10px", fontSize:"0.78rem", color:"var(--muted)" }}>
-                    {room.player_count}/{room.max_players} 👥
-                  </span>
-                </div>
-                <div style={{ fontWeight:700, marginBottom:4 }}>{room.game_name}</div>
-                <div style={{ color:"var(--muted)", fontSize:"0.85rem", marginBottom:12 }}>Host: {room.host_name}</div>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                  <span style={{ background:"rgba(78,203,113,0.1)", color:"var(--green)",
-                    border:"1px solid rgba(78,203,113,0.25)", borderRadius:20, padding:"3px 10px", fontSize:"0.78rem" }}>
-                    🟢 Waiting
-                  </span>
-                  <span style={{ fontWeight:900, letterSpacing:3, color:"var(--accent)", fontSize:"1rem" }}>
-                    {room.room_code}
-                  </span>
-                </div>
+        <div className="grid" style={{ gridTemplateColumns: "1.55fr 1fr", alignItems: "start" }} id="lobbyGrid">
+          <div className="pop" style={{ padding: 26 }}>
+            <h2 style={{ fontSize: "1.5rem", marginBottom: 18 }}>✨ Start a match</h2>
+
+            <div className={label} style={stepLabel}>1 · Game</div>
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 12, marginBottom: 22 }}>
+              {GAMES.map((g) => (
+                <button key={g.slug} className="press pick" data-game={g.slug}
+                  aria-pressed={g.slug === game} onClick={() => setGame(g.slug)}
+                  style={{ flexDirection: "column", gap: 6, padding: "14px 8px", background: g.col, borderRadius: 20 }}>
+                  <span style={{ fontSize: "1.9rem", lineHeight: 1 }}>{g.icon}</span>
+                  <span style={{ fontSize: ".82rem", textAlign: "center", lineHeight: 1.15 }}>{g.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className={label} style={stepLabel}>2 · Clock</div>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap", marginBottom: 22 }}>
+              {DURATIONS.map((d) => (
+                <button key={d.s} className="press dur p-white" aria-pressed={duration === d.s}
+                  onClick={() => setDuration(d.s)} style={{ flex: 1, minWidth: 82 }}>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+
+            <div className={label} style={stepLabel}>3 · Seats</div>
+            <div className="row" style={{ gap: 10, flexWrap: "wrap", marginBottom: 22 }} id="seats">
+              {playerChoices.map((n) => (
+                <button key={n} className="press seat p-white" aria-pressed={maxPlayers === n}
+                  onClick={() => setMaxPlayers(n)} style={{ minWidth: 64 }}>
+                  {n === 1 ? "Solo" : `${n} 👥`}
+                </button>
+              ))}
+            </div>
+
+            {/* Private — meaningless for a solo run, so we explain instead of asking. */}
+            {isSolo ? (
+              <div className="note" style={{ background: "var(--paper2)", marginBottom: 22 }}>
+                🧍 Solo run — private by default. No room code to share, no invites, no chat.
               </div>
-            ))}
+            ) : (
+              <label className="row" style={{ gap: 11, fontSize: ".95rem", marginBottom: 22, cursor: "pointer" }}>
+                <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)}
+                  style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
+                🔒 Keep it private — invite only
+              </label>
+            )}
+
+            <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
+              {creating ? "Creating…"
+                : isSolo ? `🎯 Start solo ${selected.name}`
+                : `🚀 Create ${selected.name} room`}
+            </button>
           </div>
-        )}
+
+          <div className="stack">
+            <div className="pop" style={{ padding: 26 }}>
+              <h2 style={{ fontSize: "1.4rem", marginBottom: 6 }}>🔗 Got a code?</h2>
+              <p className="muted" style={{ fontSize: ".92rem", marginBottom: 16 }}>
+                Type the six letters your friend sent you.
+              </p>
+              <form onSubmit={handleJoin}>
+                {/* Six letter tiles. A transparent input sits over them so the
+                    tiles are what you see but a real field is what you type. */}
+                <div className="code" style={{ justifyContent: "center", marginBottom: 18, position: "relative", cursor: "text" }}
+                  onClick={() => codeRef.current?.focus()}>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <span key={i} className={joinCode[i] ? undefined : "muted"}>{joinCode[i] || "·"}</span>
+                  ))}
+                  <input ref={codeRef} value={joinCode} aria-label="Room code" inputMode="latin"
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0,
+                             border: 0, padding: 0, background: "transparent", cursor: "text" }} />
+                </div>
+                <button type="submit" className="press p-mint full" disabled={joining || !joinCode.trim()}>
+                  {joining ? "Joining…" : "🔗 Join room"}
+                </button>
+              </form>
+            </div>
+            <div className="note" style={{ background: "var(--sun)" }}>
+              💡 Rooms stay open until the host starts. No rush — grab a snack.
+            </div>
+          </div>
+        </div>
+
+        <section className="sec">
+          <div className="sec-h">
+            <h2>🌐 Rooms you can hop into</h2>
+            <span className="chip c-mint">{rooms.length} open</span>
+          </div>
+
+          {loadingRooms ? (
+            <div className="note" style={{ background: "var(--paper2)", textAlign: "center" }}>Looking for rooms…</div>
+          ) : rooms.length === 0 ? (
+            <div className="pop" style={{ padding: "48px 20px", textAlign: "center" }}>
+              <div style={{ fontSize: "3rem", marginBottom: 10 }}>🪑</div>
+              <p className="muted">No open rooms right now.</p>
+              <p className="muted" style={{ fontSize: ".9rem", marginTop: 4 }}>Create one above and invite a friend!</p>
+            </div>
+          ) : (
+            <div className="tiles">
+              {rooms.map((room) => {
+                const g = GAME_MAP[room.game_slug];
+                const mins = Math.round((room.duration_seconds || 120) / 60);
+                const col = g?.col || "var(--sun)";
+                const icon = room.game_icon || g?.icon || "🎮";
+                return (
+                  <button key={room.id} className="tile" onClick={() => quickJoin(room.room_code)}>
+                    <PeekBuddy colour={col} size={54} />
+                    <span className="top" style={{ background: col, height: 96 }}>
+                      <span className="ghost">{icon}</span>
+                      <span className="big" style={{ fontSize: "2.8rem" }}>{icon}</span>
+                    </span>
+                    <span className="bot" style={{ display: "block" }}>
+                      <h3 style={{ fontSize: "1.1rem" }}>{room.game_name}</h3>
+                      <p style={{ marginBottom: 10 }}>Hosted by {room.host_name}</p>
+                      <span className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                        <span className="row" style={{ gap: 6 }}>
+                          <span className="chip c-lime">👥 {room.player_count}/{room.max_players}</span>
+                          <span className="chip c-sky">⏱️ {mins}m</span>
+                        </span>
+                        <span className="display" style={{ letterSpacing: ".14em", fontSize: "1rem" }}>{room.room_code}</span>
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

@@ -1,70 +1,58 @@
 // src/components/MahjongGame.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../utils/api";
-import Logo from "./Logo";
+import GameFrame from "./games/GameFrame";
+import GameOver from "./games/GameOver";
+import { confetti } from "./ui/FunLayer";
 
 // ── Tile definitions ─────────────────────────────────────────────────────────
-const TILE_TYPES = [
-  { e: "🀙", k: "c1" }, { e: "🀚", k: "c2" }, { e: "🀛", k: "c3" }, { e: "🀜", k: "c4" }, { e: "🀝", k: "c5" },
-  { e: "🀞", k: "c6" }, { e: "🀟", k: "c7" }, { e: "🀠", k: "c8" }, { e: "🀡", k: "c9" },
-  { e: "🀐", k: "b1" }, { e: "🀑", k: "b2" }, { e: "🀒", k: "b3" }, { e: "🀓", k: "b4" }, { e: "🀔", k: "b5" },
-  { e: "🀕", k: "b6" }, { e: "🀖", k: "b7" }, { e: "🀗", k: "b8" }, { e: "🀘", k: "b9" },
-  { e: "🀇", k: "m1" }, { e: "🀈", k: "m2" }, { e: "🀉", k: "m3" }, { e: "🀊", k: "m4" }, { e: "🀋", k: "m5" },
-  { e: "🀌", k: "m6" }, { e: "🀍", k: "m7" }, { e: "🀎", k: "m8" }, { e: "🀏", k: "m9" },
-  { e: "🀀", k: "h1" }, { e: "🀁", k: "h2" }, { e: "🀂", k: "h3" }, { e: "🀃", k: "h4" },
-  { e: "🀄", k: "h5" }, { e: "🀅", k: "h6" }, { e: "🀆", k: "h7" }, { e: "🎴", k: "h8" },
+// PICTURE TILES, not numbers.
+//
+// The old set used the Unicode mahjong glyphs (🀙🀚🀛…), which render as
+// near-invisible hairline outlines, so each tile had to be redrawn as a
+// coloured numeral + tiny suit mark. That made three different tiles all look
+// like a "2" — 2-dots, 2-bamboo, 2-characters — and none of them match each
+// other. Players spent the whole game squinting at digits.
+//
+// Now every tile is a distinct, instantly recognisable picture. Two tiles match
+// when they show the SAME PICTURE — no numbers, no suits, nothing to decode.
+// 35 pictures × 2 = the same 70-tile board.
+// Each category owns one toy-palette colour, so same-category tiles are easy to
+// scan for even before you focus on the picture itself.
+const TILE_CATEGORIES = [
+  { id: "animals", label: "Animals", tint: "var(--sun)",
+    items: ["🐶","🐱","🐼","🦊","🐸","🐵","🦁","🐯"] },
+  { id: "sea",     label: "Sea",     tint: "var(--sky)",
+    items: ["🐳","🐬","🐟","🐙","🦀","🦈","🐠"] },
+  { id: "food",    label: "Food",    tint: "var(--coral)",
+    items: ["🍕","🍔","🍩","🍦","🍓","🍉","🍫","🍪"] },
+  { id: "nature",  label: "Nature",  tint: "var(--mint)",
+    items: ["🌸","🌵","🍄","🌈","🌻","🍀"] },
+  { id: "fun",     label: "Fun",     tint: "var(--bubble)",
+    items: ["🚀","⭐","🌙","⚡","🎈","🎁"] },
 ];
 
-// Custom tile art — the Unicode mahjong glyphs render as nearly-invisible
-// outlines at small sizes, so we draw our own: big colored numeral + suit
-// icon, color-coded by suit family.
-const SUIT_STYLE = {
-  c: { color: "#1f6dd2", icon: "●",  label: "Circles"    },
-  b: { color: "#0a8d3d", icon: "🎋", label: "Bamboo"     },
-  m: { color: "#c92a2a", icon: "萬", label: "Characters" },
-  h: { color: "#a37b00", icon: "★",  label: "Honors"     },
-};
-const HONOR_FACE = {
-  h1: { glyph: "E",  sub: "East"   },
-  h2: { glyph: "S",  sub: "South"  },
-  h3: { glyph: "W",  sub: "West"   },
-  h4: { glyph: "N",  sub: "North"  },
-  h5: { glyph: "中", sub: "Red"    },
-  h6: { glyph: "發", sub: "Green"  },
-  h7: { glyph: "白", sub: "White"  },
-  h8: { glyph: "🌸", sub: "Flower" },
-};
+// Flattened catalogue: { e: emoji, k: unique key, cat }. 35 entries.
+const TILE_TYPES = TILE_CATEGORIES.flatMap((c) =>
+  c.items.map((e, i) => ({ e, k: `${c.id}${i}`, cat: c.id }))
+);
 
-function TileFace({ tileKey, dim }) {
-  const suit  = tileKey[0];
-  const num   = tileKey.slice(1);
-  const style = SUIT_STYLE[suit];
-  const color = dim ? "#5b7a4f" : style.color;
-  // Fluid font sizes scale with viewport so big-screen tiles aren't tiny.
-  const bigF   = "clamp(1.05rem, 4.2vw, 2rem)";
-  const honorF = "clamp(1.0rem,  3.8vw, 1.85rem)";
-  const subF   = "clamp(0.45rem, 1.2vw, 0.7rem)";
-  const iconF  = "clamp(0.65rem, 1.7vw, 1.05rem)";
+const CAT_STYLE = Object.fromEntries(TILE_CATEGORIES.map((c) => [c.id, c]));
 
-  if (suit === "h") {
-    const face = HONOR_FACE[tileKey];
-    return (
-      <div style={{ display:"flex", flexDirection:"column", alignItems:"center", lineHeight:1, gap:2 }}>
-        <span style={{ fontSize: honorF, fontWeight:900, color }}>
-          {face.glyph}
-        </span>
-        <span style={{ fontSize:subF, color, opacity:0.75, textTransform:"uppercase", letterSpacing:1 }}>
-          {face.sub}
-        </span>
-      </div>
-    );
-  }
+// Big picture on a category-coloured, ink-outlined disc — the same "physical
+// object" treatment every other control gets.
+function TileFace({ tile }) {
+  const style = CAT_STYLE[tile.cat] || CAT_STYLE.animals;
   return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", lineHeight:1, gap:3 }}>
-      <span style={{ fontSize:bigF, fontWeight:900, color, fontFamily:"system-ui,sans-serif" }}>{num}</span>
-      <span style={{ fontSize:iconF, color, opacity:0.85 }}>
-        {style.icon}
-      </span>
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "center",
+      width: "76%", aspectRatio: "1 / 1", borderRadius: "50%",
+      background: style.tint,
+      border: "2.5px solid var(--ink)",
+      fontSize: "clamp(1.1rem, 3.6vw, 2rem)", lineHeight: 1,
+      userSelect: "none",
+    }}>
+      <span>{tile.e}</span>
     </div>
   );
 }
@@ -103,47 +91,77 @@ function buildTiles(seed) {
   return raw;
 }
 
+// A tile is playable when it has at least one OPEN side — you could slide it
+// out that way. Board edges count as open.
+//
+// This used to check left/right only, which on a 14-wide grid meant just the
+// two ends of each row were ever free (10 of 70 tiles) — the board deadlocked
+// almost immediately. Checking all four sides frees the whole perimeter and
+// opens up more with every pair cleared, which is what makes the game playable.
 function isFree(tiles, idx, cols) {
   const tile = tiles[idx];
   if (!tile || tile.matched) return false;
+
+  const rows = Math.ceil(tiles.length / cols);
+  const row = Math.floor(idx / cols);
   const col = idx % cols;
-  const leftTile = col > 0 ? tiles[idx - 1] : null;
-  const rightTile = col < cols - 1 ? tiles[idx + 1] : null;
-  const hasLeft = leftTile != null && !leftTile.matched;
-  const hasRight = rightTile != null && !rightTile.matched;
-  return !(hasLeft && hasRight);
+
+  // Is the neighbour at (r,c) present and still on the board?
+  const occupied = (r, c) => {
+    if (r < 0 || c < 0 || r >= rows || c >= cols) return false; // off-board = open
+    const t = tiles[r * cols + c];
+    return t != null && !t.matched;
+  };
+
+  return !occupied(row, col - 1) || !occupied(row, col + 1)
+      || !occupied(row - 1, col) || !occupied(row + 1, col);
 }
 
-// ── GameOver overlay ─────────────────────────────────────────────────────────
-function GameOverOverlay({ score, pairs, won, onPlayAgain, onExit }) {
-  return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(10,5,20,0.93)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200
-    }}>
-      <div style={{
-        background: "var(--surface)", border: "1.5px solid var(--surface2)",
-        borderRadius: 20, padding: "40px 36px", textAlign: "center", maxWidth: 380, width: "90%"
-      }}>
-        <div style={{ fontSize: "4rem", marginBottom: 12 }}>{won ? "🏆" : "⏰"}</div>
-        <h2 style={{ fontSize: "1.8rem", fontWeight: 900, marginBottom: 8 }}>{won ? "You Win!" : "Time's Up!"}</h2>
-        <p style={{ color: "var(--muted)", marginBottom: 24 }}>
-          Score: <strong style={{ color: "var(--accent)" }}>{score.toLocaleString()}</strong>
-          {" · "}Pairs: {pairs}/{TOTAL_PAIRS}
-        </p>
-        <button className="btn btn-primary btn-full" onClick={onPlayAgain} style={{ marginBottom: 10 }}>
-          🔄 Play Again
-        </button>
-        <button className="btn btn-outline btn-full" onClick={onExit}>← Back to Lobby</button>
-      </div>
-    </div>
-  );
+// True when at least one pair of same-kind free tiles exists.
+function hasAvailableMatch(tileArr, cols) {
+  const free = [];
+  for (let i = 0; i < tileArr.length; i++) {
+    if (!tileArr[i].matched && isFree(tileArr, i, cols)) free.push(i);
+  }
+  for (let a = 0; a < free.length; a++) {
+    for (let b = a + 1; b < free.length; b++) {
+      if (tileArr[free[a]].k === tileArr[free[b]].k) return true;
+    }
+  }
+  return false;
+}
+
+// Redistribute EVERY remaining tile across every remaining position, and keep
+// trying until the result actually has a legal move.
+//
+// The old version shuffled only the free tiles into the free positions — the
+// same multiset of kinds landing back in the same open slots, so the board was
+// provably just as stuck afterwards. Returns the original array (identity) when
+// it can't produce a playable board, so callers can detect the no-op.
+function reshuffle(tiles, cols, maxTries = 40) {
+  const slots = [];
+  for (let i = 0; i < tiles.length; i++) if (!tiles[i].matched) slots.push(i);
+  if (slots.length < 2) return tiles;
+
+  for (let attempt = 0; attempt < maxTries; attempt++) {
+    const pool = slots.map(i => tiles[i]);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const next = [...tiles];
+    slots.forEach((idx, k) => { next[idx] = pool[k]; });
+    if (hasAvailableMatch(next, cols)) return next;
+  }
+  return tiles;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function MahjongGame({ roomCode, seed, players, currentUser, onGameEnd, isSpectator = false, spectatorState = null, spectatorWatching = null }) {
+export default function MahjongGame({ roomCode, seed, players, currentUser, onGameEnd, durationSeconds, isSpectator = false, spectatorState = null, spectatorWatching = null }) {
   const isOnline = !!roomCode;
-  const TIMER_INIT = isOnline ? 300 : 600;
+  // Every match is time-boxed by the room's duration (2–5 min); fall back to a
+  // generous solo clock when played outside a room.
+  const TIMER_INIT = durationSeconds || (isOnline ? 300 : 600);
 
   // Column count tracks viewport class (mobile/tablet/desktop).
   // Reacts to resize so DevTools / orientation changes reflow the board.
@@ -170,7 +188,6 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
   const [moves, setMoves] = useState(0);
   const [timerSec, setTimerSec] = useState(TIMER_INIT);
   const [hintIdx, setHintIdx] = useState([]);
-  const [lastPair, setLastPair] = useState(null);
   const [gameOver, setGameOver] = useState(false);
   const [won, setWon] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -209,24 +226,9 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     msgRef.current = setTimeout(() => setMsg(null), 2200);
   }, []);
 
-  // Returns true if any pair of same-kind free tiles exists.
-  const hasAvailableMatch = useCallback((tileArr, c) => {
-    const free = [];
-    for (let i = 0; i < tileArr.length; i++) {
-      if (!tileArr[i].matched && isFree(tileArr, i, c)) free.push(i);
-    }
-    for (let a = 0; a < free.length; a++) {
-      for (let b = a + 1; b < free.length; b++) {
-        if (tileArr[free[a]].k === tileArr[free[b]].k) return true;
-      }
-    }
-    return false;
-  }, []);
-
-  // Auto-shuffle when the board is deadlocked. Capped at 5 attempts since
-  // the last successful match so we don't loop forever on a true dead board.
-  const autoShuffleAttemptsRef = useRef(0);
-  useEffect(() => { autoShuffleAttemptsRef.current = 0; }, [pairs]);
+  // Rescue a deadlocked board. reshuffle() only ever returns a board that has a
+  // legal move, so a single pass is enough — no retry budget, and no way to
+  // land in the old "shuffled 5 times, still stuck" dead end.
   useEffect(() => {
     if (gameOver || isSpectator) return;
     if (selected !== null) return;            // wait for current selection
@@ -234,30 +236,13 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     // Debounce so we don't fire during the mid-click transient state.
     const t = setTimeout(() => {
       if (hasAvailableMatch(tiles, cols)) return;
-      if (autoShuffleAttemptsRef.current >= 5) {
-        showMsg("⚠️ Board appears stuck — try Undo.", "error");
-        return;
-      }
-      autoShuffleAttemptsRef.current++;
-      const freeIdx = [];
-      for (let i = 0; i < tiles.length; i++) {
-        if (!tiles[i].matched && isFree(tiles, i, cols)) freeIdx.push(i);
-      }
-      if (freeIdx.length < 2) return;
-      const copy = freeIdx.map(i => ({ ...tiles[i] }));
-      for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [copy[i], copy[j]] = [copy[j], copy[i]];
-      }
-      setTiles(prev => {
-        const next = [...prev];
-        freeIdx.forEach((idx, i) => { next[idx] = copy[i]; });
-        return next;
-      });
-      showMsg("⚡ No matches — auto-shuffled!", "info");
-    }, 500);
+      const next = reshuffle(tiles, cols);
+      if (next === tiles) { showMsg("⚠️ No moves left on the board.", "error"); return; }
+      setTiles(next);
+      showMsg("⚡ No matches — board reshuffled!", "info");
+    }, 400);
     return () => clearTimeout(t);
-  }, [tiles, cols, gameOver, isSpectator, selected, pairs, hasAvailableMatch, showMsg]);
+  }, [tiles, cols, gameOver, isSpectator, selected, pairs, showMsg]);
 
   // Online sync (player only)
   useEffect(() => {
@@ -284,11 +269,7 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     return () => clearInterval(syncRef.current);
   }, [isOnline, isSpectator, roomCode, currentUser]);
 
-  function fmt(sec) {
-    return `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
-  }
-
-  function clickTile(idx) {
+  function clickTile(idx, ev) {
     if (isSpectator || gameOver) return;
     const tile = tiles[idx];
     if (tile.matched) return;
@@ -310,11 +291,18 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
         setTiles(next);
         setScore(s => s + gain);
         setMoves(m => m + 1);
-        setLastPair([selected, idx]);
         setSelected(null);
+        // Little pop of the matched picture, right where you tapped.
+        const r = ev?.currentTarget?.getBoundingClientRect?.();
+        confetti(r ? r.left + r.width / 2 : undefined, r ? r.top + r.height / 2 : undefined,
+          { count: 16, emojis: [tile.e, "✨"] });
+
         setPairs(p => {
           const np = p + 1;
-          if (np === TOTAL_PAIRS) { clearInterval(timerRef.current); setWon(true); setGameOver(true); }
+          if (np === TOTAL_PAIRS) {
+            clearInterval(timerRef.current); setWon(true); setGameOver(true);
+            confetti(window.innerWidth / 2, window.innerHeight / 2, { count: 200 });
+          }
           return np;
         });
         showMsg(`✓ Match! +${gain}`, "success");
@@ -343,21 +331,13 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     doShuffle(true);  // auto-shuffle so the player isn't stuck
   }
 
-  // Internal: shuffles the free tiles in-place. `auto=true` skips the score
-  // penalty (used when the player is deadlocked through no fault of theirs).
+  // Redistribute every remaining tile. `auto=true` skips the score penalty
+  // (used when the player is deadlocked through no fault of theirs).
   function doShuffle(auto = false) {
-    const freeIdx = tiles.map((t, i) => (!t.matched && isFree(tiles, i, cols) ? i : -1)).filter(i => i !== -1);
-    if (freeIdx.length < 2) return; // nothing to shuffle
-    const copy = freeIdx.map(i => ({ ...tiles[i] }));
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    setTiles(prev => {
-      const next = [...prev];
-      freeIdx.forEach((idx, i) => { next[idx] = copy[i]; });
-      return next;
-    });
+    const next = reshuffle(tiles, cols);
+    if (next === tiles) { showMsg("Nothing left to shuffle!", "error"); return; }
+    setTiles(next);
+    setSelected(null);
     if (!auto) {
       setScore(s => Math.max(0, s - 50));
       showMsg("🔀 Shuffled! (−50 pts)", "info");
@@ -365,23 +345,12 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
   }
   function shuffle() { doShuffle(false); }
 
-  function undo() {
-    if (!lastPair) { showMsg("Nothing to undo!", "error"); return; }
-    const [a, b] = lastPair;
-    setTiles(prev => prev.map((t, i) => (i === a || i === b) ? { ...t, matched: false } : t));
-    setPairs(p => p - 1);
-    setScore(s => Math.max(0, s - 50));
-    setMoves(m => m + 1);
-    setLastPair(null);
-    showMsg("↩ Undone! (−50 pts)", "info");
-  }
-
   function resetGame() {
     clearInterval(timerRef.current);
     setTiles(buildTiles(seed));
     setSelected(null); setScore(0); setPairs(0); setMoves(0);
     setTimerSec(TIMER_INIT); setGameOver(false); setWon(false);
-    setLastPair(null); setHintIdx([]);
+    setHintIdx([]);
     timerRef.current = setInterval(() => {
       setTimerSec(t => {
         if (t <= 1) { clearInterval(timerRef.current); setGameOver(true); return 0; }
@@ -398,123 +367,58 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     ? (players || []).filter(p => Number(p.user_id) !== myId)
     : [];
 
-  const msgColors = { success: "var(--green)", error: "var(--red)", info: "var(--blue)" };
-  const ctrlBtn = {
-    padding: "8px 18px", borderRadius: 20, border: "1.5px solid var(--surface2)",
-    background: "transparent", color: "var(--text)", cursor: "pointer", fontSize: "0.88rem", fontWeight: 600, transition: "all 0.15s"
-  };
+  const quit = () => onGameEnd && onGameEnd(score, pairs, moves, won);
+
+  const stats = isSpectator
+    ? [
+        { label: "Score", value: (spectatorWatching?.score ?? 0).toLocaleString() },
+        { label: "Pairs", value: `${spectatorWatching?.pairs_matched ?? 0}/${TOTAL_PAIRS}` },
+        { label: "Moves", value: spectatorWatching?.moves ?? 0 },
+      ]
+    : [
+        { label: "Score", value: score.toLocaleString() },
+        { label: "Pairs", value: `${pairs}/${TOTAL_PAIRS}` },
+        { label: "Moves", value: moves },
+      ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#0f0820", overflow: "hidden" }}>
-
-      {/* ── Header ── */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: "8px clamp(12px,2vw,20px)", background: "var(--surface)", borderBottom: "1px solid var(--surface2)",
-        flexShrink: 0, flexWrap: "wrap", gap: 8
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Logo size="sm" />
-          <span style={{
-            background: "var(--surface2)", borderRadius: 20, padding: "3px 12px",
-            fontSize: "0.75rem", color: "var(--muted)"
-          }}>
-            {isSpectator ? `👀 WATCHING ${spectatorWatching?.username || ""}` : (isOnline ? "ONLINE" : "OFFLINE") + " · MAHJONG"}
-          </span>
-        </div>
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-          {(isSpectator ? [
-            { v: (spectatorWatching?.score ?? 0).toLocaleString(), l: "Score" },
-            { v: `${spectatorWatching?.pairs_matched ?? 0}/${TOTAL_PAIRS}`, l: "Pairs" },
-            { v: spectatorWatching?.moves ?? 0, l: "Moves" },
-          ] : [
-            { v: score.toLocaleString(), l: "Score" },
-            { v: `${pairs}/${TOTAL_PAIRS}`, l: "Pairs" },
-            { v: fmt(timerSec), l: "Time", urgent: timerSec <= 30 },
-            { v: moves, l: "Moves" },
-          ]).map(s => (
-            <div key={s.l} style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "1.2rem", fontWeight: 700, color: s.urgent ? "var(--red)" : "var(--accent)" }}>
-                {s.v}
-              </div>
-              <div style={{ fontSize: "0.68rem", color: "var(--muted)", textTransform: "uppercase", letterSpacing: 1 }}>
-                {s.l}
-              </div>
-            </div>
-          ))}
-        </div>
-        <button style={ctrlBtn} onClick={() => onGameEnd && onGameEnd(score, pairs, moves, won)}>
-          {isSpectator ? "← Leave" : "🚪 Quit"}
-        </button>
-      </div>
-
-      {/* ── Opponents bar (online) ── */}
-      {opponents.length > 0 && (
-        <div style={{
-          display: "flex", gap: 10, padding: "8px 16px", background: "#120a25",
-          borderBottom: "1px solid var(--surface2)", flexShrink: 0, flexWrap: "wrap"
-        }}>
-          {opponents.map(p => (
-            <div key={p.user_id} style={{
-              display: "flex", alignItems: "center", gap: 10,
-              background: "var(--surface)", borderRadius: 10, padding: "8px 14px", flex: 1, minWidth: 140
-            }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                background: "linear-gradient(135deg,var(--blue),var(--accent2))",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1rem"
-              }}>
-                {p.avatar}
-              </div>
-              <div>
-                <div style={{ fontSize: "0.88rem", fontWeight: 600 }}>{p.username}</div>
-                <div style={{ fontSize: "0.78rem", color: "var(--muted)" }}>
-                  {(oppData[p.username]?.score ?? p.score ?? 0).toLocaleString()} pts
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* ── Message banner ── */}
-      {msg && (
-        <div style={{
-          padding: "7px 16px", textAlign: "center", flexShrink: 0,
-          background: `${msgColors[msg.type]}22`, color: msgColors[msg.type],
-          fontSize: "0.92rem", fontWeight: 600
-        }}>
-          {msg.text}
-        </div>
-      )}
-
-      {/* ── Board (felt-table vibe to make the cream tiles pop) ── */}
-      <div style={{
-        flex: 1, minHeight: 0, overflow: "hidden",
-        // Vertical padding stays meaningful on mobile (tile calc reserves
-        // for it); horizontal grows on larger screens.
-        padding: "clamp(20px, 3vw, 36px) clamp(12px, 3vw, 32px)",
-        display: "flex", justifyContent: "center", alignItems: "center",
-        background: "radial-gradient(ellipse at center, #1f5a3a 0%, #143928 55%, #0a1f17 100%)",
-      }}>
+    <>
+      <GameFrame
+        gameName="Mahjong Solitaire" badge="🀄 MAHJONG"
+        isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
+        stats={stats}
+        timer={isSpectator ? null : { value: timerSec, max: TIMER_INIT }}
+        opponents={opponents.map(p => ({
+          ...p,
+          score: oppData[p.username]?.score ?? p.score ?? 0,
+        }))}
+        message={msg}
+        onQuit={quit}
+        controls={!isSpectator ? (
+          <>
+            <button className="press p-white sm" onClick={hint}>💡 Hint</button>
+            <button className="press p-white sm" onClick={shuffle}>🔀 Shuffle</button>
+          </>
+        ) : null}
+      >
         <div style={{
           display: "grid",
-          // Tile height is the limiting dimension; width follows the aspect ratio.
-          // We pick the smaller of (height-fit) and (width-fit) so the whole
-          // board fits the available viewport without scrolling.
+          // Derive tile WIDTH from both budgets and take the smaller, so the
+          // board can never overflow either axis. (The previous version sized
+          // from height first and let width fall out of an aspect ratio, which
+          // pushed the right-hand columns off-screen on wide-but-short windows.)
           "--rows": String(Math.ceil(70 / cols)),
           "--cols": String(cols),
-          // Reserved chrome height: header (~50) + optional opponents bar
-          // (~62) + controls (~52) + felt padding top+bottom (~64) + safety.
-          // Caps lowered slightly so smaller screens always leave breathing room
-          // between the tiles and the felt edges.
-          "--tile-h": `min(
-            clamp(32px, calc((100dvh - 280px) / var(--rows) - 8px), 78px),
-            clamp(44px, calc((100vw - 80px) / var(--cols) * 1.32 - 10px), 100px)
-          )`,
-          gridTemplateColumns: `repeat(${cols}, calc(var(--tile-h) * 0.78))`,
-          gridAutoRows: "var(--tile-h)",
-          gap: "clamp(5px, 0.8vw, 10px)",
+          "--gap": "clamp(5px, 0.8vw, 10px)",
+          // Horizontal budget: viewport minus felt padding minus all the gaps.
+          "--fit-w": "calc((min(100vw, 1500px) - 64px - (var(--cols) - 1) * var(--gap)) / var(--cols))",
+          // Vertical budget: viewport minus chrome (header + opponents bar +
+          // controls + felt padding), converted to a width via the aspect ratio.
+          "--fit-h": "calc(((100dvh - 260px) - (var(--rows) - 1) * var(--gap)) / var(--rows) / 1.18)",
+          "--tile-w": "max(34px, min(var(--fit-w), var(--fit-h), 88px))",
+          gridTemplateColumns: "repeat(var(--cols), var(--tile-w))",
+          gridAutoRows: "calc(var(--tile-w) * 1.18)",
+          gap: "var(--gap)",
           maxWidth: "100%",
         }}>
           {tiles.map((tile, idx) => {
@@ -522,73 +426,61 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
             const isSel = selected === idx;
             const isHint = hintIdx.includes(idx);
 
-            // Layered, dimensional tile look — gradient face + colored side
-            // for a "physical" stack feel, plus high-contrast states.
-            let bg          = "linear-gradient(180deg,#fffaeb 0%, #f3e3b8 100%)";
-            let border      = "1.5px solid #b8923a";
-            let transform   = "translateY(0)";
-            let shadow      = "0 5px 0 #8b6914, 0 6px 12px rgba(0,0,0,0.35)";
-            let opacity     = 1;
-            let cursor      = "pointer";
-            let filter      = "none";
-            let extraGlow   = null;
-            const dimFace   = false;
+            // Every tile is a physical object: white card stock, ink outline,
+            // hard shadow. State is carried by how far it sits off the table —
+            // a selected tile lifts, a blocked one sits flat and greys out.
+            let bg = "#fff";
+            let transform = "translateY(0)";
+            let shadow = "0 5px 0 var(--ink)";
+            let opacity = 1;
+            let cursor = "pointer";
+            let filter = "none";
 
             if (tile.matched) {
-              bg = "linear-gradient(180deg,#d9f8e1 0%, #b4ecc4 100%)";
-              border = "1.5px solid #4ecb71";
-              opacity = 0.55; shadow = "0 1px 0 #2f8a4a"; cursor = "default";
+              bg = "var(--lime)";
+              opacity = 0.5; shadow = "0 1px 0 var(--ink)"; cursor = "default";
             } else if (isSel) {
-              bg = "linear-gradient(180deg,#fff4b8 0%, #ffd84d 100%)";
-              border = "2px solid #e8a900";
+              bg = "var(--sun)";
               transform = "translateY(-8px)";
-              shadow = "0 13px 0 #8b6914, 0 0 22px rgba(255,213,80,0.55)";
+              shadow = "0 13px 0 var(--ink)";
             } else if (isHint) {
-              bg = "linear-gradient(180deg,#ffe0f0 0%, #ffb1d8 100%)";
-              border = "2px solid var(--accent2,#ff6dba)";
-              extraGlow = "0 0 14px rgba(255,109,186,0.55)";
+              bg = "var(--bubble)";
+              transform = "translateY(-4px)";
+              shadow = "0 9px 0 var(--ink)";
             } else if (!free) {
-              opacity = 0.82; cursor = "not-allowed";
-              filter = "grayscale(35%)";
-              shadow = "0 3px 0 #8b6914, 0 3px 6px rgba(0,0,0,0.25)";
+              opacity = 0.7; cursor = "not-allowed";
+              filter = "grayscale(45%)";
+              shadow = "0 2px 0 var(--ink)";
             }
 
             return (
-              <div key={idx} onClick={() => clickTile(idx)} style={{
-                position:"relative",
+              <div key={idx} onClick={(ev) => clickTile(idx, ev)} style={{
+                position: "relative",
                 width: "100%", height: "100%",
-                background: bg, border, borderRadius: 8,
+                background: bg,
+                border: "3px solid var(--ink)",
+                borderRadius: 12,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 cursor, transition: "transform 0.12s, box-shadow 0.12s, opacity 0.12s",
-                boxShadow: extraGlow ? `${shadow}, ${extraGlow}` : shadow,
+                boxShadow: shadow,
                 transform, opacity, filter,
                 userSelect: "none",
               }}>
-                <TileFace tileKey={tile.k} dim={dimFace} />
+                <TileFace tile={tile} />
               </div>
             );
           })}
         </div>
-      </div>
+      </GameFrame>
 
-      {/* ── Controls ── */}
-      <div style={{
-        display: "flex", gap: 10, padding: "8px 16px", background: "var(--surface)",
-        borderTop: "1px solid var(--surface2)", justifyContent: "center", flexWrap: "wrap", flexShrink: 0
-      }}>
-        {!isSpectator && <button style={ctrlBtn} onClick={hint}>💡 Hint</button>}
-        {!isSpectator && <button style={ctrlBtn} onClick={shuffle}>🔀 Shuffle</button>}
-        {!isSpectator && <button style={ctrlBtn} onClick={undo}>↩ Undo</button>}
-      </div>
-
-      {/* ── Game over overlay ── */}
       {gameOver && !isSpectator && (
-        <GameOverOverlay
-          score={score} pairs={pairs} won={won}
+        <GameOver
+          score={score} won={won} finished={won}
+          extra={`Pairs: ${pairs}/${TOTAL_PAIRS}`}
           onPlayAgain={resetGame}
-          onExit={() => onGameEnd && onGameEnd(score, pairs, moves, won)}
+          onExit={quit}
         />
       )}
-    </div>
+    </>
   );
 }

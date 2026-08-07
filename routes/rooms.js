@@ -30,7 +30,7 @@ router.param("code", (req, res, next, raw) => {
 router.get("/", verifyToken, async (req, res, next) => {
   try {
     const [rows] = await db.execute(`
-      SELECT r.id, r.room_code, r.status, r.max_players, r.is_private, r.created_at,
+      SELECT r.id, r.room_code, r.status, r.max_players, r.is_private, r.duration_seconds, r.created_at,
              gt.name AS game_name, gt.icon AS game_icon, gt.slug AS game_slug,
              u.username AS host_name,
              COUNT(rp.id) AS player_count
@@ -38,7 +38,9 @@ router.get("/", verifyToken, async (req, res, next) => {
       JOIN game_types gt  ON gt.id = r.game_type_id
       JOIN users u        ON u.id  = r.host_id
       LEFT JOIN room_players rp ON rp.room_id = r.id
-      WHERE r.status = 'waiting' AND r.is_private = 0
+      -- max_players = 1 is a solo run: nobody can join it, so listing it as an
+      -- "open room" would only produce failed joins.
+      WHERE r.status = 'waiting' AND r.is_private = 0 AND r.max_players > 1
       GROUP BY r.id
       ORDER BY r.created_at DESC
       LIMIT 20
@@ -50,9 +52,14 @@ router.get("/", verifyToken, async (req, res, next) => {
 // POST /api/rooms — create room
 router.post("/", verifyToken, async (req, res, next) => {
   try {
-    const { game_slug, max_players = 2, is_private = false } = req.body;
+    const { game_slug, max_players = 2, is_private = false, duration_seconds = 120 } = req.body;
     if (typeof game_slug !== "string" || !GAME_SLUG_RE.test(game_slug))
       return res.status(400).json({ success: false, message: "Invalid game_slug." });
+
+    // Match length: clamp to [120s, 300s] (2–5 minutes).
+    const DURATION_MIN = 120, DURATION_MAX = 300;
+    const duration = Math.max(DURATION_MIN,
+      Math.min(DURATION_MAX, Math.floor(Number(duration_seconds) || DURATION_MIN)));
 
     const [gt] = await db.execute(
       "SELECT id, max_players FROM game_types WHERE slug = ? AND is_active = 1",
@@ -64,6 +71,10 @@ router.post("/", verifyToken, async (req, res, next) => {
     if (!Number.isFinite(requested) || requested < 1)
       return res.status(400).json({ success: false, message: "max_players must be a positive number." });
     const cap = Math.min(Math.floor(requested), gt[0].max_players);
+    // A solo run is always private — there is no seat for anyone else, so it
+    // must never appear in the open-room list regardless of what was sent.
+    const priv = (cap === 1 || is_private) ? 1 : 0;
+
     let code; let tries = 0;
     do {
       code = genCode(6);
@@ -73,15 +84,15 @@ router.post("/", verifyToken, async (req, res, next) => {
 
     const seed = Math.floor(Math.random() * 1_000_000);
     const [result] = await db.execute(
-      "INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed) VALUES (?,?,?,?,?,?)",
-      [code, gt[0].id, req.user.id, cap, is_private ? 1 : 0, seed]
+      "INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed, duration_seconds) VALUES (?,?,?,?,?,?,?)",
+      [code, gt[0].id, req.user.id, cap, priv, seed, duration]
     );
     const roomId = result.insertId;
     await db.execute(
       "INSERT INTO room_players (room_id, user_id, is_host) VALUES (?,?,1)",
       [roomId, req.user.id]
     );
-    res.status(201).json({ success: true, room: { id: roomId, room_code: code, seed, max_players: cap } });
+    res.status(201).json({ success: true, room: { id: roomId, room_code: code, seed, max_players: cap, duration_seconds: duration } });
   } catch (err) { next(err); }
 });
 
@@ -112,6 +123,10 @@ router.post("/join", verifyToken, async (req, res, next) => {
     if (existing)
       return res.json({ success: true, room, already_joined: true, as_spectator: !!existing.is_spectator });
 
+    // Solo run: closed to everyone but its owner — not even as a spectator.
+    if (Number(room.max_players) === 1)
+      return res.status(403).json({ success: false, message: "That's a solo run — it can't be joined." });
+
     const seatedCount = members.filter(m => !m.is_spectator).length;
     const isFull      = seatedCount >= room.max_players;
     const isLive      = room.status === "in_progress";
@@ -131,7 +146,8 @@ router.post("/join", verifyToken, async (req, res, next) => {
 router.get("/:code", verifyToken, async (req, res, next) => {
   try {
     const [rooms] = await db.execute(`
-      SELECT r.id, r.room_code, r.status, r.max_players, r.seed, r.started_at, r.created_at,
+      SELECT r.id, r.room_code, r.status, r.max_players, r.seed, r.duration_seconds,
+             r.started_at, r.created_at,
              gt.slug AS game_slug, gt.name AS game_name, gt.icon AS game_icon,
              u.username AS host_name
       FROM rooms r
@@ -227,7 +243,7 @@ router.patch("/:code/score", verifyToken, async (req, res, next) => {
 router.get("/:code/poll", verifyToken, async (req, res, next) => {
   try {
     const [rooms] = await db.execute(
-      "SELECT id, status, seed FROM rooms WHERE room_code = ?",
+      "SELECT id, status, seed, duration_seconds, started_at FROM rooms WHERE room_code = ?",
       [req.params.code]
     );
     if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
@@ -247,7 +263,16 @@ router.get("/:code/poll", verifyToken, async (req, res, next) => {
       ORDER BY cm.sent_at DESC LIMIT 30
     `, [rooms[0].id]);
 
-    res.json({ success: true, status: rooms[0].status, seed: rooms[0].seed, players, chat: msgs.reverse() });
+    res.json({
+      success: true,
+      status: rooms[0].status,
+      seed: rooms[0].seed,
+      duration_seconds: rooms[0].duration_seconds,
+      started_at: rooms[0].started_at,
+      server_now: new Date().toISOString(),  // lets clients anchor the clock to server time
+      players,
+      chat: msgs.reverse(),
+    });
   } catch (err) { next(err); }
 });
 
@@ -291,12 +316,14 @@ router.post("/:code/invite", verifyToken, async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Cannot invite yourself." });
 
     const [rooms] = await db.execute(
-      "SELECT id, status FROM rooms WHERE room_code = ?",
+      "SELECT id, status, max_players FROM rooms WHERE room_code = ?",
       [req.params.code]
     );
     if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
     if (rooms[0].status === "finished" || rooms[0].status === "abandoned")
       return res.status(409).json({ success: false, message: "Game has ended." });
+    if (Number(rooms[0].max_players) === 1)
+      return res.status(409).json({ success: false, message: "Solo runs can't be shared." });
 
     const [member] = await db.execute(
       "SELECT 1 FROM room_players WHERE room_id = ? AND user_id = ? LIMIT 1",

@@ -32,3 +32,11 @@ Thumbs.db
 
 # portable cloudflared binary downloaded by `npm run share`
 tools/
+
+# zero-downtime build staging (scripts/build.js)
+/build-next
+/build-old
+
+# share.js runtime state (waiting-room page)
+/.share-state
+/.share-placeholder.pid

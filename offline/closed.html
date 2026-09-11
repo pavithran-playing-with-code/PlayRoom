@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlayRoom is closed right now</title>
+<!--
+  Served by Tailscale itself (not by the game server) whenever `npm run share`
+  isn't running but this laptop is still on. Self-contained on purpose: the
+  game server and MySQL are off when this page is showing.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--paper:#FFF6E6;--ink:#2E2140;--ink-soft:#6C5E85;--sun:#FFC53D;--coral:#FF6B6B;--mint:#3DD6C0;--sky:#4CC9F0;--grape:#9B5DE5}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:var(--paper);
+    color:var(--ink);font-family:Nunito,system-ui,sans-serif;font-weight:700;text-align:center}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;opacity:.5;pointer-events:none;background-image:
+    radial-gradient(circle at 12% 18%,var(--sun) 0 5px,transparent 6px),radial-gradient(circle at 82% 12%,var(--coral) 0 4px,transparent 5px),
+    radial-gradient(circle at 68% 74%,var(--mint) 0 5px,transparent 6px),radial-gradient(circle at 24% 82%,var(--grape) 0 4px,transparent 5px),
+    radial-gradient(circle at 92% 52%,var(--sky) 0 4px,transparent 5px);background-size:520px 520px}
+  h1{font-family:Fredoka,Nunito,sans-serif;font-weight:600;font-size:clamp(1.9rem,6vw,2.6rem);line-height:1.05;margin:18px 0 10px}
+  .card{max-width:460px;width:100%;background:#fff;border:3px solid var(--ink);border-radius:26px;
+    box-shadow:0 6px 0 var(--ink);padding:30px 24px 26px}
+  .brand{display:inline-flex;align-items:center;gap:10px;font-family:Fredoka,sans-serif;font-size:1.4rem;
+    text-shadow:0 3px 0 var(--sun);margin-bottom:6px}
+  .scene{position:relative;width:230px;margin:6px auto 0}
+  .sign{position:absolute;right:-18px;top:18px;transform:rotate(8deg);background:var(--coral);color:#fff;
+    font-family:Fredoka,sans-serif;font-size:1.25rem;letter-spacing:.08em;padding:6px 14px;
+    border:3px solid var(--ink);border-radius:12px;box-shadow:0 4px 0 var(--ink);transform-origin:50% -30px;
+    animation:swing 3s ease-in-out infinite}
+  .sign::before{content:"";position:absolute;left:50%;top:-26px;width:3px;height:24px;background:var(--ink);transform:translateX(-50%)}
+  .z{position:absolute;font-family:Fredoka,sans-serif;color:var(--grape);opacity:0;animation:float 3.6s ease-in infinite}
+  .z1{left:58px;top:40px;font-size:1.2rem}.z2{left:40px;top:28px;font-size:1.6rem;animation-delay:1.2s}.z3{left:22px;top:14px;font-size:2rem;animation-delay:2.4s}
+  .breathe{transform-origin:100px 200px;animation:breathe 3.6s ease-in-out infinite}
+  p{color:var(--ink-soft);font-weight:700;line-height:1.55;font-size:1.02rem}
+  .chip{display:inline-flex;align-items:center;gap:8px;margin-top:18px;border:2.5px solid var(--ink);
+    border-radius:999px;padding:6px 14px;font-size:.85rem;background:var(--paper)}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--coral);border:2px solid var(--ink)}
+  .chip.back{background:#B5E655}.chip.back .dot{background:#fff}
+  @keyframes swing{0%,100%{transform:rotate(8deg)}50%{transform:rotate(-4deg)}}
+  @keyframes float{0%{opacity:0;transform:translate(0,0)}25%{opacity:1}100%{opacity:0;transform:translate(-18px,-40px)}}
+  @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.025,.985)}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true">
+        <g transform="rotate(-13 17 28)"><rect x="5" y="15" width="18" height="25" rx="6" fill="#3DD6C0" stroke="#2E2140" stroke-width="3"/></g>
+        <g transform="rotate(9 30 20)"><rect x="24" y="9" width="18" height="25" rx="6" fill="#FF6B6B" stroke="#2E2140" stroke-width="3"/></g>
+        <g transform="rotate(-2 24 24)"><rect x="14" y="11" width="20" height="27" rx="7" fill="#FFC53D" stroke="#2E2140" stroke-width="3"/>
+          <path d="M18 21q2.5 2 5 0M25 21q2.5 2 5 0" stroke="#2E2140" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+          <path d="M21 29h6" stroke="#2E2140" stroke-width="2.6" stroke-linecap="round"/></g>
+      </svg>
+      PlayRoom
+    </div>
+
+    <div class="scene">
+      <span class="z z1">z</span><span class="z z2">z</span><span class="z z3">Z</span>
+      <span class="sign">CLOSED</span>
+      <!-- the Detective from the login page, asleep at his post -->
+      <svg viewBox="0 0 200 224" width="230" aria-hidden="true">
+        <ellipse cx="100" cy="209" rx="58" ry="10" fill="#2E2140" opacity=".16"/>
+        <g class="breathe">
+          <rect x="52" y="138" width="22" height="58" rx="11" fill="#2E2140"/>
+          <rect x="126" y="138" width="22" height="58" rx="11" fill="#2E2140"/>
+          <rect x="40" y="62" width="120" height="106" rx="34" fill="#4CC9F0" stroke="#2E2140" stroke-width="6"/>
+          <ellipse cx="100" cy="30" rx="42" ry="26" fill="#FF6B6B" stroke="#2E2140" stroke-width="6"/>
+          <rect x="34" y="44" width="132" height="15" rx="7.5" fill="#2E2140"/>
+          <ellipse cx="52" cy="52" rx="16" ry="11" fill="#FF6B6B" stroke="#2E2140" stroke-width="6"/>
+          <ellipse cx="148" cy="52" rx="16" ry="11" fill="#FF6B6B" stroke="#2E2140" stroke-width="6"/>
+          <circle cx="100" cy="10" r="8" fill="#FFC53D" stroke="#2E2140" stroke-width="5"/>
+          <path d="M74 106 q8 8 16 0" stroke="#2E2140" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <path d="M110 106 q8 8 16 0" stroke="#2E2140" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <ellipse cx="100" cy="133" rx="7" ry="6" fill="#2E2140"/>
+          <ellipse cx="44" cy="160" rx="20" ry="15" fill="#4CC9F0" stroke="#2E2140" stroke-width="6"/>
+          <ellipse cx="156" cy="160" rx="20" ry="15" fill="#4CC9F0" stroke="#2E2140" stroke-width="6"/>
+        </g>
+      </svg>
+    </div>
+
+    <h1>PlayRoom is closed right now</h1>
+    <p>The game room is taking a nap. Keep this page open — it will open the game by itself the moment PlayRoom is back.</p>
+    <div class="chip" id="chip"><span class="dot"></span><span id="state">Checking every 10 seconds…</span></div>
+  </main>
+
+<script>
+  // When the host starts `npm run share`, this same address starts answering
+  // /api/health with the real game server — then we simply reload into it.
+  async function check() {
+    try {
+      const r = await fetch("/api/health", { cache: "no-store" });
+      const j = r.ok ? await r.json().catch(() => null) : null;
+      if (j && j.success) {
+        document.getElementById("chip").classList.add("back");
+        document.getElementById("state").textContent = "PlayRoom is back — opening…";
+        setTimeout(() => location.reload(), 600);
+      }
+    } catch (e) { /* still closed */ }
+  }
+  setInterval(check, 10000);
+</script>
+</body>
+</html>

@@ -84,6 +84,7 @@ export default function Navbar() {
                         <span className="muted" style={{ fontSize: ".8rem" }}>Signed in</span>
                       </span>
                     </div>
+                    <MenuItem to="/profile" onClick={() => setOpen(false)} label="✏️ Edit profile" />
                     <MenuItem to="/friends" onClick={() => setOpen(false)}
                       label={`👥 Friends${pendingCt ? `  (${pendingCt})` : ""}`} />
                     <MenuItem to="/leaderboard" onClick={() => setOpen(false)} label="🏆 Leaderboard" />

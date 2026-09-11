@@ -80,6 +80,7 @@ const limiter = (max, windowMinutes, message) => rateLimit({
 // Credential endpoints: tight, and IP-keyed by nature (nobody's authenticated yet).
 app.use("/api/auth/login",    limiter(20,  15, "Too many login attempts — try again in a few minutes."));
 app.use("/api/auth/register", limiter(10,  60, "Too many accounts created — try again later."));
+app.use("/api/auth/change-password", limiter(10, 15, "Too many password attempts - try again in a few minutes."));
 
 // The game loop lives here (poll + score sync every few seconds). Generous.
 app.use("/api/rooms",         limiter(2000, 15, "Too many requests — please slow down."));

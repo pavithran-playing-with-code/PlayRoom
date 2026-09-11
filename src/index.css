@@ -471,3 +471,8 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .ae-blocker .ae-tri{animation:aeWarnFill .5s ease}
 @keyframes aeWarnStroke{25%,75%{stroke:var(--grape)}}
 @keyframes aeWarnFill{25%,75%{fill:var(--grape)}}
+
+/* ---------- profile page ---------- */
+.hint{margin-top:7px;font-size:.82rem;font-weight:700;color:var(--ink-soft);line-height:1.4}
+.hint-bad{color:#B3372E}
+.field input:disabled{opacity:.6;cursor:not-allowed;box-shadow:none;background:var(--paper2)}

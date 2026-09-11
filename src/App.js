@@ -13,6 +13,7 @@ import Lobby           from "./pages/Lobby";
 import Room            from "./pages/Room";
 import Leaderboard     from "./pages/Leaderboard";
 import Friends         from "./pages/Friends";
+import Profile         from "./pages/Profile";
 
 export default function App() {
   return (
@@ -47,6 +48,7 @@ function WithNav() {
         <Route path="/lobby"       element={<ProtectedRoute><Lobby /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
         <Route path="/friends"     element={<ProtectedRoute><Friends /></ProtectedRoute>} />
+        <Route path="/profile"     element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="*"            element={<Navigate to="/" replace />} />
       </Routes>
     </>

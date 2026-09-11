@@ -6,6 +6,7 @@ import MemoryGame from "../MemoryGame";
 import SpeedMath from "./SpeedMath";
 import TapRush from "./TapRush";
 import WordRush from "./WordRush";
+import ArrowEscape from "./ArrowEscape";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -39,6 +40,12 @@ export const GAMES = [
     blurb: "Unscramble as many words as you can before time runs out.",
     minPlayers: 1, maxPlayers: 4, tag: "Word", col: "var(--lime)",
     Component: WordRush,
+  },
+  {
+    slug: "arrows", name: "Arrow Escape", icon: "🏹",
+    blurb: "Tap an arrow to slide it off the board, but only if its path is clear.",
+    minPlayers: 1, maxPlayers: 4, tag: "Puzzle", col: "var(--bubble)",
+    Component: ArrowEscape,
   },
 ];
 

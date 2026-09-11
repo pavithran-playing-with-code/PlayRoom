@@ -7,6 +7,37 @@ const { verifyToken } = require("../middleware/auth");
 // Memory max ~5k, Mahjong max ~12k. 25k leaves headroom for future games.
 const MAX_SCORE_PER_GAME = 25000;
 
+// Pairs required to clear the board, for the games that HAVE a win condition.
+// Games absent from this map are pure score-attack: there is nothing to
+// "complete", so a solo run of one is recorded as `incomplete` rather than
+// being scored as a win or a loss.
+const OBJECTIVE_PAIRS = { mahjong: 35, memory: 16 };
+
+/**
+ * Decide the outcome of a match from data the server already holds.
+ *
+ * Previously the client simply POSTed `won: true|false` and we believed it,
+ * which is why every row in game_sessions says 'loss': no game ever managed to
+ * report a win, and nothing stopped a modified client from claiming one.
+ *
+ * Rules:
+ *   • 2+ seated players → highest score wins; a tie for top is a draw.
+ *   • solo + objective game → win if the board was cleared, else loss.
+ *   • solo + score-attack  → 'incomplete' (counts as played, not as win/loss).
+ */
+function decideResult({ seated, myUserId, myScore, gameSlug }) {
+  if (seated.length > 1) {
+    const best = Math.max(...seated.map(p => Number(p.score) || 0));
+    if (myScore < best) return "loss";
+    const tiedAtTop = seated.filter(p => (Number(p.score) || 0) === best).length;
+    return tiedAtTop > 1 ? "draw" : "win";
+  }
+  const needed = OBJECTIVE_PAIRS[gameSlug];
+  if (!needed) return "incomplete";
+  const me = seated.find(p => p.user_id === myUserId);
+  return (Number(me?.pairs_matched) || 0) >= needed ? "win" : "loss";
+}
+
 // GET /api/leaderboard
 router.get("/", async (req, res, next) => {
   try {
@@ -28,7 +59,9 @@ router.get("/", async (req, res, next) => {
 // ensures the leaderboard can only be updated once per room+user.
 router.post("/update", verifyToken, async (req, res, next) => {
   try {
-    const { room_code, won = false } = req.body;
+    // NOTE: the client may still send `won`. It is deliberately ignored —
+    // the outcome is derived from stored scores below.
+    const { room_code } = req.body;
     if (!room_code || typeof room_code !== "string")
       return res.status(400).json({ success: false, message: "room_code is required." });
 
@@ -46,14 +79,19 @@ router.post("/update", verifyToken, async (req, res, next) => {
     if (room.status === "waiting")
       return res.status(409).json({ success: false, message: "Game has not started." });
 
-    const [playerRows] = await db.execute(
-      "SELECT score, pairs_matched, moves, is_spectator FROM room_players WHERE room_id = ? AND user_id = ?",
-      [room.id, req.user.id]
+    // Pull the whole table at once — we need every seated player's score to
+    // work out who actually won.
+    const [allPlayers] = await db.execute(
+      "SELECT user_id, score, pairs_matched, moves, is_spectator FROM room_players WHERE room_id = ?",
+      [room.id]
     );
-    if (!playerRows.length)
+    const mine = allPlayers.find(p => Number(p.user_id) === Number(req.user.id));
+    if (!mine)
       return res.status(403).json({ success: false, message: "You were not a player in this room." });
-    if (playerRows[0].is_spectator)
+    if (mine.is_spectator)
       return res.json({ success: true, spectator: true });
+
+    const seated = allPlayers.filter(p => !p.is_spectator);
 
     // 2. Idempotent: one leaderboard update per (room, user). Re-submits no-op.
     const [existing] = await db.execute(
@@ -64,20 +102,24 @@ router.post("/update", verifyToken, async (req, res, next) => {
       return res.json({ success: true, already_recorded: true });
 
     // 3. Pull server-stored score (still client-written via /score, but capped).
-    const rawScore = Number(playerRows[0].score) || 0;
+    const rawScore = Number(mine.score) || 0;
     const score    = Math.max(0, Math.min(rawScore, MAX_SCORE_PER_GAME));
-    const wonFlag  = won ? 1 : 0;
 
-    // 4. Persist the session record (also marks this room+user as recorded).
+    // 4. Decide the outcome from stored data — never from the request body.
+    const result  = decideResult({
+      seated, myUserId: Number(req.user.id), myScore: score, gameSlug: room.game_slug,
+    });
+    const wonFlag = result === "win" ? 1 : 0;
+
+    // 5. Persist the session record (also marks this room+user as recorded).
     await db.execute(
       `INSERT INTO game_sessions (room_id, user_id, game_type, score, pairs_matched, moves, result)
        VALUES (?,?,?,?,?,?,?)`,
       [room.id, req.user.id, room.game_slug, score,
-       playerRows[0].pairs_matched, playerRows[0].moves,
-       wonFlag ? "win" : "loss"]
+       mine.pairs_matched, mine.moves, result]
     );
 
-    // 5. Update aggregate stats.
+    // 6. Update aggregate stats.
     await db.execute(
       `UPDATE users SET
          total_score  = total_score  + ?,
@@ -100,7 +142,7 @@ router.post("/update", verifyToken, async (req, res, next) => {
         win_rate     = VALUES(win_rate)
     `, [req.user.id]);
 
-    res.json({ success: true, score });
+    res.json({ success: true, score, result, won: result === "win" });
   } catch (err) { next(err); }
 });
 

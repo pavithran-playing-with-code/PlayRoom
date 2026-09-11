@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../../utils/api";
+import { finalSync } from "./finalSync";
 
 export default function useGameEngine({
   roomCode,
@@ -60,15 +61,22 @@ export default function useGameEngine({
   }, [isSpectator]);
 
   // ── Score sync + opponent poll (online players only) ──
+  // Stops as soon as the match is over so we don't keep hammering a room the
+  // server has already closed.
   useEffect(() => {
-    if (!isOnline || isSpectator) return;
+    if (!isOnline || isSpectator || gameOver) return;
     syncRef.current = setInterval(async () => {
       try {
         const s = liveRef.current;
-        await api.patch(`/api/rooms/${roomCode}/score`, { score: s.score, moves: s.moves });
+        const put = await api.patch(`/api/rooms/${roomCode}/score`, { score: s.score, moves: s.moves });
+        // The server owns the deadline. If it says the match is over, believe
+        // it — our local countdown may be behind, paused, or tampered with.
+        if (put.status === 409) { setGameOver(true); return; }
+
         const res = await api.get(`/api/rooms/${roomCode}/poll`);
         const data = await res.json();
         if (data.success) {
+          if (data.status === "finished" || data.status === "abandoned") setGameOver(true);
           const opp = {};
           (data.players || []).forEach((p) => {
             if (p.user_id !== currentUser?.id && !p.is_spectator)
@@ -79,7 +87,7 @@ export default function useGameEngine({
       } catch { /* silent */ }
     }, 2000);
     return () => clearInterval(syncRef.current);
-  }, [isOnline, isSpectator, roomCode, currentUser]);
+  }, [isOnline, isSpectator, roomCode, currentUser, gameOver]);
 
   // ── Game API exposed to the specific game ──
   const addScore = useCallback((delta) => setScore((s) => Math.max(0, s + delta)), []);
@@ -93,21 +101,30 @@ export default function useGameEngine({
     setGameOver(true);
   }, []);
 
-  // ── Winner determination ──
+  // ── Outcome, for DISPLAY ONLY ──
+  // The authoritative result is computed by the server in
+  // POST /api/leaderboard/update from the stored scores; this is just what the
+  // GameOver overlay shows while that request is in flight.
   const oppScores = Object.values(opponents).map((o) => Number(o.score) || 0);
   const maxOpp = oppScores.length ? Math.max(...oppScores) : -1;
-  // You win if no opponent has strictly more points. Solo: a win means you
-  // finished the objective; a pure time-up solo run just records the score.
-  const won = opponents && oppScores.length
-    ? score >= maxOpp
-    : finished;
+  // Strictly greater: matching the top score is a draw, not a win. The old
+  // `>=` handed both players a victory on a tie.
+  const won = oppScores.length ? score > maxOpp : finished;
+  const draw = oppScores.length > 0 && score === maxOpp;
   const rank = oppScores.length
     ? 1 + oppScores.filter((s) => s > score).length
     : 1;
 
-  const endMatch = useCallback(() => {
-    onGameEnd && onGameEnd(liveRef.current.score, 0, liveRef.current.moves, won);
-  }, [onGameEnd, won]);
+  // Push our final score, give opponents a beat to push theirs, then hand off.
+  // Room.jsx asks the server for the official result from here.
+  const endingRef = useRef(false);
+  const endMatch = useCallback(async () => {
+    if (endingRef.current) return;      // double-click / quit-then-timeout
+    endingRef.current = true;
+    const s = liveRef.current;
+    if (isOnline) await finalSync(roomCode, { score: s.score, moves: s.moves });
+    onGameEnd && onGameEnd(s.score, 0, s.moves, won);
+  }, [onGameEnd, won, isOnline, roomCode]);
 
   const fmt = (sec) =>
     `${Math.floor(sec / 60).toString().padStart(2, "0")}:${(sec % 60).toString().padStart(2, "0")}`;
@@ -118,7 +135,7 @@ export default function useGameEngine({
     score, setScore, addScore,
     moves, addMove,
     gameOver, finished, finish,
-    opponents, oppScores, won, rank,
+    opponents, oppScores, won, draw, rank,
     endMatch,
   };
 }

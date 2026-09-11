@@ -27,6 +27,16 @@ function allowedOrigins() {
 const LOCALHOST_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 const isLocalhostOrigin = (origin) => LOCALHOST_RE.test(origin);
 
+// Cloudflare quick tunnels hand out a fresh random hostname every restart, so
+// the exact URL can't be known ahead of time and pinned in .env. When SHARE_MODE
+// is on (set by `npm run share`), trust any trycloudflare.com host so the app
+// works immediately without an edit-and-restart dance.
+//
+// Deliberately opt-in: a real deployment must still name its origins explicitly,
+// or it would be trusting every tunnel anyone can spin up in 10 seconds.
+const QUICK_TUNNEL_RE = /^https:\/\/[a-z0-9][a-z0-9-]*\.trycloudflare\.com$/;
+const shareMode = () => process.env.SHARE_MODE === "1";
+
 function isAllowedOrigin(origin) {
   // No Origin header at all: same-origin navigations, curl, health checks,
   // server-to-server. There is no browser to protect in that case.
@@ -34,6 +44,7 @@ function isAllowedOrigin(origin) {
   const clean = normalize(origin);
   if (allowedOrigins().includes(clean)) return true;
   if (!isProd() && isLocalhostOrigin(clean)) return true;
+  if (shareMode() && QUICK_TUNNEL_RE.test(clean)) return true;
   return false;
 }
 

@@ -2,6 +2,43 @@
 const router = require("express").Router();
 const db     = require("../config/db");
 const { verifyToken } = require("../middleware/auth");
+const { emitRoom } = require("../config/socket");
+
+// ── Match clock (server-authoritative) ────────────────────────────────────────
+// The countdown a player sees is client-side, so it can be paused, slowed or
+// ignored entirely. The server therefore owns the real deadline:
+// started_at + duration_seconds. Once that passes, the room is `finished` and
+// no further score writes are accepted.
+//
+// The comparison is done in SQL rather than JS so it never depends on the Node
+// process and MySQL agreeing about the current time or the timezone.
+const CLOCK_GRACE_SECONDS = 3;   // absorbs network latency on the final sync
+
+// Flip an expired in_progress room to `finished`. Idempotent — the WHERE clause
+// means only the first caller to notice actually performs the transition.
+// Returns true if this call ended the match.
+async function settleIfExpired(roomId) {
+  const [r] = await db.execute(
+    `UPDATE rooms SET status = 'finished', finished_at = NOW()
+      WHERE id = ? AND status = 'in_progress' AND started_at IS NOT NULL
+        AND started_at + INTERVAL (duration_seconds + ${CLOCK_GRACE_SECONDS}) SECOND <= NOW()`,
+    [roomId]
+  );
+  return r.affectedRows > 0;
+}
+
+// Keeps the stale-room sweep honest — see sweepStaleRooms() in server.js.
+async function touchRoom(roomId) {
+  try {
+    await db.execute("UPDATE rooms SET last_activity_at = NOW() WHERE id = ?", [roomId]);
+  } catch { /* non-critical */ }
+}
+
+// Push a change to everyone subscribed to this room's socket channel. REST
+// stays the source of truth; this just saves clients from waiting for the poll.
+function push(req, code, event, payload = {}) {
+  emitRoom(req.app.get("io"), code, event, payload);
+}
 
 function genCode(len = 6) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -84,7 +121,7 @@ router.post("/", verifyToken, async (req, res, next) => {
 
     const seed = Math.floor(Math.random() * 1_000_000);
     const [result] = await db.execute(
-      "INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed, duration_seconds) VALUES (?,?,?,?,?,?,?)",
+      "INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed, duration_seconds, last_activity_at) VALUES (?,?,?,?,?,?,?,NOW())",
       [code, gt[0].id, req.user.id, cap, priv, seed, duration]
     );
     const roomId = result.insertId;
@@ -138,6 +175,8 @@ router.post("/join", verifyToken, async (req, res, next) => {
       "INSERT INTO room_players (room_id, user_id, is_spectator) VALUES (?,?,?)",
       [room.id, req.user.id, asSpectator]
     );
+    await touchRoom(room.id);
+    push(req, code, "room:players", { code, joined: req.user.id });
     res.json({ success: true, room, as_spectator: !!asSpectator });
   } catch (err) { next(err); }
 });
@@ -145,6 +184,11 @@ router.post("/join", verifyToken, async (req, res, next) => {
 // GET /api/rooms/:code
 router.get("/:code", verifyToken, async (req, res, next) => {
   try {
+    // Same authority as /poll — never report a room as live past its deadline.
+    const [pre] = await db.execute("SELECT id FROM rooms WHERE room_code = ?", [req.params.code]);
+    if (pre.length && await settleIfExpired(pre[0].id))
+      push(req, req.params.code, "room:ended", { code: req.params.code });
+
     const [rooms] = await db.execute(`
       SELECT r.id, r.room_code, r.status, r.max_players, r.seed, r.duration_seconds,
              r.started_at, r.created_at,
@@ -183,10 +227,12 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
     if (room.status !== "waiting")
       return res.status(409).json({ success: false, message: "Game already started." });
 
+    // started_at is the anchor the server measures the match deadline from.
     await db.execute(
-      "UPDATE rooms SET status = 'in_progress', started_at = NOW() WHERE id = ?",
+      "UPDATE rooms SET status = 'in_progress', started_at = NOW(), last_activity_at = NOW() WHERE id = ?",
       [room.id]
     );
+    push(req, req.params.code, "room:started", { code: req.params.code });
     res.json({ success: true, message: "Game started!" });
   } catch (err) { next(err); }
 });
@@ -197,6 +243,16 @@ const MAX_SCORE      = 25000;
 const MAX_PAIRS      = 100;
 const MAX_MOVES      = 5000;
 const MAX_STATE_LEN  = 4096;   // JSON game_state string upper bound
+
+// Absent field → null → COALESCE leaves the stored value alone.
+// This used to coerce `undefined` to 0, so a caller that sent only `score`
+// silently zeroed pairs_matched and moves. useGameEngine does exactly that.
+function clampOrNull(raw, max) {
+  if (raw === undefined || raw === null) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(Math.floor(n), max));
+}
 
 function sanitizeState(raw) {
   if (raw == null) return null;
@@ -217,23 +273,48 @@ function sanitizeState(raw) {
 
 router.patch("/:code/score", verifyToken, async (req, res, next) => {
   try {
-    const score         = Math.max(0, Math.min(Number(req.body.score)         || 0, MAX_SCORE));
-    const pairs_matched = Math.max(0, Math.min(Number(req.body.pairs_matched) || 0, MAX_PAIRS));
-    const moves         = Math.max(0, Math.min(Number(req.body.moves)         || 0, MAX_MOVES));
+    const score         = clampOrNull(req.body.score,         MAX_SCORE);
+    const pairs_matched = clampOrNull(req.body.pairs_matched, MAX_PAIRS);
+    const moves         = clampOrNull(req.body.moves,         MAX_MOVES);
     const game_state    = sanitizeState(req.body.game_state); // null if absent/invalid
 
-    const [rooms] = await db.execute("SELECT id FROM rooms WHERE room_code = ?", [req.params.code]);
-    if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
-
-    const [result] = await db.execute(
-      `UPDATE room_players
-         SET score = ?, pairs_matched = ?, moves = ?,
-             game_state = COALESCE(?, game_state)
-       WHERE room_id = ? AND user_id = ? AND is_spectator = 0`,
-      [score, pairs_matched, moves, game_state, rooms[0].id, req.user.id]
+    const [rooms] = await db.execute(
+      "SELECT id, status FROM rooms WHERE room_code = ?", [req.params.code]
     );
-    if (result.affectedRows === 0)
-      return res.status(403).json({ success: false, message: "Spectators cannot submit scores." });
+    if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
+    const roomId = rooms[0].id;
+
+    // End the match first if its clock has run out, so the write below is
+    // rejected by the status guard rather than landing after the deadline.
+    if (await settleIfExpired(roomId)) push(req, req.params.code, "room:ended", { code: req.params.code });
+
+    // One guarded write: the join enforces "match is actually running", the
+    // WHERE enforces "you are a seated player in it".
+    const [result] = await db.execute(
+      `UPDATE room_players rp
+         JOIN rooms r ON r.id = rp.room_id
+          SET rp.score         = COALESCE(?, rp.score),
+              rp.pairs_matched = COALESCE(?, rp.pairs_matched),
+              rp.moves         = COALESCE(?, rp.moves),
+              rp.game_state    = COALESCE(?, rp.game_state),
+              r.last_activity_at = NOW()
+        WHERE rp.room_id = ? AND rp.user_id = ? AND rp.is_spectator = 0
+          AND r.status = 'in_progress'`,
+      [score, pairs_matched, moves, game_state, roomId, req.user.id]
+    );
+
+    if (result.affectedRows === 0) {
+      // Only now pay for a second query, to say *why* it was rejected.
+      const [me] = await db.execute(
+        "SELECT is_spectator FROM room_players WHERE room_id = ? AND user_id = ?",
+        [roomId, req.user.id]
+      );
+      if (!me.length)
+        return res.status(403).json({ success: false, message: "You are not in this room." });
+      if (me[0].is_spectator)
+        return res.status(403).json({ success: false, message: "Spectators cannot submit scores." });
+      return res.status(409).json({ success: false, message: "The match is not running.", match_over: true });
+    }
 
     res.json({ success: true });
   } catch (err) { next(err); }
@@ -242,6 +323,15 @@ router.patch("/:code/score", verifyToken, async (req, res, next) => {
 // GET /api/rooms/:code/poll
 router.get("/:code/poll", verifyToken, async (req, res, next) => {
   try {
+    const [pre] = await db.execute(
+      "SELECT id FROM rooms WHERE room_code = ?", [req.params.code]
+    );
+    if (!pre.length) return res.status(404).json({ success: false, message: "Room not found." });
+
+    // Expire the match before reporting status, so every client learns the
+    // game is over from the same authority instead of its own local clock.
+    if (await settleIfExpired(pre[0].id)) push(req, req.params.code, "room:ended", { code: req.params.code });
+
     const [rooms] = await db.execute(
       "SELECT id, status, seed, duration_seconds, started_at FROM rooms WHERE room_code = ?",
       [req.params.code]
@@ -255,6 +345,13 @@ router.get("/:code/poll", verifyToken, async (req, res, next) => {
       WHERE rp.room_id = ?
       ORDER BY rp.is_spectator, rp.is_host DESC, rp.joined_at
     `, [rooms[0].id]);
+
+    // game_state is a player's private board progress. Spectators need it to
+    // mirror the player they're watching; opponents have no business seeing it.
+    const iAmSpectator = players.some(p => p.user_id === req.user.id && p.is_spectator);
+    const visiblePlayers = players.map(p =>
+      (iAmSpectator || p.user_id === req.user.id) ? p : { ...p, game_state: null }
+    );
 
     const [msgs] = await db.execute(`
       SELECT cm.message, cm.sent_at, u.username, u.avatar
@@ -270,7 +367,7 @@ router.get("/:code/poll", verifyToken, async (req, res, next) => {
       duration_seconds: rooms[0].duration_seconds,
       started_at: rooms[0].started_at,
       server_now: new Date().toISOString(),  // lets clients anchor the clock to server time
-      players,
+      players: visiblePlayers,
       chat: msgs.reverse(),
     });
   } catch (err) { next(err); }
@@ -283,7 +380,7 @@ router.post("/:code/chat", verifyToken, async (req, res, next) => {
     if (typeof message !== "string" || !message.trim())
       return res.status(400).json({ success: false, message: "Message cannot be empty." });
     // Strip control chars (incl. zero-width) but keep newlines and printable unicode.
-    const cleaned = message.replace(/[ --]/g, "").trim().slice(0, 300);
+    const cleaned = message.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "").trim().slice(0, 300);
     if (!cleaned) return res.status(400).json({ success: false, message: "Message cannot be empty." });
 
     const [rooms] = await db.execute("SELECT id FROM rooms WHERE room_code = ?", [req.params.code]);
@@ -301,6 +398,10 @@ router.post("/:code/chat", verifyToken, async (req, res, next) => {
       "INSERT INTO chat_messages (room_id, user_id, message) VALUES (?,?,?)",
       [rooms[0].id, req.user.id, cleaned]
     );
+    await touchRoom(rooms[0].id);
+    push(req, req.params.code, "room:chat", {
+      code: req.params.code, username: req.user.username, message: cleaned,
+    });
     res.status(201).json({ success: true });
   } catch (err) { next(err); }
 });
@@ -408,6 +509,7 @@ router.post("/:code/leave", verifyToken, async (req, res, next) => {
         );
       }
     }
+    push(req, req.params.code, "room:players", { code: req.params.code, left: req.user.id });
     res.json({ success: true });
   } catch (err) { next(err); }
 });

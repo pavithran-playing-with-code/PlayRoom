@@ -18,6 +18,10 @@ const SOCKET_URL = process.env.REACT_APP_API_URL || undefined;
 export function SocketProvider({ children }) {
   const { token, isLoggedIn } = useAuth();
   const socketRef = useRef(null);
+  // Also held in state: consumers that subscribe to room channels need a
+  // re-render when the socket appears. Reading socketRef.current during render
+  // gave them `null` on first paint and never updated them.
+  const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
   // Set of currently-online userIds (numbers), updated via presence events.
   const [onlineUsers, setOnlineUsers] = useState(() => new Set());
@@ -28,19 +32,22 @@ export function SocketProvider({ children }) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
+        setSocket(null);
         setConnected(false);
         setOnlineUsers(new Set());
       }
       return;
     }
 
-    const socket = io(SOCKET_URL, {
+    const s = io(SOCKET_URL, {
       auth: { token },
       autoConnect: true,
       transports: ["websocket", "polling"],
     });
-    socketRef.current = socket;
+    socketRef.current = s;
+    setSocket(s);
 
+    const socket = s;
     socket.on("connect", () => setConnected(true));
     socket.on("disconnect", () => setConnected(false));
     socket.on("presence:update", ({ userId, online }) => {
@@ -55,12 +62,13 @@ export function SocketProvider({ children }) {
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      setSocket(null);
       setConnected(false);
     };
   }, [isLoggedIn, token]);
 
   const value = {
-    socket: socketRef.current,
+    socket,
     connected,
     onlineUsers,
     isUserOnline: (id) => onlineUsers.has(Number(id)),

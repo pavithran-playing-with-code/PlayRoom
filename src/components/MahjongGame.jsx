@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../utils/api";
 import GameFrame from "./games/GameFrame";
 import GameOver from "./games/GameOver";
+import { finalSync } from "./games/finalSync";
 import { confetti } from "./ui/FunLayer";
 
 // ── Tile definitions ─────────────────────────────────────────────────────────
@@ -345,19 +346,10 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
   }
   function shuffle() { doShuffle(false); }
 
-  function resetGame() {
-    clearInterval(timerRef.current);
-    setTiles(buildTiles(seed));
-    setSelected(null); setScore(0); setPairs(0); setMoves(0);
-    setTimerSec(TIMER_INIT); setGameOver(false); setWon(false);
-    setHintIdx([]);
-    timerRef.current = setInterval(() => {
-      setTimerSec(t => {
-        if (t <= 1) { clearInterval(timerRef.current); setGameOver(true); return 0; }
-        return t - 1;
-      });
-    }, 1000);
-  }
+  // No resetGame / "Play Again" any more. Every match is a room, and the
+  // leaderboard records one session per (room, user) — so a second run in the
+  // same room could never be scored. The button looked like it worked and
+  // silently threw the replay away; starting a fresh room is the real path.
 
   // Robust filter: coerce both ids to numbers, and bail entirely if we don't
   // know our own id yet (otherwise the player sees themselves as their own
@@ -367,7 +359,22 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
     ? (players || []).filter(p => Number(p.user_id) !== myId)
     : [];
 
-  const quit = () => onGameEnd && onGameEnd(score, pairs, moves, won);
+  // Push the final score before handing off — the server decides the outcome
+  // from what's stored, so it has to be current. See games/finalSync.js.
+  const quittingRef = useRef(false);
+  async function quit() {
+    if (quittingRef.current) return;
+    quittingRef.current = true;
+    clearInterval(syncRef.current);
+    if (isOnline) {
+      const matchedIdx = tiles.map((t, i) => (t.matched ? i : -1)).filter(i => i >= 0);
+      await finalSync(roomCode, {
+        score, pairs_matched: pairs, moves,
+        game_state: JSON.stringify({ matched: matchedIdx }),
+      });
+    }
+    onGameEnd && onGameEnd(score, pairs, moves, won);
+  }
 
   const stats = isSpectator
     ? [
@@ -477,7 +484,6 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
         <GameOver
           score={score} won={won} finished={won}
           extra={`Pairs: ${pairs}/${TOTAL_PAIRS}`}
-          onPlayAgain={resetGame}
           onExit={quit}
         />
       )}

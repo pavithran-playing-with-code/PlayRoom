@@ -29,3 +29,6 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+
+# portable cloudflared binary downloaded by `npm run share`
+tools/

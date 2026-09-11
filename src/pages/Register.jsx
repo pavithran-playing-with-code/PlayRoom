@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
 import Detective, { useDetective } from "../components/characters/Detective";
-import { useToast } from "../components/ui";
+import { useToast, PasswordInput } from "../components/ui";
 
 const AVATARS = ["🎮", "🦊", "🐸", "🐙", "🐱", "🐲", "🐼", "🐾", "🀄", "🃏", "🎯", "🌟"];
 
@@ -90,7 +90,7 @@ export default function Register() {
 
             <div className="field">
               <label htmlFor="rg-pass">Password</label>
-              <input id="rg-pass" type="password" placeholder="at least 6 characters" autoComplete="new-password"
+              <PasswordInput id="rg-pass" placeholder="at least 6 characters" autoComplete="new-password"
                 required minLength={6}
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}

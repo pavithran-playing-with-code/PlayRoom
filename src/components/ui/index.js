@@ -8,5 +8,6 @@ export { default as Modal } from "./Modal";
 export { default as Tabs } from "./Tabs";
 export { default as ProgressRing } from "./ProgressRing";
 export { default as Input, Field, Select } from "./Input";
+export { default as PasswordInput } from "./PasswordInput";
 export { ToastProvider, useToast } from "./Toast";
 export { default as FunLayer, confetti } from "./FunLayer";

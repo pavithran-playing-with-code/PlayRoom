@@ -434,3 +434,40 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
 .taptile{aspect-ratio:1;border:3px solid var(--ink);border-radius:var(--r);
   font-size:2.2rem;display:grid;place-items:center;
   transition:transform .09s ease,box-shadow .09s ease,background .09s ease}
+
+/* ---------- password field with a show/hide eye (ui/PasswordInput) ---------- */
+.pw{position:relative}
+.pw input{padding-right:56px}
+/* nudged up 2px: the field's hard shadow sits below it, so its visual centre is higher */
+.pw-toggle{position:absolute;right:9px;top:50%;transform:translateY(calc(-50% - 2px));
+  width:38px;height:38px;border-radius:12px;display:grid;place-items:center;
+  color:var(--ink-soft);transition:background .1s,color .1s}
+.pw-toggle:hover{color:var(--ink);background:var(--paper2)}
+.pw-toggle[aria-pressed="true"]{color:var(--grape)}
+/* Edge draws its own reveal button; one eye is enough */
+input::-ms-reveal,input::-ms-clear{display:none}
+
+/* ---------- Arrow Escape ---------- */
+/* Width is capped by the viewport height too, so the 7x9 board never needs scrolling on a phone. */
+.ae-frame{position:relative;margin:0 auto;padding:10px;background:#fff;
+  border:3px solid var(--ink);border-radius:var(--r-lg);box-shadow:0 5px 0 var(--ink);
+  width:min(92vw,430px,calc((100dvh - 250px) * 7 / 9 + 26px));
+  touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.ae-board{display:block;width:100%;height:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ae-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:2;pointer-events:none;
+  border:3px solid var(--ink);border-radius:999px;padding:6px 14px;font-family:Fredoka,sans-serif;
+  font-weight:600;font-size:.95rem;white-space:nowrap;box-shadow:0 3px 0 var(--ink);
+  animation:aePop .2s cubic-bezier(.34,1.7,.64,1)}
+@keyframes aePop{from{opacity:0;transform:translate(-50%,-6px) scale(.9)}}
+/* sliding out: the visible dash runs along the path while the head moves straight on */
+.ae-leaving .ae-body{animation:aeSlideBody var(--dur) cubic-bezier(.5,0,.9,.5) forwards}
+.ae-leaving .ae-head{animation:aeSlideHead var(--dur) cubic-bezier(.5,0,.9,.5) forwards}
+@keyframes aeSlideBody{to{stroke-dashoffset:var(--to)}}
+@keyframes aeSlideHead{to{transform:translate(var(--tx),var(--ty))}}
+/* blocked tap: the tapped arrow shakes, the one in its way flashes */
+.ae-shake{animation:aeShake .36s ease}
+@keyframes aeShake{20%{transform:translate(-1.4px,0)}40%{transform:translate(1.4px,0)}60%{transform:translate(-.9px,0)}80%{transform:translate(.9px,0)}}
+.ae-blocker .ae-body{animation:aeWarnStroke .5s ease}
+.ae-blocker .ae-tri{animation:aeWarnFill .5s ease}
+@keyframes aeWarnStroke{25%,75%{stroke:var(--grape)}}
+@keyframes aeWarnFill{25%,75%{fill:var(--grape)}}

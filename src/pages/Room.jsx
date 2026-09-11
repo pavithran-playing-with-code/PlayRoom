@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
+import { useSocket } from "../utils/SocketContext";
 import { getGameComponent, GAME_MAP } from "../components/games/registry";
 import { Avatar } from "../components/ui";
 
@@ -10,6 +11,7 @@ export default function Room() {
   const { code } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { socket } = useSocket() || {};
 
   const [room,      setRoom]      = useState(null);
   const [players,   setPlayers]   = useState([]);
@@ -119,11 +121,34 @@ export default function Room() {
     return () => window.removeEventListener("beforeunload", onUnload);
   }, [leaveRoom]);
 
+  // Real-time: subscribe to this room's channel and refresh the instant the
+  // server says something changed. Polling below stays as a safety net for
+  // dropped sockets, but at a much slower cadence now that it isn't the only
+  // way to learn about a join, a chat line or the host pressing Start.
+  useEffect(() => {
+    if (!socket || notFound) return;
+    const refresh = () => poll();
+    socket.emit("room:join", code);
+    socket.on("room:players", refresh);
+    socket.on("room:started", refresh);
+    socket.on("room:chat", refresh);
+    socket.on("room:ended", refresh);
+    return () => {
+      socket.emit("room:leave", code);
+      socket.off("room:players", refresh);
+      socket.off("room:started", refresh);
+      socket.off("room:chat", refresh);
+      socket.off("room:ended", refresh);
+    };
+  }, [socket, code, poll, notFound]);
+
   useEffect(() => {
     if (pausePolling) return;
     fetchRoom();
     poll();
-    pollRef.current = setInterval(poll, 2000);
+    // 5s, not 2s: the socket channel above delivers changes immediately, so
+    // this only has to catch the case where the socket is down.
+    pollRef.current = setInterval(poll, 5000);
     return () => clearInterval(pollRef.current);
   }, [fetchRoom, poll, pausePolling]);
 
@@ -244,9 +269,10 @@ export default function Room() {
         durationSeconds={duration}
         startedAt={startedAt}
         serverNow={serverNow}
-        onGameEnd={async (_score, _pairs, _moves, won) => {
-          // Server reads the validated score from room_players; we only signal win/loss + room.
-          try { await api.post("/api/leaderboard/update", { room_code: code, won: !!won }); } catch { /* silent */ }
+        onGameEnd={async () => {
+          // The server reads the validated score from room_players AND decides
+          // the outcome from it — nothing about the result is sent from here.
+          try { await api.post("/api/leaderboard/update", { room_code: code }); } catch { /* silent */ }
           exitToLobby();
         }}
       />

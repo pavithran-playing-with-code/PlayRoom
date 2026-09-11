@@ -77,6 +77,9 @@ const TABLES = {
       status       ENUM('waiting','in_progress','finished','abandoned')
                                 NOT NULL DEFAULT 'waiting',
       created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      -- Touched on join/start/chat/score. The stale-room sweep uses this rather
+      -- than created_at, so a busy lobby isn't culled just for being old.
+      last_activity_at DATETIME NULL DEFAULT NULL,
       started_at   TIMESTAMP    NULL,
       finished_at  TIMESTAMP    NULL,
       PRIMARY KEY (id),
@@ -115,7 +118,7 @@ const TABLES = {
       score         INT          NOT NULL DEFAULT 0,
       pairs_matched INT          NOT NULL DEFAULT 0,
       moves         INT          NOT NULL DEFAULT 0,
-      result        ENUM('win','loss','draw') NOT NULL DEFAULT 'loss',
+      result        ENUM('win','loss','draw','incomplete') NOT NULL DEFAULT 'loss',
       created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       UNIQUE KEY uq_session_room_user (room_id, user_id),
@@ -203,6 +206,7 @@ const GAME_SEED = [
   { slug: "speedmath", name: "Speed Math",        description: "Solve as many problems as you can before the clock runs out!", min: 1, max: 4, icon: "➗", active: 1 },
   { slug: "reaction",  name: "Tap Rush",          description: "Tap the lit tiles fast — rack up points against the clock!",   min: 1, max: 4, icon: "⚡", active: 1 },
   { slug: "wordrush",  name: "Word Rush",         description: "Unscramble as many words as possible before time's up!",       min: 1, max: 4, icon: "🔤", active: 1 },
+  { slug: "arrows",    name: "Arrow Escape",      description: "Tap an arrow to slide it off the board, but only if its path is clear.", min: 1, max: 4, icon: "🏹", active: 1 },
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
 ];
 
@@ -219,9 +223,62 @@ async function addColumnIfMissing(conn, table, column, definition) {
   }
 }
 
+// Every FK that points at users(id) must cascade, or deleting a user fails.
+//
+// This can't be fixed by editing the CREATE TABLE statements above: those run
+// under `CREATE TABLE IF NOT EXISTS`, so an install created before the CASCADE
+// was declared keeps its old NO ACTION constraints forever. Live databases also
+// disagree with this file on constraint *names* (live `fk_rooms_game_type` vs
+// this file's `fk_rooms_game`), so we look the constraint up by column rather
+// than assuming a name.
+const USER_FK_CASCADES = [
+  ["rooms",         "host_id"],
+  ["room_players",  "user_id"],
+  ["game_sessions", "user_id"],
+  ["leaderboard",   "user_id"],
+  ["chat_messages", "user_id"],
+  ["room_invites",  "from_user"],
+  ["room_invites",  "to_user"],
+  ["friendships",   "user_a"],
+  ["friendships",   "user_b"],
+  ["friendships",   "requested_by"],
+];
+
+async function ensureUserFkCascades(conn) {
+  for (const [table, column] of USER_FK_CASCADES) {
+    // Find the constraint on this column that references users(id), and read
+    // its current delete rule.
+    const [rows] = await conn.execute(
+      `SELECT k.CONSTRAINT_NAME AS name, r.DELETE_RULE AS rule
+         FROM information_schema.KEY_COLUMN_USAGE k
+         JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+           ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+          AND r.CONSTRAINT_NAME   = k.CONSTRAINT_NAME
+        WHERE k.TABLE_SCHEMA = ? AND k.TABLE_NAME = ? AND k.COLUMN_NAME = ?
+          AND k.REFERENCED_TABLE_NAME = 'users'`,
+      [DB_NAME, table, column]
+    );
+    if (!rows.length) continue;                       // table/column not present
+    if (rows[0].rule === "CASCADE") continue;         // already correct
+
+    const name = rows[0].name;
+    await conn.query(`ALTER TABLE \`${table}\` DROP FOREIGN KEY \`${name}\``);
+    await conn.query(
+      `ALTER TABLE \`${table}\`
+         ADD CONSTRAINT \`${name}\` FOREIGN KEY (\`${column}\`)
+         REFERENCES users(id) ON DELETE CASCADE`
+    );
+    console.log(`   ↑ migrated: ${table}.${column} → ON DELETE CASCADE (was ${rows[0].rule})`);
+  }
+}
+
 async function migrate(conn) {
   await addColumnIfMissing(conn, "rooms", "duration_seconds",
     "duration_seconds INT NOT NULL DEFAULT 120 AFTER seed");
+  // Drives the stale-room sweep: "idle for an hour", not "created an hour ago".
+  await addColumnIfMissing(conn, "rooms", "last_activity_at",
+    "last_activity_at DATETIME NULL DEFAULT NULL AFTER created_at");
+  await ensureUserFkCascades(conn);
 }
 
 async function main() {

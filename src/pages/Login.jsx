@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
 import Detective, { useDetective } from "../components/characters/Detective";
-import { useToast } from "../components/ui";
+import { useToast, PasswordInput } from "../components/ui";
 
 export default function Login() {
   const [form, setForm] = useState({ username: "", password: "" });
@@ -67,7 +67,7 @@ export default function Login() {
 
             <div className="field">
               <label htmlFor="lg-pass">Password</label>
-              <input id="lg-pass" type="password" placeholder="••••••••" autoComplete="current-password"
+              <PasswordInput id="lg-pass" placeholder="••••••••" autoComplete="current-password"
                 value={form.password}
                 onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
                 {...det.secretProps} />

@@ -75,15 +75,25 @@ async function tailscaleReady(ts) {
     return null;
   }
   if (process.platform === "win32" && fs.existsSync(TS_APP)) {
-    line("⏳ Starting the Tailscale app…");
+    line("⏳ Starting the Tailscale app… (from cold this can take up to a minute)");
     spawn(TS_APP, [], { detached: true, stdio: "ignore" }).unref();
-    for (let i = 0; i < 25; i++) {
+    // A warm start connects in ~2 s, but a cold start once took longer than
+    // the 25 s this used to allow — and silently fell back to a random
+    // Cloudflare link even though Tailscale was seconds from ready.
+    for (let i = 1; i <= 90; i++) {
       await sleep(1000);
       st = tsStatus(ts);
-      if (st?.BackendState === "Running") return st;
+      if (st?.BackendState === "Running") { line("✅ Tailscale is up."); return st; }
+      if (st?.BackendState === "NeedsLogin") {
+        line("⚠️  Tailscale needs you to sign in — open the Tailscale app.");
+        return null;
+      }
+      if (i % 15 === 0) line(`   …still waiting for Tailscale (${i}s)`);
     }
   }
   line(`⚠️  Tailscale isn't connected (state: ${st?.BackendState || "unknown"}).`);
+  line("   When the Tailscale icon shows Connected, press Ctrl+C and run npm run share");
+  line("   again to get your fixed link back.");
   return null;
 }
 

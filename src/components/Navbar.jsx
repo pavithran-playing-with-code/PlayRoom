@@ -1,22 +1,30 @@
 // src/components/Navbar.jsx
 // The header bar. Behind the links, `.runstrip` holds the mascot who strolls
-// the width of the bar and shows off — he's decorative, pointer-events:none,
-// and hidden entirely on narrow screens.
+// the width of the bar and shows off. He's decorative (pointer-events:none)
+// and walks on every screen size, phones included.
+//
+// Two groups: the page links, and "me" (friends dock + account menu). Side by
+// side on bigger screens; on a phone "me" sits next to the logo and the links
+// get a full-width row of their own.
 import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../utils/AuthContext";
-import { api } from "../utils/api";
+import { usePresence } from "../utils/PresenceContext";
+import useMedia from "../utils/useMedia";
 import Logo from "./Logo";
 import Runner from "./characters/Runner";
+import FriendsDock from "./FriendsDock";
 import { Avatar } from "./ui";
 
 export default function Navbar() {
   const { user, isLoggedIn, logout } = useAuth();
+  // Kept live over the socket by PresenceContext, no polling of our own.
+  const { inboxCount: pendingCt } = usePresence();
+  const narrow = useMedia("(max-width: 400px)");
   const navigate = useNavigate();
   const location = useLocation();
 
   const [open, setOpen] = useState(false);
-  const [pendingCt, setPendingCt] = useState(0);
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -28,27 +36,10 @@ export default function Navbar() {
     return () => { document.removeEventListener("mousedown", onClick); document.removeEventListener("keydown", onKey); };
   }, [open]);
 
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    let cancelled = false;
-    async function tick() {
-      try {
-        const res = await api.get("/api/friends/inbox-count");
-        const data = await res.json();
-        if (!cancelled && data.success) setPendingCt(data.count || 0);
-      } catch { /* silent */ }
-    }
-    tick();
-    const t = setInterval(tick, 15000);
-    return () => { cancelled = true; clearInterval(t); };
-  }, [isLoggedIn]);
-
   function handleLogout() { setOpen(false); logout(); navigate("/login"); }
 
   const navLink = (to, label) => (
-    <Link key={to} to={to} className="navlink" aria-current={location.pathname === to}>
-      {label}
-    </Link>
+    <Link key={to} to={to} className="navlink" aria-current={location.pathname === to}>{label}</Link>
   );
 
   return (
@@ -59,12 +50,17 @@ export default function Navbar() {
           <Logo size="md" />
         </Link>
 
-        <div className="row" style={{ gap: 6 }}>
-          {isLoggedIn ? (
-            <>
+        {isLoggedIn ? (
+          <>
+            <div className="navlinks">
               {navLink("/lobby", "🕹️ Lobby")}
               {navLink("/leaderboard", "🏆 Board")}
               {navLink("/friends", pendingCt ? `👥 Crew (${pendingCt})` : "👥 Crew")}
+            </div>
+
+            <div className="navme">
+              {/* Friends' faces with online pips: tap for who's on and last seen */}
+              <FriendsDock max={narrow ? 2 : 3} size={32} />
 
               <span className="menuwrap" ref={menuRef}>
                 <button onClick={() => setOpen((o) => !o)} style={{ borderRadius: 999, position: "relative" }}
@@ -93,14 +89,14 @@ export default function Navbar() {
                   </div>
                 )}
               </span>
-            </>
-          ) : (
-            <>
-              {navLink("/login", "Log in")}
-              <Link to="/register" className="press p-coral sm">Join free</Link>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        ) : (
+          <div className="navme">
+            {navLink("/login", "Log in")}
+            <Link to="/register" className="press p-coral sm">Join free</Link>
+          </div>
+        )}
       </div>
     </nav>
   );

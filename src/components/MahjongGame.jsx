@@ -1,9 +1,10 @@
 // src/components/MahjongGame.jsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { api } from "../utils/api";
+// Match pairs of free tiles (a tile is free when at least one side is open)
+// and clear the board before the clock stops.
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import GameFrame from "./games/GameFrame";
 import GameOver from "./games/GameOver";
-import { finalSync } from "./games/finalSync";
+import useGameEngine from "./games/useGameEngine";
 import { confetti } from "./ui/FunLayer";
 
 // ── Tile definitions ─────────────────────────────────────────────────────────
@@ -42,15 +43,15 @@ const CAT_STYLE = Object.fromEntries(TILE_CATEGORIES.map((c) => [c.id, c]));
 
 // Big picture on a category-coloured, ink-outlined disc — the same "physical
 // object" treatment every other control gets.
-function TileFace({ tile }) {
+function TileFace({ tile, size }) {
   const style = CAT_STYLE[tile.cat] || CAT_STYLE.animals;
   return (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "center",
-      width: "76%", aspectRatio: "1 / 1", borderRadius: "50%",
+      width: "78%", aspectRatio: "1 / 1", borderRadius: "50%",
       background: style.tint,
-      border: "2.5px solid var(--ink)",
-      fontSize: "clamp(1.1rem, 3.6vw, 2rem)", lineHeight: 1,
+      border: `${size < 40 ? 2 : 2.5}px solid var(--ink)`,
+      fontSize: Math.max(11, Math.round(size * 0.44)), lineHeight: 1,
       userSelect: "none",
     }}>
       <span>{tile.e}</span>
@@ -58,18 +59,27 @@ function TileFace({ tile }) {
   );
 }
 
-// 70 tiles total. We pick a column count to match the viewport so the
-// board uses horizontal space on desktop and stays portrait on mobile.
-// 70 factors cleanly into 7 / 10 / 14 — all give complete rows.
-function pickColsForViewport() {
-  if (typeof window === "undefined") return 10;
-  const w = window.innerWidth;
-  if (w < 600)  return 7;   // mobile portrait  → 10 rows
-  if (w < 1000) return 10;  // tablet / narrow  → 7 rows
-  return 14;                // desktop laptop+  → 5 rows
-}
-
+// ── The board ────────────────────────────────────────────────────────────────
+// Always 10 wide x 7 tall *in logic*, on every screen. Whether a tile is free
+// depends on its neighbours, so the grid can't change with the window. The old
+// board re-flowed to 7/10/14 columns by screen width: every resize moved tiles
+// next to different neighbours, and a phone and a laptop in the same room were
+// playing different games. A tall screen now shows the same board turned on
+// its side. The free rule looks at all four sides, so turning the board
+// changes nothing about which tiles are free.
+const COLS = 10;
+const ROWS = 7;
 const TOTAL_PAIRS = 35;
+const RATIO = 1.18;          // tile height / width
+const MATCH = 100;           // plus the seconds left on the clock
+const MISS = -10;
+const HINT_COST = -20;
+const SHUFFLE_COST = -50;
+
+// Tile indexes in the order they're drawn.
+const LANDSCAPE = Array.from({ length: COLS * ROWS }, (_, i) => i);
+const PORTRAIT = [];
+for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) PORTRAIT.push(r * COLS + c);
 
 function seededRand(seed) {
   let s = (seed || 42) % 2147483647;
@@ -79,9 +89,8 @@ function seededRand(seed) {
 
 function buildTiles(seed) {
   const rand = seededRand(seed);
-  const types = TILE_TYPES.slice(0, TOTAL_PAIRS).filter(Boolean);
-  let raw = [];
-  types.forEach(t => {
+  const raw = [];
+  TILE_TYPES.slice(0, TOTAL_PAIRS).forEach((t) => {
     raw.push({ ...t, matched: false });
     raw.push({ ...t, matched: false });
   });
@@ -94,286 +103,186 @@ function buildTiles(seed) {
 
 // A tile is playable when it has at least one OPEN side — you could slide it
 // out that way. Board edges count as open.
-//
-// This used to check left/right only, which on a 14-wide grid meant just the
-// two ends of each row were ever free (10 of 70 tiles) — the board deadlocked
-// almost immediately. Checking all four sides frees the whole perimeter and
-// opens up more with every pair cleared, which is what makes the game playable.
-function isFree(tiles, idx, cols) {
+function isFree(tiles, idx) {
   const tile = tiles[idx];
   if (!tile || tile.matched) return false;
-
-  const rows = Math.ceil(tiles.length / cols);
-  const row = Math.floor(idx / cols);
-  const col = idx % cols;
-
-  // Is the neighbour at (r,c) present and still on the board?
-  const occupied = (r, c) => {
-    if (r < 0 || c < 0 || r >= rows || c >= cols) return false; // off-board = open
-    const t = tiles[r * cols + c];
-    return t != null && !t.matched;
-  };
-
-  return !occupied(row, col - 1) || !occupied(row, col + 1)
-      || !occupied(row - 1, col) || !occupied(row + 1, col);
+  const r = Math.floor(idx / COLS);
+  const c = idx % COLS;
+  const taken = (rr, cc) =>
+    rr >= 0 && cc >= 0 && rr < ROWS && cc < COLS && !tiles[rr * COLS + cc].matched;
+  return !taken(r, c - 1) || !taken(r, c + 1) || !taken(r - 1, c) || !taken(r + 1, c);
 }
 
-// True when at least one pair of same-kind free tiles exists.
-function hasAvailableMatch(tileArr, cols) {
+// Two free tiles showing the same picture, or null.
+function findPair(tiles) {
   const free = [];
-  for (let i = 0; i < tileArr.length; i++) {
-    if (!tileArr[i].matched && isFree(tileArr, i, cols)) free.push(i);
-  }
+  for (let i = 0; i < tiles.length; i++) if (isFree(tiles, i)) free.push(i);
   for (let a = 0; a < free.length; a++) {
     for (let b = a + 1; b < free.length; b++) {
-      if (tileArr[free[a]].k === tileArr[free[b]].k) return true;
+      if (tiles[free[a]].k === tiles[free[b]].k) return [free[a], free[b]];
     }
   }
-  return false;
+  return null;
 }
 
 // Redistribute EVERY remaining tile across every remaining position, and keep
-// trying until the result actually has a legal move.
-//
-// The old version shuffled only the free tiles into the free positions — the
-// same multiset of kinds landing back in the same open slots, so the board was
-// provably just as stuck afterwards. Returns the original array (identity) when
-// it can't produce a playable board, so callers can detect the no-op.
-function reshuffle(tiles, cols, maxTries = 40) {
+// trying until the result actually has a legal move. Returns the original
+// array (identity) when it can't produce a playable board.
+function reshuffle(tiles, maxTries = 40) {
   const slots = [];
   for (let i = 0; i < tiles.length; i++) if (!tiles[i].matched) slots.push(i);
   if (slots.length < 2) return tiles;
 
   for (let attempt = 0; attempt < maxTries; attempt++) {
-    const pool = slots.map(i => tiles[i]);
+    const pool = slots.map((i) => tiles[i]);
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     const next = [...tiles];
     slots.forEach((idx, k) => { next[idx] = pool[k]; });
-    if (hasAvailableMatch(next, cols)) return next;
+    if (findPair(next)) return next;
   }
   return tiles;
 }
 
+const matchedIndices = (tiles) => tiles.map((t, i) => (t.matched ? i : -1)).filter((i) => i >= 0);
+
+// The biggest tiles that fit the board area, lying down or standing up.
+function layout(w, h) {
+  const gap = Math.round(Math.max(3, Math.min(10, Math.min(w, h) * 0.012)));
+  const room = h - 10;                    // a lifted tile's shadow
+  const fit = (cols, rows) =>
+    Math.min((w - (cols - 1) * gap) / cols, (room - (rows - 1) * gap) / rows / RATIO);
+  const land = fit(COLS, ROWS);
+  const port = fit(ROWS, COLS);
+  const portrait = port > land;
+  const tw = Math.max(22, Math.min(88, Math.floor(portrait ? port : land)));
+  return { portrait, cols: portrait ? ROWS : COLS, gap, tw, th: Math.floor(tw * RATIO) };
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
-export default function MahjongGame({ roomCode, seed, players, currentUser, onGameEnd, durationSeconds, isSpectator = false, spectatorState = null, spectatorWatching = null }) {
-  const isOnline = !!roomCode;
-  // Every match is time-boxed by the room's duration (2–5 min); fall back to a
-  // generous solo clock when played outside a room.
-  const TIMER_INIT = durationSeconds || (isOnline ? 300 : 600);
+export default function MahjongGame({
+  roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 300, startedAt, serverNow,
+  isSpectator = false, spectatorState = null, spectatorWatching = null,
+}) {
+  // The board lives in a ref as well as state: two taps in the same tick must
+  // each see the other's result (see MemoryGame.jsx for the bug this avoids).
+  const live = useRef(null);
+  if (live.current === null) live.current = { tiles: buildTiles(seed), selected: null, pairs: 0 };
 
-  // Column count tracks viewport class (mobile/tablet/desktop).
-  // Reacts to resize so DevTools / orientation changes reflow the board.
-  // Note: changing COLS mid-game shifts which tiles are spatially adjacent,
-  // so a tile's "free/blocked" status can change — acceptable trade-off.
-  const [cols, setCols] = useState(() => pickColsForViewport());
-  useEffect(() => {
-    const onResize = () => {
-      const next = pickColsForViewport();
-      setCols(c => (c === next ? c : next));
-    };
-    window.addEventListener("resize", onResize);
-    window.addEventListener("orientationchange", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("orientationchange", onResize);
-    };
-  }, []);
-
-  const [tiles, setTiles] = useState(() => buildTiles(seed));
+  const [tiles, setTiles] = useState(() => live.current.tiles);
   const [selected, setSelected] = useState(null);
-  const [score, setScore] = useState(0);
   const [pairs, setPairs] = useState(0);
-  const [moves, setMoves] = useState(0);
-  const [timerSec, setTimerSec] = useState(TIMER_INIT);
   const [hintIdx, setHintIdx] = useState([]);
-  const [gameOver, setGameOver] = useState(false);
-  const [won, setWon] = useState(false);
   const [msg, setMsg] = useState(null);
-  const [oppData, setOppData] = useState({});
+  const msgTimer = useRef(null);
 
-  const timerRef = useRef(null);
-  const syncRef = useRef(null);
-  const msgRef = useRef(null);
-  const stateRef = useRef({ score, pairs, moves, tiles });
-  useEffect(() => { stateRef.current = { score, pairs, moves, tiles }; }, [score, pairs, moves, tiles]);
+  const eng = useGameEngine({
+    roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
+    extraState: () => ({
+      pairs_matched: live.current.pairs,
+      game_state: JSON.stringify({ matched: matchedIndices(live.current.tiles) }),
+    }),
+  });
+
+  const showMsg = useCallback((text, type = "info") => {
+    setMsg({ text, type });
+    clearTimeout(msgTimer.current);
+    msgTimer.current = setTimeout(() => setMsg(null), 2000);
+  }, []);
+  useEffect(() => () => clearTimeout(msgTimer.current), []);
 
   // Spectator: rebuild tile.matched from the watched player's state.
   useEffect(() => {
     if (!isSpectator || !spectatorState) return;
     const matched = new Set((spectatorState.matched || []).map(Number));
-    setTiles(prev => prev.map((t, i) => ({ ...t, matched: matched.has(i) })));
+    const s = live.current;
+    s.tiles = s.tiles.map((t, i) => ({ ...t, matched: matched.has(i) }));
+    setTiles(s.tiles);
   }, [isSpectator, spectatorState]);
 
-  // Timer (player only)
-  useEffect(() => {
-    if (isSpectator) return;
-    timerRef.current = setInterval(() => {
-      setTimerSec(t => {
-        if (t <= 1) { clearInterval(timerRef.current); setGameOver(true); setWon(false); return 0; }
-        return t - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timerRef.current);
-  }, [isSpectator]);
+  function applyShuffle(next) {
+    const s = live.current;
+    s.tiles = next;
+    s.selected = null;
+    setTiles(next);
+    setSelected(null);
+    setHintIdx([]);
+  }
 
-  // Helpers declared here (above the auto-shuffle effect) so they're
-  // initialized before any effect that depends on them — avoids TDZ.
-  const showMsg = useCallback((text, type = "info") => {
-    setMsg({ text, type });
-    clearTimeout(msgRef.current);
-    msgRef.current = setTimeout(() => setMsg(null), 2200);
-  }, []);
-
-  // Rescue a deadlocked board. reshuffle() only ever returns a board that has a
-  // legal move, so a single pass is enough — no retry budget, and no way to
-  // land in the old "shuffled 5 times, still stuck" dead end.
+  // Rescue a deadlocked board. reshuffle() only ever returns a board with a
+  // legal move, so one pass is enough.
   useEffect(() => {
-    if (gameOver || isSpectator) return;
-    if (selected !== null) return;            // wait for current selection
-    if (pairs >= TOTAL_PAIRS) return;
-    // Debounce so we don't fire during the mid-click transient state.
+    if (eng.gameOver || isSpectator || pairs >= TOTAL_PAIRS) return undefined;
     const t = setTimeout(() => {
-      if (hasAvailableMatch(tiles, cols)) return;
-      const next = reshuffle(tiles, cols);
-      if (next === tiles) { showMsg("⚠️ No moves left on the board.", "error"); return; }
-      setTiles(next);
-      showMsg("⚡ No matches — board reshuffled!", "info");
+      const s = live.current;
+      if (findPair(s.tiles)) return;
+      const next = reshuffle(s.tiles);
+      if (next === s.tiles) { showMsg("⚠️ No moves left on the board.", "error"); return; }
+      applyShuffle(next);
+      showMsg("⚡ No pairs left, so the board was reshuffled", "info");
     }, 400);
     return () => clearTimeout(t);
-  }, [tiles, cols, gameOver, isSpectator, selected, pairs, showMsg]);
-
-  // Online sync (player only)
-  useEffect(() => {
-    if (!isOnline || isSpectator) return;
-    syncRef.current = setInterval(async () => {
-      try {
-        const s = stateRef.current;
-        const matchedIdx = s.tiles.map((t, i) => t.matched ? i : -1).filter(i => i >= 0);
-        await api.patch(`/api/rooms/${roomCode}/score`, {
-          score: s.score, pairs_matched: s.pairs, moves: s.moves,
-          game_state: JSON.stringify({ matched: matchedIdx }),
-        });
-        const res = await api.get(`/api/rooms/${roomCode}/poll`);
-        const data = await res.json();
-        if (data.success) {
-          const opp = {};
-          (data.players || []).forEach(p => {
-            if (p.user_id !== currentUser?.id) opp[p.username] = { score: p.score, avatar: p.avatar };
-          });
-          setOppData(opp);
-        }
-      } catch { /* silent */ }
-    }, 2000);
-    return () => clearInterval(syncRef.current);
-  }, [isOnline, isSpectator, roomCode, currentUser]);
+  }, [tiles, eng.gameOver, isSpectator, pairs, showMsg]);
 
   function clickTile(idx, ev) {
-    if (isSpectator || gameOver) return;
-    const tile = tiles[idx];
-    if (tile.matched) return;
-    if (!isFree(tiles, idx, cols)) { showMsg("Tile is blocked!", "error"); return; }
+    if (isSpectator || eng.gameOver) return;
+    const s = live.current;
+    const tile = s.tiles[idx];
+    if (!tile || tile.matched) return;
+    if (!isFree(s.tiles, idx)) { showMsg("Boxed in! Pick a tile with an open side", "error"); return; }
     setHintIdx([]);
 
-    if (selected === null) {
-      setSelected(idx);
-    } else if (selected === idx) {
-      setSelected(null);
+    if (s.selected === null || s.selected === idx) {
+      s.selected = s.selected === idx ? null : idx;
+    } else if (s.tiles[s.selected].k === tile.k) {
+      const a = s.selected;
+      const gain = MATCH + eng.timeLeft;
+      s.tiles = s.tiles.map((t, i) => (i === a || i === idx ? { ...t, matched: true } : t));
+      s.selected = null;
+      s.pairs += 1;
+      setTiles(s.tiles);
+      setPairs(s.pairs);
+      eng.addMove();
+      eng.addScore(gain);
+      // Little pop of the matched picture, right where you tapped.
+      const r = ev?.currentTarget?.getBoundingClientRect?.();
+      confetti(r ? r.left + r.width / 2 : undefined, r ? r.top + r.height / 2 : undefined,
+        { count: 16, emojis: [tile.e, "✨"] });
+      if (s.pairs === TOTAL_PAIRS) eng.finish();
+      else showMsg(`✓ Match! +${gain}`, "success");
     } else {
-      const t1 = tiles[selected];
-      if (t1.k === tile.k) {
-        // Match!
-        const gain = 100 + Math.max(0, timerSec);
-        const next = tiles.map((t, i) =>
-          (i === selected || i === idx) ? { ...t, matched: true } : t
-        );
-        setTiles(next);
-        setScore(s => s + gain);
-        setMoves(m => m + 1);
-        setSelected(null);
-        // Little pop of the matched picture, right where you tapped.
-        const r = ev?.currentTarget?.getBoundingClientRect?.();
-        confetti(r ? r.left + r.width / 2 : undefined, r ? r.top + r.height / 2 : undefined,
-          { count: 16, emojis: [tile.e, "✨"] });
-
-        setPairs(p => {
-          const np = p + 1;
-          if (np === TOTAL_PAIRS) {
-            clearInterval(timerRef.current); setWon(true); setGameOver(true);
-            confetti(window.innerWidth / 2, window.innerHeight / 2, { count: 200 });
-          }
-          return np;
-        });
-        showMsg(`✓ Match! +${gain}`, "success");
-      } else {
-        setScore(s => Math.max(0, s - 10));
-        setMoves(m => m + 1);
-        setSelected(null);
-        showMsg("✗ Not a match!", "error");
-      }
+      s.selected = null;
+      eng.addMove();
+      eng.addScore(MISS);
+      showMsg(`✗ Not a match (${MISS})`, "error");
     }
+    setSelected(s.selected);
   }
 
   function hint() {
-    const free = tiles.map((t, i) => (!t.matched && isFree(tiles, i, cols) ? i : -1)).filter(i => i !== -1);
-    for (let a = 0; a < free.length; a++) {
-      for (let b = a + 1; b < free.length; b++) {
-        if (tiles[free[a]].k === tiles[free[b]].k) {
-          setHintIdx([free[a], free[b]]);
-          setScore(s => Math.max(0, s - 20));
-          showMsg("Hint shown! (−20 pts)", "info");
-          return;
-        }
-      }
+    if (isSpectator || eng.gameOver) return;
+    const pair = findPair(live.current.tiles);
+    if (pair) {
+      setHintIdx(pair);
+      eng.addScore(HINT_COST);
+      showMsg(`💡 Here's a pair (${HINT_COST})`, "info");
+      return;
     }
-    showMsg("No free matches — auto-shuffling…", "error");
-    doShuffle(true);  // auto-shuffle so the player isn't stuck
+    const next = reshuffle(live.current.tiles);
+    if (next === live.current.tiles) { showMsg("Nothing left to shuffle!", "error"); return; }
+    applyShuffle(next);
+    showMsg("⚡ No free pairs, so the board was reshuffled", "info");
   }
 
-  // Redistribute every remaining tile. `auto=true` skips the score penalty
-  // (used when the player is deadlocked through no fault of theirs).
-  function doShuffle(auto = false) {
-    const next = reshuffle(tiles, cols);
-    if (next === tiles) { showMsg("Nothing left to shuffle!", "error"); return; }
-    setTiles(next);
-    setSelected(null);
-    if (!auto) {
-      setScore(s => Math.max(0, s - 50));
-      showMsg("🔀 Shuffled! (−50 pts)", "info");
-    }
-  }
-  function shuffle() { doShuffle(false); }
-
-  // No resetGame / "Play Again" any more. Every match is a room, and the
-  // leaderboard records one session per (room, user) — so a second run in the
-  // same room could never be scored. The button looked like it worked and
-  // silently threw the replay away; starting a fresh room is the real path.
-
-  // Robust filter: coerce both ids to numbers, and bail entirely if we don't
-  // know our own id yet (otherwise the player sees themselves as their own
-  // opponent — that's the "Pavithran 0 pts" strip bug).
-  const myId = Number(currentUser?.id);
-  const opponents = (isOnline && Number.isFinite(myId))
-    ? (players || []).filter(p => Number(p.user_id) !== myId)
-    : [];
-
-  // Push the final score before handing off — the server decides the outcome
-  // from what's stored, so it has to be current. See games/finalSync.js.
-  const quittingRef = useRef(false);
-  async function quit() {
-    if (quittingRef.current) return;
-    quittingRef.current = true;
-    clearInterval(syncRef.current);
-    if (isOnline) {
-      const matchedIdx = tiles.map((t, i) => (t.matched ? i : -1)).filter(i => i >= 0);
-      await finalSync(roomCode, {
-        score, pairs_matched: pairs, moves,
-        game_state: JSON.stringify({ matched: matchedIdx }),
-      });
-    }
-    onGameEnd && onGameEnd(score, pairs, moves, won);
+  function shuffle() {
+    if (isSpectator || eng.gameOver) return;
+    const next = reshuffle(live.current.tiles);
+    if (next === live.current.tiles) { showMsg("Nothing left to shuffle!", "error"); return; }
+    applyShuffle(next);
+    eng.addScore(SHUFFLE_COST);
+    showMsg(`🔀 Shuffled (${SHUFFLE_COST})`, "info");
   }
 
   const stats = isSpectator
@@ -383,9 +292,9 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
         { label: "Moves", value: spectatorWatching?.moves ?? 0 },
       ]
     : [
-        { label: "Score", value: score.toLocaleString() },
+        { label: "Score", value: eng.score.toLocaleString() },
         { label: "Pairs", value: `${pairs}/${TOTAL_PAIRS}` },
-        { label: "Moves", value: moves },
+        { label: "Moves", value: eng.moves },
       ];
 
   return (
@@ -394,13 +303,10 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
         gameName="Mahjong Solitaire" badge="🀄 MAHJONG"
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
-        timer={isSpectator ? null : { value: timerSec, max: TIMER_INIT }}
-        opponents={opponents.map(p => ({
-          ...p,
-          score: oppData[p.username]?.score ?? p.score ?? 0,
-        }))}
+        timer={{ value: eng.timeLeft, max: durationSeconds }}
+        opponents={Object.values(eng.opponents)}
         message={msg}
-        onQuit={quit}
+        onQuit={eng.endMatch}
         controls={!isSpectator ? (
           <>
             <button className="press p-white sm" onClick={hint}>💡 Hint</button>
@@ -408,84 +314,75 @@ export default function MahjongGame({ roomCode, seed, players, currentUser, onGa
           </>
         ) : null}
       >
-        <div style={{
-          display: "grid",
-          // Derive tile WIDTH from both budgets and take the smaller, so the
-          // board can never overflow either axis. (The previous version sized
-          // from height first and let width fall out of an aspect ratio, which
-          // pushed the right-hand columns off-screen on wide-but-short windows.)
-          "--rows": String(Math.ceil(70 / cols)),
-          "--cols": String(cols),
-          "--gap": "clamp(5px, 0.8vw, 10px)",
-          // Horizontal budget: viewport minus felt padding minus all the gaps.
-          "--fit-w": "calc((min(100vw, 1500px) - 64px - (var(--cols) - 1) * var(--gap)) / var(--cols))",
-          // Vertical budget: viewport minus chrome (header + opponents bar +
-          // controls + felt padding), converted to a width via the aspect ratio.
-          "--fit-h": "calc(((100dvh - 260px) - (var(--rows) - 1) * var(--gap)) / var(--rows) / 1.18)",
-          "--tile-w": "max(34px, min(var(--fit-w), var(--fit-h), 88px))",
-          gridTemplateColumns: "repeat(var(--cols), var(--tile-w))",
-          gridAutoRows: "calc(var(--tile-w) * 1.18)",
-          gap: "var(--gap)",
-          maxWidth: "100%",
-        }}>
-          {tiles.map((tile, idx) => {
-            const free = !tile.matched && isFree(tiles, idx, cols);
-            const isSel = selected === idx;
-            const isHint = hintIdx.includes(idx);
+        {({ w, h }) => {
+          const L = layout(w, h);
+          const order = L.portrait ? PORTRAIT : LANDSCAPE;
+          const lift = Math.max(4, Math.round(L.tw * 0.12));
+          return (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: `repeat(${L.cols}, ${L.tw}px)`,
+              gridAutoRows: `${L.th}px`,
+              gap: L.gap,
+              touchAction: "manipulation",
+            }}>
+              {order.map((idx) => {
+                const tile = tiles[idx];
+                const free = !tile.matched && isFree(tiles, idx);
+                const isSel = selected === idx;
+                const isHint = hintIdx.includes(idx);
 
-            // Every tile is a physical object: white card stock, ink outline,
-            // hard shadow. State is carried by how far it sits off the table —
-            // a selected tile lifts, a blocked one sits flat and greys out.
-            let bg = "#fff";
-            let transform = "translateY(0)";
-            let shadow = "0 5px 0 var(--ink)";
-            let opacity = 1;
-            let cursor = "pointer";
-            let filter = "none";
+                // Every tile is a physical object: white card stock, ink outline,
+                // hard shadow. State is carried by how far it sits off the table —
+                // a selected tile lifts, a blocked one sits flat and greys out.
+                let bg = "#fff";
+                let transform = "translateY(0)";
+                let shadow = `0 ${Math.round(lift * 0.7)}px 0 var(--ink)`;
+                let opacity = 1;
+                let cursor = "pointer";
+                let filter = "none";
 
-            if (tile.matched) {
-              bg = "var(--lime)";
-              opacity = 0.5; shadow = "0 1px 0 var(--ink)"; cursor = "default";
-            } else if (isSel) {
-              bg = "var(--sun)";
-              transform = "translateY(-8px)";
-              shadow = "0 13px 0 var(--ink)";
-            } else if (isHint) {
-              bg = "var(--bubble)";
-              transform = "translateY(-4px)";
-              shadow = "0 9px 0 var(--ink)";
-            } else if (!free) {
-              opacity = 0.7; cursor = "not-allowed";
-              filter = "grayscale(45%)";
-              shadow = "0 2px 0 var(--ink)";
-            }
+                if (tile.matched) {
+                  bg = "var(--lime)";
+                  opacity = 0.5; shadow = "0 1px 0 var(--ink)"; cursor = "default";
+                } else if (isSel) {
+                  bg = "var(--sun)";
+                  transform = `translateY(-${lift}px)`;
+                  shadow = `0 ${lift + 4}px 0 var(--ink)`;
+                } else if (isHint) {
+                  bg = "var(--bubble)";
+                  transform = `translateY(-${Math.round(lift / 2)}px)`;
+                  shadow = `0 ${Math.round(lift / 2) + 4}px 0 var(--ink)`;
+                } else if (!free) {
+                  opacity = 0.7; cursor = "not-allowed";
+                  filter = "grayscale(45%)";
+                  shadow = "0 2px 0 var(--ink)";
+                }
 
-            return (
-              <div key={idx} onClick={(ev) => clickTile(idx, ev)} style={{
-                position: "relative",
-                width: "100%", height: "100%",
-                background: bg,
-                border: "3px solid var(--ink)",
-                borderRadius: 12,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor, transition: "transform 0.12s, box-shadow 0.12s, opacity 0.12s",
-                boxShadow: shadow,
-                transform, opacity, filter,
-                userSelect: "none",
-              }}>
-                <TileFace tile={tile} />
-              </div>
-            );
-          })}
-        </div>
+                return (
+                  <button key={idx} type="button" onClick={(ev) => clickTile(idx, ev)}
+                    aria-label={tile.matched ? "Cleared" : `${tile.e}${free ? "" : " (blocked)"}`}
+                    style={{
+                      position: "relative", width: "100%", height: "100%", padding: 0,
+                      background: bg,
+                      border: `${L.tw < 40 ? 2 : 3}px solid var(--ink)`,
+                      borderRadius: Math.max(6, Math.round(L.tw * 0.18)),
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      cursor, transition: "transform 0.12s, box-shadow 0.12s, opacity 0.12s",
+                      boxShadow: shadow, transform, opacity, filter,
+                      userSelect: "none", WebkitTapHighlightColor: "transparent",
+                    }}>
+                    <TileFace tile={tile} size={L.tw} />
+                  </button>
+                );
+              })}
+            </div>
+          );
+        }}
       </GameFrame>
 
-      {gameOver && !isSpectator && (
-        <GameOver
-          score={score} won={won} finished={won}
-          extra={`Pairs: ${pairs}/${TOTAL_PAIRS}`}
-          onExit={quit}
-        />
+      {eng.gameOver && !isSpectator && (
+        <GameOver eng={eng} me={currentUser} extra={`Pairs: ${pairs}/${TOTAL_PAIRS}`} />
       )}
     </>
   );

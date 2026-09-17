@@ -1,12 +1,23 @@
 // src/components/MemoryGame.jsx
-import React, { useState, useEffect, useRef } from "react";
-import { api } from "../utils/api";
+// Flip two cards; a matching pair stays face-up. Clear all 16 pairs before the
+// clock runs out. Everyone in a room gets the same seeded deck.
+//
+// The board lives in a ref, not in React state. Two taps can land in the same
+// tick (two fingers on a phone, or a quick double-tap), and each one has to
+// see what the one before it did. The old version read rendered state there,
+// so a third card could flip while two were already face-up: cards got
+// stranded face-up, the pair count never reached 16, and the game never ended.
+import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./games/GameFrame";
 import GameOver from "./games/GameOver";
-import { finalSync } from "./games/finalSync";
+import useGameEngine from "./games/useGameEngine";
 
-const EMOJIS     = ["🎮","🀄","🃏","🧩","🎯","🎲","🏆","⚡","🔥","🌟","🐉","🦊","🎪","🎨","🎵","🎸"];
-const TOTAL_PAIRS = 16;
+const EMOJIS      = ["🎮","🀄","🃏","🧩","🎯","🎲","🏆","⚡","🔥","🌟","🐉","🦊","🎪","🎨","🎵","🎸"];
+const TOTAL_PAIRS = EMOJIS.length;
+const PAIR_POINTS = 100;   // plus the seconds left on the clock
+const MISS        = -5;
+const PEEK_MS     = 800;   // how long a wrong pair stays face-up
+const RATIO       = 1.2;   // card height / width
 
 function seededRand(seed) {
   let s = (seed || 99) % 2147483647;
@@ -16,7 +27,7 @@ function seededRand(seed) {
 
 function buildCards(seed) {
   const rand = seededRand(seed);
-  let deck   = [...EMOJIS, ...EMOJIS].map((emoji, i) => ({ id: i, emoji, flipped: false, matched: false }));
+  const deck = [...EMOJIS, ...EMOJIS].map((emoji, i) => ({ id: i, emoji, flipped: false, matched: false }));
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
@@ -24,139 +35,93 @@ function buildCards(seed) {
   return deck;
 }
 
-export default function MemoryGame({ roomCode, seed, players, currentUser, onGameEnd, durationSeconds, isSpectator = false, spectatorState = null, spectatorWatching = null }) {
-  const isOnline   = !!roomCode;
-  // Time-boxed by the room duration (2–5 min); default 180s for solo play.
-  const TIMER_INIT = durationSeconds || 180;
+// The biggest cards that fit the board area: 4 wide x 8 tall on a phone,
+// 8 wide x 4 tall on a laptop, whichever gives larger cards.
+function layout(w, h) {
+  const gap = Math.round(Math.max(6, Math.min(14, Math.min(w, h) * 0.02)));
+  const room = h - 6;                       // the hard shadow under the last row
+  let best = { cols: 4, cw: 0 };
+  for (const [cols, rows] of [[4, 8], [8, 4]]) {
+    const cw = Math.min((w - (cols - 1) * gap) / cols, (room - (rows - 1) * gap) / rows / RATIO);
+    if (cw > best.cw) best = { cols, cw };
+  }
+  const cw = Math.max(26, Math.min(112, Math.floor(best.cw)));
+  return { cols: best.cols, gap, cw, ch: Math.floor(cw * RATIO) };
+}
 
-  // 4 cols on phones, 8 on bigger screens. Memory has no spatial adjacency
-  // rule so reflowing mid-game is fully safe.
-  const pickMemCols = () => (typeof window !== "undefined" && window.innerWidth < 600) ? 4 : 8;
-  const [memCols, setMemCols] = useState(pickMemCols);
+export default function MemoryGame({
+  roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 180, startedAt, serverNow,
+  isSpectator = false, spectatorState = null, spectatorWatching = null,
+}) {
+  // cards: the deck. open: indexes face-up but not matched (0, 1 or 2).
+  // peek: the timer that turns a wrong pair back over.
+  const live = useRef(null);
+  if (live.current === null) live.current = { cards: buildCards(seed), open: [], pairs: 0, peek: null };
+
+  const [cards, setCards] = useState(() => live.current.cards);
+  const [pairs, setPairs] = useState(0);
+
+  const eng = useGameEngine({
+    roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
+    extraState: () => ({
+      pairs_matched: live.current.pairs,
+      game_state: JSON.stringify({ matched: live.current.cards.filter((c) => c.matched).map((c) => c.id) }),
+    }),
+  });
+
   useEffect(() => {
-    const onResize = () => {
-      const next = pickMemCols();
-      setMemCols(c => (c === next ? c : next));
-    };
-    window.addEventListener("resize", onResize);
-    window.addEventListener("orientationchange", onResize);
-    return () => {
-      window.removeEventListener("resize", onResize);
-      window.removeEventListener("orientationchange", onResize);
-    };
+    const s = live.current;
+    return () => clearTimeout(s.peek);
   }, []);
 
-  const [cards,    setCards]    = useState(() => buildCards(seed));
-  const [flipped,  setFlipped]  = useState([]);
-  const [score,    setScore]    = useState(0);
-  const [pairs,    setPairs]    = useState(0);
-  const [moves,    setMoves]    = useState(0);
-  const [timerSec, setTimerSec] = useState(TIMER_INIT);
-  const [blocked,  setBlocked]  = useState(false);
-  const [gameOver, setGameOver] = useState(false);
-  const [won,      setWon]      = useState(false);
-
-  const timerRef = useRef(null);
-  const syncRef  = useRef(null);
-  // Latest live values for the sync interval — avoids stale closures.
-  const stateRef = useRef({ score, pairs, moves, cards });
-  useEffect(() => { stateRef.current = { score, pairs, moves, cards }; }, [score, pairs, moves, cards]);
-
-  // Spectator: rebuild cards each render to match the watched player's matched set.
+  // Spectator: mirror the watched player's matched set.
   useEffect(() => {
     if (!isSpectator || !spectatorState) return;
     const matched = new Set((spectatorState.matched || []).map(Number));
-    setCards(prev => prev.map(c => ({ ...c, matched: matched.has(c.id), flipped: matched.has(c.id) })));
+    const s = live.current;
+    s.cards = s.cards.map((c) => ({ ...c, matched: matched.has(c.id), flipped: matched.has(c.id) }));
+    setCards(s.cards);
   }, [isSpectator, spectatorState]);
 
-  useEffect(() => {
-    // Players run the countdown; spectators don't (they piggyback on the player).
-    if (isSpectator) return;
-    timerRef.current = setInterval(() => {
-      setTimerSec(t => {
-        if (t <= 1) { clearInterval(timerRef.current); setGameOver(true); return 0; }
-        return t - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timerRef.current);
-  }, [isSpectator]);
-
-  useEffect(() => {
-    if (!isOnline || isSpectator) return;
-    syncRef.current = setInterval(() => {
-      const s = stateRef.current;
-      const matchedIds = s.cards.filter(c => c.matched).map(c => c.id);
-      api.patch(`/api/rooms/${roomCode}/score`, {
-        score: s.score, pairs_matched: s.pairs, moves: s.moves,
-        game_state: JSON.stringify({ matched: matchedIds }),
-      }).catch(() => {});
-    }, 2000);
-    return () => clearInterval(syncRef.current);
-  }, [isOnline, isSpectator, roomCode]);
-
-  function clickCard(idx) {
-    if (isSpectator || blocked || gameOver) return;
-    const card = cards[idx];
-    if (card.flipped || card.matched) return;
-
-    const newFlipped = [...flipped, idx];
-    setCards(prev => prev.map((c, i) => i === idx ? { ...c, flipped: true } : c));
-    setFlipped(newFlipped);
-
-    if (newFlipped.length === 2) {
-      setBlocked(true);
-      setMoves(m => m + 1);
-      const [a, b] = newFlipped;
-
-      // We need the latest cards state — use functional update
-      setCards(prev => {
-        if (prev[a].emoji === prev[b].emoji) {
-          const next = prev.map((c, i) => (i === a || i === b) ? { ...c, matched: true } : c);
-          // Side effects after match
-          setTimeout(() => {
-            setScore(s => s + 100 + Math.max(0, timerSec));
-            setPairs(p => {
-              const np = p + 1;
-              if (np === TOTAL_PAIRS) { clearInterval(timerRef.current); setWon(true); setGameOver(true); }
-              return np;
-            });
-            setFlipped([]);
-            setBlocked(false);
-          }, 500);
-          return next;
-        } else {
-          // No match — flip back after delay
-          setTimeout(() => {
-            setCards(c => c.map((cd, i) => (i === a || i === b) ? { ...cd, flipped: false } : cd));
-            setScore(s => Math.max(0, s - 5));
-            setFlipped([]);
-            setBlocked(false);
-          }, 900);
-          return prev;
-        }
-      });
-    }
+  // Turn a wrong pair back face-down.
+  function hideMiss() {
+    const s = live.current;
+    clearTimeout(s.peek);
+    s.peek = null;
+    if (s.open.length !== 2) return;
+    const [a, b] = s.open;
+    s.cards = s.cards.map((c, i) => ((i === a || i === b) && !c.matched ? { ...c, flipped: false } : c));
+    s.open = [];
   }
 
-  // No resetGame / "Play Again" any more — see the note in MahjongGame.jsx.
-  // One session is recorded per (room, user), so a replay in the same room
-  // could never score.
+  function flip(idx) {
+    if (isSpectator || eng.gameOver) return;
+    const s = live.current;
+    // Tapping on while a wrong pair is showing skips the wait instead of being ignored.
+    if (s.open.length === 2) hideMiss();
 
-  // Push the final score before handing off — the server decides the outcome
-  // from what's stored, so it has to be current. See games/finalSync.js.
-  const quittingRef = useRef(false);
-  async function quit() {
-    if (quittingRef.current) return;
-    quittingRef.current = true;
-    clearInterval(syncRef.current);
-    if (isOnline) {
-      const matchedIds = cards.filter(c => c.matched).map(c => c.id);
-      await finalSync(roomCode, {
-        score, pairs_matched: pairs, moves,
-        game_state: JSON.stringify({ matched: matchedIds }),
-      });
+    const card = s.cards[idx];
+    if (card && !card.flipped && !card.matched) {
+      s.cards = s.cards.map((c, i) => (i === idx ? { ...c, flipped: true } : c));
+      s.open = [...s.open, idx];
+
+      if (s.open.length === 2) {
+        const [a, b] = s.open;
+        eng.addMove();
+        if (s.cards[a].emoji === s.cards[b].emoji) {
+          s.cards = s.cards.map((c, i) => (i === a || i === b ? { ...c, matched: true } : c));
+          s.open = [];
+          s.pairs += 1;
+          setPairs(s.pairs);
+          eng.addScore(PAIR_POINTS + eng.timeLeft);
+          if (s.pairs === TOTAL_PAIRS) eng.finish();
+        } else {
+          eng.addScore(MISS);
+          s.peek = setTimeout(() => { hideMiss(); setCards(live.current.cards); }, PEEK_MS);
+        }
+      }
     }
-    onGameEnd && onGameEnd(score, pairs, moves, won);
+    setCards(s.cards);
   }
 
   const stats = isSpectator
@@ -166,9 +131,9 @@ export default function MemoryGame({ roomCode, seed, players, currentUser, onGam
         { label: "Moves", value: spectatorWatching?.moves ?? 0 },
       ]
     : [
-        { label: "Score", value: score.toLocaleString() },
+        { label: "Score", value: eng.score.toLocaleString() },
         { label: "Pairs", value: `${pairs}/${TOTAL_PAIRS}` },
-        { label: "Moves", value: moves },
+        { label: "Moves", value: eng.moves },
       ];
 
   return (
@@ -177,42 +142,42 @@ export default function MemoryGame({ roomCode, seed, players, currentUser, onGam
         gameName="Memory Match" badge="🃏 MEMORY"
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
-        timer={isSpectator ? null : { value: timerSec, max: TIMER_INIT }}
-        onQuit={quit}
+        timer={{ value: eng.timeLeft, max: durationSeconds }}
+        opponents={Object.values(eng.opponents)}
+        onQuit={eng.endMatch}
       >
-        {/* 4 cols on phones, 8 on tablet/desktop so the board uses the width */}
-        <div style={{
-          display: "grid",
-          "--mem-cols": String(memCols),
-          gridTemplateColumns: "repeat(var(--mem-cols), clamp(48px, calc((100vw - 48px) / var(--mem-cols) - 12px), 104px))",
-          gridAutoRows: "clamp(60px, calc((100vw - 48px) / var(--mem-cols) * 1.2), 126px)",
-          gap: "clamp(7px, 1vw, 14px)",
-          maxWidth: "100%",
-        }}>
-          {cards.map((card, idx) => {
-            const face = card.flipped || card.matched;
-            return (
-              <div key={card.id} onClick={() => clickCard(idx)} className="memcard"
-                style={{
-                  cursor: face ? "default" : "pointer",
-                  // matched cards go lime and settle flat; a face-up card lifts.
-                  background: card.matched ? "var(--lime)" : face ? "#fff" : "var(--sun)",
-                  boxShadow: card.matched ? "0 2px 0 var(--ink)" : "0 5px 0 var(--ink)",
-                  transform: face ? "translateY(-2px)" : "translateY(0)",
-                }}>
-                {face ? card.emoji : "🎴"}
-              </div>
-            );
-          })}
-        </div>
+        {({ w, h }) => {
+          const L = layout(w, h);
+          return (
+            <div className="memgrid" style={{
+              gridTemplateColumns: `repeat(${L.cols}, ${L.cw}px)`,
+              gridAutoRows: `${L.ch}px`,
+              gap: L.gap,
+            }}>
+              {cards.map((card, idx) => {
+                const face = card.flipped || card.matched;
+                return (
+                  <button key={card.id} type="button" className="memcard" onClick={() => flip(idx)}
+                    aria-label={face ? card.emoji : "Face-down card"}
+                    style={{
+                      fontSize: Math.round(L.cw * 0.5),
+                      cursor: face || isSpectator ? "default" : "pointer",
+                      // matched cards go lime and settle flat; a face-up card lifts.
+                      background: card.matched ? "var(--lime)" : face ? "#fff" : "var(--sun)",
+                      boxShadow: card.matched ? "0 2px 0 var(--ink)" : "0 5px 0 var(--ink)",
+                      transform: face ? "translateY(-2px)" : "translateY(0)",
+                    }}>
+                    {face ? card.emoji : "🎴"}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        }}
       </GameFrame>
 
-      {gameOver && !isSpectator && (
-        <GameOver
-          score={score} won={won} finished={won}
-          extra={`Pairs: ${pairs}/${TOTAL_PAIRS}`}
-          onExit={quit}
-        />
+      {eng.gameOver && !isSpectator && (
+        <GameOver eng={eng} me={currentUser} extra={`Pairs: ${pairs}/${TOTAL_PAIRS}`} />
       )}
     </>
   );

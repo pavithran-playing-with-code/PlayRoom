@@ -2,7 +2,7 @@
 const router = require("express").Router();
 const db     = require("../config/db");
 const { verifyToken } = require("../middleware/auth");
-const { emitRoom } = require("../config/socket");
+const { emitRoom, emitUser } = require("../config/socket");
 
 // ── Match clock (server-authoritative) ────────────────────────────────────────
 // The countdown a player sees is client-side, so it can be paused, slowed or
@@ -31,6 +31,16 @@ async function settleIfExpired(roomId) {
 async function touchRoom(roomId) {
   try {
     await db.execute("UPDATE rooms SET last_activity_at = NOW() WHERE id = ?", [roomId]);
+  } catch { /* non-critical */ }
+}
+
+// Joining a room answers any invite to it, so it stops counting in the badge.
+async function answerInvite(roomId, userId) {
+  try {
+    await db.execute(
+      "UPDATE room_invites SET status = 'accepted', responded_at = NOW() WHERE room_id = ? AND to_user = ? AND status = 'pending'",
+      [roomId, userId]
+    );
   } catch { /* non-critical */ }
 }
 
@@ -102,7 +112,8 @@ router.post("/", verifyToken, async (req, res, next) => {
       "SELECT id, max_players FROM game_types WHERE slug = ? AND is_active = 1",
       [game_slug]
     );
-    if (!gt.length) return res.status(404).json({ success: false, message: "Game type not found." });
+    if (!gt.length)
+      return res.status(404).json({ success: false, message: `"${game_slug}" isn't set up in the database yet (game_types).` });
 
     const requested = Number(max_players);
     if (!Number.isFinite(requested) || requested < 1)
@@ -157,8 +168,10 @@ router.post("/join", verifyToken, async (req, res, next) => {
       [room.id]
     );
     const existing = members.find(p => p.user_id === req.user.id);
-    if (existing)
+    if (existing) {
+      await answerInvite(room.id, req.user.id);
       return res.json({ success: true, room, already_joined: true, as_spectator: !!existing.is_spectator });
+    }
 
     // Solo run: closed to everyone but its owner — not even as a spectator.
     if (Number(room.max_players) === 1)
@@ -176,6 +189,7 @@ router.post("/join", verifyToken, async (req, res, next) => {
       [room.id, req.user.id, asSpectator]
     );
     await touchRoom(room.id);
+    await answerInvite(room.id, req.user.id);
     push(req, code, "room:players", { code, joined: req.user.id });
     res.json({ success: true, room, as_spectator: !!asSpectator });
   } catch (err) { next(err); }
@@ -217,7 +231,7 @@ router.get("/:code", verifyToken, async (req, res, next) => {
 router.patch("/:code/start", verifyToken, async (req, res, next) => {
   try {
     const [rooms] = await db.execute(
-      "SELECT id, host_id, status FROM rooms WHERE room_code = ?",
+      "SELECT id, host_id, status, max_players FROM rooms WHERE room_code = ?",
       [req.params.code]
     );
     if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
@@ -226,6 +240,17 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Only the host can start." });
     if (room.status !== "waiting")
       return res.status(409).json({ success: false, message: "Game already started." });
+
+    // A 2-player room is a 2-player match: every seat must be filled first.
+    const [[seated]] = await db.execute(
+      "SELECT COUNT(*) AS n FROM room_players WHERE room_id = ? AND is_spectator = 0", [room.id]
+    );
+    const waitingFor = Number(room.max_players) - Number(seated.n);
+    if (waitingFor > 0)
+      return res.status(409).json({
+        success: false,
+        message: `Waiting for ${waitingFor} more player${waitingFor > 1 ? "s" : ""} to join.`,
+      });
 
     // started_at is the anchor the server measures the match deadline from.
     await db.execute(
@@ -417,7 +442,9 @@ router.post("/:code/invite", verifyToken, async (req, res, next) => {
       return res.status(400).json({ success: false, message: "Cannot invite yourself." });
 
     const [rooms] = await db.execute(
-      "SELECT id, status, max_players FROM rooms WHERE room_code = ?",
+      `SELECT r.id, r.status, r.max_players, gt.name AS game_name, gt.icon AS game_icon
+         FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id
+        WHERE r.room_code = ?`,
       [req.params.code]
     );
     if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
@@ -461,6 +488,23 @@ router.post("/:code/invite", verifyToken, async (req, res, next) => {
          created_at   = CURRENT_TIMESTAMP`,
       [rooms[0].id, req.user.id, target]
     );
+
+    // Tell them now, wherever they are in the app (mid-game included). Never
+    // fails the invite: it's already saved and waiting in their inbox.
+    try {
+      const [inv] = await db.execute(
+        "SELECT id FROM room_invites WHERE room_id = ? AND to_user = ?", [rooms[0].id, target]
+      );
+      const [from] = await db.execute("SELECT id, username, avatar FROM users WHERE id = ?", [req.user.id]);
+      emitUser(req.app.get("io"), target, "room:invite", {
+        id: inv[0] ? inv[0].id : null,
+        room_code: req.params.code,
+        game_name: rooms[0].game_name,
+        game_icon: rooms[0].game_icon,
+        from: from[0] || { id: req.user.id, username: req.user.username },
+      });
+    } catch { /* best-effort */ }
+
     res.status(201).json({ success: true });
   } catch (err) { next(err); }
 });

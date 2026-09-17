@@ -41,6 +41,7 @@ const TABLES = {
       games_won    INT          NOT NULL DEFAULT 0,
       is_active    TINYINT(1)   NOT NULL DEFAULT 1,
       created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at TIMESTAMP    NULL DEFAULT NULL,
       PRIMARY KEY (id),
       UNIQUE KEY uq_users_username (username),
       UNIQUE KEY uq_users_email (email)

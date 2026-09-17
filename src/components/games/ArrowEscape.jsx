@@ -20,6 +20,10 @@ const MISS = -8;                         // tapping an arrow that's boxed in
 const pointsFor = (arrow) => 6 + 2 * arrow.cells.length;
 const boardBonus = (level) => 40 + 10 * level;
 
+// The widest frame that fits the board area: the SVG plus 10px padding and a
+// 3px border each side, with the hint line above and the shadow below.
+const frameWidth = (w, h) => Math.floor(Math.max(150, Math.min(w, 430, (h - 60) * COLS / ROWS + 26)));
+
 // A separate deterministic stream per board, so board 3 is identical for
 // everyone no matter how fast they reached it.
 const boardFor = (seed, level) => generateBoard(seededRand(seed * 1009 + level * 7919 + 1), level);
@@ -134,7 +138,7 @@ export default function ArrowEscape(props) {
         opponents={oppList}
         onQuit={eng.endMatch}
       >
-        {isSpectator ? (
+        {({ w, h }) => (isSpectator ? (
           <div className="muted">
             👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
           </div>
@@ -143,7 +147,7 @@ export default function ArrowEscape(props) {
             <div className="muted eyebrow" style={{ textAlign: "center" }}>
               Tap an arrow · it only leaves if its path is clear
             </div>
-            <div className="ae-frame">
+            <div className="ae-frame" style={{ width: frameWidth(w, h) }}>
               {msg && (
                 <div key={msg.n} className="ae-toast"
                   style={msg.type === "error"
@@ -170,16 +174,11 @@ export default function ArrowEscape(props) {
               </svg>
             </div>
           </div>
-        )}
+        ))}
       </GameFrame>
 
       {eng.gameOver && !isSpectator && (
-        <GameOver
-          score={eng.score} won={eng.won} rank={eng.rank} isOnline={eng.isOnline}
-          me={currentUser} opponents={oppList}
-          extra={`Boards cleared: ${level - 1}`}
-          onExit={eng.endMatch}
-        />
+        <GameOver eng={eng} me={currentUser} extra={`Boards cleared: ${level - 1}`} />
       )}
     </>
   );

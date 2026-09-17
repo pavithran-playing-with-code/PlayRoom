@@ -2,11 +2,27 @@
 const router = require("express").Router();
 const db     = require("../config/db");
 const { verifyToken } = require("../middleware/auth");
+const { emitUser } = require("../config/socket");
+const { presenceOf } = require("../config/presence");
 
 // Friendships use canonical (user_a, user_b) order with user_a < user_b.
 function orderPair(x, y) {
   const a = Number(x), b = Number(y);
   return a < b ? [a, b] : [b, a];
+}
+
+async function publicUser(id) {
+  const [rows] = await db.execute("SELECT id, username, avatar FROM users WHERE id = ?", [id]);
+  return rows[0] || { id: Number(id), username: "Someone", avatar: "🎮" };
+}
+
+// Live nudge to the other person. Never fails the request: if the push is
+// missed, the inbox and the badge still have it.
+async function notify(req, userId, event, payload) {
+  try {
+    const body = typeof payload === "function" ? await payload() : payload;
+    emitUser(req.app.get("io"), userId, event, body);
+  } catch { /* best-effort */ }
 }
 
 router.use(verifyToken);
@@ -21,15 +37,21 @@ router.get("/inbox-count", async (req, res, next) => {
          AND (user_a = ? OR user_b = ?)`,
       [req.user.id, req.user.id, req.user.id]
     );
+    // Only invites you can still act on: the room is open and you're not in it.
     const [r2] = await db.execute(
-      "SELECT COUNT(*) AS n FROM room_invites WHERE to_user = ? AND status = 'pending'",
+      `SELECT COUNT(*) AS n FROM room_invites inv
+         JOIN rooms r ON r.id = inv.room_id
+        WHERE inv.to_user = ? AND inv.status = 'pending'
+          AND r.status IN ('waiting', 'in_progress')
+          AND NOT EXISTS (SELECT 1 FROM room_players rp
+                           WHERE rp.room_id = inv.room_id AND rp.user_id = inv.to_user)`,
       [req.user.id]
     );
     res.json({ success: true, count: Number(r1[0].n) + Number(r2[0].n) });
   } catch (err) { next(err); }
 });
 
-// ── GET /api/friends — accepted friends list
+// ── GET /api/friends — accepted friends, with who's online and last seen
 router.get("/", async (req, res, next) => {
   try {
     const [rows] = await db.execute(
@@ -41,7 +63,13 @@ router.get("/", async (req, res, next) => {
        ORDER BY u.username`,
       [req.user.id, req.user.id, req.user.id]
     );
-    res.json({ success: true, friends: rows });
+    const pres = await presenceOf(rows.map((r) => r.id));
+    const friends = rows.map((r) => ({
+      ...r,
+      online: !!pres[r.id]?.online,
+      last_seen: pres[r.id]?.last_seen || null,
+    }));
+    res.json({ success: true, friends });
   } catch (err) { next(err); }
 });
 
@@ -115,16 +143,21 @@ router.post("/request", async (req, res, next) => {
       return res.status(404).json({ success: false, message: "User not found." });
 
     const [a, b] = orderPair(req.user.id, target);
+    let requestId;
     try {
-      await db.execute(
+      const [ins] = await db.execute(
         "INSERT INTO friendships (user_a, user_b, requested_by, status) VALUES (?,?,?, 'pending')",
         [a, b, req.user.id]
       );
+      requestId = ins.insertId;
     } catch (err) {
       if (err.code === "ER_DUP_ENTRY")
         return res.status(409).json({ success: false, message: "Friend request already exists or you're already friends." });
       throw err;
     }
+    await notify(req, target, "friend:request", async () => ({
+      id: requestId, from: await publicUser(req.user.id),
+    }));
     res.status(201).json({ success: true });
   } catch (err) { next(err); }
 });
@@ -145,17 +178,28 @@ router.post("/:id/accept", async (req, res, next) => {
     );
     if (result.affectedRows === 0)
       return res.status(404).json({ success: false, message: "No pending request to accept." });
+
+    const [fr] = await db.execute("SELECT requested_by FROM friendships WHERE id = ?", [id]);
+    if (fr.length) {
+      await notify(req, fr[0].requested_by, "friend:accepted", async () => ({
+        by: await publicUser(req.user.id),
+      }));
+    }
     res.json({ success: true });
   } catch (err) { next(err); }
 });
 
-// ── POST /api/friends/:id/reject — delete pending request
+// ── POST /api/friends/:id/reject — delete pending request (also "cancel" for the sender)
 router.post("/:id/reject", async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0)
       return res.status(400).json({ success: false, message: "Invalid id." });
 
+    const [pair] = await db.execute(
+      "SELECT user_a, user_b FROM friendships WHERE id = ? AND status = 'pending' AND (user_a = ? OR user_b = ?)",
+      [id, req.user.id, req.user.id]
+    );
     const [result] = await db.execute(
       `DELETE FROM friendships
        WHERE id = ? AND status = 'pending'
@@ -164,6 +208,10 @@ router.post("/:id/reject", async (req, res, next) => {
     );
     if (result.affectedRows === 0)
       return res.status(404).json({ success: false, message: "No pending request found." });
+    if (pair.length) {
+      const other = Number(pair[0].user_a) === Number(req.user.id) ? pair[0].user_b : pair[0].user_a;
+      await notify(req, other, "friends:changed", {});
+    }
     res.json({ success: true });
   } catch (err) { next(err); }
 });
@@ -182,6 +230,7 @@ router.delete("/:user_id", async (req, res, next) => {
     );
     if (result.affectedRows === 0)
       return res.status(404).json({ success: false, message: "Not friends." });
+    await notify(req, other, "friends:changed", {});
     res.json({ success: true });
   } catch (err) { next(err); }
 });
@@ -201,6 +250,9 @@ router.get("/invites", async (req, res, next) => {
        JOIN game_types gt ON gt.id = r.game_type_id
        JOIN users u       ON u.id = inv.from_user
        WHERE inv.to_user = ? AND inv.status = 'pending'
+         AND r.status IN ('waiting', 'in_progress')
+         AND NOT EXISTS (SELECT 1 FROM room_players rp
+                          WHERE rp.room_id = inv.room_id AND rp.user_id = inv.to_user)
        ORDER BY inv.created_at DESC`,
       [req.user.id]
     );

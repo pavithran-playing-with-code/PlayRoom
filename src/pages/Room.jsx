@@ -6,8 +6,18 @@ import { useAuth } from "../utils/AuthContext";
 import { useSocket } from "../utils/SocketContext";
 import { getGameComponent, GAME_MAP } from "../components/games/registry";
 import { Avatar } from "../components/ui";
+import { usePresence } from "../utils/PresenceContext";
+import { presenceLabel } from "../utils/timeAgo";
 
-export default function Room() {
+// Keyed by the room code, so going straight from one room to another (an
+// invite accepted from inside a room) starts clean instead of inheriting the
+// old room's status, seed and players.
+export default function RoomPage() {
+  const { code } = useParams();
+  return <Room key={code} />;
+}
+
+function Room() {
   const { code } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -17,7 +27,7 @@ export default function Room() {
   const [players,   setPlayers]   = useState([]);
   const [status,    setStatus]    = useState("waiting");
   const [seed,      setSeed]      = useState(null);
-  const [duration,  setDuration]  = useState(120);
+  const [duration,  setDuration]  = useState(null);
   const [startedAt, setStartedAt] = useState(null);
   const [serverNow, setServerNow] = useState(null);
   const [chat,      setChat]      = useState([]);
@@ -26,7 +36,8 @@ export default function Room() {
   const [starting,  setStarting]  = useState(false);
   const [copied,    setCopied]    = useState(false);
 
-  const [friends,        setFriends]        = useState([]);
+  const { friends } = usePresence();
+  const [played,         setPlayed]         = useState(false);
   const [showInvite,     setShowInvite]     = useState(false);
   const [inviteToast,    setInviteToast]    = useState("");
   const [invitedIds,     setInvitedIds]     = useState(new Set());
@@ -45,7 +56,7 @@ export default function Room() {
   // Pause the room poll while we're actually playing — the game component runs
   // its own score/opponent sync loop, so a second timer is pure duplicate load.
   // Spectators keep polling: their whole view is rendered from poll data.
-  const pausePolling = notFound || (status === "in_progress" && !isSpectator);
+  const pausePolling = notFound || played || (status === "in_progress" && !isSpectator);
 
   const fetchRoom = useCallback(async () => {
     try {
@@ -54,6 +65,7 @@ export default function Room() {
       if (!data.success) { setNotFound(true); setError(data.message || "Room not found."); return; }
       setRoom(data.room);
       setPlayers(data.room.players || []);
+      if (data.room.duration_seconds) setDuration(data.room.duration_seconds);
     } catch { setError("Could not load room."); }
   }, [code]);
 
@@ -156,18 +168,13 @@ export default function Room() {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [chat]);
 
-  // Load friend list once for the invite picker.
+  // Once I'm in the game, stay in it until I leave. When the match ends (the
+  // clock, or the host walked out) the game shows its own results screen and
+  // records the score. Swapping to the "Game finished" card here used to pull
+  // that screen away, and the result was never saved.
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res  = await api.get("/api/friends");
-        const data = await res.json();
-        if (!cancelled && data.success) setFriends(data.friends);
-      } catch { /* silent */ }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+    if (status === "in_progress" && seed !== null && !isSpectator) setPlayed(true);
+  }, [status, seed, isSpectator]);
 
   // Close invite popover on outside click / escape.
   useEffect(() => {
@@ -223,6 +230,8 @@ export default function Room() {
   const seatedPlayers    = players.filter(p => !p.is_spectator);
   const watchingPlayers  = players.filter(p =>  p.is_spectator);
   const canStart     = isHost && seatedPlayers.length >= 1 && status === "waiting";
+  // Every seat has to be filled before the host can start (the server checks too).
+  const waitingFor   = room ? Math.max(0, (room.max_players || 1) - seatedPlayers.length) : 1;
 
   // A 1-seat room is a solo run: nobody else can join it (the API rejects joins
   // and hides it from the open-room list), so every "get people in here" affordance
@@ -245,7 +254,7 @@ export default function Room() {
   }
 
   // ── Room ended ────────────────────────────────────────────────────────────
-  if (status === "abandoned" || status === "finished") {
+  if ((status === "abandoned" || status === "finished") && !played) {
     return (
       <Notice emoji={status === "abandoned" ? "🚪" : "🏁"}
         title={status === "abandoned" ? "Room closed" : "Game finished"}>
@@ -258,7 +267,7 @@ export default function Room() {
   }
 
   // ── In-game ───────────────────────────────────────────────────────────────
-  if (status === "in_progress" && seed !== null && !isSpectator) {
+  if ((played || status === "in_progress") && seed !== null && !isSpectator) {
     const GameComponent = getGameComponent(room?.game_slug);
     return (
       <GameComponent
@@ -266,7 +275,7 @@ export default function Room() {
         seed={seed}
         players={seatedPlayers}
         currentUser={user}
-        durationSeconds={duration}
+        durationSeconds={duration || 120}
         startedAt={startedAt}
         serverNow={serverNow}
         onGameEnd={async () => {
@@ -301,7 +310,7 @@ export default function Room() {
         seed={seed}
         players={seatedPlayers}
         currentUser={user}
-        durationSeconds={duration}
+        durationSeconds={duration || 120}
         startedAt={startedAt}
         serverNow={serverNow}
         isSpectator
@@ -314,7 +323,7 @@ export default function Room() {
 
 
   // ── Waiting lobby ─────────────────────────────────────────────────────────
-  const mins = Math.round((duration || 120) / 60);
+  const mins = duration ? Math.round(duration / 60) : null;
   const seats = room?.max_players || 2;
   const g = GAME_MAP[room?.game_slug];
   const col = g?.col || "var(--mint)";
@@ -327,7 +336,7 @@ export default function Room() {
           <button className="press p-white sm" onClick={exitToLobby}>← Leave</button>
           <span className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <span className="chip c-sun">{room?.game_icon || "🎮"} {room?.game_name || "Loading…"}</span>
-            <span className="chip c-sky">⏱️ {mins} min</span>
+            {mins && <span className="chip c-sky">⏱️ {mins} min match</span>}
             {isSolo && <span className="chip c-coral">🧍 Solo run</span>}
           </span>
         </div>
@@ -414,8 +423,11 @@ export default function Room() {
                       const sent = invitedIds.has(f.id);
                       return (
                         <div key={f.id} className="row" style={{ gap: 10, padding: "8px 10px" }}>
-                          <Avatar emoji={f.avatar} size={32} seed={f.id} />
-                          <span style={{ flex: 1, fontSize: ".92rem" }}>{f.username}</span>
+                          <Avatar emoji={f.avatar} size={32} seed={f.id} online={f.online} />
+                          <span style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
+                            <span style={{ display: "block", fontSize: ".92rem" }}>{f.username}</span>
+                            <span className="muted" style={{ fontSize: ".74rem" }}>{presenceLabel(f)}</span>
+                          </span>
                           {inRoom ? <span className="muted" style={{ fontSize: ".78rem" }}>In room</span>
                             : sent ? <span className="chip c-lime" style={{ fontSize: ".72rem" }}>✓ Invited</span>
                             : <button className="press p-lime sm" onClick={() => sendInvite(f.id)}>Invite</button>}
@@ -429,11 +441,19 @@ export default function Room() {
 
             {canStart && (
               <button className="press p-coral lg" style={{ flex: 2, minWidth: 220 }}
-                onClick={handleStart} disabled={starting}>
-                {starting ? "Starting…" : isSolo ? "🎯 Start solo run!" : "🚀 Start the game!"}
+                onClick={handleStart} disabled={starting || waitingFor > 0}>
+                {starting ? "Starting…"
+                  : waitingFor > 0 ? `⏳ Waiting for ${waitingFor} more player${waitingFor > 1 ? "s" : ""}…`
+                  : isSolo ? "🎯 Start solo run!" : "🚀 Start the game!"}
               </button>
             )}
           </div>
+
+          {canStart && waitingFor > 0 && (
+            <div className="note" style={{ background: "var(--paper2)", marginTop: 16 }}>
+              👥 The game can start once all {seats} seats are filled. Send the code or invite a friend.
+            </div>
+          )}
 
           {inviteToast && <div className="muted" style={{ marginTop: 10, fontSize: ".82rem" }}>{inviteToast}</div>}
 

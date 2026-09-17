@@ -1,7 +1,7 @@
 // src/components/games/SpeedMath.jsx
 // Solve as many problems as you can before the clock runs out. Seeded so all
 // players in a room get the same problem sequence → fair head-to-head race.
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
@@ -41,28 +41,38 @@ export default function SpeedMath(props) {
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const problems = useMemo(() => buildProblems(seed), [seed]);
 
+  // Which problem is up lives in a ref too: two taps in the same tick must not
+  // both be marked against one problem.
+  const live = useRef({ idx: 0, streak: 0 });
   const [idx, setIdx] = useState(0);
   const [streak, setStreak] = useState(0);
   const [flash, setFlash] = useState(null); // 'good' | 'bad'
+  const flashTimer = useRef(null);
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
 
   const oppList = Object.values(eng.opponents);
   const problem = problems[idx % problems.length];
 
-  function answer(opt) {
+  function answer(opt, at) {
     if (eng.gameOver || isSpectator) return;
+    const s = live.current;
+    if (at !== s.idx) return;                 // a tap aimed at the previous problem
+    const p = problems[s.idx % problems.length];
     eng.addMove();
-    if (opt === problem.answer) {
-      const bonus = Math.min(8, streak * 2); // streak reward
-      eng.addScore(CORRECT + bonus);
-      setStreak((s) => s + 1);
+    if (opt === p.answer) {
+      eng.addScore(CORRECT + Math.min(8, s.streak * 2)); // streak reward
+      s.streak += 1;
       setFlash("good");
     } else {
       eng.addScore(WRONG);
-      setStreak(0);
+      s.streak = 0;
       setFlash("bad");
     }
-    setTimeout(() => setFlash(null), 180);
-    setIdx((i) => i + 1);
+    setStreak(s.streak);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 180);
+    s.idx += 1;
+    setIdx(s.idx);
   }
 
   const specScore = spectatorWatching?.score ?? 0;
@@ -80,48 +90,56 @@ export default function SpeedMath(props) {
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
-        opponents={oppList.map((o) => ({ ...o }))}
+        opponents={oppList}
         onQuit={eng.endMatch}
       >
-        <div style={{ width: "100%", maxWidth: 460, textAlign: "center" }}>
-          <div className="muted eyebrow" style={{ textAlign: "center" }}>Solve it!</div>
-          <div
-            className="pop display"
-            style={{
-              padding: "40px 24px", marginBottom: 28, fontSize: "3.2rem",
-              // mint on a right answer, coral on a wrong one — the panel itself
-              // is the feedback, so no extra banner is needed
-              background: flash === "good" ? "var(--lime)" : flash === "bad" ? "var(--coral)" : "var(--sun)",
-              transform: flash === "good" ? "scale(1.03)" : flash === "bad" ? "translateX(-5px)" : "none",
-              transition: "transform .12s ease, background .12s ease",
-            }}
-          >
-            {problem.text}
-          </div>
-          {!isSpectator ? (
-            <div className="grid g2">
-              {problem.options.map((opt, i) => (
-                <button key={i} onClick={() => answer(opt)} className="press p-white"
-                  style={{ padding: "20px 8px", fontSize: "1.7rem" }}>
-                  {opt}
-                </button>
-              ))}
+        {({ w, h }) => {
+          // Problem panel on top, always a 2 x 2 grid of answers under it,
+          // everything scaled to the height that's left.
+          const W = Math.min(w, 480);
+          const gap = Math.round(Math.max(8, Math.min(16, h * 0.025)));
+          const eyebrow = 26;
+          const panelH = Math.round(Math.max(64, Math.min(170, h * 0.32)));
+          const btnH = Math.round(Math.max(44, Math.min(96, (h - eyebrow - panelH - gap * 2 - 12) / 2)));
+          const probFont = Math.round(Math.max(22, Math.min(56, panelH * 0.42, W / 6.5)));
+          const optFont = Math.round(Math.max(18, Math.min(30, btnH * 0.42)));
+          return (
+            <div style={{ width: W, textAlign: "center" }}>
+              <div className="muted eyebrow" style={{ textAlign: "center" }}>Solve it!</div>
+              <div
+                className="pop display"
+                style={{
+                  height: panelH, display: "grid", placeItems: "center", marginBottom: gap,
+                  fontSize: probFont, lineHeight: 1,
+                  // lime on a right answer, coral on a wrong one — the panel itself
+                  // is the feedback, so no extra banner is needed
+                  background: flash === "good" ? "var(--lime)" : flash === "bad" ? "var(--coral)" : "var(--sun)",
+                  transform: flash === "good" ? "scale(1.03)" : flash === "bad" ? "translateX(-5px)" : "none",
+                  transition: "transform .12s ease, background .12s ease",
+                }}
+              >
+                {problem.text}
+              </div>
+              {!isSpectator ? (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap }}>
+                  {problem.options.map((opt, i) => (
+                    <button key={`${idx}-${i}`} onClick={() => answer(opt, idx)} className="press p-white"
+                      style={{ height: btnH, padding: 0, fontSize: optFont }}>
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="muted">
+                  👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="muted">
-              👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-            </div>
-          )}
-        </div>
+          );
+        }}
       </GameFrame>
 
-      {eng.gameOver && !isSpectator && (
-        <GameOver
-          score={eng.score} won={eng.won} rank={eng.rank} isOnline={eng.isOnline}
-          me={currentUser} opponents={oppList}
-          onExit={eng.endMatch}
-        />
-      )}
+      {eng.gameOver && !isSpectator && <GameOver eng={eng} me={currentUser} />}
     </>
   );
 }

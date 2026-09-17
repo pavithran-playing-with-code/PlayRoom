@@ -4,6 +4,7 @@
 //
 // Real-time is ADDITIVE to the existing REST polling: components can listen for
 // push events to refresh instantly, while polling remains a safety net.
+// Friends' presence is tracked on top of this socket in PresenceContext.
 
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
@@ -18,13 +19,11 @@ const SOCKET_URL = process.env.REACT_APP_API_URL || undefined;
 export function SocketProvider({ children }) {
   const { token, isLoggedIn } = useAuth();
   const socketRef = useRef(null);
-  // Also held in state: consumers that subscribe to room channels need a
-  // re-render when the socket appears. Reading socketRef.current during render
-  // gave them `null` on first paint and never updated them.
+  // Also held in state: consumers that subscribe to events need a re-render
+  // when the socket appears. Reading socketRef.current during render gave them
+  // `null` on first paint and never updated them.
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
-  // Set of currently-online userIds (numbers), updated via presence events.
-  const [onlineUsers, setOnlineUsers] = useState(() => new Set());
 
   useEffect(() => {
     if (!isLoggedIn || !token) {
@@ -34,7 +33,6 @@ export function SocketProvider({ children }) {
         socketRef.current = null;
         setSocket(null);
         setConnected(false);
-        setOnlineUsers(new Set());
       }
       return;
     }
@@ -47,34 +45,18 @@ export function SocketProvider({ children }) {
     socketRef.current = s;
     setSocket(s);
 
-    const socket = s;
-    socket.on("connect", () => setConnected(true));
-    socket.on("disconnect", () => setConnected(false));
-    socket.on("presence:update", ({ userId, online }) => {
-      setOnlineUsers((prev) => {
-        const next = new Set(prev);
-        if (online) next.add(Number(userId));
-        else next.delete(Number(userId));
-        return next;
-      });
-    });
+    s.on("connect", () => setConnected(true));
+    s.on("disconnect", () => setConnected(false));
 
     return () => {
-      socket.disconnect();
+      s.disconnect();
       socketRef.current = null;
       setSocket(null);
       setConnected(false);
     };
   }, [isLoggedIn, token]);
 
-  const value = {
-    socket,
-    connected,
-    onlineUsers,
-    isUserOnline: (id) => onlineUsers.has(Number(id)),
-  };
-
-  return <SocketContext.Provider value={value}>{children}</SocketContext.Provider>;
+  return <SocketContext.Provider value={{ socket, connected }}>{children}</SocketContext.Provider>;
 }
 
 export function useSocket() {

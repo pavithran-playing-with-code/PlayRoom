@@ -49,6 +49,49 @@ app.use(express.urlencoded({ extended: true }));
 // ── Trust proxy (fixes express-rate-limit X-Forwarded-For warning)
 app.set("trust proxy", 1);
 
+// ── Print every failed API call in this terminal ─────────────────────────────
+// Crashes (500s) are printed with a full stack by middleware/errorHandler.js.
+// Everything else that fails, like a 404 "Game type not found", a 409 "match
+// is over" or a 429 rate limit, used to vanish silently. Now each one prints
+// who asked, what they sent (passwords and tokens masked) and what went wrong.
+function whoIs(req) {
+  const auth = req.headers.authorization || "";
+  if (!auth.startsWith("Bearer ")) return "guest";
+  try {
+    const p = jwt.verify(auth.slice(7), process.env.JWT_SECRET);
+    return `${p.username} (#${p.id})`;
+  } catch {
+    return "expired/invalid token";
+  }
+}
+
+const SECRET_KEY = /pass|token|secret/i;
+function safeBody(body) {
+  if (!body || typeof body !== "object") return "";
+  const out = {};
+  for (const [k, v] of Object.entries(body)) out[k] = SECRET_KEY.test(k) ? "***" : v;
+  const s = JSON.stringify(out);
+  return s === "{}" ? "" : s.slice(0, 300);
+}
+
+// Strip control characters so nothing sent from a browser can mess with the terminal.
+const clean = (v, max) => (typeof v === "string" ? v.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "").slice(0, max) : "");
+
+app.use("/api", (req, res, next) => {
+  const started = Date.now();
+  const json = res.json.bind(res);
+  res.json = (body) => { res.locals.reply = body; return json(body); };
+  res.on("finish", () => {
+    if (res.statusCode < 400 || res.locals.errorLogged || req.path === "/client-log") return;
+    const msg = res.locals.reply && res.locals.reply.message;
+    const body = req.method === "GET" ? "" : safeBody(req.body);
+    console.warn(`⚠️  ${res.statusCode} ${req.method} ${req.originalUrl}  · ${whoIs(req)} · ${Date.now() - started}ms`);
+    if (msg) console.warn(`    → ${msg}`);
+    if (body) console.warn(`    sent: ${body}`);
+  });
+  next();
+});
+
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 // Three tiers, because one global budget can't serve both "stop brute-forcing
 // my login" and "let a game loop poll twice a second".
@@ -94,6 +137,18 @@ app.get("/api/health", (_req, res) =>
 );
 
 // ── API routes ────────────────────────────────────────────────────────────────
+// Problems only the browser can see (page crashes, requests that never
+// arrived, replies that weren't JSON), sent by src/utils/reportError.js.
+app.post("/api/client-log", (req, res) => {
+  const b = req.body || {};
+  console.error("─────────────────────────────────────────");
+  console.error(`🖥️  BROWSER ${clean(b.kind, 20) || "error"}  · ${whoIs(req)} · page ${clean(b.page, 200) || "?"}`);
+  console.error("Message :", clean(b.message, 500) || "—");
+  if (b.stack) console.error("Stack   :", clean(b.stack, 2000));
+  console.error("─────────────────────────────────────────");
+  res.status(204).end();
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/games", gameRoutes);
@@ -163,7 +218,25 @@ const io = initSocket(server);
 app.set("io", io);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
+// Every game the app offers needs its row in game_types, or creating a room for
+// it fails with "Game type not found". Say so loudly at startup.
+const APP_GAMES = ["mahjong", "memory", "speedmath", "reaction", "wordrush", "arrows"];
+async function checkGameTypes() {
+  try {
+    const [rows] = await db.execute("SELECT slug FROM game_types WHERE is_active = 1");
+    const have = new Set(rows.map((r) => r.slug));
+    const missing = APP_GAMES.filter((s) => !have.has(s));
+    if (missing.length) {
+      console.warn(`\n⚠️  Missing from the game_types table: ${missing.join(", ")}`);
+      console.warn("   Rooms for these games can't be created until their rows are added.\n");
+    }
+  } catch (err) {
+    console.warn("⚠️  Could not check game_types:", err.message);
+  }
+}
+
 server.listen(PORT, () => {
+  checkGameTypes();
   console.log(`\n🚀 PlayRoom backend   →  http://localhost:${PORT}`);
   console.log(`   Health check        →  http://localhost:${PORT}/api/health`);
   console.log(`   WebSocket (Socket.io) ready on the same port`);

@@ -1,10 +1,12 @@
 // src/App.js
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "./utils/AuthContext";
 import { SocketProvider } from "./utils/SocketContext";
+import { PresenceProvider } from "./utils/PresenceContext";
 import { ToastProvider, FunLayer } from "./components/ui";
 import Navbar          from "./components/Navbar";
+import Notifier        from "./components/Notifier";
 import ProtectedRoute  from "./components/ProtectedRoute";
 import Home            from "./pages/Home";
 import Login           from "./pages/Login";
@@ -14,15 +16,31 @@ import Room            from "./pages/Room";
 import Leaderboard     from "./pages/Leaderboard";
 import Friends         from "./pages/Friends";
 import Profile         from "./pages/Profile";
+import { installErrorReporting } from "./utils/reportError";
+
+installErrorReporting();
+
+// A new page starts at the top. Without this, the browser kept the previous
+// page's scroll, so a game card near the bottom of Home opened the lobby
+// already scrolled down.
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <SocketProvider>
+      <PresenceProvider>
       <ToastProvider>
       {/* Sparkle trail + tap bursts + confetti, above everything, click-through */}
       <FunLayer />
       <BrowserRouter>
+        {/* Live friend requests, invites and "X is online", on every page, mid-game too */}
+        <Notifier />
+        <ScrollToTop />
         <Routes>
           {/* Room page has its own full-screen game layout — no Navbar */}
           <Route path="/room/:code" element={<ProtectedRoute><Room /></ProtectedRoute>} />
@@ -32,6 +50,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
       </ToastProvider>
+      </PresenceProvider>
       </SocketProvider>
     </AuthProvider>
   );

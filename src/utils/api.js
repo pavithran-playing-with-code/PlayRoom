@@ -2,6 +2,8 @@
 // In development, requests go directly to the backend via REACT_APP_API_URL.
 // In production, Express serves everything from the same origin so BASE stays "".
 
+import { reportError } from "./reportError";
+
 const BASE = process.env.REACT_APP_API_URL || "";
 
 export async function apiFetch(endpoint, options = {}) {
@@ -15,10 +17,21 @@ export async function apiFetch(endpoint, options = {}) {
 
   // Bearer tokens travel in the Authorization header; no cookies needed.
   // (credentials:"include" forces tighter CORS + sends cookies we don't use.)
-  const res = await fetch(BASE + endpoint, {
-    ...options,
-    headers,
-  });
+  const method = options.method || "GET";
+  let res;
+  try {
+    res = await fetch(BASE + endpoint, { ...options, headers });
+  } catch (err) {
+    // Never reached the server: offline, or the share link is down.
+    reportError("network", `${method} ${endpoint} failed: ${err.message}`);
+    throw err;
+  }
+
+  // Our API always answers in JSON; anything else came from something in between.
+  const type = res.headers.get("content-type") || "";
+  if (!type.includes("application/json") && res.status !== 204) {
+    reportError("bad-response", `${method} ${endpoint} returned HTTP ${res.status} (${type || "no content type"}), not JSON`);
+  }
 
   if (res.status === 401) {
     localStorage.removeItem("pr_token");

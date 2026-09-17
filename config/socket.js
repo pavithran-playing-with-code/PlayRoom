@@ -2,9 +2,13 @@
 //  config/socket.js — Socket.io real-time hub
 //
 //  Design: REST endpoints remain the source of truth (they write to MySQL).
-//  This layer adds (a) presence tracking and (b) per-room channels so the
-//  server can push "something changed" events instead of clients polling on a
-//  timer. Routes emit via emitRoom(req.app.get("io"), code, event, payload).
+//  This layer adds:
+//    (a) presence: who's online, told only to their friends
+//    (b) per-room channels, so the server can push "something changed"
+//        instead of clients polling on a timer
+//    (c) a private channel per user, for friend requests, invites and the
+//        like, so they arrive live wherever the user is, mid-game included
+//  Routes emit via emitRoom(io, code, …) and emitUser(io, userId, …).
 //
 //  Auth: the client passes its JWT in the handshake (auth.token); we verify it
 //  the same way middleware/auth.js does for REST.
@@ -13,12 +17,30 @@
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const { corsOrigin } = require("./cors");
+const presence = require("./presence");
 
-// userId -> Set<socketId>. A user is "online" while they have ≥1 live socket.
-const online = new Map();
+const { online } = presence;
+
+// A page refresh or a patchy phone connection drops the socket for a second or
+// two. Wait this long before telling friends someone left. Otherwise every
+// reload would flash them offline and back, and fire an "is online" pop-up.
+const OFFLINE_GRACE_MS = 6000;
+const offlineTimers = new Map(); // userId -> Timeout
 
 function roomChannel(code) {
   return `room:${String(code).toUpperCase()}`;
+}
+
+function userChannel(userId) {
+  return `user:${Number(userId)}`;
+}
+
+// Presence only goes to the people allowed to see it: accepted friends.
+async function tellFriends(io, userId, payload) {
+  try {
+    const ids = await presence.friendIdsOf(userId);
+    if (ids.length) io.to(ids.map(userChannel)).emit("presence:update", payload);
+  } catch { /* best-effort */ }
 }
 
 function initSocket(httpServer) {
@@ -45,13 +67,21 @@ function initSocket(httpServer) {
 
   io.on("connection", (socket) => {
     const uid = Number(socket.user.id);
+    socket.join(userChannel(uid));
 
-    // ── Presence: mark online (first socket only broadcasts) ──
-    if (!online.has(uid)) {
-      online.set(uid, new Set());
-      io.emit("presence:update", { userId: uid, online: true });
+    // ── Presence: back within the grace window means they never left ──
+    const pending = offlineTimers.get(uid);
+    if (pending) {
+      clearTimeout(pending);
+      offlineTimers.delete(uid);
     }
+    const wasOnline = online.has(uid);
+    if (!wasOnline) online.set(uid, new Set());
     online.get(uid).add(socket.id);
+    if (!wasOnline) {
+      tellFriends(io, uid, { userId: uid, online: true });
+      presence.stampLastSeen(uid);
+    }
 
     // Subscribe to a room's real-time channel.
     socket.on("room:join", (code) => {
@@ -77,11 +107,27 @@ function initSocket(httpServer) {
       const set = online.get(uid);
       if (!set) return;
       set.delete(socket.id);
-      if (set.size === 0) {
+      if (set.size > 0 || offlineTimers.has(uid)) return;
+      offlineTimers.set(uid, setTimeout(() => {
+        offlineTimers.delete(uid);
+        const still = online.get(uid);
+        if (still && still.size > 0) return;
         online.delete(uid);
-        io.emit("presence:update", { userId: uid, online: false });
-      }
+        const at = new Date().toISOString();
+        presence.stampLastSeen(uid);
+        tellFriends(io, uid, { userId: uid, online: false, last_seen: at });
+      }, OFFLINE_GRACE_MS));
     });
+
+    // Who of my friends is on right now, plus when the rest were last seen.
+    // Sent after the handlers above are registered, so nothing is missed
+    // while the query runs.
+    (async () => {
+      try {
+        const ids = await presence.friendIdsOf(uid);
+        socket.emit("presence:snapshot", await presence.presenceOf(ids));
+      } catch { /* the client also gets presence from /api/friends */ }
+    })();
   });
 
   return io;
@@ -93,12 +139,13 @@ function emitRoom(io, code, event, payload) {
   io.to(roomChannel(code)).emit(event, payload);
 }
 
-function isOnline(userId) {
-  return online.has(Number(userId));
+// Push something to one user, on every tab and device they have open.
+function emitUser(io, userId, event, payload) {
+  if (!io) return;
+  io.to(userChannel(userId)).emit(event, payload);
 }
 
-function onlineUserIds() {
-  return [...online.keys()];
-}
-
-module.exports = { initSocket, emitRoom, isOnline, onlineUserIds, roomChannel };
+module.exports = {
+  initSocket, emitRoom, emitUser, roomChannel, userChannel,
+  isOnline: presence.isOnline, onlineUserIds: presence.onlineUserIds,
+};

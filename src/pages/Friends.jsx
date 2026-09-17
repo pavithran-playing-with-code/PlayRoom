@@ -2,13 +2,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../utils/api";
-import { useSocket } from "../utils/SocketContext";
+import { usePresence } from "../utils/PresenceContext";
+import { presenceLabel } from "../utils/timeAgo";
 import { Avatar, Tabs, useToast } from "../components/ui";
 
 export default function Friends() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { isUserOnline } = useSocket() || {};
+  const { presenceOf, inboxVersion, refresh } = usePresence();
 
   const [tab, setTab] = useState("friends");
   const [friends, setFriends] = useState([]);
@@ -35,9 +36,12 @@ export default function Friends() {
 
   useEffect(() => {
     loadAll();
-    const t = setInterval(loadAll, 10000);
+    const t = setInterval(loadAll, 15000);
     return () => clearInterval(t);
   }, [loadAll]);
+
+  // Live: a request or invite just arrived, or someone answered one.
+  useEffect(() => { if (inboxVersion) loadAll(); }, [inboxVersion, loadAll]);
 
   async function search() {
     if (query.trim().length < 2) { setResults([]); return; }
@@ -57,7 +61,7 @@ export default function Friends() {
       if (!data.success) toast.error(data.message || "Action failed.");
       else if (okMsg) toast.success(okMsg);
     } catch { toast.error("Request failed."); }
-    finally { setBusy((b) => ({ ...b, [key]: false })); loadAll(); }
+    finally { setBusy((b) => ({ ...b, [key]: false })); refresh(); }
   }
 
   async function sendRequest(userId) {
@@ -92,7 +96,7 @@ export default function Friends() {
     { id: "find", label: "🔍 Find people" },
   ];
 
-  const online = (id) => (isUserOnline ? isUserOnline(id) : undefined);
+  const online = (id) => !!presenceOf(id)?.online;
 
   return (
     <div className="wrap">
@@ -113,7 +117,9 @@ export default function Friends() {
                   <Row key={f.id}>
                     <Avatar emoji={f.avatar} size={48} seed={f.id} online={online(f.id)} />
                     <Who name={f.username}
-                      sub={online(f.id) ? "ready to play" : `friends since ${new Date(f.friends_since).toLocaleDateString()}`} />
+                      sub={online(f.id) ? "🟢 online now · ready to play"
+                        : presenceOf(f.id)?.last_seen ? presenceLabel(presenceOf(f.id))
+                        : `friends since ${new Date(f.friends_since).toLocaleDateString()}`} />
                     <button className="press p-white sm" disabled={!!busy[`del-${f.id}`]}
                       onClick={() => {
                         if (window.confirm(`Remove ${f.username}?`)) {
@@ -134,7 +140,7 @@ export default function Friends() {
               <div className="stack" style={{ marginBottom: 32 }}>
                 {incoming.map((r) => (
                   <Row key={r.id} tone="var(--paper2)">
-                    <Avatar emoji={r.avatar} size={48} seed={r.user_id} online={online(r.user_id)} />
+                    <Avatar emoji={r.avatar} size={48} seed={r.user_id} />
                     <Who name={r.username} sub="wants to be friends" />
                     <button className="press p-white sm" disabled={!!busy[`rej-${r.id}`]}
                       onClick={() => call("post", `/api/friends/${r.id}/reject`, `rej-${r.id}`)}>Nah</button>
@@ -199,8 +205,10 @@ export default function Friends() {
               <div className="stack">
                 {results.map((u) => (
                   <Row key={u.id}>
-                    <Avatar emoji={u.avatar} size={48} seed={u.id} online={online(u.id)} />
-                    <Who name={u.username} sub={online(u.id) ? "online now" : "player"} />
+                    <Avatar emoji={u.avatar} size={48} seed={u.id}
+                      online={u.rel_status === "accepted" ? online(u.id) : undefined} />
+                    <Who name={u.username}
+                      sub={u.rel_status === "accepted" ? presenceLabel(presenceOf(u.id)) : "player"} />
                     {u.rel_status === "accepted" ? <span className="chip c-lime">✓ In your crew</span>
                       : u.rel_status === "pending" ? <span className="chip">Pending…</span>
                       : u.rel_status === "blocked" ? <span className="chip">Unavailable</span>

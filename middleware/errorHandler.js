@@ -8,6 +8,7 @@ module.exports = function errorHandler(err, req, res, _next) {
   console.error("Stack   :", err.stack);
   console.error("─────────────────────────────────────────");
 
+  res.locals.errorLogged = true;   // printed above; server.js's failure log skips it
   const status = err.status || err.statusCode || 500;
   res.status(status).json({
     success: false,

@@ -68,7 +68,7 @@ export default function Home() {
           </div>
           <div className="tiles">
             {GAMES.map((g) => (
-              <Link key={g.slug} to={isLoggedIn ? "/lobby" : "/register"} className="tile">
+              <Link key={g.slug} to={isLoggedIn ? `/lobby?game=${g.slug}` : "/register"} className="tile">
                 <PeekBuddy colour={g.col} size={60} />
                 <span className="top" style={{ background: g.col }}>
                   <span className="ghost">{g.icon}</span>

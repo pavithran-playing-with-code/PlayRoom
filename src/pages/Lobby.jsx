@@ -1,10 +1,12 @@
 // src/pages/Lobby.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
 import { GAMES, GAME_MAP } from "../components/games/registry";
-import { useToast } from "../components/ui";
+import { useToast, Avatar } from "../components/ui";
+import { usePresence } from "../utils/PresenceContext";
+import { presenceLabel } from "../utils/timeAgo";
 import PeekBuddy from "../components/characters/PeekBuddy";
 
 const DURATIONS = [
@@ -22,7 +24,11 @@ export default function Lobby() {
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
 
-  const [game, setGame] = useState("mahjong");
+  // The chosen game lives in the URL (?game=arrows): a game card on the home
+  // page opens the lobby with that game already picked, and a refresh keeps it.
+  const [params, setParams] = useSearchParams();
+  const game = GAME_MAP[params.get("game")] ? params.get("game") : GAMES[0].slug;
+  const setGame = (slug) => setParams({ game: slug }, { replace: true });
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [duration, setDuration] = useState(120);
   const [isPrivate, setIsPrivate] = useState(false);
@@ -37,6 +43,7 @@ export default function Lobby() {
   // Solo = 1 seat. Nobody can join, so the room is implicitly private and the
   // privacy toggle is hidden rather than shown as a no-op.
   const isSolo = maxPlayers === 1;
+  const mins = Math.round(duration / 60);
 
   // Keep maxPlayers valid when switching games.
   useEffect(() => {
@@ -164,10 +171,16 @@ export default function Lobby() {
               </label>
             )}
 
+            {/* What you're about to create, spelled out: game, clock, seats. */}
+            <div className="lobby-sum" aria-live="polite">
+              <span className="chip" style={{ background: selected.col }}>{selected.icon} {selected.name}</span>
+              <span className="chip c-sky">⏱️ {mins} min match</span>
+              <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
+            </div>
             <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
               {creating ? "Creating…"
-                : isSolo ? `🎯 Start solo ${selected.name}`
-                : `🚀 Create ${selected.name} room`}
+                : isSolo ? `🎯 Start solo · ${mins} min`
+                : `🚀 Create room · ${mins} min`}
             </button>
           </div>
 
@@ -195,6 +208,7 @@ export default function Lobby() {
                 </button>
               </form>
             </div>
+            <CrewCard />
             <div className="note" style={{ background: "var(--sun)" }}>
               💡 Rooms stay open until the host starts. No rush — grab a snack.
             </div>
@@ -247,6 +261,47 @@ export default function Lobby() {
           )}
         </section>
       </div>
+    </div>
+  );
+}
+
+// Your friends at a glance: faces only, a green pip means online right now.
+// Tap a face for their name and when they were last on.
+function CrewCard() {
+  const { friends } = usePresence();
+  const [pick, setPick] = useState(null);
+  const onlineCt = friends.filter((f) => f.online).length;
+  const picked = friends.find((f) => f.id === pick);
+
+  return (
+    <div className="pop" style={{ padding: 22 }}>
+      <div className="row" style={{ justifyContent: "space-between", marginBottom: 14 }}>
+        <h2 style={{ fontSize: "1.25rem" }}>👥 Your crew</h2>
+        {friends.length > 0 && <span className="chip c-lime">{onlineCt} online</span>}
+      </div>
+      {friends.length === 0 ? (
+        <p className="muted" style={{ fontSize: ".92rem" }}>
+          No friends yet. <Link to="/friends" className="linkish">Add some</Link> to see when they're on.
+        </p>
+      ) : (
+        <>
+          <div className="crewfaces">
+            {friends.map((f) => (
+              <button key={f.id} type="button" className="crewface" aria-pressed={pick === f.id}
+                onClick={() => setPick((p) => (p === f.id ? null : f.id))}
+                title={`${f.username}: ${presenceLabel(f)}`} aria-label={`${f.username}, ${presenceLabel(f)}`}>
+                <Avatar emoji={f.avatar} size={46} seed={f.id} online={f.online} className={f.online ? "" : "is-off"} />
+                <span className={`crewtag${f.online ? " on" : ""}`}>{presenceLabel(f, { short: true })}</span>
+              </button>
+            ))}
+          </div>
+          {picked && (
+            <div className="crewwho">
+              <strong>{picked.username}</strong> · <span className="muted">{presenceLabel(picked)}</span>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

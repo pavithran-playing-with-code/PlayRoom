@@ -208,6 +208,8 @@ const GAME_SEED = [
   { slug: "reaction",  name: "Tap Rush",          description: "Tap the lit tiles fast — rack up points against the clock!",   min: 1, max: 4, icon: "⚡", active: 1 },
   { slug: "wordrush",  name: "Word Rush",         description: "Unscramble as many words as possible before time's up!",       min: 1, max: 4, icon: "🔤", active: 1 },
   { slug: "arrows",    name: "Arrow Escape",      description: "Tap an arrow to slide it off the board, but only if its path is clear.", min: 1, max: 4, icon: "🏹", active: 1 },
+  { slug: "jigsaw",    name: "Missing Piece",     description: "Spot which piece fills the gap in the picture.",                  min: 1, max: 4, icon: "🧩", active: 1 },
+  { slug: "dino",      name: "Dino Dash",         description: "Jump the cacti, duck the birds, run as far as you can.",          min: 1, max: 4, icon: "🦖", active: 1 },
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
 ];
 

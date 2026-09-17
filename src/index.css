@@ -25,6 +25,8 @@
   --sky:#4CC9F0;
   --lime:#B5E655;
   --bubble:#FF8FC7;
+  --peach:#FFA36C;
+  --leaf:#8FDB5C;
 
   --r:18px; --r-lg:26px; --r-xl:34px;
   --lift:5px;             /* how far a pressable sits off the page */
@@ -588,3 +590,34 @@ input::-ms-reveal,input::-ms-clear{display:none}
   font-family:Fredoka,sans-serif;font-weight:600;line-height:1;transition:background .12s}
 .wr-slot.filled{border-style:solid;box-shadow:0 3px 0 var(--ink)}
 .wr-tile{border-radius:12px}
+
+/* ---------- Missing Piece ---------- */
+.pz-wrap{display:flex;flex-direction:column;align-items:center}
+.pz-wrap.side{flex-direction:row}
+.pz-frame{margin:0 auto;padding:7px;border:3px solid var(--ink);border-radius:18px;
+  background:#B8794B;box-shadow:0 5px 0 var(--ink)}
+.pz-board{display:block;width:100%;height:auto;outline:3px solid var(--ink);border-radius:2px}
+.pz-lines path{fill:none;stroke:rgba(46,33,64,.3);stroke-width:1.6}
+.pz-hole{fill:#FFF1CF;stroke:var(--ink);stroke-width:3.5;stroke-linejoin:round}
+.pz-done{fill:none;stroke:var(--lime);stroke-width:6;stroke-linejoin:round}
+.pz-fill{animation:pzPop .35s cubic-bezier(.34,1.7,.64,1);transform-box:fill-box;transform-origin:center}
+@keyframes pzPop{from{transform:scale(1.15);opacity:.4}}
+.pz-opts{display:flex;flex-wrap:wrap;justify-content:center;flex:none}
+.press.pz-opt{position:relative;padding:5px;border-radius:16px;--lift:4px;touch-action:manipulation}
+.pz-piece{display:block;width:100%;height:100%;overflow:visible}
+.pz-edge{fill:none;stroke:var(--ink);stroke-width:3.5;stroke-linejoin:round}
+.pz-letter{position:absolute;left:-9px;top:-9px;z-index:1;width:26px;height:26px;border-radius:999px;
+  display:grid;place-items:center;background:var(--sun);border:3px solid var(--ink);font-size:.8rem;line-height:1}
+.press.pz-right{background:var(--lime)}
+.press.pz-opt:disabled .pz-letter{background:var(--coral);color:#fff}
+.pz-shake{animation:pzShake .4s ease}
+/* ---------- Dino Dash ---------- */
+.dino-pad{display:flex;align-items:center;justify-content:center;touch-action:none;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:pointer}
+.dino-canvas{display:block;border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);
+  background:#FFF6E6}
+.press.dino-btn{flex:1;max-width:260px;padding:14px 10px;font-size:1.1rem;touch-action:none;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.dino-key{font-size:.7rem;border:2px solid var(--ink);border-radius:6px;padding:1px 6px;opacity:.6}
+@media(hover:none){ .dino-key{display:none} }
+@keyframes pzShake{20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}

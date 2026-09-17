@@ -26,7 +26,10 @@ const net = require("net");
 require("dotenv").config();
 
 const ROOT = path.join(__dirname, "..");
-const PORT = process.env.PORT || 4321;
+// The shared server gets its own port, so the local dev backend (npm start's
+// proxy target and VS Code's F5, on PORT / 4321) can keep running alongside it.
+// Both use the same MySQL database.
+const PORT = Number(process.env.SHARE_PORT || 4333);
 const PH_PORT = Number(process.env.PLACEHOLDER_PORT || 4320);
 const BUILD = path.join(ROOT, "build", "index.html");
 const STATE = path.join(ROOT, ".share-state");
@@ -280,10 +283,9 @@ function announce(url, fixed) {
   if (await portInUse(PORT)) {
     fail(`Port ${PORT} is already in use.
 
-   Something is already listening there - most likely 'node server.js'
-   from VS Code's Run button (F5) or another terminal, or an earlier
-   'npm run share'. Stop it with Ctrl+C, then run 'npm run share' again.
-   This script starts the server itself.`);
+   Most likely an earlier 'npm run share' is still running. Stop it with
+   Ctrl+C, then run 'npm run share' again. (The local dev backend on 4321
+   is fine to leave running.) To use a different port, set SHARE_PORT in .env.`);
   }
 
   // ── server ──

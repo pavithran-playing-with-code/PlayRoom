@@ -5,7 +5,7 @@ import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
 import { useSocket } from "../utils/SocketContext";
 import { getGameComponent, GAME_MAP } from "../components/games/registry";
-import { Avatar } from "../components/ui";
+import { Avatar, Modal } from "../components/ui";
 import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
 
@@ -34,6 +34,7 @@ function Room() {
   const [chatInput, setChatInput] = useState("");
   const [error,     setError]     = useState("");
   const [starting,  setStarting]  = useState(false);
+  const [confirmStart, setConfirmStart] = useState(false);
   const [copied,    setCopied]    = useState(false);
 
   const { friends } = usePresence();
@@ -215,7 +216,9 @@ function Room() {
     } catch { setInviteToast("Invite failed."); }
   }
 
-  async function handleStart() {
+  async function handleStart(confirmed = false) {
+    if (!confirmed && seatsLeft > 0 && !isSolo) { setConfirmStart(true); return; }
+    setConfirmStart(false);
     setStarting(true);
     try {
       const res  = await api.patch(`/api/rooms/${code}/start`, {});
@@ -242,13 +245,16 @@ function Room() {
   const seatedPlayers    = players.filter(p => !p.is_spectator);
   const watchingPlayers  = players.filter(p =>  p.is_spectator);
   const canStart     = isHost && seatedPlayers.length >= 1 && status === "waiting";
-  // Every seat has to be filled before the host can start (the server checks too).
-  const waitingFor   = room ? Math.max(0, (room.max_players || 1) - seatedPlayers.length) : 1;
 
   // A 1-seat room is a solo run: nobody else can join it (the API rejects joins
   // and hides it from the open-room list), so every "get people in here" affordance
   // — room code, invites, chat, empty seats — is noise and stays hidden.
-  const isSolo = (room?.max_players || 0) === 1;
+  const isSolo       = (room?.max_players || 0) === 1;
+  const seatsLeft    = room ? Math.max(0, (room.max_players || 1) - seatedPlayers.length) : 1;
+  // Solo needs nobody; any other room needs one other person. Empty seats are
+  // fine, but the host is asked first, so nobody starts a 5-player match by
+  // accident while two friends are still typing in the code.
+  const tooFewToStart = !isSolo && seatedPlayers.length < 2;
 
   // ── Room not found ────────────────────────────────────────────────────────
   if (notFound) {
@@ -453,19 +459,42 @@ function Room() {
 
             {canStart && (
               <button className="press p-coral lg" style={{ flex: 2, minWidth: 220 }}
-                onClick={handleStart} disabled={starting || waitingFor > 0}>
+                onClick={() => handleStart()} disabled={starting || tooFewToStart}>
                 {starting ? "Starting…"
-                  : waitingFor > 0 ? `⏳ Waiting for ${waitingFor} more player${waitingFor > 1 ? "s" : ""}…`
-                  : isSolo ? "🎯 Start solo run!" : "🚀 Start the game!"}
+                  : tooFewToStart ? "⏳ Waiting for someone to join…"
+                  : isSolo ? "🎯 Start solo run!"
+                  : seatsLeft > 0 ? `🚀 Start with ${seatedPlayers.length} of ${seats}`
+                  : "🚀 Start the game!"}
               </button>
             )}
           </div>
 
-          {canStart && waitingFor > 0 && (
+          {canStart && tooFewToStart && (
             <div className="note" style={{ background: "var(--paper2)", marginTop: 16 }}>
-              👥 The game can start once all {seats} seats are filled. Send the code or invite a friend.
+              👥 Send the code or invite a friend — a match needs at least two players.
+              (Want to play on your own? Start a solo run from the lobby.)
             </div>
           )}
+
+          {/* Starting with empty seats: say who's actually playing first. */}
+          <Modal open={confirmStart} onClose={() => setConfirmStart(false)} title="Start without a full room?">
+            <p style={{ marginBottom: 8 }}>
+              {seatedPlayers.length} of {seats} seats are taken, so this match is between{" "}
+              <strong>{seatedPlayers.map((p) => p.username).join(" and ")}</strong>.
+            </p>
+            <p className="muted" style={{ fontSize: ".9rem", marginBottom: 20 }}>
+              The {seatsLeft} empty seat{seatsLeft > 1 ? "s" : ""} stay{seatsLeft > 1 ? "" : "s"} empty, and the
+              result counts for the players who are here. Anyone who arrives later can still watch.
+            </p>
+            <div className="inline">
+              <button className="press p-white" style={{ flex: 1 }} onClick={() => setConfirmStart(false)}>
+                ⏳ Keep waiting
+              </button>
+              <button className="press p-coral" style={{ flex: 1 }} onClick={() => handleStart(true)}>
+                🚀 Start with {seatedPlayers.length}
+              </button>
+            </div>
+          </Modal>
 
           {inviteToast && <div className="muted" style={{ marginTop: 10, fontSize: ".82rem" }}>{inviteToast}</div>}
 

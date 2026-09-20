@@ -251,15 +251,17 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
     if (room.status !== "waiting")
       return res.status(409).json({ success: false, message: "Game already started." });
 
-    // A 2-player room is a 2-player match: every seat must be filled first.
+    // A match with other people needs at least one other person. Empty seats
+    // are fine: nobody should have to abandon a 5-seat room and make a new one
+    // because only three friends turned up. (Playing alone is what a solo run
+    // is for, so a multi-seat room still can't start with one player.)
     const [[seated]] = await db.execute(
       "SELECT COUNT(*) AS n FROM room_players WHERE room_id = ? AND is_spectator = 0", [room.id]
     );
-    const waitingFor = Number(room.max_players) - Number(seated.n);
-    if (waitingFor > 0)
+    if (Number(room.max_players) > 1 && Number(seated.n) < 2)
       return res.status(409).json({
         success: false,
-        message: `Waiting for ${waitingFor} more player${waitingFor > 1 ? "s" : ""} to join.`,
+        message: "Waiting for at least one more player to join.",
       });
 
     // started_at is the anchor the server measures the match deadline from.

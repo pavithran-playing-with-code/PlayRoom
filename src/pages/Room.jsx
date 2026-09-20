@@ -140,28 +140,40 @@ function Room() {
   useEffect(() => {
     if (!socket || notFound) return;
     const refresh = () => poll();
+    // A join changes who's here AND the seat count, so refresh both.
+    const joined = () => { poll(); fetchRoom(); };
     socket.emit("room:join", code);
-    socket.on("room:players", refresh);
+    socket.on("room:players", joined);
     socket.on("room:started", refresh);
     socket.on("room:chat", refresh);
     socket.on("room:ended", refresh);
     return () => {
       socket.emit("room:leave", code);
-      socket.off("room:players", refresh);
+      socket.off("room:players", joined);
       socket.off("room:started", refresh);
       socket.off("room:chat", refresh);
       socket.off("room:ended", refresh);
     };
-  }, [socket, code, poll, notFound]);
+  }, [socket, code, poll, fetchRoom, notFound]);
 
   useEffect(() => {
     if (pausePolling) return;
     fetchRoom();
     poll();
-    // 5s, not 2s: the socket channel above delivers changes immediately, so
-    // this only has to catch the case where the socket is down.
-    pollRef.current = setInterval(poll, 5000);
-    return () => clearInterval(pollRef.current);
+    // The socket channel above delivers changes the moment they happen; this
+    // is the safety net for when it's down. In the waiting room it has to be
+    // quick, or the host stares at "Waiting for 1 more player…" long after
+    // their friend arrived.
+    pollRef.current = setInterval(poll, 2500);
+    // Coming back to the tab shouldn't wait for the next tick either.
+    const onWake = () => { if (document.visibilityState === "visible") { poll(); fetchRoom(); } };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    return () => {
+      clearInterval(pollRef.current);
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+    };
   }, [fetchRoom, poll, pausePolling]);
 
   useEffect(() => {
@@ -379,7 +391,7 @@ function Room() {
                   </div>
                   <div style={{ fontSize: "1rem" }}>{p.username}</div>
                   {/* "Host" is meaningless when you're the only player. */}
-                  {p.is_host && !isSolo && <div style={{ fontSize: ".8rem", marginTop: 3 }}>👑 Host</div>}
+                  {!!p.is_host && !isSolo && <div style={{ fontSize: ".8rem", marginTop: 3 }}>👑 Host</div>}
                   {p.user_id === user?.id && <div className="muted" style={{ fontSize: ".8rem" }}>that's you</div>}
                 </div>
               ) : (

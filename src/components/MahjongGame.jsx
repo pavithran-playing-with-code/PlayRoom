@@ -343,8 +343,9 @@ export default function MahjongGame({
                 let filter = "none";
 
                 if (tile.matched) {
-                  bg = "var(--lime)";
-                  opacity = 0.5; shadow = "0 1px 0 var(--ink)"; cursor = "default";
+                  // gone: a faint ghost of the slot, so the board reads clearly
+                  bg = "var(--paper2)";
+                  opacity = 0.14; shadow = "none"; cursor = "default";
                 } else if (isSel) {
                   bg = "var(--sun)";
                   transform = `translateY(-${lift}px)`;
@@ -354,8 +355,10 @@ export default function MahjongGame({
                   transform = `translateY(-${Math.round(lift / 2)}px)`;
                   shadow = `0 ${Math.round(lift / 2) + 4}px 0 var(--ink)`;
                 } else if (!free) {
-                  opacity = 0.7; cursor = "not-allowed";
-                  filter = "grayscale(45%)";
+                  // blocked for now, not dead: keep the picture easy to read,
+                  // just sitting flat on the table
+                  bg = "var(--paper2)";
+                  opacity = 0.78; cursor = "not-allowed";
                   shadow = "0 2px 0 var(--ink)";
                 }
 
@@ -370,6 +373,8 @@ export default function MahjongGame({
                       display: "flex", alignItems: "center", justifyContent: "center",
                       cursor, transition: "transform 0.12s, box-shadow 0.12s, opacity 0.12s",
                       boxShadow: shadow, transform, opacity, filter,
+                      outline: isSel ? "3px solid var(--ink)" : "none",
+                      outlineOffset: 2,
                       userSelect: "none", WebkitTapHighlightColor: "transparent",
                     }}>
                     <TileFace tile={tile} size={L.tw} />

@@ -39,6 +39,13 @@ export default function GameFrame({
   const boardRef = useRef(null);
   const [size, setSize] = useState(guess);
 
+  // A game owns the whole screen: stop the page behind it from scrolling, so
+  // the header can't be pushed out of sight on a phone.
+  useLayoutEffect(() => {
+    document.body.classList.add("in-game");
+    return () => document.body.classList.remove("in-game");
+  }, []);
+
   useLayoutEffect(() => {
     const el = boardRef.current;
     if (!el) return undefined;

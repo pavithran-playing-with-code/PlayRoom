@@ -2,7 +2,7 @@
 const router = require("express").Router();
 const db     = require("../config/db");
 const { verifyToken } = require("../middleware/auth");
-const { emitRoom, emitUser } = require("../config/socket");
+const { emitRoom, emitUser, isOnline } = require("../config/socket");
 
 // ── Match clock (server-authoritative) ────────────────────────────────────────
 // The countdown a player sees is client-side, so it can be paused, slowed or
@@ -78,6 +78,7 @@ router.get("/", verifyToken, async (req, res, next) => {
   try {
     const [rows] = await db.execute(`
       SELECT r.id, r.room_code, r.status, r.max_players, r.is_private, r.duration_seconds, r.created_at,
+             r.host_id, r.last_activity_at,
              gt.name AS game_name, gt.icon AS game_icon, gt.slug AS game_slug,
              u.username AS host_name,
              COUNT(rp.id) AS player_count
@@ -88,11 +89,20 @@ router.get("/", verifyToken, async (req, res, next) => {
       -- max_players = 1 is a solo run: nobody can join it, so listing it as an
       -- "open room" would only produce failed joins.
       WHERE r.status = 'waiting' AND r.is_private = 0 AND r.max_players > 1
+        AND COALESCE(r.last_activity_at, r.created_at) > NOW() - INTERVAL 20 MINUTE
       GROUP BY r.id
+      HAVING player_count > 0
       ORDER BY r.created_at DESC
       LIMIT 20
     `);
-    res.json({ success: true, rooms: rows });
+    // Only rooms somebody is actually sitting in: the host is connected right
+    // now, or the room was touched in the last few minutes. A host who closed
+    // the tab without leaving used to leave an empty room on this list for an
+    // hour, and everyone who tried it got "Room not found" or an empty seat.
+    const FRESH_MS = 5 * 60 * 1000;
+    const live = rows.filter((r) => isOnline(r.host_id)
+      || Date.now() - new Date(r.last_activity_at || r.created_at).getTime() < FRESH_MS);
+    res.json({ success: true, rooms: live });
   } catch (err) { next(err); }
 });
 
@@ -540,8 +550,8 @@ router.post("/:code/leave", verifyToken, async (req, res, next) => {
           [room.id]
         );
       }
-    } else if (room.status === "in_progress") {
-      // Non-host left mid-game: if no seated players remain, abandon.
+    } else if (room.status === "in_progress" || room.status === "waiting") {
+      // Last one out closes the room, so it stops showing in the lobby list.
       const [remaining] = await db.execute(
         "SELECT COUNT(*) AS n FROM room_players WHERE room_id = ? AND is_spectator = 0",
         [room.id]

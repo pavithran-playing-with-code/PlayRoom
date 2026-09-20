@@ -9,6 +9,11 @@ import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
 import PeekBuddy from "../components/characters/PeekBuddy";
 
+// The little crew that fills up as you add seats.
+const CREW = ["🐯", "🐼", "🦊", "🐸", "🌸", "🚀", "🐙", "🦁"];
+const CREW_COLS = ["var(--sun)", "var(--sky)", "var(--coral)", "var(--mint)",
+  "var(--bubble)", "var(--lime)", "var(--peach)", "var(--berry)"];
+
 const DURATIONS = [
   { s: 120, label: "2 min" },
   { s: 180, label: "3 min" },
@@ -39,7 +44,6 @@ export default function Lobby() {
   const codeRef = useRef(null);
 
   const selected = GAME_MAP[game] || GAMES[0];
-  const playerChoices = Array.from({ length: selected.maxPlayers }, (_, i) => i + 1);
   // Solo = 1 seat. Nobody can join, so the room is implicitly private and the
   // privacy toggle is hidden rather than shown as a no-op.
   const isSolo = maxPlayers === 1;
@@ -139,23 +143,50 @@ export default function Lobby() {
             </div>
 
             <div className={label} style={stepLabel}>2 · Clock</div>
-            <div className="row" style={{ gap: 10, flexWrap: "wrap", marginBottom: 22 }}>
+            <div className="durrow">
               {DURATIONS.map((d) => (
                 <button key={d.s} className="press dur p-white" aria-pressed={duration === d.s}
-                  onClick={() => setDuration(d.s)} style={{ flex: 1, minWidth: 82 }}>
+                  onClick={() => setDuration(d.s)}>
                   {d.label}
                 </button>
               ))}
             </div>
 
             <div className={label} style={stepLabel}>3 · Seats</div>
-            <div className="row" style={{ gap: 10, flexWrap: "wrap", marginBottom: 22 }} id="seats">
-              {playerChoices.map((n) => (
-                <button key={n} className="press seat p-white" aria-pressed={maxPlayers === n}
-                  onClick={() => setMaxPlayers(n)} style={{ minWidth: 64 }}>
-                  {n === 1 ? "Solo" : `${n} 👥`}
-                </button>
-              ))}
+            {/* Solo and 2 are the usual picks, so they're one tap. Past that,
+                the crew grows a face at a time up to 8 — eight numbered
+                buttons in a row was a lot of furniture for a rare choice. */}
+            <div className="seatpick" id="seats">
+              <button className="press seat p-white" aria-pressed={maxPlayers === 1}
+                onClick={() => setMaxPlayers(1)}>🧍 Solo</button>
+              <button className="press seat p-white" aria-pressed={maxPlayers === 2}
+                onClick={() => setMaxPlayers(2)}>👥 2</button>
+              {maxPlayers < 3 ? (
+                <button className="press seat p-white" onClick={() => setMaxPlayers(3)}
+                  aria-label="More players">➕ More</button>
+              ) : (
+                <span className="seatstep">
+                  <button className="press p-white step" aria-label="One player fewer"
+                    onClick={() => setMaxPlayers(maxPlayers - 1)}>–</button>
+                  <span className="seatcrew" aria-hidden="true">
+                    {Array.from({ length: maxPlayers }).map((_, i) => (
+                      <span key={i} className="face"
+                        style={{ background: CREW_COLS[i % CREW_COLS.length], zIndex: 9 - i }}>
+                        {CREW[i % CREW.length]}
+                      </span>
+                    ))}
+                  </span>
+                  <strong>{maxPlayers}</strong>
+                  <button className="press p-white step" aria-label="One player more"
+                    disabled={maxPlayers >= selected.maxPlayers}
+                    onClick={() => setMaxPlayers(Math.min(selected.maxPlayers, maxPlayers + 1))}>+</button>
+                </span>
+              )}
+            </div>
+            <div className="muted seathint">
+              {isSolo
+                ? "🧍 Solo — just you and the clock."
+                : `👥 ${maxPlayers} players — everyone has to join before the game can start.`}
             </div>
 
             {/* Private — meaningless for a solo run, so we explain instead of asking. */}

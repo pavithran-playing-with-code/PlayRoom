@@ -537,6 +537,25 @@ input::-ms-reveal,input::-ms-clear{display:none}
 
 /* ---------- lobby pickers: the choice you made must be unmistakable ---------- */
 .press.pick,.press.dur,.press.seat{position:relative}
+/* clock and seats: even rows that don't leave one button stranded on its own */
+.durrow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:22px}
+.press.dur{padding:12px 0;min-width:0}
+/* seats: two quick picks, then a crew that grows a face at a time */
+.seatpick{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.press.seat{padding:11px 20px;min-width:0;border-radius:16px}
+.seatstep{display:inline-flex;align-items:center;gap:10px;padding:6px 10px;
+  border:3px solid var(--ink);border-radius:999px;background:var(--ink);color:#fff;
+  box-shadow:0 4px 0 var(--ink)}
+.seatstep strong{font-family:Fredoka,sans-serif;font-weight:600;font-size:1.1rem;min-width:16px;text-align:center}
+.press.step{width:40px;height:40px;padding:0;border-radius:999px;--lift:3px;color:var(--ink);
+  font-size:1.45rem;line-height:1;display:inline-flex;align-items:center;justify-content:center}
+.seatcrew{display:inline-flex;align-items:center;padding-right:8px}
+.seatcrew .face{width:28px;height:28px;font-size:15px;border-width:2.5px;margin-right:-9px}
+.seathint{font-size:.82rem;margin:10px 0 18px}
+@media(max-width:520px){
+  .press.seat{padding:10px 16px}
+  .seatcrew .face{width:24px;height:24px;font-size:13px;margin-right:-8px}
+}
 .press.pick[aria-pressed="false"]{filter:saturate(.45) brightness(1.06)}
 .press.pick[aria-pressed="false"]:hover{filter:none}
 .press.pick[aria-pressed="true"]{outline:4px solid var(--ink);outline-offset:3px}

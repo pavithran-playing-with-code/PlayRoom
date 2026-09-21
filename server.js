@@ -220,7 +220,7 @@ app.set("io", io);
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Every game the app offers needs its row in game_types, or creating a room for
 // it fails with "Game type not found". Say so loudly at startup.
-const APP_GAMES = ["mahjong", "memory", "speedmath", "reaction", "wordrush", "arrows", "jigsaw", "dino", "numbers", "colors", "pipes"];
+const APP_GAMES = ["mahjong", "memory", "speedmath", "reaction", "wordrush", "arrows", "jigsaw", "dino", "numbers", "colors", "pipes", "flappy", "slide", "blocks"];
 async function checkGameTypes() {
   try {
     const [rows] = await db.execute("SELECT slug FROM game_types WHERE is_active = 1");

@@ -30,6 +30,9 @@
   --ice:#8FD8F5;
   --berry:#C9A3F5;
   --pipe:#9DB8F2;
+  --chick:#FFD65C;
+  --slate:#A8C4E8;
+  --brick:#F59A86;
 
   --r:18px; --r-lg:26px; --r-xl:34px;
   --lift:5px;             /* how far a pressable sits off the page */
@@ -664,6 +667,39 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .cd-grid.bad{background:rgba(255,107,107,.45)}
 .cd-grid.slow{background:rgba(46,33,64,.12)}
 .press.cd-tile{padding:0;border-radius:18px;--lift:5px;-webkit-tap-highlight-color:transparent}
+
+/* ---------- Flappy Dash ---------- */
+.fl-pad{display:flex;align-items:center;justify-content:center;touch-action:none;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:pointer}
+.fl-canvas{display:block;border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);background:#8FD3FF}
+.press.fl-btn{flex:1;max-width:320px;padding:14px 10px;font-size:1.1rem;touch-action:none;
+  user-select:none;-webkit-user-select:none}
+
+/* ---------- Slide Puzzle ---------- */
+.sp-frame{margin:0 auto;padding:8px;border:3px solid var(--ink);border-radius:20px;background:#F6F2EA;
+  box-shadow:0 5px 0 var(--ink);transition:background .2s}
+.sp-frame.done{background:var(--lime)}
+.sp-grid{display:grid;justify-content:center;touch-action:manipulation}
+/* the tiles you can actually slide are the bright ones */
+.press.sp-tile{padding:0;border-radius:14px;--lift:3px;background:#FFFDF6;color:var(--ink-soft);
+  font-family:Fredoka,sans-serif;font-weight:600;-webkit-tap-highlight-color:transparent}
+.press.sp-tile.ready{background:var(--sun);color:var(--ink);--lift:5px}
+.sp-gap{display:block}
+.sp-help{margin-top:8px;font-size:.8rem}
+
+/* ---------- Block Drop ---------- */
+.bd-wrap{display:flex;align-items:flex-start;justify-content:center;gap:12px}
+.bd-wrap.stacked{flex-direction:column-reverse;align-items:center;gap:6px}
+.bd-wrap.stacked .bd-next{flex-direction:row;gap:8px}
+.bd-frame{padding:7px;border:3px solid var(--ink);border-radius:16px;background:#F3EFE6;box-shadow:0 5px 0 var(--ink)}
+.bd-grid{display:grid;gap:1px;background:rgba(46,33,64,.12);touch-action:manipulation}
+.bd-cell{display:block;background:#FFFCF4;border-radius:3px}
+.bd-cell.ghost{background:rgba(46,33,64,.16)}
+.bd-next{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:.72rem;
+  text-transform:uppercase;letter-spacing:.08em}
+.bd-mini{display:grid;gap:1px}
+.press.bd-btn{flex:1;min-width:0;max-width:110px;padding:13px 0;font-size:1.25rem;touch-action:none;
+  user-select:none;-webkit-user-select:none}
 
 /* ---------- Pipes ---------- */
 .pp-frame{margin:0 auto;padding:10px;border:3px solid var(--ink);border-radius:20px;background:#F6F2EA;

@@ -12,6 +12,9 @@ import DinoDash from "./DinoDash";
 import NumberRush from "./NumberRush";
 import ColorDash from "./ColorDash";
 import Pipes from "./Pipes";
+import FlappyDash from "./FlappyDash";
+import SlidePuzzle from "./SlidePuzzle";
+import BlockDrop from "./BlockDrop";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -81,6 +84,24 @@ export const GAMES = [
     blurb: "Turn the pipes until every one joins up to the source. No loose ends!",
     minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--pipe)",
     Component: Pipes,
+  },
+  {
+    slug: "flappy", name: "Flappy Dash", icon: "🐤",
+    blurb: "Tap to flap. Squeeze through the pipes and try not to meet one.",
+    minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--chick)",
+    Component: FlappyDash,
+  },
+  {
+    slug: "slide", name: "Slide Puzzle", icon: "🔀",
+    blurb: "Slide the tiles until 1–8 are back in order. Fewer moves, more points.",
+    minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--slate)",
+    Component: SlidePuzzle,
+  },
+  {
+    slug: "blocks", name: "Block Drop", icon: "🧱",
+    blurb: "Turn and drop the falling blocks, fill a row and watch it vanish.",
+    minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--brick)",
+    Component: BlockDrop,
   },
 ];
 

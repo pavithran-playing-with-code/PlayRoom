@@ -213,6 +213,9 @@ const GAME_SEED = [
   { slug: "numbers",   name: "Number Rush",       description: "Tap the numbers in order, one grid after another.",               min: 1, max: 8, icon: "🔢", active: 1 },
   { slug: "colors",    name: "Color Dash",        description: "Tap the swatch that matches the named colour, fast.",             min: 1, max: 8, icon: "🎨", active: 1 },
   { slug: "pipes",     name: "Pipes",             description: "Turn the pipes until every one joins up to the source.",          min: 1, max: 8, icon: "🚰", active: 1 },
+  { slug: "flappy",    name: "Flappy Dash",       description: "Tap to flap and squeeze through the pipes.",                       min: 1, max: 8, icon: "🐤", active: 1 },
+  { slug: "slide",     name: "Slide Puzzle",      description: "Slide the tiles until 1-8 are back in order.",                     min: 1, max: 8, icon: "🔀", active: 1 },
+  { slug: "blocks",    name: "Block Drop",        description: "Turn and drop the falling blocks to clear lines.",                 min: 1, max: 8, icon: "🧱", active: 1 },
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
 ];
 

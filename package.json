@@ -12,7 +12,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "share": "node scripts/share.js",
-    "share:off": "node scripts/share.js stop"
+    "share:off": "node scripts/share.js stop",
+    "sql": "node scripts/makeSql.js"
   },
   "proxy": "http://localhost:4321",
   "dependencies": {

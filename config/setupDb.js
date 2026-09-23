@@ -13,17 +13,22 @@
 
 require("dotenv").config();
 const mysql = require("mysql2/promise");
+const { sslOptions } = require("./dbSsl");
 
 const DB_NAME = process.env.DB_NAME || "playroom";
 
 // Connect WITHOUT a database selected first, so we can CREATE DATABASE.
+// The same TLS settings as the app's pool, so this can bootstrap a hosted
+// database (Aiven, PlanetScale, …) and not just a local MySQL.
 const baseConfig = {
   host: process.env.DB_HOST || "localhost",
   port: parseInt(process.env.DB_PORT) || 3306,
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "",
+  ssl: sslOptions(),
   charset: "utf8mb4",
   multipleStatements: true,
+  connectTimeout: 20_000,
 };
 
 // ── Table definitions ─────────────────────────────────────────────────────────
@@ -219,6 +224,20 @@ const GAME_SEED = [
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
 ];
 
+// Columns added after the first release. A table created before one of these
+// existed is skipped entirely by CREATE TABLE IF NOT EXISTS, so each needs an
+// ALTER of its own or the install silently runs without the column.
+//
+// scripts/makeSql.js renders these into the .sql too, so a database set up by
+// hand ends up in the same shape as one this script bootstrapped.
+const COLUMN_MIGRATIONS = [
+  ["rooms", "duration_seconds", "duration_seconds INT NOT NULL DEFAULT 120 AFTER seed"],
+  // Drives the stale-room sweep: "idle for an hour", not "created an hour ago".
+  ["rooms", "last_activity_at", "last_activity_at DATETIME NULL DEFAULT NULL AFTER created_at"],
+  // Powers "last seen 5 minutes ago" on the friends list.
+  ["users", "last_seen_at",     "last_seen_at TIMESTAMP NULL DEFAULT NULL AFTER created_at"],
+];
+
 // Add a column only if it's missing — keeps existing data, runs safely every time.
 async function addColumnIfMissing(conn, table, column, definition) {
   const [rows] = await conn.execute(
@@ -282,11 +301,9 @@ async function ensureUserFkCascades(conn) {
 }
 
 async function migrate(conn) {
-  await addColumnIfMissing(conn, "rooms", "duration_seconds",
-    "duration_seconds INT NOT NULL DEFAULT 120 AFTER seed");
-  // Drives the stale-room sweep: "idle for an hour", not "created an hour ago".
-  await addColumnIfMissing(conn, "rooms", "last_activity_at",
-    "last_activity_at DATETIME NULL DEFAULT NULL AFTER created_at");
+  for (const [table, column, definition] of COLUMN_MIGRATIONS) {
+    await addColumnIfMissing(conn, table, column, definition);
+  }
   await ensureUserFkCascades(conn);
 }
 
@@ -295,11 +312,18 @@ async function main() {
 
   // 1. Connect without a DB and ensure the database exists.
   let conn = await mysql.createConnection(baseConfig);
-  await conn.query(
-    `CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`
-       CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
-  );
-  console.log(`✅ Database ready: ${DB_NAME}`);
+  try {
+    await conn.query(
+      `CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`
+         CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+    );
+    console.log(`✅ Database ready: ${DB_NAME}`);
+  } catch (err) {
+    // A hosted database (Aiven, PlanetScale, …) creates the schema for you and
+    // may not grant CREATE DATABASE at all. That's fine as long as it exists —
+    // the connection below will tell us if it doesn't.
+    console.log(`ℹ️  Skipping CREATE DATABASE (${err.code || err.message}); using the existing "${DB_NAME}"`);
+  }
   await conn.end();
 
   // 2. Reconnect with the DB selected.
@@ -332,8 +356,14 @@ async function main() {
   console.log(`\n🎉 Setup complete. Start the backend with:  node server.js\n`);
 }
 
-main().catch((err) => {
-  console.error("\n❌ Database setup failed:", err.message);
-  console.error("   Check your .env → DB_HOST / DB_USER / DB_PASSWORD / DB_PORT\n");
-  process.exit(1);
-});
+// Only bootstrap when run directly. Requiring this file just hands over the
+// schema, which is what scripts/makeSql.js does to write the .sql by hand.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error("\n❌ Database setup failed:", err.message);
+    console.error("   Check your .env → DB_HOST / DB_USER / DB_PASSWORD / DB_PORT\n");
+    process.exit(1);
+  });
+}
+
+module.exports = { TABLES, CREATE_ORDER, GAME_SEED, COLUMN_MIGRATIONS, USER_FK_CASCADES };

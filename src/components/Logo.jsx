@@ -1,7 +1,12 @@
 // src/components/Logo.jsx
 // Brand mark: three fanned tiles with a face on the front one, so the logo is
 // part of the same cast as the runner and the peeking buddies rather than a
-// generic icon. Used in the Navbar, the auth pages and the in-game header.
+// generic icon. Used in the Navbar and the in-game header.
+//
+// It's the same artwork as the favicon and the home-screen icon, served from
+// public/ rather than imported: the source PNG is over a megabyte, and
+// bundling it would put all of that in front of the first paint for something
+// drawn 46 pixels wide. logo192 is 39KB and the browser caches it once.
 import React from "react";
 
 const SIZES = {
@@ -16,7 +21,16 @@ export default function Logo({ size = "md", showText = true, style = {} }) {
 
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: cfg.gap, ...style }}>
-      <TileMark size={cfg.icon} />
+      <img
+        src={`${process.env.PUBLIC_URL}/logo192.png`}
+        width={cfg.icon}
+        height={cfg.icon}
+        alt=""
+        aria-hidden="true"
+        // The artwork is a square card; the corners are rounded here rather
+        // than baked in, so the same file works as a flat app icon too.
+        style={{ borderRadius: "23%", flexShrink: 0, display: "block" }}
+      />
       {showText && (
         <span
           className="display"
@@ -32,26 +46,5 @@ export default function Logo({ size = "md", showText = true, style = {} }) {
         </span>
       )}
     </span>
-  );
-}
-
-// Mint tile behind, coral tile beside it, and a marigold tile in front wearing
-// the cast's face.
-function TileMark({ size }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 48 48" aria-label="PlayRoom" style={{ flexShrink: 0 }}>
-      <g transform="rotate(-13 17 28)">
-        <rect x="5" y="15" width="18" height="25" rx="6" fill="var(--mint)" stroke="var(--ink)" strokeWidth="3" />
-      </g>
-      <g transform="rotate(9 30 20)">
-        <rect x="24" y="9" width="18" height="25" rx="6" fill="var(--coral)" stroke="var(--ink)" strokeWidth="3" />
-      </g>
-      <g transform="rotate(-2 24 24)">
-        <rect x="14" y="11" width="20" height="27" rx="7" fill="var(--sun)" stroke="var(--ink)" strokeWidth="3" />
-        <circle cx="20.5" cy="21" r="2.4" fill="var(--ink)" />
-        <circle cx="27.5" cy="21" r="2.4" fill="var(--ink)" />
-        <path d="M20 28.5q4 3.6 8 0" stroke="var(--ink)" strokeWidth="2.6" fill="none" strokeLinecap="round" />
-      </g>
-    </svg>
   );
 }

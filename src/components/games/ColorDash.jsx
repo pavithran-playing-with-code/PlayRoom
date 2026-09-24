@@ -145,7 +145,11 @@ export default function ColorDash(props) {
           const tile = Math.floor((side - gap * 2) / 3);
           return (
             <div style={{ width: side }}>
-              <div className="pop cd-target" key={`t${round}`}>
+              {/* No key on the round here: keying it remounted the card every
+                  round, which replayed its entry animation and made the card
+                  blink out and back on every colour change. The name and the
+                  swatch changing is the feedback; the card should sit still. */}
+              <div className="pop cd-target">
                 <span>Tap:</span>
                 <strong>{target.name}</strong>
                 <span className="cd-swatch" style={{ background: target.hex }} />

@@ -1,6 +1,7 @@
 // routes/leaderboard.js
 const router = require("express").Router();
 const db     = require("../config/db");
+const { settleIfExpired } = require("../config/matchClock");
 const { verifyToken } = require("../middleware/auth");
 
 // Hard caps prevent a tampered client from posting absurd scores.
@@ -11,7 +12,10 @@ const MAX_SCORE_PER_GAME = 25000;
 // Games absent from this map are pure score-attack: there is nothing to
 // "complete", so a solo run of one is recorded as `incomplete` rather than
 // being scored as a win or a loss.
-const OBJECTIVE_PAIRS = { mahjong: 35, memory: 16 };
+// Must match TOTAL_PAIRS in the game component — see src/components/MahjongGame.jsx.
+const OBJECTIVE_PAIRS = { mahjong: 24, memory: 16 };
+
+const cap = (n) => Math.max(0, Math.min(Number(n) || 0, MAX_SCORE_PER_GAME));
 
 /**
  * Decide the outcome of a match from data the server already holds.
@@ -27,15 +31,74 @@ const OBJECTIVE_PAIRS = { mahjong: 35, memory: 16 };
  */
 function decideResult({ seated, myUserId, myScore, gameSlug }) {
   if (seated.length > 1) {
-    const best = Math.max(...seated.map(p => Number(p.score) || 0));
+    const best = Math.max(...seated.map(p => cap(p.score)));
     if (myScore < best) return "loss";
-    const tiedAtTop = seated.filter(p => (Number(p.score) || 0) === best).length;
+    const tiedAtTop = seated.filter(p => cap(p.score) === best).length;
     return tiedAtTop > 1 ? "draw" : "win";
   }
   const needed = OBJECTIVE_PAIRS[gameSlug];
   if (!needed) return "incomplete";
-  const me = seated.find(p => p.user_id === myUserId);
+  const me = seated.find(p => Number(p.user_id) === Number(myUserId));
   return (Number(me?.pairs_matched) || 0) >= needed ? "win" : "loss";
+}
+
+// Record the result for EVERY seated player, from one snapshot of the scores.
+//
+// Each player used to record only themselves, whenever they happened to dismiss
+// the results screen. Two clients finishing at once would each read the table
+// before the other's final score had landed, and both would be written down as
+// the winner — which is how someone could lose a match and still climb the
+// board. Ranking everyone against the same numbers, once, makes that
+// impossible: there is exactly one snapshot and exactly one top score in it.
+//
+// Rows already present are left alone, so this stays safe to call repeatedly.
+async function settleRoom(room, seated) {
+  const [done] = await db.execute(
+    "SELECT user_id FROM game_sessions WHERE room_id = ?", [room.id]
+  );
+  const recorded = new Set(done.map((r) => Number(r.user_id)));
+  const results = [];
+
+  for (const p of seated) {
+    const userId = Number(p.user_id);
+    const score = cap(p.score);
+    const result = decideResult({ seated, myUserId: userId, myScore: score, gameSlug: room.game_slug });
+    results.push({ user_id: userId, score, result });
+    if (recorded.has(userId)) continue;
+
+    // The unique key on (room_id, user_id) is the real guard: if two players
+    // call this at the same instant, the loser of that race is ignored rather
+    // than double-counting the match.
+    const [ins] = await db.execute(
+      `INSERT IGNORE INTO game_sessions (room_id, user_id, game_type, score, pairs_matched, moves, result)
+       VALUES (?,?,?,?,?,?,?)`,
+      [room.id, userId, room.game_slug, score, p.pairs_matched, p.moves, result]
+    );
+    if (!ins.affectedRows) continue;             // somebody else got there first
+
+    await db.execute(
+      `UPDATE users SET
+         total_score  = total_score  + ?,
+         games_played = games_played + 1,
+         games_won    = games_won    + ?
+       WHERE id = ?`,
+      [score, result === "win" ? 1 : 0, userId]
+    );
+    await db.execute(`
+      INSERT INTO leaderboard (user_id, username, avatar, total_score, games_played, games_won, win_rate)
+      SELECT id, username, avatar, total_score, games_played, games_won,
+             IF(games_played > 0, ROUND(games_won / games_played * 100, 2), 0)
+      FROM users WHERE id = ?
+      ON DUPLICATE KEY UPDATE
+        username     = VALUES(username),
+        avatar       = VALUES(avatar),
+        total_score  = VALUES(total_score),
+        games_played = VALUES(games_played),
+        games_won    = VALUES(games_won),
+        win_rate     = VALUES(win_rate)
+    `, [userId]);
+  }
+  return results;
 }
 
 // GET /api/leaderboard
@@ -75,9 +138,13 @@ router.post("/update", verifyToken, async (req, res, next) => {
     if (!rooms.length)
       return res.status(404).json({ success: false, message: "Room not found." });
 
-    const room = rooms[0];
+    let room = rooms[0];
     if (room.status === "waiting")
       return res.status(409).json({ success: false, message: "Game has not started." });
+
+    // If the clock has run out, end the match here — that freezes every score,
+    // which is the precondition for ranking anyone.
+    if (room.status === "in_progress" && await settleIfExpired(room.id)) room.status = "finished";
 
     // Pull the whole table at once — we need every seated player's score to
     // work out who actually won.
@@ -93,56 +160,24 @@ router.post("/update", verifyToken, async (req, res, next) => {
 
     const seated = allPlayers.filter(p => !p.is_spectator);
 
-    // 2. Idempotent: one leaderboard update per (room, user). Re-submits no-op.
-    const [existing] = await db.execute(
-      "SELECT id FROM game_sessions WHERE room_id = ? AND user_id = ?",
-      [room.id, req.user.id]
-    );
-    if (existing.length)
-      return res.json({ success: true, already_recorded: true });
+    // 2. Nobody is ranked while the match can still change. A player who quits
+    //    early would otherwise be scored against half-finished opponents. Their
+    //    row gets written when the match actually ends and someone reports it,
+    //    using whatever score they walked away with.
+    if (room.status === "in_progress")
+      return res.json({ success: true, pending: true, message: "Match still running." });
 
-    // 3. Pull server-stored score (still client-written via /score, but capped).
-    const rawScore = Number(mine.score) || 0;
-    const score    = Math.max(0, Math.min(rawScore, MAX_SCORE_PER_GAME));
+    // 3. Rank and record every seated player together, from one snapshot.
+    const results = await settleRoom(room, seated);
+    const me = results.find(r => r.user_id === Number(req.user.id));
 
-    // 4. Decide the outcome from stored data — never from the request body.
-    const result  = decideResult({
-      seated, myUserId: Number(req.user.id), myScore: score, gameSlug: room.game_slug,
+    res.json({
+      success: true,
+      score: me?.score ?? 0,
+      result: me?.result ?? "incomplete",
+      won: me?.result === "win",
+      standings: results,
     });
-    const wonFlag = result === "win" ? 1 : 0;
-
-    // 5. Persist the session record (also marks this room+user as recorded).
-    await db.execute(
-      `INSERT INTO game_sessions (room_id, user_id, game_type, score, pairs_matched, moves, result)
-       VALUES (?,?,?,?,?,?,?)`,
-      [room.id, req.user.id, room.game_slug, score,
-       mine.pairs_matched, mine.moves, result]
-    );
-
-    // 6. Update aggregate stats.
-    await db.execute(
-      `UPDATE users SET
-         total_score  = total_score  + ?,
-         games_played = games_played + 1,
-         games_won    = games_won    + ?
-       WHERE id = ?`,
-      [score, wonFlag, req.user.id]
-    );
-    await db.execute(`
-      INSERT INTO leaderboard (user_id, username, avatar, total_score, games_played, games_won, win_rate)
-      SELECT id, username, avatar, total_score, games_played, games_won,
-             IF(games_played > 0, ROUND(games_won / games_played * 100, 2), 0)
-      FROM users WHERE id = ?
-      ON DUPLICATE KEY UPDATE
-        username     = VALUES(username),
-        avatar       = VALUES(avatar),
-        total_score  = VALUES(total_score),
-        games_played = VALUES(games_played),
-        games_won    = VALUES(games_won),
-        win_rate     = VALUES(win_rate)
-    `, [req.user.id]);
-
-    res.json({ success: true, score, result, won: result === "win" });
   } catch (err) { next(err); }
 });
 

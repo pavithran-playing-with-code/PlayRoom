@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../../utils/api";
+import { useSocket } from "../../utils/SocketContext";
 import { finalSync } from "./finalSync";
 
 const SYNC_MS = 2000;
@@ -124,6 +125,32 @@ export default function useGameEngine({
     timer = setTimeout(loop, SYNC_MS);
     return () => { alive = false; clearTimeout(timer); };
   }, [isOnline, isSpectator, roomCode, myId, payload]);
+
+  // ── Opponents' scores, live ──
+  // The poll above is the fallback. Each player's own sync broadcasts to the
+  // room, so a score lands here as soon as it is written rather than waiting
+  // for this client's next poll — two polls apart, an opponent's number could
+  // be four seconds behind, which reads as wrong rather than late.
+  //
+  // Room.jsx owns the room:join, and it stays mounted while the game renders,
+  // so this only has to listen.
+  const socket = useSocket();
+  useEffect(() => {
+    if (!socket || !isOnline || !roomCode) return undefined;
+    const onScore = (p) => {
+      const id = Number(p?.user_id);
+      if (!Number.isFinite(id) || id === myId) return;
+      setOpponents((prev) => {
+        const had = prev[id];
+        if (!had) return prev;                    // not a seat we're showing
+        const score = Number(p.score) || 0;
+        if (had.score === score) return prev;     // no change, no re-render
+        return { ...prev, [id]: { ...had, score } };
+      });
+    };
+    socket.on("room:score", onScore);
+    return () => socket.off("room:score", onScore);
+  }, [socket, isOnline, roomCode, myId]);
 
   // ── The moment the match ends, push the final numbers once ──
   // The server decides the result from stored scores, so they must be current.

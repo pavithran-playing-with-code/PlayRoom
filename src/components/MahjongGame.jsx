@@ -18,23 +18,30 @@ import { confetti } from "./ui/FunLayer";
 //
 // Now every tile is a distinct, instantly recognisable picture. Two tiles match
 // when they show the SAME PICTURE — no numbers, no suits, nothing to decode.
-// 35 pictures × 2 = the same 70-tile board.
+// 24 pictures × 2 = a 48-tile board.
 // Each category owns one toy-palette colour, so same-category tiles are easy to
 // scan for even before you focus on the picture itself.
+//
+// Every picture here has to be telling apart from every other one at about 40
+// pixels on a phone, which ruled out a lot of the old set: two fish (🐟 and 🐠)
+// side by side on the same blue, a whale and a dolphin that are both a blue
+// blob at that size, a lion and a tiger that are both a round orange cat face,
+// and a biscuit and a chocolate bar that are both a brown rectangle. One fish,
+// one big sea animal, one orange cat — silhouettes that differ, not details.
 const TILE_CATEGORIES = [
   { id: "animals", label: "Animals", tint: "var(--sun)",
-    items: ["🐶","🐱","🐼","🦊","🐸","🐵","🦁","🐯"] },
+    items: ["🐶","🐱","🐼","🦊","🐸"] },
   { id: "sea",     label: "Sea",     tint: "var(--sky)",
-    items: ["🐳","🐬","🐟","🐙","🦀","🦈","🐠"] },
+    items: ["🐳","🐟","🐙","🦀"] },
   { id: "food",    label: "Food",    tint: "var(--coral)",
-    items: ["🍕","🍔","🍩","🍦","🍓","🍉","🍫","🍪"] },
+    items: ["🍕","🍔","🍩","🍦","🍓"] },
   { id: "nature",  label: "Nature",  tint: "var(--mint)",
-    items: ["🌸","🌵","🍄","🌈","🌻","🍀"] },
+    items: ["🌸","🌵","🍄","🌈","🌻"] },
   { id: "fun",     label: "Fun",     tint: "var(--bubble)",
-    items: ["🚀","⭐","🌙","⚡","🎈","🎁"] },
+    items: ["🚀","⭐","🌙","🎈","🎁"] },
 ];
 
-// Flattened catalogue: { e: emoji, k: unique key, cat }. 35 entries.
+// Flattened catalogue: { e: emoji, k: unique key, cat }. 24 entries.
 const TILE_TYPES = TILE_CATEGORIES.flatMap((c) =>
   c.items.map((e, i) => ({ e, k: `${c.id}${i}`, cat: c.id }))
 );
@@ -60,18 +67,28 @@ function TileFace({ tile, size }) {
 }
 
 // ── The board ────────────────────────────────────────────────────────────────
-// Always 10 wide x 7 tall *in logic*, on every screen. Whether a tile is free
+// Always 8 wide x 6 tall *in logic*, on every screen. Whether a tile is free
 // depends on its neighbours, so the grid can't change with the window. The old
-// board re-flowed to 7/10/14 columns by screen width: every resize moved tiles
-// next to different neighbours, and a phone and a laptop in the same room were
-// playing different games. A tall screen now shows the same board turned on
-// its side. The free rule looks at all four sides, so turning the board
-// changes nothing about which tiles are free.
-const COLS = 10;
-const ROWS = 7;
-const TOTAL_PAIRS = 35;
+// board re-flowed by screen width: every resize moved tiles next to different
+// neighbours, and a phone and a laptop in the same room were playing different
+// games. A tall screen shows the same board turned on its side. The free rule
+// looks at all four sides, so turning the board changes nothing.
+//
+// 8 x 6 rather than the earlier 10 x 7. Seventy tiles on a phone came out around 30
+// pixels wide — too small to read the picture or hit the one you meant. Fewer,
+// bigger tiles is the same game and an actually playable one. The board is the
+// same on every screen, so a phone and a laptop in one room still race the same
+// layout; shrinking it only for phones would have made them different games.
+//
+// NOTE: OBJECTIVE_PAIRS.mahjong in routes/leaderboard.js must match TOTAL_PAIRS,
+// or a solo clear stops counting as a win.
+const COLS = 8;
+const ROWS = 6;
+const TOTAL_PAIRS = 24;
 const RATIO = 1.18;          // tile height / width
 const MATCH = 100;           // plus the seconds left on the clock
+const CLEAR_BONUS = 400;     // for clearing a whole board, x the board number
+const NEXT_BOARD_MS = 1400;  // long enough to enjoy having cleared it
 const MISS = -10;
 const HINT_COST = -20;
 const SHUFFLE_COST = -50;
@@ -169,11 +186,18 @@ export default function MahjongGame({
   // The board lives in a ref as well as state: two taps in the same tick must
   // each see the other's result (see MemoryGame.jsx for the bug this avoids).
   const live = useRef(null);
-  if (live.current === null) live.current = { tiles: buildTiles(seed), selected: null, pairs: 0 };
+  if (live.current === null) {
+    // `pairs` is this board; `total` is every board, and that is what the
+    // server sees — clearing one board still counts as completing the objective.
+    live.current = { tiles: buildTiles(seed), selected: null, pairs: 0, total: 0, board: 1 };
+  }
 
   const [tiles, setTiles] = useState(() => live.current.tiles);
   const [selected, setSelected] = useState(null);
   const [pairs, setPairs] = useState(0);
+  const [board, setBoard] = useState(1);
+  const boardTimer = useRef(null);
+  useEffect(() => () => clearTimeout(boardTimer.current), []);
   const [hintIdx, setHintIdx] = useState([]);
   const [msg, setMsg] = useState(null);
   const msgTimer = useRef(null);
@@ -181,7 +205,7 @@ export default function MahjongGame({
   const eng = useGameEngine({
     roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
     extraState: () => ({
-      pairs_matched: live.current.pairs,
+      pairs_matched: live.current.total,
       game_state: JSON.stringify({ matched: matchedIndices(live.current.tiles) }),
     }),
   });
@@ -201,6 +225,23 @@ export default function MahjongGame({
     s.tiles = s.tiles.map((t, i) => ({ ...t, matched: matched.has(i) }));
     setTiles(s.tiles);
   }, [isSpectator, spectatorState]);
+
+  // A fresh board, seeded off the board number so everyone in the room who
+  // gets this far plays the same one.
+  function nextBoard() {
+    const s = live.current;
+    if (eng.gameOver || isSpectator) return;
+    s.board += 1;
+    s.pairs = 0;
+    s.tiles = buildTiles((Number(seed) || 1) + s.board * 7919);
+    s.selected = null;
+    setTiles(s.tiles);
+    setPairs(0);
+    setBoard(s.board);
+    setSelected(null);
+    setHintIdx([]);
+    showMsg(`🀄 Board ${s.board} — go!`, "info");
+  }
 
   function applyShuffle(next) {
     const s = live.current;
@@ -242,6 +283,7 @@ export default function MahjongGame({
       s.tiles = s.tiles.map((t, i) => (i === a || i === idx ? { ...t, matched: true } : t));
       s.selected = null;
       s.pairs += 1;
+      s.total += 1;
       setTiles(s.tiles);
       setPairs(s.pairs);
       eng.addMove();
@@ -250,8 +292,18 @@ export default function MahjongGame({
       const r = ev?.currentTarget?.getBoundingClientRect?.();
       confetti(r ? r.left + r.width / 2 : undefined, r ? r.top + r.height / 2 : undefined,
         { count: 16, emojis: [tile.e, "✨"] });
-      if (s.pairs === TOTAL_PAIRS) eng.finish();
-      else showMsg(`✓ Match! +${gain}`, "success");
+      if (s.pairs === TOTAL_PAIRS) {
+        // Clearing the board used to end the match on the spot, which dropped
+        // you on a results screen declaring you the winner while everyone else
+        // was still playing — and froze your score there, so a genuinely
+        // faster player could still be overtaken. The room's clock ends the
+        // match; clearing just earns a bonus and a fresh board.
+        const bonus = CLEAR_BONUS * s.board + eng.timeLeft;
+        eng.addScore(bonus);
+        showMsg(`🎉 Board ${s.board} cleared! +${bonus}`, "success");
+        clearTimeout(boardTimer.current);
+        boardTimer.current = setTimeout(nextBoard, NEXT_BOARD_MS);
+      } else showMsg(`✓ Match! +${gain}`, "success");
     } else {
       s.selected = null;
       eng.addMove();
@@ -294,7 +346,7 @@ export default function MahjongGame({
     : [
         { label: "Score", value: eng.score.toLocaleString() },
         { label: "Pairs", value: `${pairs}/${TOTAL_PAIRS}` },
-        { label: "Moves", value: eng.moves },
+        ...(board > 1 ? [{ label: "Board", value: board }] : [{ label: "Moves", value: eng.moves }]),
       ];
 
   return (
@@ -387,7 +439,8 @@ export default function MahjongGame({
       </GameFrame>
 
       {eng.gameOver && !isSpectator && (
-        <GameOver eng={eng} me={currentUser} extra={`Pairs: ${pairs}/${TOTAL_PAIRS}`} />
+        <GameOver eng={eng} me={currentUser}
+          extra={`Pairs matched: ${live.current.total}${board > 1 ? ` · Boards cleared: ${board - 1}` : ""}`} />
       )}
     </>
   );

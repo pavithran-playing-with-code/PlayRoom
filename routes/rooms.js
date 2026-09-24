@@ -1,32 +1,13 @@
 // routes/rooms.js
 const router = require("express").Router();
 const db     = require("../config/db");
+const { settleIfExpired } = require("../config/matchClock");
 const { verifyToken } = require("../middleware/auth");
 const { emitRoom, emitUser, isOnline } = require("../config/socket");
 
 // ── Match clock (server-authoritative) ────────────────────────────────────────
 // The countdown a player sees is client-side, so it can be paused, slowed or
 // ignored entirely. The server therefore owns the real deadline:
-// started_at + duration_seconds. Once that passes, the room is `finished` and
-// no further score writes are accepted.
-//
-// The comparison is done in SQL rather than JS so it never depends on the Node
-// process and MySQL agreeing about the current time or the timezone.
-const CLOCK_GRACE_SECONDS = 3;   // absorbs network latency on the final sync
-
-// Flip an expired in_progress room to `finished`. Idempotent — the WHERE clause
-// means only the first caller to notice actually performs the transition.
-// Returns true if this call ended the match.
-async function settleIfExpired(roomId) {
-  const [r] = await db.execute(
-    `UPDATE rooms SET status = 'finished', finished_at = NOW()
-      WHERE id = ? AND status = 'in_progress' AND started_at IS NOT NULL
-        AND started_at + INTERVAL (duration_seconds + ${CLOCK_GRACE_SECONDS}) SECOND <= NOW()`,
-    [roomId]
-  );
-  return r.affectedRows > 0;
-}
-
 // Keeps the stale-room sweep honest — see sweepStaleRooms() in server.js.
 async function touchRoom(roomId) {
   try {
@@ -352,6 +333,15 @@ router.patch("/:code/score", verifyToken, async (req, res, next) => {
         return res.status(403).json({ success: false, message: "Spectators cannot submit scores." });
       return res.status(409).json({ success: false, message: "The match is not running.", match_over: true });
     }
+
+    // Tell the room straight away. The 2s poll is the fallback; without this an
+    // opponent's score only moved when the *reader* next polled, so it could be
+    // four seconds stale — long enough, in a two-minute match, to look like the
+    // wrong number rather than a late one.
+    push(req, req.params.code, "room:score", {
+      user_id: Number(req.user.id),
+      score, pairs_matched, moves,
+    });
 
     res.json({ success: true });
   } catch (err) { next(err); }

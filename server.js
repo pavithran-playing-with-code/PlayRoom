@@ -100,11 +100,12 @@ app.use("/api", (req, res, next) => {
 // burns ~40 req/min (score sync + opponent poll + inbox badge) — so a player
 // got 429'd roughly 12 minutes in, mid-match. Worse, the limiter keys on IP, so
 // two people on one home connection shared that budget and hit it twice as fast.
-const limiter = (max, windowMinutes, message) => rateLimit({
+const limiter = (max, windowMinutes, message, skip) => rateLimit({
   windowMs: windowMinutes * 60 * 1000,
   max,
   standardHeaders: true,
   legacyHeaders: false,
+  ...(skip ? { skip } : {}),
   // Authenticated users get their own bucket; fall back to IP for anonymous
   // traffic. Without this, everyone behind one NAT shares a budget.
   keyGenerator: (req) => {
@@ -129,7 +130,16 @@ app.use("/api/auth/change-password", limiter(10, 15, "Too many password attempts
 app.use("/api/rooms",         limiter(2000, 15, "Too many requests — please slow down."));
 
 // Everything else.
-app.use("/api/",              limiter(600,  15, "Too many requests — please try again later."));
+//
+// app.use("/api/") also runs for /api/rooms and /api/auth/*, so without this
+// skip those requests were spending from two budgets at once and the generous
+// room allowance above counted for nothing: a lobby poll every 5s plus a match
+// poll every 2.5s plus score sync clears 600 in well under fifteen minutes, and
+// the next "create room" came back 429 even though the room limiter was barely
+// touched. Anything with a limiter of its own is not counted again here.
+const HAS_OWN_LIMIT = ["/api/rooms", "/api/auth/login", "/api/auth/register", "/api/auth/change-password"];
+app.use("/api/",              limiter(600,  15, "Too many requests — please try again later.",
+  (req) => HAS_OWN_LIMIT.some((p) => req.originalUrl === p || req.originalUrl.startsWith(p + "/") || req.originalUrl.startsWith(p + "?"))));
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) =>

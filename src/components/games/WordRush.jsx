@@ -21,6 +21,7 @@ const WORDS = [
 const CORRECT = 16;
 const SKIP = -4;
 const WRONG_MS = 450;   // how long a wrong word stays up before it clears
+const REVEAL_MS = 1300; // long enough to read the answer you paid for
 
 function buildRound(seed) {
   const rand = seededRand(seed);
@@ -46,6 +47,7 @@ export default function WordRush(props) {
   const [picked, setPicked] = useState([]);
   const [solved, setSolved] = useState(0);
   const [flash, setFlash] = useState(null);   // 'good' | 'bad' | 'skip'
+  const [revealed, setRevealed] = useState(null);   // the answer, while it's being shown
   const timers = useRef([]);
   useEffect(() => {
     const t = timers.current;
@@ -105,7 +107,22 @@ export default function WordRush(props) {
     setPicked(s.picked);
   }
   const undo = () => unpick(live.current.picked.length - 1);
-  const skip = () => { if (canPlay) nextWord(SKIP, "skip"); };
+
+  // Giving up costs the same as it always did, but you get told the answer.
+  // Skipping silently taught you nothing and just felt like a punishment.
+  function giveUp() {
+    const s = live.current;
+    if (!canPlay || s.lock) return;
+    s.lock = true;
+    const at = s.idx;
+    setRevealed(round[s.idx % round.length].word);
+    setFlash("skip");
+    later(() => {
+      if (s.idx !== at) return;              // the round moved on without us
+      setRevealed(null);
+      nextWord(SKIP, "skip");
+    }, REVEAL_MS);
+  }
 
   // A physical keyboard works too: a letter picks the first unused tile with
   // that letter, Backspace takes the last one back.
@@ -131,7 +148,9 @@ export default function WordRush(props) {
     ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
     : [{ label: "Score", value: eng.score.toLocaleString() }, { label: "Solved", value: solved }];
 
-  const slotFill = flash === "good" ? "var(--lime)" : flash === "bad" ? "var(--coral)" : "#fff";
+  const slotFill = revealed ? "var(--sky, #BDE3FF)"
+    : flash === "good" ? "var(--lime)"
+    : flash === "bad" ? "var(--coral)" : "#fff";
 
   return (
     <>
@@ -145,7 +164,7 @@ export default function WordRush(props) {
         controls={!isSpectator ? (
           <>
             <button className="press p-white sm" onClick={undo} disabled={!picked.length || !canPlay}>⌫ Undo</button>
-            <button className="press p-white sm" onClick={skip} disabled={!canPlay}>⏭ Skip ({SKIP})</button>
+            <button className="press p-white sm" onClick={giveUp} disabled={!canPlay || !!revealed}>💡 Show answer ({SKIP})</button>
           </>
         ) : null}
       >
@@ -170,14 +189,17 @@ export default function WordRush(props) {
               <div className="wr-row" style={{ gap, marginBottom: Math.round(tile * 0.45) }}>
                 {Array.from({ length: n }).map((_, k) => {
                   const j = picked[k];
-                  const filled = j != null;
+                  // While the answer is on show it fills every slot, whatever
+                  // the player had picked so far.
+                  const letter = revealed ? revealed[k] : (j != null ? cur.scrambled[j] : "");
+                  const filled = !!letter;
                   return (
                     <button key={k} type="button" className={`wr-slot${filled ? " filled" : ""}`}
-                      onClick={() => unpick(k)} disabled={!filled || !canPlay}
-                      aria-label={filled ? `Remove ${cur.scrambled[j]}` : "Empty"}
+                      onClick={() => unpick(k)} disabled={!filled || !canPlay || !!revealed}
+                      aria-label={filled ? `Remove ${letter}` : "Empty"}
                       style={{ width: tile, height: tall, fontSize: Math.round(tile * 0.5),
                         background: filled || flash === "good" ? slotFill : "transparent" }}>
-                      {filled ? cur.scrambled[j].toUpperCase() : ""}
+                      {filled ? letter.toUpperCase() : ""}
                     </button>
                   );
                 })}

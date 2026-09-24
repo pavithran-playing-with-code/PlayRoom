@@ -134,7 +134,10 @@ export default function useGameEngine({
   //
   // Room.jsx owns the room:join, and it stays mounted while the game renders,
   // so this only has to listen.
-  const socket = useSocket();
+  // useSocket() hands back { socket, connected } — destructure it. Taking the
+  // context object itself passes the truthiness guard below and then throws
+  // "socket.on is not a function" the moment a match starts.
+  const { socket } = useSocket() || {};
   useEffect(() => {
     if (!socket || !isOnline || !roomCode) return undefined;
     const onScore = (p) => {

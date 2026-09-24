@@ -136,13 +136,23 @@ rounded shapes, one accent colour per game.
 There is no test runner. What works:
 
 - **Pure logic** — board modules (`tetrisBoard.js`, `pipesBoard.js`,
-  `flappySim.js`…) are plain JS with no React, so they can be exercised from a
-  Node script directly.
-- **Real games** — build with a temporary route that mounts one game with a
+  `flappySim.js`…) and `config/matchResult.js` are plain JS with no React or
+  database, so they can be exercised from a Node script directly.
+- **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
-  Sample the DOM to assert behaviour, and take screenshots at 390px.
-  Delete the route before committing.
+  Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route
+  before committing.
+- **A whole match** — `scripts/e2e.mjs` signs in real players against a real
+  backend, starts a real match, and fails on any console error. Its header says
+  how to run it.
 
-Reproduce a bug before fixing it. Several "fixes" here have turned out to be
-the test being wrong — and the grey flash in Color Dash was the card, not the
-grid everyone assumed.
+**Anything touching the room, the socket or the engine gets the e2e run before
+it ships.** `socket.on is not a function` reached production and blanked every
+online match: the unit tests passed, the build compiled, and nothing had ever
+started a match. Compiling is not evidence that a room works.
+
+Reproduce a bug before fixing it, and prove the test catches it — reintroduce
+the bug and watch it fail. Several "fixes" here turned out to be the test being
+wrong, and the grey flash in Color Dash was the card, not the grid everyone
+assumed.
+

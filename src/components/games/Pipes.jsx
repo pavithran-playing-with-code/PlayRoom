@@ -125,6 +125,7 @@ export default function Pipes(props) {
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={oppList}
+        teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
       >

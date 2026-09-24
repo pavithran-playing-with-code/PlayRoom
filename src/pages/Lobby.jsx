@@ -37,6 +37,7 @@ export default function Lobby() {
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [duration, setDuration] = useState(120);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [teamMode, setTeamMode] = useState(false);
   const [creating, setCreating] = useState(false);
 
   const [joinCode, setJoinCode] = useState("");
@@ -48,11 +49,20 @@ export default function Lobby() {
   // privacy toggle is hidden rather than shown as a no-op.
   const isSolo = maxPlayers === 1;
   const mins = Math.round(duration / 60);
+  // Two sides of two is the smallest team match worth the name.
+  const MIN_TEAM_SEATS = 4;
+  const canTeam = maxPlayers >= MIN_TEAM_SEATS;
+  const teams = teamMode && canTeam;
 
   // Keep maxPlayers valid when switching games.
   useEffect(() => {
     setMaxPlayers((mp) => Math.min(mp, selected.maxPlayers));
   }, [selected.maxPlayers]);
+
+  // Dropping below four seats leaves no room for two teams.
+  useEffect(() => {
+    if (!canTeam) setTeamMode(false);
+  }, [canTeam]);
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -75,6 +85,7 @@ export default function Lobby() {
         game_slug: game, max_players: maxPlayers,
         is_private: isSolo ? true : isPrivate,   // solo rooms are never listed
         duration_seconds: duration,
+        mode: teams ? "teams" : "free",
       });
       const data = await res.json();
       if (!data.success) { toast.error(data.message || "Failed to create room."); return; }
@@ -195,11 +206,25 @@ export default function Lobby() {
                 🧍 Solo run — private by default. No room code to share, no invites, no chat.
               </div>
             ) : (
-              <label className="row" style={{ gap: 11, fontSize: ".95rem", marginBottom: 22, cursor: "pointer" }}>
-                <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)}
-                  style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
-                🔒 Keep it private — invite only
-              </label>
+              <>
+                <label className="row" style={{ gap: 11, fontSize: ".95rem", marginBottom: 12, cursor: "pointer" }}>
+                  <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)}
+                    style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
+                  🔒 Keep it private — invite only
+                </label>
+                {/* Needs four seats: two sides of two. */}
+                <label className="row"
+                  style={{ gap: 11, fontSize: ".95rem", marginBottom: 22,
+                    cursor: canTeam ? "pointer" : "not-allowed", opacity: canTeam ? 1 : .45 }}>
+                  <input type="checkbox" checked={teams} disabled={!canTeam}
+                    onChange={(e) => setTeamMode(e.target.checked)}
+                    style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
+                  <span>
+                    ⚔️ Team match — play as sides, highest total wins
+                    {!canTeam && <span className="muted"> · needs {MIN_TEAM_SEATS}+ seats</span>}
+                  </span>
+                </label>
+              </>
             )}
 
             {/* What you're about to create, spelled out: game, clock, seats. */}
@@ -207,6 +232,7 @@ export default function Lobby() {
               <span className="chip" style={{ background: selected.col }}>{selected.icon} {selected.name}</span>
               <span className="chip c-sky">⏱️ {mins} min match</span>
               <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
+              {teams && <span className="chip c-grape">⚔️ Teams</span>}
             </div>
             <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
               {creating ? "Creating…"

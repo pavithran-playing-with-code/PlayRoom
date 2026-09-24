@@ -80,6 +80,9 @@ const TABLES = {
       -- who finishes early banks a big completion bonus, so finishing first
       -- naturally yields the top score).
       duration_seconds INT      NOT NULL DEFAULT 120,
+      -- 'free': every player for themselves, ranked by their own score.
+      -- 'teams': players pick a side and the sides are ranked by total.
+      mode         ENUM('free','teams') NOT NULL DEFAULT 'free',
       status       ENUM('waiting','in_progress','finished','abandoned')
                                 NOT NULL DEFAULT 'waiting',
       created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -103,6 +106,8 @@ const TABLES = {
       user_id       INT UNSIGNED NOT NULL,
       is_host       TINYINT(1)   NOT NULL DEFAULT 0,
       is_spectator  TINYINT(1)   NOT NULL DEFAULT 0,
+      -- Which side they're on in a teams room, 1-4. NULL in a free-for-all.
+      team          TINYINT      NULL DEFAULT NULL,
       score         INT          NOT NULL DEFAULT 0,
       pairs_matched INT          NOT NULL DEFAULT 0,
       moves         INT          NOT NULL DEFAULT 0,
@@ -236,6 +241,9 @@ const COLUMN_MIGRATIONS = [
   ["rooms", "last_activity_at", "last_activity_at DATETIME NULL DEFAULT NULL AFTER created_at"],
   // Powers "last seen 5 minutes ago" on the friends list.
   ["users", "last_seen_at",     "last_seen_at TIMESTAMP NULL DEFAULT NULL AFTER created_at"],
+  // Team play.
+  ["rooms",        "mode", "mode ENUM('free','teams') NOT NULL DEFAULT 'free' AFTER duration_seconds"],
+  ["room_players", "team", "team TINYINT NULL DEFAULT NULL AFTER is_spectator"],
 ];
 
 // Add a column only if it's missing — keeps existing data, runs safely every time.

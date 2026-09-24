@@ -9,6 +9,13 @@ import { Avatar, Modal } from "../components/ui";
 import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
 
+// Team play. Four sides at most, two players each at least — the server
+// enforces the same numbers on start.
+const MAX_TEAMS = 4;
+const MIN_PER_TEAM = 2;
+const TEAM_NAMES  = ["Red", "Yellow", "Blue", "Green"];
+const TEAM_COLOURS = ["var(--coral)", "var(--sun)", "var(--sky)", "var(--mint)"];
+
 // Keyed by the room code, so going straight from one room to another (an
 // invite accepted from inside a room) starts clean instead of inheriting the
 // old room's status, seed and players.
@@ -40,6 +47,10 @@ function Room() {
   const [error,     setError]     = useState("");
   const [starting,  setStarting]  = useState(false);
   const [confirmStart, setConfirmStart] = useState(false);
+  const [teamBusy, setTeamBusy] = useState(false);
+  // The poll carries the mode too, so the team picker survives a refresh
+  // before the slower room fetch comes back.
+  const [roomMode, setRoomMode] = useState(null);
   const [copied,    setCopied]    = useState(false);
 
   const { friends } = usePresence();
@@ -85,6 +96,7 @@ function Room() {
       }
       setStatus(data.status);
       setSeed(data.seed);
+      if (data.mode) setRoomMode(data.mode);
       if (data.duration_seconds) setDuration(data.duration_seconds);
       setStartedAt(data.started_at || null);
       setServerNow(data.server_now || null);
@@ -260,6 +272,37 @@ function Room() {
   // fine, but the host is asked first, so nobody starts a 5-player match by
   // accident while two friends are still typing in the code.
   const tooFewToStart = !isSolo && seatedPlayers.length < 2;
+
+  // ── Teams ────────────────────────────────────────────────────────────────
+  const isTeams      = room?.mode === "teams" || roomMode === "teams";
+  const myTeam       = me?.team ?? null;
+  const teamCount    = Math.min(MAX_TEAMS, Math.max(2, Math.floor((room?.max_players || 4) / MIN_PER_TEAM)));
+  const teamNos      = Array.from({ length: teamCount }, (_, i) => i + 1);
+  const membersOf    = (n) => seatedPlayers.filter((p) => Number(p.team) === n);
+  const unplaced     = seatedPlayers.filter((p) => p.team == null);
+  const usedTeams    = teamNos.filter((n) => membersOf(n).length > 0);
+  const shortTeam    = usedTeams.find((n) => membersOf(n).length < MIN_PER_TEAM);
+  // Same rule the server enforces on start, so the button explains itself
+  // rather than failing with a message after the fact.
+  const teamsNotReady = isTeams && (
+    unplaced.length > 0 || usedTeams.length < 2 || shortTeam !== undefined
+  );
+  const teamProblem = !isTeams ? null
+    : unplaced.length ? `${unplaced.length} player${unplaced.length > 1 ? "s haven't" : " hasn't"} picked a team`
+    : usedTeams.length < 2 ? "A team match needs at least two teams"
+    : shortTeam !== undefined ? `${TEAM_NAMES[shortTeam - 1]} needs at least ${MIN_PER_TEAM} players`
+    : null;
+
+  async function pickTeam(n) {
+    if (!isTeams || status !== "waiting" || teamBusy) return;
+    setTeamBusy(true);
+    try {
+      const res = await api.patch(`/api/rooms/${code}/team`, { team: n === myTeam ? null : n });
+      const data = await res.json();
+      if (data.success) fetchRoom();
+    } catch { /* the next poll will show the truth */ }
+    finally { setTeamBusy(false); }
+  }
 
   // ── Room not found ────────────────────────────────────────────────────────
   if (notFound) {
@@ -439,6 +482,52 @@ function Room() {
             })}
           </div>
 
+          {/* Pick a side. Sizes are shown on purpose: a team match is scored on
+              the straight total, so a bigger side has the advantage and people
+              should be able to see that and even it up themselves. */}
+          {isTeams && status === "waiting" && (
+            <>
+              <div className="muted eyebrow">⚔️ Teams — tap one to join, tap again to leave</div>
+              <div className="teampick">
+                {teamNos.map((n) => {
+                  const members = membersOf(n);
+                  const mine = myTeam === n;
+                  return (
+                    <div key={n} className={`pop teamcol${mine ? " mine" : ""}`}
+                      style={{ borderColor: mine ? "var(--ink)" : undefined }}>
+                      <div className="teamhead" style={{ background: TEAM_COLOURS[n - 1] }}>
+                        <span>{TEAM_NAMES[n - 1]}</span>
+                        <span className={members.length < MIN_PER_TEAM ? "teamshort" : "teamok"}>
+                          {members.length}
+                        </span>
+                      </div>
+                      <div className="teamlist">
+                        {members.length === 0
+                          ? <span className="muted" style={{ fontSize: ".8rem" }}>empty</span>
+                          : members.map((p) => (
+                              <span key={p.user_id} className="chip" style={{ fontSize: ".78rem" }}>
+                                {p.avatar} {p.username}{p.user_id === user?.id && " (you)"}
+                              </span>
+                            ))}
+                      </div>
+                      {!isSpectator && (
+                        <button className={`press sm full ${mine ? "p-white" : "p-sun"}`}
+                          onClick={() => pickTeam(n)} disabled={teamBusy}>
+                          {mine ? "Leave" : "Join"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {unplaced.length > 0 && (
+                <div className="note" style={{ background: "var(--paper2)", marginBottom: 20 }}>
+                  ⏳ Still choosing: {unplaced.map((p) => p.username).join(", ")}
+                </div>
+              )}
+            </>
+          )}
+
           {/* Spectators */}
           {watchingPlayers.length > 0 && (
             <>
@@ -489,15 +578,22 @@ function Room() {
 
             {canStart && (
               <button className="press p-coral lg" style={{ flex: 2, minWidth: 220 }}
-                onClick={() => handleStart()} disabled={starting || tooFewToStart}>
+                onClick={() => handleStart()} disabled={starting || tooFewToStart || teamsNotReady}>
                 {starting ? "Starting…"
                   : tooFewToStart ? "⏳ Waiting for someone to join…"
+                  : teamsNotReady ? "⚔️ Teams aren't ready"
                   : isSolo ? "🎯 Start solo run!"
                   : seatsLeft > 0 ? `🚀 Start with ${seatedPlayers.length} of ${seats}`
                   : "🚀 Start the game!"}
               </button>
             )}
           </div>
+
+          {canStart && teamsNotReady && !tooFewToStart && (
+            <div className="note" style={{ background: "var(--paper2)", marginTop: 16 }}>
+              ⚔️ {teamProblem}.
+            </div>
+          )}
 
           {canStart && tooFewToStart && (
             <div className="note" style={{ background: "var(--paper2)", marginTop: 16 }}>

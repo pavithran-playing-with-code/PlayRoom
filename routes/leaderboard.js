@@ -2,45 +2,8 @@
 const router = require("express").Router();
 const db     = require("../config/db");
 const { settleIfExpired } = require("../config/matchClock");
+const { cap, resultsFor } = require("../config/matchResult");
 const { verifyToken } = require("../middleware/auth");
-
-// Hard caps prevent a tampered client from posting absurd scores.
-// Memory max ~5k, Mahjong max ~12k. 25k leaves headroom for future games.
-const MAX_SCORE_PER_GAME = 25000;
-
-// Pairs required to clear the board, for the games that HAVE a win condition.
-// Games absent from this map are pure score-attack: there is nothing to
-// "complete", so a solo run of one is recorded as `incomplete` rather than
-// being scored as a win or a loss.
-// Must match TOTAL_PAIRS in the game component — see src/components/MahjongGame.jsx.
-const OBJECTIVE_PAIRS = { mahjong: 24, memory: 16 };
-
-const cap = (n) => Math.max(0, Math.min(Number(n) || 0, MAX_SCORE_PER_GAME));
-
-/**
- * Decide the outcome of a match from data the server already holds.
- *
- * Previously the client simply POSTed `won: true|false` and we believed it,
- * which is why every row in game_sessions says 'loss': no game ever managed to
- * report a win, and nothing stopped a modified client from claiming one.
- *
- * Rules:
- *   • 2+ seated players → highest score wins; a tie for top is a draw.
- *   • solo + objective game → win if the board was cleared, else loss.
- *   • solo + score-attack  → 'incomplete' (counts as played, not as win/loss).
- */
-function decideResult({ seated, myUserId, myScore, gameSlug }) {
-  if (seated.length > 1) {
-    const best = Math.max(...seated.map(p => cap(p.score)));
-    if (myScore < best) return "loss";
-    const tiedAtTop = seated.filter(p => cap(p.score) === best).length;
-    return tiedAtTop > 1 ? "draw" : "win";
-  }
-  const needed = OBJECTIVE_PAIRS[gameSlug];
-  if (!needed) return "incomplete";
-  const me = seated.find(p => Number(p.user_id) === Number(myUserId));
-  return (Number(me?.pairs_matched) || 0) >= needed ? "win" : "loss";
-}
 
 // Record the result for EVERY seated player, from one snapshot of the scores.
 //
@@ -57,13 +20,14 @@ async function settleRoom(room, seated) {
     "SELECT user_id FROM game_sessions WHERE room_id = ?", [room.id]
   );
   const recorded = new Set(done.map((r) => Number(r.user_id)));
+  const outcomes = resultsFor(room, seated);
   const results = [];
 
   for (const p of seated) {
     const userId = Number(p.user_id);
     const score = cap(p.score);
-    const result = decideResult({ seated, myUserId: userId, myScore: score, gameSlug: room.game_slug });
-    results.push({ user_id: userId, score, result });
+    const result = outcomes.get(userId) || "incomplete";
+    results.push({ user_id: userId, team: p.team ?? null, score, result });
     if (recorded.has(userId)) continue;
 
     // The unique key on (room_id, user_id) is the real guard: if two players
@@ -136,7 +100,7 @@ router.post("/update", verifyToken, async (req, res, next) => {
 
     // 1. Find the room and confirm the user was a player in it.
     const [rooms] = await db.execute(
-      `SELECT r.id, r.status, r.game_type_id, gt.slug AS game_slug
+      `SELECT r.id, r.status, r.game_type_id, r.mode, gt.slug AS game_slug
        FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id
        WHERE r.room_code = ?`,
       [room_code.toUpperCase()]
@@ -155,7 +119,7 @@ router.post("/update", verifyToken, async (req, res, next) => {
     // Pull the whole table at once — we need every seated player's score to
     // work out who actually won.
     const [allPlayers] = await db.execute(
-      "SELECT user_id, score, pairs_matched, moves, is_spectator FROM room_players WHERE room_id = ?",
+      "SELECT user_id, team, score, pairs_matched, moves, is_spectator FROM room_players WHERE room_id = ?",
       [room.id]
     );
     const mine = allPlayers.find(p => Number(p.user_id) === Number(req.user.id));

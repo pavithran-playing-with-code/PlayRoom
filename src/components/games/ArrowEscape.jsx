@@ -136,6 +136,7 @@ export default function ArrowEscape(props) {
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={oppList}
+        teams={eng.teams}
         onQuit={eng.endMatch}
       >
         {({ w, h }) => (isSpectator ? (

@@ -56,6 +56,9 @@ CREATE TABLE IF NOT EXISTS rooms (
   -- who finishes early banks a big completion bonus, so finishing first
   -- naturally yields the top score).
   duration_seconds INT      NOT NULL DEFAULT 120,
+  -- 'free': every player for themselves, ranked by their own score.
+  -- 'teams': players pick a side and the sides are ranked by total.
+  mode         ENUM('free','teams') NOT NULL DEFAULT 'free',
   status       ENUM('waiting','in_progress','finished','abandoned')
                             NOT NULL DEFAULT 'waiting',
   created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -78,6 +81,8 @@ CREATE TABLE IF NOT EXISTS room_players (
   user_id       INT UNSIGNED NOT NULL,
   is_host       TINYINT(1)   NOT NULL DEFAULT 0,
   is_spectator  TINYINT(1)   NOT NULL DEFAULT 0,
+  -- Which side they're on in a teams room, 1-4. NULL in a free-for-all.
+  team          TINYINT      NULL DEFAULT NULL,
   score         INT          NOT NULL DEFAULT 0,
   pairs_matched INT          NOT NULL DEFAULT 0,
   moves         INT          NOT NULL DEFAULT 0,
@@ -187,6 +192,18 @@ SET @sql = (SELECT IF(COUNT(*) > 0, 'DO 0',
   'ALTER TABLE `users` ADD COLUMN last_seen_at TIMESTAMP NULL DEFAULT NULL AFTER created_at')
   FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'last_seen_at');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = (SELECT IF(COUNT(*) > 0, 'DO 0',
+  'ALTER TABLE `rooms` ADD COLUMN mode ENUM(''free'',''teams'') NOT NULL DEFAULT ''free'' AFTER duration_seconds')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rooms' AND COLUMN_NAME = 'mode');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @sql = (SELECT IF(COUNT(*) > 0, 'DO 0',
+  'ALTER TABLE `room_players` ADD COLUMN team TINYINT NULL DEFAULT NULL AFTER is_spectator')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'room_players' AND COLUMN_NAME = 'team');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ── Game catalog ─────────────────────────────────────────────────────────────

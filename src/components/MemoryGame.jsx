@@ -144,6 +144,7 @@ export default function MemoryGame({
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={Object.values(eng.opponents)}
+        teams={eng.teams}
         onQuit={eng.endMatch}
       >
         {({ w, h }) => {

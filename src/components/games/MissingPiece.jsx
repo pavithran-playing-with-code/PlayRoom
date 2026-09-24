@@ -150,6 +150,7 @@ export default function MissingPiece(props) {
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={oppList}
+        teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
       >

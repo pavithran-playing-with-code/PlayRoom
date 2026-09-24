@@ -595,6 +595,39 @@ input::-ms-reveal,input::-ms-clear{display:none}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .press.fdock-watch{margin-left:auto;flex:none;padding:6px 11px;font-size:.8rem;--lift:3px}
 
+/* Team picker in the waiting room. Two across on a phone, four on a laptop —
+   a side is never narrower than a name. */
+.teampick{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:10px;margin-bottom:18px}
+.teamcol{padding:0;overflow:hidden;display:flex;flex-direction:column;gap:8px;
+  padding-bottom:10px;--lift:4px}
+.teamcol.mine{box-shadow:0 var(--lift) 0 var(--ink),0 0 0 3px var(--ink) inset}
+.teamhead{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 12px;font-family:Fredoka,sans-serif;font-weight:700;
+  border-bottom:3px solid var(--ink)}
+/* The count is the whole point of showing it, so it reads at a glance: a side
+   that can't legally start is flagged before the host finds out on tap. */
+.teamhead .teamok,.teamhead .teamshort{min-width:24px;text-align:center;
+  border:2px solid var(--ink);border-radius:999px;padding:0 7px;font-size:.85rem;background:#fff}
+.teamhead .teamshort{background:var(--paper2);opacity:.75}
+.teamlist{display:flex;flex-wrap:wrap;gap:5px;padding:0 10px;min-height:28px}
+.teamcol .press{margin:0 10px}
+
+/* Team totals above the board. The total is the number that decides the match,
+   so it is the biggest thing in the chip; the size sits beside it because a
+   bigger side is an advantage under a straight total. */
+.gamerow.teamrow{gap:8px}
+.teamscore{flex:none;display:flex;align-items:center;gap:7px;padding:5px 11px;
+  border:3px solid var(--ink);border-radius:999px;box-shadow:0 3px 0 var(--ink);
+  font-family:Fredoka,sans-serif;font-weight:600;font-size:.86rem;white-space:nowrap}
+.teamscore.mine{box-shadow:0 3px 0 var(--ink),0 0 0 2px var(--ink) inset}
+.teamscore .ts-total{font-size:1.02rem;font-weight:700}
+.teamscore .ts-size{font-size:.72rem;opacity:.7}
+
+/* Final team table on the results screen. */
+.teamfinal{gap:11px;padding:10px 12px;border:3px solid var(--ink);border-radius:16px;
+  box-shadow:0 3px 0 var(--ink)}
+
 /* Spectator's row of players to watch: pinned above the game's own controls,
    scrollable sideways when a room is full. */
 .spec-switch{position:fixed;left:0;right:0;bottom:calc(8px + env(safe-area-inset-bottom));

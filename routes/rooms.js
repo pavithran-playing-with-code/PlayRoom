@@ -74,6 +74,12 @@ function genCode(len = 6) {
   return code;
 }
 
+// Team play. Four sides is plenty for eight seats, and a side of one is just a
+// player with extra steps, so two apiece is the floor.
+const MAX_TEAMS = 4;
+const MIN_PER_TEAM = 2;
+const MIN_TEAM_PLAYERS = MIN_PER_TEAM * 2;
+
 const ROOM_CODE_RE = /^[A-Z0-9]{4,8}$/;
 const GAME_SLUG_RE = /^[a-z0-9_-]{1,40}$/;
 function normCode(raw) {
@@ -126,7 +132,8 @@ router.get("/", verifyToken, async (req, res, next) => {
 // POST /api/rooms — create room
 router.post("/", verifyToken, async (req, res, next) => {
   try {
-    const { game_slug, max_players = 2, is_private = false, duration_seconds = 120 } = req.body;
+    const { game_slug, max_players = 2, is_private = false, duration_seconds = 120,
+            mode = "free" } = req.body;
     if (typeof game_slug !== "string" || !GAME_SLUG_RE.test(game_slug))
       return res.status(400).json({ success: false, message: "Invalid game_slug." });
 
@@ -157,17 +164,25 @@ router.post("/", verifyToken, async (req, res, next) => {
       if (!ex.length) break;
     } while (++tries < 10);
 
+    // Teams need two sides of two, so a teams room has to seat at least four.
+    const roomMode = mode === "teams" ? "teams" : "free";
+    if (roomMode === "teams" && cap < MIN_TEAM_PLAYERS)
+      return res.status(400).json({
+        success: false,
+        message: `A team match needs room for at least ${MIN_TEAM_PLAYERS} players.`,
+      });
+
     const seed = Math.floor(Math.random() * 1_000_000);
     const [result] = await db.execute(
-      "INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed, duration_seconds, last_activity_at) VALUES (?,?,?,?,?,?,?,NOW())",
-      [code, gt[0].id, req.user.id, cap, priv, seed, duration]
+      "INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed, duration_seconds, mode, last_activity_at) VALUES (?,?,?,?,?,?,?,?,NOW())",
+      [code, gt[0].id, req.user.id, cap, priv, seed, duration, roomMode]
     );
     const roomId = result.insertId;
     await db.execute(
       "INSERT INTO room_players (room_id, user_id, is_host) VALUES (?,?,1)",
       [roomId, req.user.id]
     );
-    res.status(201).json({ success: true, room: { id: roomId, room_code: code, seed, max_players: cap, duration_seconds: duration } });
+    res.status(201).json({ success: true, room: { id: roomId, room_code: code, seed, max_players: cap, duration_seconds: duration, mode: roomMode } });
   } catch (err) { next(err); }
 });
 
@@ -233,7 +248,7 @@ router.get("/:code", verifyToken, async (req, res, next) => {
     }
 
     const [rooms] = await db.execute(`
-      SELECT r.id, r.room_code, r.status, r.max_players, r.seed, r.duration_seconds,
+      SELECT r.id, r.room_code, r.status, r.max_players, r.seed, r.duration_seconds, r.mode,
              r.started_at, r.created_at,
              gt.slug AS game_slug, gt.name AS game_name, gt.icon AS game_icon,
              u.username AS host_name
@@ -246,7 +261,7 @@ router.get("/:code", verifyToken, async (req, res, next) => {
 
     const room = rooms[0];
     const [players] = await db.execute(`
-      SELECT rp.is_host, rp.is_spectator, rp.score, rp.joined_at,
+      SELECT rp.is_host, rp.is_spectator, rp.team, rp.score, rp.joined_at,
              u.id AS user_id, u.username, u.avatar
       FROM room_players rp JOIN users u ON u.id = rp.user_id
       WHERE rp.room_id = ?
@@ -260,7 +275,7 @@ router.get("/:code", verifyToken, async (req, res, next) => {
 router.patch("/:code/start", verifyToken, async (req, res, next) => {
   try {
     const [rooms] = await db.execute(
-      "SELECT id, host_id, status, max_players FROM rooms WHERE room_code = ?",
+      "SELECT id, host_id, status, max_players, mode FROM rooms WHERE room_code = ?",
       [req.params.code]
     );
     if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
@@ -282,6 +297,31 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
         success: false,
         message: "Waiting for at least one more player to join.",
       });
+
+    // A team match needs everyone on a side, at least two sides, and nobody
+    // stranded on their own — a team of one is just a player, and would be
+    // beaten by any pair on the straight total this mode scores by.
+    if (room.mode === "teams") {
+      const [sides] = await db.execute(
+        `SELECT team, COUNT(*) AS n FROM room_players
+          WHERE room_id = ? AND is_spectator = 0 GROUP BY team`, [room.id]
+      );
+      const unplaced = sides.find(t => t.team === null);
+      if (unplaced)
+        return res.status(409).json({
+          success: false,
+          message: `${unplaced.n} player${unplaced.n > 1 ? "s haven't" : " hasn't"} picked a team yet.`,
+        });
+      const placed = sides.filter(t => t.team !== null);
+      if (placed.length < 2)
+        return res.status(409).json({ success: false, message: "A team match needs at least two teams." });
+      const short = placed.find(t => Number(t.n) < MIN_PER_TEAM);
+      if (short)
+        return res.status(409).json({
+          success: false,
+          message: `Every team needs at least ${MIN_PER_TEAM} players — team ${short.team} has ${short.n}.`,
+        });
+    }
 
     // started_at is the anchor the server measures the match deadline from.
     await db.execute(
@@ -327,6 +367,37 @@ function sanitizeState(raw) {
     return JSON.stringify({ matched: cleaned });
   } catch { return null; }
 }
+
+// PATCH /:code/team — choose a side. Players pick their own, and can keep
+// changing until the host starts.
+router.patch("/:code/team", verifyToken, async (req, res, next) => {
+  try {
+    const team = req.body.team === null ? null : Number(req.body.team);
+    if (team !== null && (!Number.isInteger(team) || team < 1 || team > MAX_TEAMS))
+      return res.status(400).json({ success: false, message: `Team must be 1-${MAX_TEAMS}.` });
+
+    const [rooms] = await db.execute(
+      "SELECT id, status, mode FROM rooms WHERE room_code = ?", [req.params.code]
+    );
+    if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
+    const room = rooms[0];
+    if (room.mode !== "teams")
+      return res.status(409).json({ success: false, message: "This room isn't a team match." });
+    if (room.status !== "waiting")
+      return res.status(409).json({ success: false, message: "The match has already started." });
+
+    const [result] = await db.execute(
+      "UPDATE room_players SET team = ? WHERE room_id = ? AND user_id = ? AND is_spectator = 0",
+      [team, room.id, req.user.id]
+    );
+    if (!result.affectedRows)
+      return res.status(403).json({ success: false, message: "You're not seated in this room." });
+
+    await touchRoom(room.id);
+    push(req, req.params.code, "room:players", { code: req.params.code, team: { user_id: req.user.id, team } });
+    res.json({ success: true, team });
+  } catch (err) { next(err); }
+});
 
 router.patch("/:code/score", verifyToken, async (req, res, next) => {
   try {
@@ -405,13 +476,13 @@ router.get("/:code/poll", verifyToken, async (req, res, next) => {
     }
 
     const [rooms] = await db.execute(
-      "SELECT id, status, seed, duration_seconds, started_at FROM rooms WHERE room_code = ?",
+      "SELECT id, status, seed, duration_seconds, started_at, mode FROM rooms WHERE room_code = ?",
       [req.params.code]
     );
     if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
 
     const [players] = await db.execute(`
-      SELECT rp.is_host, rp.is_spectator, rp.score, rp.pairs_matched, rp.moves, rp.game_state,
+      SELECT rp.is_host, rp.is_spectator, rp.team, rp.score, rp.pairs_matched, rp.moves, rp.game_state,
              u.id AS user_id, u.username, u.avatar
       FROM room_players rp JOIN users u ON u.id = rp.user_id
       WHERE rp.room_id = ?
@@ -437,6 +508,7 @@ router.get("/:code/poll", verifyToken, async (req, res, next) => {
       status: rooms[0].status,
       seed: rooms[0].seed,
       duration_seconds: rooms[0].duration_seconds,
+      mode: rooms[0].mode,
       started_at: rooms[0].started_at,
       server_now: new Date().toISOString(),  // lets clients anchor the clock to server time
       players: visiblePlayers,

@@ -10,12 +10,15 @@ import { confetti } from "../ui/FunLayer";
 
 const MEDAL = ["🥇", "🥈", "🥉"];
 
+const TEAM_NAMES = ["Red", "Yellow", "Blue", "Green"];
+const TEAM_COLOURS = ["var(--coral)", "var(--sun)", "var(--sky)", "var(--mint)"];
+
 export default function GameOver(props) {
   const { eng, me, onPlayAgain, extra = null } = props;
   const fromEng = eng ? {
     score: eng.score, won: eng.won, draw: eng.draw, rank: eng.rank,
     finished: eng.finished, closed: eng.closed, isOnline: eng.isOnline,
-    opponents: Object.values(eng.opponents), onExit: eng.endMatch,
+    opponents: Object.values(eng.opponents), teams: eng.teams, onExit: eng.endMatch,
   } : {};
   const {
     score = 0,
@@ -26,12 +29,23 @@ export default function GameOver(props) {
     closed = false,         // the room shut mid-match
     isOnline = false,
     opponents = [],         // [{ username, avatar, score }]
+    teams = null,           // [{ team, total, members, mine }] in a team room
     onExit,
   } = { ...props, ...fromEng };
 
   const [leaving, setLeaving] = useState(false);
   const multi = isOnline && opponents.length > 0;
-  const celebrate = !closed && (won || finished);
+
+  // In a team room the match is decided by the sides, so the headline follows
+  // your side — a player can top the scoreboard and still be on the losing
+  // team, and being told "You win!" in that moment would be a lie.
+  const sides = teams && teams.length > 1 ? teams : null;
+  const myTeam = sides?.find((t) => t.mine) || null;
+  const teamWon  = !!(sides && myTeam && myTeam.total === sides[0].total && sides[0].total > sides[1].total);
+  const teamDraw = !!(sides && myTeam && myTeam.total === sides[0].total && sides[0].total === sides[1].total);
+  const iWon = sides ? teamWon : won;
+
+  const celebrate = !closed && (iWon || (!sides && finished));
 
   // Party on the way in — but only if there's something to celebrate.
   useEffect(() => {
@@ -44,6 +58,10 @@ export default function GameOver(props) {
   }, [celebrate]);
 
   const headline = closed ? "🚪 Match closed"
+    : sides
+      ? (teamWon ? `🏆 ${TEAM_NAMES[(myTeam.team - 1) % TEAM_NAMES.length]} wins!`
+        : teamDraw ? "🤝 It's a draw!"
+        : "Good game!")
     : multi
       ? (finished ? "🎉 Board cleared!"
         : won ? "🏆 You win!"
@@ -52,6 +70,7 @@ export default function GameOver(props) {
       : (finished ? "🎉 Cleared it!" : "⏰ Time's up!");
 
   const icon = closed ? "🚪"
+    : sides ? (teamWon ? "🏆" : teamDraw ? "🤝" : "⚔️")
     : multi ? (won ? "🏆" : draw ? "🤝" : finished ? "🎉" : "🎮")
     : finished ? "🎉" : "⏰";
 
@@ -79,6 +98,28 @@ export default function GameOver(props) {
           Score: <strong>{Number(score).toLocaleString()}</strong>
           {extra ? <> · {extra}</> : null}
         </p>
+
+        {sides && (
+          <div className="stack" style={{ gap: 8, marginBottom: 18, textAlign: "left" }}>
+            <div className="muted eyebrow">Final team scores</div>
+            {sides.map((t, i) => (
+              <div key={t.team} className="row teamfinal"
+                style={{ background: TEAM_COLOURS[(t.team - 1) % TEAM_COLOURS.length] }}>
+                <span className="rank" style={{ width: 32, height: 32, background: "#fff" }}>
+                  {i === 0 ? "🏆" : i + 1}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <strong>{TEAM_NAMES[(t.team - 1) % TEAM_NAMES.length]}</strong>
+                  {t.mine && <span className="muted"> · your team</span>}
+                  <span className="muted" style={{ display: "block", fontSize: ".78rem" }}>
+                    {t.members} player{t.members === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <strong>{Number(t.total).toLocaleString()}</strong>
+              </div>
+            ))}
+          </div>
+        )}
 
         {multi && (
           <div className="stack" style={{ gap: 10, marginBottom: 22, textAlign: "left" }}>

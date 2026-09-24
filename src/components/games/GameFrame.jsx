@@ -21,6 +21,10 @@ const guess = () => (typeof window === "undefined"
 
 const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+// Matches the waiting room's team colours and names.
+const TEAM_NAMES = ["Red", "Yellow", "Blue", "Green"];
+const TEAM_COLOURS = ["var(--coral)", "var(--sun)", "var(--sky)", "var(--mint)"];
+
 export default function GameFrame({
   gameName,
   badge,
@@ -29,6 +33,7 @@ export default function GameFrame({
   stats = [],                 // [{ label, value, urgent }]
   timer,                      // { value, max } seconds — renders the ring
   opponents = [],             // [{ user_id, username, avatar, score }]
+  teams = null,               // [{ team, total, members, mine }] in a team room, else null
   message = null,             // { text, type }
   controls = null,            // node
   onQuit,
@@ -106,6 +111,26 @@ export default function GameFrame({
           </button>
         </div>
       </div>
+
+      {/* In a team room the sides come first: your own score matters, but the
+          number that decides the match is your side's total. Sizes are shown
+          because a bigger side is an advantage under a straight total. */}
+      {teams && teams.length > 0 && (
+        <div className="gamerow teamrow">
+          {teams.map((t, i) => (
+            <div key={t.team} className={`teamscore${t.mine ? " mine" : ""}`}
+              style={{ background: TEAM_COLOURS[(t.team - 1) % TEAM_COLOURS.length] }}>
+              <span className="ts-name">
+                {i === 0 && teams.length > 1 && teams[0].total > teams[1].total ? "👑 " : ""}
+                {TEAM_NAMES[(t.team - 1) % TEAM_NAMES.length]}
+                {t.mine && " (you)"}
+              </span>
+              <span className="ts-total">{Number(t.total).toLocaleString()}</span>
+              <span className="ts-size">{t.members}p</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Opponent strip: a single row that swipes sideways on a phone */}
       {opponents.length > 0 && (

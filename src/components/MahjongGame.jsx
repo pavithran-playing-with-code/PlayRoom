@@ -357,6 +357,7 @@ export default function MahjongGame({
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={Object.values(eng.opponents)}
+        teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
         controls={!isSpectator ? (

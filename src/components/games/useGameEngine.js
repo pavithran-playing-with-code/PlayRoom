@@ -11,7 +11,7 @@
 // A game owns its play logic and calls addScore()/addMove()/finish(); the
 // engine owns time, sync and who-won.
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { api } from "../../utils/api";
 import { useSocket } from "../../utils/SocketContext";
 import { finalSync } from "./finalSync";
@@ -173,6 +173,31 @@ export default function useGameEngine({
     setGameOver(true);
   }, []);
 
+  // ── Team standings ──
+  // Only in a room playing as sides. Built from the same numbers as the
+  // opponent strip — my own live score plus whatever the others last synced —
+  // so the two can never disagree on screen.
+  //
+  // Sides are ranked on the straight total, which does favour a bigger side.
+  // That is the rule this mode is played by; the waiting room shows sizes so
+  // it is visible rather than mysterious.
+  const teams = useMemo(() => {
+    const seats = (players || []).filter((p) => !p.is_spectator);
+    if (!seats.some((p) => p.team != null)) return null;
+    const scoreOf = (id) => (Number(id) === myId ? score : Number(opponents[Number(id)]?.score) || 0);
+    const rows = new Map();
+    for (const p of seats) {
+      if (p.team == null) continue;
+      const n = Number(p.team);
+      const row = rows.get(n) || { team: n, total: 0, members: 0, mine: false };
+      row.total += scoreOf(p.user_id);
+      row.members += 1;
+      if (Number(p.user_id) === myId) row.mine = true;
+      rows.set(n, row);
+    }
+    return [...rows.values()].sort((a, b) => b.total - a.total || a.team - b.team);
+  }, [players, opponents, score, myId]);
+
   // ── Outcome, for DISPLAY ONLY ──
   // The authoritative result is computed by the server in
   // POST /api/leaderboard/update from the stored scores.
@@ -209,6 +234,7 @@ export default function useGameEngine({
     moves, addMove,
     gameOver, finished, closed, finish,
     opponents, oppScores, won, draw, rank,
+    teams,
     endMatch,
   };
 }

@@ -285,6 +285,7 @@ export default function FlappyDash(props) {
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={oppList}
+        teams={eng.teams}
         onQuit={eng.endMatch}
         controls={!isSpectator ? (
           <button className="press p-sun fl-btn" onPointerDown={(e) => { e.preventDefault(); tap(); }}

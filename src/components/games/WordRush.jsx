@@ -160,6 +160,7 @@ export default function WordRush(props) {
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={oppList}
+        teams={eng.teams}
         onQuit={eng.endMatch}
         controls={!isSpectator ? (
           <>

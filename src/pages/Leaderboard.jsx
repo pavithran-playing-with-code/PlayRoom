@@ -8,6 +8,13 @@ const MEDAL = ["🥇", "🥈", "🥉"];
 // Podium reading order is 2nd, 1st, 3rd — so the tallest block sits in the middle.
 const PODIUM_HEIGHTS = [96, 132, 74];
 
+// Wins are what the board is ordered by, so wins are the number people see.
+// Points moved to the small print: they only break ties.
+const wins = (row) => {
+  const n = Number(row?.games_won) || 0;
+  return `${n} ${n === 1 ? "win" : "wins"}`;
+};
+
 export default function Leaderboard() {
   const { user } = useAuth();
   const [board, setBoard] = useState([]);
@@ -53,7 +60,8 @@ export default function Leaderboard() {
                     <div key={p.user_id} style={{ flex: 1, maxWidth: 150, textAlign: "center" }}>
                       <Avatar emoji={p.avatar} size={place === 0 ? 76 : 58} seed={p.user_id} />
                       <div className="display" style={{ marginTop: 8, fontSize: "1.05rem" }}>{p.username}</div>
-                      <div style={{ fontSize: ".9rem" }}>{Number(p.total_score).toLocaleString()}</div>
+                      <div className="display" style={{ fontSize: ".95rem" }}>{wins(p)}</div>
+                      <div className="muted" style={{ fontSize: ".75rem" }}>{Number(p.total_score).toLocaleString()} pts</div>
                       <div className="step" style={{ height: PODIUM_HEIGHTS[orderIdx], background: col, marginTop: 10 }}>
                         {MEDAL[place]}
                       </div>
@@ -71,11 +79,11 @@ export default function Leaderboard() {
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span className="display" style={{ display: "block", fontSize: "1.1rem" }}>Your rank</span>
                   <span className="muted" style={{ fontSize: ".85rem" }}>
-                    {myRow.games_played} games · {myRow.win_rate}% win rate
+                    {myRow.games_played} games · {Number(myRow.total_score).toLocaleString()} pts
                   </span>
                 </span>
-                <span className="display" style={{ fontSize: "1.25rem" }}>
-                  {Number(myRow.total_score).toLocaleString()}
+                <span className="display" style={{ fontSize: "1.25rem", whiteSpace: "nowrap" }}>
+                  {wins(myRow)}
                 </span>
               </div>
             )}
@@ -97,11 +105,11 @@ export default function Leaderboard() {
                         {row.username}{isMe && " (you)"}
                       </span>
                       <span className="muted" style={{ fontSize: ".85rem" }}>
-                        {row.games_played} games played · {row.win_rate}% wins
+                        {row.games_played} games · {row.win_rate}% · {Number(row.total_score).toLocaleString()} pts
                       </span>
                     </span>
-                    <span className="display" style={{ fontSize: "1.25rem" }}>
-                      {Number(row.total_score).toLocaleString()}
+                    <span className="display" style={{ fontSize: "1.25rem", whiteSpace: "nowrap" }}>
+                      {wins(row)}
                     </span>
                   </div>
                 );

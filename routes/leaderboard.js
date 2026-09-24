@@ -104,12 +104,18 @@ async function settleRoom(room, seated) {
 // GET /api/leaderboard
 router.get("/", async (req, res, next) => {
   try {
+    // Ranked on matches won, with lifetime points only breaking ties.
+    //
+    // It used to rank on total_score alone, which is a count of how much you
+    // have played more than how well: someone could lose to a friend and stay
+    // above them on the board, because points never come back off. Beating
+    // people is what moves you now.
     const [rows] = await db.execute(`
       SELECT l.user_id, l.username, l.avatar,
              l.total_score, l.games_played, l.games_won, l.win_rate,
-             RANK() OVER (ORDER BY l.total_score DESC) AS \`rank\`
+             RANK() OVER (ORDER BY l.games_won DESC, l.total_score DESC) AS \`rank\`
       FROM leaderboard l
-      ORDER BY l.total_score DESC
+      ORDER BY l.games_won DESC, l.total_score DESC
       LIMIT 50
     `);
     res.json({ success: true, leaderboard: rows });

@@ -2,6 +2,7 @@
 const router = require("express").Router();
 const db     = require("../config/db");
 const { settleIfExpired } = require("../config/matchClock");
+const { recordResults } = require("../config/recordResults");
 const { verifyToken } = require("../middleware/auth");
 const { emitRoom, emitUser, tellFriends, isOnline } = require("../config/socket");
 
@@ -245,6 +246,7 @@ router.get("/:code", verifyToken, async (req, res, next) => {
     if (pre.length && await settleIfExpired(pre[0].id)) {
       push(req, req.params.code, "room:ended", { code: req.params.code });
       await announcePlaying(req, pre[0].id, req.params.code, false);
+      await recordResults(pre[0].id);
     }
 
     const [rooms] = await db.execute(`
@@ -417,6 +419,7 @@ router.patch("/:code/score", verifyToken, async (req, res, next) => {
     if (await settleIfExpired(roomId)) {
       push(req, req.params.code, "room:ended", { code: req.params.code });
       await announcePlaying(req, roomId, req.params.code, false);
+      await recordResults(roomId);
     }
 
     // One guarded write: the join enforces "match is actually running", the
@@ -473,6 +476,7 @@ router.get("/:code/poll", verifyToken, async (req, res, next) => {
     if (await settleIfExpired(pre[0].id)) {
       push(req, req.params.code, "room:ended", { code: req.params.code });
       await announcePlaying(req, pre[0].id, req.params.code, false);
+      await recordResults(pre[0].id);
     }
 
     const [rooms] = await db.execute(

@@ -21,6 +21,7 @@ const path = require("path");
 
 const errorHandler = require("./middleware/errorHandler");
 const db = require("./config/db");
+const { recordResults } = require("./config/recordResults");
 const { initSocket } = require("./config/socket");
 const { corsOptions, assertProductionOrigins } = require("./config/cors");
 
@@ -243,6 +244,25 @@ async function sweepStaleRooms() {
     );
     if (w.affectedRows || p.affectedRows || o.affectedRows)
       console.log(`🧹 Rooms swept: ${w.affectedRows} idle, ${p.affectedRows} finished, ${o.affectedRows} orphaned`);
+
+    // Last resort for the record books. A match is normally written down the
+    // moment a poll notices the clock has stopped, but if everybody closed the
+    // tab at the final whistle nobody ever polls again. Catch those here rather
+    // than lose the match.
+    const [missed] = await db.execute(
+      `SELECT r.id FROM rooms r
+         JOIN room_players rp ON rp.room_id = r.id AND rp.is_spectator = 0
+        WHERE r.status = 'finished'
+          AND r.finished_at > NOW() - INTERVAL 1 DAY
+          AND NOT EXISTS (SELECT 1 FROM game_sessions gs WHERE gs.room_id = r.id)
+        GROUP BY r.id
+        LIMIT 50`
+    );
+    for (const row of missed) {
+      try { await recordResults(row.id); }
+      catch (e) { console.error(`Could not record room ${row.id}:`, e.message); }
+    }
+    if (missed.length) console.log(`🏅 Recorded ${missed.length} finished match(es) nobody reported`);
   } catch (err) {
     console.error("Stale-room sweep failed:", err.message);
   }

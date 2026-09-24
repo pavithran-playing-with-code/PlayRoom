@@ -2,68 +2,9 @@
 const router = require("express").Router();
 const db     = require("../config/db");
 const { settleIfExpired } = require("../config/matchClock");
-const { cap, resultsFor } = require("../config/matchResult");
+const { cap } = require("../config/matchResult");
+const { recordResults } = require("../config/recordResults");
 const { verifyToken } = require("../middleware/auth");
-
-// Record the result for EVERY seated player, from one snapshot of the scores.
-//
-// Each player used to record only themselves, whenever they happened to dismiss
-// the results screen. Two clients finishing at once would each read the table
-// before the other's final score had landed, and both would be written down as
-// the winner — which is how someone could lose a match and still climb the
-// board. Ranking everyone against the same numbers, once, makes that
-// impossible: there is exactly one snapshot and exactly one top score in it.
-//
-// Rows already present are left alone, so this stays safe to call repeatedly.
-async function settleRoom(room, seated) {
-  const [done] = await db.execute(
-    "SELECT user_id FROM game_sessions WHERE room_id = ?", [room.id]
-  );
-  const recorded = new Set(done.map((r) => Number(r.user_id)));
-  const outcomes = resultsFor(room, seated);
-  const results = [];
-
-  for (const p of seated) {
-    const userId = Number(p.user_id);
-    const score = cap(p.score);
-    const result = outcomes.get(userId) || "incomplete";
-    results.push({ user_id: userId, team: p.team ?? null, score, result });
-    if (recorded.has(userId)) continue;
-
-    // The unique key on (room_id, user_id) is the real guard: if two players
-    // call this at the same instant, the loser of that race is ignored rather
-    // than double-counting the match.
-    const [ins] = await db.execute(
-      `INSERT IGNORE INTO game_sessions (room_id, user_id, game_type, score, pairs_matched, moves, result)
-       VALUES (?,?,?,?,?,?,?)`,
-      [room.id, userId, room.game_slug, score, p.pairs_matched, p.moves, result]
-    );
-    if (!ins.affectedRows) continue;             // somebody else got there first
-
-    await db.execute(
-      `UPDATE users SET
-         total_score  = total_score  + ?,
-         games_played = games_played + 1,
-         games_won    = games_won    + ?
-       WHERE id = ?`,
-      [score, result === "win" ? 1 : 0, userId]
-    );
-    await db.execute(`
-      INSERT INTO leaderboard (user_id, username, avatar, total_score, games_played, games_won, win_rate)
-      SELECT id, username, avatar, total_score, games_played, games_won,
-             IF(games_played > 0, ROUND(games_won / games_played * 100, 2), 0)
-      FROM users WHERE id = ?
-      ON DUPLICATE KEY UPDATE
-        username     = VALUES(username),
-        avatar       = VALUES(avatar),
-        total_score  = VALUES(total_score),
-        games_played = VALUES(games_played),
-        games_won    = VALUES(games_won),
-        win_rate     = VALUES(win_rate)
-    `, [userId]);
-  }
-  return results;
-}
 
 // GET /api/leaderboard
 router.get("/", async (req, res, next) => {
@@ -138,7 +79,7 @@ router.post("/update", verifyToken, async (req, res, next) => {
       return res.json({ success: true, pending: true, message: "Match still running." });
 
     // 3. Rank and record every seated player together, from one snapshot.
-    const results = await settleRoom(room, seated);
+    const results = await recordResults(room.id);
     const me = results.find(r => r.user_id === Number(req.user.id));
 
     res.json({

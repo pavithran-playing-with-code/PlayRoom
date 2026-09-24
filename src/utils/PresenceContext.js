@@ -119,9 +119,11 @@ export function PresenceProvider({ children }) {
           ...f,
           online,
           last_seen: presence[f.id]?.last_seen || null,
-          // Somebody who has gone offline is not still mid-match, whatever the
-          // last update we saw said.
-          playing: online ? (presence[f.id]?.playing ?? null) : null,
+          // Not gated on `online`. The server only reports a match that is
+          // genuinely running and joinable, and a socket that drops for a
+          // moment would otherwise hide the Watch button from under someone
+          // who is very much still playing.
+          playing: presence[f.id]?.playing ?? null,
         };
       })
       .sort(byPresence),

@@ -728,10 +728,12 @@ input::-ms-reveal,input::-ms-clear{display:none}
   box-shadow:0 5px 0 var(--ink);transition:background .2s}
 .sp-frame.done{background:var(--lime)}
 .sp-grid{display:grid;justify-content:center;touch-action:manipulation}
-/* the tiles you can actually slide are the bright ones */
-.press.sp-tile{padding:0;border-radius:14px;--lift:3px;background:#FFFDF6;color:var(--ink-soft);
+/* Every tile is the same colour: two colours read as two kinds of tile, and in
+   a sliding puzzle they are all the same kind. Which ones can move is said with
+   depth instead — the movable ones sit higher off the board. */
+.press.sp-tile{padding:0;border-radius:14px;--lift:3px;background:var(--sun);color:var(--ink);
   font-family:Fredoka,sans-serif;font-weight:600;-webkit-tap-highlight-color:transparent}
-.press.sp-tile.ready{background:var(--sun);color:var(--ink);--lift:5px}
+.press.sp-tile.ready{--lift:6px}
 .sp-gap{display:block}
 .sp-help{margin-top:8px;font-size:.8rem}
 

@@ -142,9 +142,40 @@ app.use("/api/",              limiter(600,  15, "Too many requests — please tr
   (req) => HAS_OWN_LIMIT.some((p) => req.originalUrl === p || req.originalUrl.startsWith(p + "/") || req.originalUrl.startsWith(p + "?"))));
 
 // ── Health check ──────────────────────────────────────────────────────────────
-app.get("/api/health", (_req, res) =>
-  res.json({ success: true, status: "OK", version: "1.0.0", timestamp: new Date().toISOString() })
-);
+// This touches the database on purpose, for two reasons.
+//
+// It used to answer {"status":"OK"} without asking anything, so during an hour
+// where every single game request returned 500 — the database had been powered
+// off and its hostname stopped resolving — this endpoint cheerfully reported
+// OK and the uptime monitor never noticed. A health check that cannot fail is
+// not a health check.
+//
+// And the monitor pings this every five minutes, so a real query here is also
+// what keeps a free-tier database from being powered off for inactivity in the
+// first place. The check and the cure are the same request.
+//
+// It still answers 200 when the database is down, with db:"down". Returning an
+// error status would make Render treat the service as unhealthy and restart it,
+// which during a database outage turns a bad minute into a restart loop.
+app.get("/api/health", async (_req, res) => {
+  let database = "down";
+  let detail = null;
+  try {
+    await db.query("SELECT 1");
+    database = "up";
+  } catch (err) {
+    detail = err.code || err.message;
+    console.error("⚠️  Health check: database unreachable —", detail);
+  }
+  res.json({
+    success: true,
+    status: database === "up" ? "OK" : "DEGRADED",
+    db: database,
+    ...(detail ? { db_error: detail } : {}),
+    version: "1.0.0",
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // ── API routes ────────────────────────────────────────────────────────────────
 // Problems only the browser can see (page crashes, requests that never

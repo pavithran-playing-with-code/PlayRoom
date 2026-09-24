@@ -3,11 +3,12 @@ const router = require("express").Router();
 const db     = require("../config/db");
 const { settleIfExpired } = require("../config/matchClock");
 const { verifyToken } = require("../middleware/auth");
-const { emitRoom, emitUser, isOnline } = require("../config/socket");
+const { emitRoom, emitUser, tellFriends, isOnline } = require("../config/socket");
 
-// ── Match clock (server-authoritative) ────────────────────────────────────────
-// The countdown a player sees is client-side, so it can be paused, slowed or
-// ignored entirely. The server therefore owns the real deadline:
+// The match clock is server-authoritative and lives in config/matchClock.js:
+// the countdown a player sees is client-side, so it can be paused, slowed or
+// ignored entirely.
+
 // Keeps the stale-room sweep honest — see sweepStaleRooms() in server.js.
 async function touchRoom(roomId) {
   try {
@@ -23,6 +24,41 @@ async function answerInvite(roomId, userId) {
       [roomId, userId]
     );
   } catch { /* non-critical */ }
+}
+
+// Tell each player's friends that they have started or stopped playing, so a
+// "watch" button can appear and disappear as it happens. Without this the
+// friends list only learns on its next poll, a minute later — most of a match.
+//
+// Only `playing` is sent: PresenceContext leaves any field it isn't given
+// alone, so this can't accidentally mark someone offline.
+async function announcePlaying(req, roomId, code, playing) {
+  const io = req.app.get("io");
+  if (!io) return;
+  try {
+    const [seats] = await db.execute(
+      "SELECT user_id FROM room_players WHERE room_id = ? AND is_spectator = 0", [roomId]
+    );
+    let info = null;
+    if (playing) {
+      const [[g]] = await db.execute(
+        `SELECT gt.name AS game_name, gt.icon AS game_icon, r.duration_seconds, r.max_players
+           FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id WHERE r.id = ?`,
+        [roomId]
+      );
+      // A solo run can't be joined, so there is nothing to advertise.
+      if (!g || Number(g.max_players) <= 1) return;
+      info = {
+        room_code: code,
+        game_name: g.game_name,
+        game_icon: g.game_icon,
+        seconds_left: Number(g.duration_seconds) || 0,
+      };
+    }
+    for (const s of seats) {
+      tellFriends(io, Number(s.user_id), { userId: Number(s.user_id), playing: info });
+    }
+  } catch { /* best-effort: the next friends poll will correct it */ }
 }
 
 // Push a change to everyone subscribed to this room's socket channel. REST
@@ -191,8 +227,10 @@ router.get("/:code", verifyToken, async (req, res, next) => {
   try {
     // Same authority as /poll — never report a room as live past its deadline.
     const [pre] = await db.execute("SELECT id FROM rooms WHERE room_code = ?", [req.params.code]);
-    if (pre.length && await settleIfExpired(pre[0].id))
+    if (pre.length && await settleIfExpired(pre[0].id)) {
       push(req, req.params.code, "room:ended", { code: req.params.code });
+      await announcePlaying(req, pre[0].id, req.params.code, false);
+    }
 
     const [rooms] = await db.execute(`
       SELECT r.id, r.room_code, r.status, r.max_players, r.seed, r.duration_seconds,
@@ -251,6 +289,7 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
       [room.id]
     );
     push(req, req.params.code, "room:started", { code: req.params.code });
+    await announcePlaying(req, room.id, req.params.code, true);
     res.json({ success: true, message: "Game started!" });
   } catch (err) { next(err); }
 });
@@ -304,7 +343,10 @@ router.patch("/:code/score", verifyToken, async (req, res, next) => {
 
     // End the match first if its clock has run out, so the write below is
     // rejected by the status guard rather than landing after the deadline.
-    if (await settleIfExpired(roomId)) push(req, req.params.code, "room:ended", { code: req.params.code });
+    if (await settleIfExpired(roomId)) {
+      push(req, req.params.code, "room:ended", { code: req.params.code });
+      await announcePlaying(req, roomId, req.params.code, false);
+    }
 
     // One guarded write: the join enforces "match is actually running", the
     // WHERE enforces "you are a seated player in it".
@@ -357,7 +399,10 @@ router.get("/:code/poll", verifyToken, async (req, res, next) => {
 
     // Expire the match before reporting status, so every client learns the
     // game is over from the same authority instead of its own local clock.
-    if (await settleIfExpired(pre[0].id)) push(req, req.params.code, "room:ended", { code: req.params.code });
+    if (await settleIfExpired(pre[0].id)) {
+      push(req, req.params.code, "room:ended", { code: req.params.code });
+      await announcePlaying(req, pre[0].id, req.params.code, false);
+    }
 
     const [rooms] = await db.execute(
       "SELECT id, status, seed, duration_seconds, started_at FROM rooms WHERE room_code = ?",

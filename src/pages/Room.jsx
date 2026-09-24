@@ -1,6 +1,6 @@
 // src/pages/Room.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
 import { useSocket } from "../utils/SocketContext";
@@ -25,6 +25,11 @@ function Room() {
 
   const [room,      setRoom]      = useState(null);
   const [players,   setPlayers]   = useState([]);
+  // Who a spectator is watching. Seeded from ?watch=<id> when you arrive from
+  // a friend's Watch button, then whatever they pick from the switcher.
+  const [search] = useSearchParams();
+  const watchId = search.get("watch");
+  const [watching, setWatching] = useState(null);
   const [status,    setStatus]    = useState("waiting");
   const [seed,      setSeed]      = useState(null);
   const [duration,  setDuration]  = useState(null);
@@ -274,12 +279,15 @@ function Room() {
   // ── Room ended ────────────────────────────────────────────────────────────
   if ((status === "abandoned" || status === "finished") && !played) {
     return (
-      <Notice emoji={status === "abandoned" ? "🚪" : "🏁"}
-        title={status === "abandoned" ? "Room closed" : "Game finished"}>
+      <Notice emoji={status === "abandoned" ? "🚪" : isSpectator ? "👋" : "🏁"}
+        title={status === "abandoned" ? "Room closed"
+          : isSpectator ? "That's the end of the match" : "Game finished"}>
         <p className="muted" style={{ marginBottom: 22 }}>
-          {status === "abandoned" ? "The host left or the room was abandoned." : "This room's game has ended."}
+          {status === "abandoned" ? "The host left or the room was abandoned."
+            : isSpectator ? "The clock ran out, so you've stopped watching."
+            : "This room's game has ended."}
         </p>
-        <button className="press p-sun full" onClick={() => navigate("/lobby")}>← Back to lobby</button>
+        <button className="press p-sun full" onClick={exitToLobby}>← Back to lobby</button>
       </Notice>
     );
   }
@@ -308,7 +316,13 @@ function Room() {
 
   // ── Spectator view (game in progress, I'm watching) ───────────────────────
   if (status === "in_progress" && isSpectator && seed !== null) {
-    const watched = seatedPlayers.find(p => p.is_host) || seatedPlayers[0];
+    // Whoever you came to watch. Arriving from a friend's Watch button carries
+    // ?watch=<their id>; otherwise start on the host. You can switch below.
+    const wantId = Number(watchId) || null;
+    const watched =
+      seatedPlayers.find(p => Number(p.user_id) === Number(watching ?? wantId))
+      || seatedPlayers.find(p => p.is_host)
+      || seatedPlayers[0];
     let parsedState = null;
     try { parsedState = watched?.game_state ? JSON.parse(watched.game_state) : null; } catch { parsedState = null; }
 
@@ -323,19 +337,35 @@ function Room() {
 
     const GameComponent = getGameComponent(room?.game_slug);
     return (
-      <GameComponent
-        roomCode={code}
-        seed={seed}
-        players={seatedPlayers}
-        currentUser={user}
-        durationSeconds={duration || 120}
-        startedAt={startedAt}
-        serverNow={serverNow}
-        isSpectator
-        spectatorState={parsedState}
-        spectatorWatching={watched}
-        onGameEnd={exitToLobby}
-      />
+      <>
+        <GameComponent
+          roomCode={code}
+          seed={seed}
+          players={seatedPlayers}
+          currentUser={user}
+          durationSeconds={duration || 120}
+          startedAt={startedAt}
+          serverNow={serverNow}
+          isSpectator
+          spectatorState={parsedState}
+          spectatorWatching={watched}
+          onGameEnd={exitToLobby}
+        />
+        {/* Hop between players without leaving. Only worth showing when there
+            is somebody else to hop to. */}
+        {seatedPlayers.length > 1 && (
+          <div className="spec-switch" role="group" aria-label="Choose who to watch">
+            {seatedPlayers.map((p) => (
+              <button key={p.user_id} type="button"
+                className={`press sm ${Number(p.user_id) === Number(watched.user_id) ? "p-sun" : "p-white"}`}
+                onClick={() => setWatching(Number(p.user_id))}
+                aria-pressed={Number(p.user_id) === Number(watched.user_id)}>
+                {p.avatar || "🎮"} {p.username}
+              </button>
+            ))}
+          </div>
+        )}
+      </>
     );
   }
 

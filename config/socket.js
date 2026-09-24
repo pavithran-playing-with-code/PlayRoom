@@ -146,6 +146,6 @@ function emitUser(io, userId, event, payload) {
 }
 
 module.exports = {
-  initSocket, emitRoom, emitUser, roomChannel, userChannel,
+  initSocket, emitRoom, emitUser, tellFriends, roomChannel, userChannel,
   isOnline: presence.isOnline, onlineUserIds: presence.onlineUserIds,
 };

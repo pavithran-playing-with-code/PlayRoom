@@ -4,12 +4,16 @@
 // last seen. It sits in the navbar and in the in-game header, so it's visible
 // on every screen.
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePresence } from "../utils/PresenceContext";
+import { api } from "../utils/api";
 import { presenceLabel } from "../utils/timeAgo";
 import { Avatar } from "./ui";
 
 export default function FriendsDock({ max = 3, size = 34 }) {
   const { friends } = usePresence();
+  const navigate = useNavigate();
+  const [joining, setJoining] = useState(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const [, setTick] = useState(0);
@@ -39,6 +43,23 @@ export default function FriendsDock({ max = 3, size = 34 }) {
   const onlineCt = friends.filter((f) => f.online).length;
   const shown = friends.slice(0, max);
   const extra = friends.length - shown.length;
+
+  // Drop in on a friend's match. Joining a room that is already under way
+  // seats you as a spectator, so this is the same call the lobby makes.
+  async function watch(friend) {
+    const code = friend.playing?.room_code;
+    if (!code || joining) return;
+    setJoining(friend.id);
+    try {
+      const res = await api.post("/api/rooms/join", { room_code: code });
+      const data = await res.json();
+      if (data.success) {
+        setOpen(false);
+        navigate(`/room/${code}?watch=${friend.id}`);
+      }
+    } catch { /* the row stays put; they can tap again */ }
+    finally { setJoining(null); }
+  }
 
   function toggle() {
     if (!open && btnRef.current) {
@@ -73,8 +94,17 @@ export default function FriendsDock({ max = 3, size = 34 }) {
               <Avatar emoji={f.avatar} size={34} seed={f.id} online={f.online} className={f.online ? "" : "is-off"} />
               <span className="fdock-who">
                 <span className="fdock-name">{f.username}</span>
-                <span className={f.online ? "fdock-on" : "muted"}>{presenceLabel(f)}</span>
+                <span className={f.playing ? "fdock-playing" : f.online ? "fdock-on" : "muted"}>
+                  {f.playing ? `${f.playing.game_icon || "🎮"} ${f.playing.game_name}` : presenceLabel(f)}
+                </span>
               </span>
+              {f.playing && (
+                <button type="button" className="press p-sun sm fdock-watch"
+                  onClick={() => watch(f)} disabled={joining === f.id}
+                  aria-label={`Watch ${f.username} play ${f.playing.game_name}`}>
+                  {joining === f.id ? "…" : "👁️ Watch"}
+                </button>
+              )}
             </div>
           ))}
         </div>

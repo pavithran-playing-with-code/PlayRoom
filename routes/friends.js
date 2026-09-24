@@ -5,6 +5,41 @@ const { verifyToken } = require("../middleware/auth");
 const { emitUser } = require("../config/socket");
 const { presenceOf } = require("../config/presence");
 
+// Which of these people are in a match you could go and watch, right now.
+//
+// Only rooms that can actually be joined: a solo run is private to its owner,
+// and a room whose clock has already run out is about to be settled. Returns
+// { userId: { room_code, game_name, game_icon, seconds_left } }.
+async function playingNow(ids) {
+  if (!ids.length) return {};
+  const marks = ids.map(() => "?").join(",");
+  const [rows] = await db.execute(
+    `SELECT rp.user_id, r.room_code, gt.name AS game_name, gt.icon AS game_icon,
+            GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(),
+              r.started_at + INTERVAL r.duration_seconds SECOND)) AS seconds_left
+       FROM room_players rp
+       JOIN rooms r       ON r.id  = rp.room_id
+       JOIN game_types gt ON gt.id = r.game_type_id
+      WHERE rp.user_id IN (${marks})
+        AND rp.is_spectator = 0
+        AND r.status = 'in_progress'
+        AND r.max_players > 1
+        AND r.started_at IS NOT NULL
+        AND r.started_at + INTERVAL r.duration_seconds SECOND > NOW()`,
+    ids
+  );
+  const out = {};
+  for (const r of rows) {
+    out[r.user_id] = {
+      room_code: r.room_code,
+      game_name: r.game_name,
+      game_icon: r.game_icon,
+      seconds_left: Number(r.seconds_left) || 0,
+    };
+  }
+  return out;
+}
+
 // Friendships use canonical (user_a, user_b) order with user_a < user_b.
 function orderPair(x, y) {
   const a = Number(x), b = Number(y);
@@ -64,10 +99,12 @@ router.get("/", async (req, res, next) => {
       [req.user.id, req.user.id, req.user.id]
     );
     const pres = await presenceOf(rows.map((r) => r.id));
+    const live = await playingNow(rows.map((r) => r.id));
     const friends = rows.map((r) => ({
       ...r,
       online: !!pres[r.id]?.online,
       last_seen: pres[r.id]?.last_seen || null,
+      playing: live[r.id] || null,
     }));
     res.json({ success: true, friends });
   } catch (err) { next(err); }

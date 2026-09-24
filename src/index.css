@@ -589,6 +589,19 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .fdock-name{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fdock-on{color:#2F8F3A;font-weight:800;font-size:.85rem}
 .fdock-who .muted{font-size:.85rem}
+/* Mid-match, with a way in. The name line says which game, the button drops
+   you into it as a spectator. */
+.fdock-playing{color:var(--berry,#C2185B);font-weight:800;font-size:.85rem;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.press.fdock-watch{margin-left:auto;flex:none;padding:6px 11px;font-size:.8rem;--lift:3px}
+
+/* Spectator's row of players to watch: pinned above the game's own controls,
+   scrollable sideways when a room is full. */
+.spec-switch{position:fixed;left:0;right:0;bottom:calc(8px + env(safe-area-inset-bottom));
+  z-index:30;display:flex;gap:8px;justify-content:flex-start;align-items:center;
+  padding:8px 12px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.spec-switch::-webkit-scrollbar{display:none}
+.spec-switch .press{flex:none;padding:8px 13px;font-size:.85rem;--lift:3px}
 
 /* ---------- lobby crew card ---------- */
 .crewfaces{display:flex;flex-wrap:wrap;gap:10px 8px}

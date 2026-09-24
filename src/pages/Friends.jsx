@@ -12,6 +12,7 @@ export default function Friends() {
   const { presenceOf, inboxVersion, refresh } = usePresence();
 
   const [tab, setTab] = useState("friends");
+  const [watchBusy, setWatchBusy] = useState(null);
   const [friends, setFriends] = useState([]);
   const [incoming, setIncoming] = useState([]);
   const [outgoing, setOutgoing] = useState([]);
@@ -98,6 +99,20 @@ export default function Friends() {
 
   const online = (id) => !!presenceOf(id)?.online;
 
+  // Joining a room that is already under way seats you as a spectator.
+  async function watch(friend) {
+    const code = friend.playing?.room_code;
+    if (!code || watchBusy) return;
+    setWatchBusy(friend.id);
+    try {
+      const res = await api.post("/api/rooms/join", { room_code: code });
+      const data = await res.json();
+      if (data.success) navigate(`/room/${code}?watch=${friend.id}`);
+      else toast.error(data.message || "Could not watch that match.");
+    } catch { toast.error("Could not watch that match."); }
+    finally { setWatchBusy(null); }
+  }
+
   return (
     <div className="wrap">
       <div style={{ maxWidth: 820, margin: "0 auto" }}>
@@ -117,9 +132,17 @@ export default function Friends() {
                   <Row key={f.id}>
                     <Avatar emoji={f.avatar} size={48} seed={f.id} online={online(f.id)} />
                     <Who name={f.username}
-                      sub={online(f.id) ? "🟢 online now · ready to play"
+                      sub={f.playing ? `${f.playing.game_icon || "🎮"} playing ${f.playing.game_name}`
+                        : online(f.id) ? "🟢 online now · ready to play"
                         : presenceOf(f.id)?.last_seen ? presenceLabel(presenceOf(f.id))
                         : `friends since ${new Date(f.friends_since).toLocaleDateString()}`} />
+                    {f.playing && (
+                      <button className="press p-sun sm" disabled={watchBusy === f.id}
+                        onClick={() => watch(f)}
+                        aria-label={`Watch ${f.username} play ${f.playing.game_name}`}>
+                        {watchBusy === f.id ? "…" : "👁️ Watch"}
+                      </button>
+                    )}
                     <button className="press p-white sm" disabled={!!busy[`del-${f.id}`]}
                       onClick={() => {
                         if (window.confirm(`Remove ${f.username}?`)) {

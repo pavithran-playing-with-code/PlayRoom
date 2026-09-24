@@ -28,11 +28,18 @@ export function PresenceProvider({ children }) {
   // Bumps whenever requests or invites change, so pages showing them can reload.
   const [inboxVersion, setInboxVersion] = useState(0);
 
+  // A field that isn't in the update is left as it was. Updates are partial —
+  // "they started a match" says nothing about whether they're online — and
+  // reading a missing field as false would knock people offline.
   const merge = useCallback((map) => {
     setPresence((prev) => {
       const next = { ...prev };
       for (const [id, p] of Object.entries(map || {})) {
-        next[id] = { online: !!p.online, last_seen: p.last_seen || prev[id]?.last_seen || null };
+        next[id] = {
+          online:    p.online !== undefined ? !!p.online : (prev[id]?.online ?? false),
+          last_seen: p.last_seen || prev[id]?.last_seen || null,
+          playing:   p.playing !== undefined ? p.playing : (prev[id]?.playing ?? null),
+        };
       }
       return next;
     });
@@ -81,7 +88,7 @@ export function PresenceProvider({ children }) {
   useEffect(() => {
     if (!socket) return undefined;
     const onSnapshot = (map) => merge(map);
-    const onUpdate = ({ userId, online, last_seen }) => merge({ [userId]: { online, last_seen } });
+    const onUpdate = ({ userId, online, last_seen, playing }) => merge({ [userId]: { online, last_seen, playing } });
     const onInbox = () => { loadInbox(); setInboxVersion((v) => v + 1); };
     const onFriends = () => refresh();
     const onReconnect = () => { loadFriends(); loadInbox(); };   // catch up on anything missed
@@ -106,7 +113,17 @@ export function PresenceProvider({ children }) {
 
   const friends = useMemo(
     () => list
-      .map((f) => ({ ...f, online: !!presence[f.id]?.online, last_seen: presence[f.id]?.last_seen || null }))
+      .map((f) => {
+        const online = !!presence[f.id]?.online;
+        return {
+          ...f,
+          online,
+          last_seen: presence[f.id]?.last_seen || null,
+          // Somebody who has gone offline is not still mid-match, whatever the
+          // last update we saw said.
+          playing: online ? (presence[f.id]?.playing ?? null) : null,
+        };
+      })
       .sort(byPresence),
     [list, presence]
   );

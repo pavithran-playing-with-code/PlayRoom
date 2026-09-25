@@ -145,6 +145,13 @@ There is no test runner. What works:
 - **A whole match** — `scripts/e2e.mjs` signs in real players against a real
   backend, starts a real match, and fails on any console error. Its header says
   how to run it.
+- **Rules that span requests** — `scripts/check-results.js` (a finished match
+  reaches the Hall of Fame) and `scripts/check-spectating.js` (a friend
+  mid-match is visible and watchable). API-level, no browser, quick to run.
+
+Register is rate limited to 10 accounts an hour per IP, so a long run of tests
+will start failing with 429 — reuse accounts from an earlier run rather than
+raising the limit.
 
 **Anything touching the room, the socket or the engine gets the e2e run before
 it ships.** `socket.on is not a function` reached production and blanked every

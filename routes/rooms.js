@@ -47,8 +47,7 @@ async function announcePlaying(req, roomId, code, playing) {
            FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id WHERE r.id = ?`,
         [roomId]
       );
-      // A solo run can't be joined, so there is nothing to advertise.
-      if (!g || Number(g.max_players) <= 1) return;
+      if (!g) return;
       info = {
         room_code: code,
         game_name: g.game_name,
@@ -216,8 +215,10 @@ router.post("/join", verifyToken, async (req, res, next) => {
       return res.json({ success: true, room, already_joined: true, as_spectator: !!existing.is_spectator });
     }
 
-    // Solo run: closed to everyone but its owner — not even as a spectator.
-    if (Number(room.max_players) === 1)
+    // A solo run has no seat for anyone else, ever. Once it is under way a
+    // friend may watch it, which costs the player nothing: spectators can't
+    // score, can't be seen by the game, and can't take a seat.
+    if (Number(room.max_players) === 1 && room.status !== "in_progress")
       return res.status(403).json({ success: false, message: "That's a solo run — it can't be joined." });
 
     const seatedCount = members.filter(m => !m.is_spectator).length;
@@ -225,6 +226,7 @@ router.post("/join", verifyToken, async (req, res, next) => {
     const isLive      = room.status === "in_progress";
 
     // Join as spectator when seats are full OR the game is already underway.
+    // A solo run is only ever the latter, so this covers it.
     const asSpectator = isFull || isLive ? 1 : 0;
 
     await db.execute(

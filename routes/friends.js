@@ -7,9 +7,11 @@ const { presenceOf } = require("../config/presence");
 
 // Which of these people are in a match you could go and watch, right now.
 //
-// Only rooms that can actually be joined: a solo run is private to its owner,
-// and a room whose clock has already run out is about to be settled. Returns
-// { userId: { room_code, game_name, game_icon, seconds_left } }.
+// Solo runs count. Nobody can take a seat in one or touch the score, but
+// watching a friend play is the whole point of the feature and most games here
+// get played alone. A room whose clock has already run out is left out — it is
+// about to be settled and there is nothing left to see.
+// Returns { userId: { room_code, game_name, game_icon, seconds_left } }.
 async function playingNow(ids) {
   if (!ids.length) return {};
   const marks = ids.map(() => "?").join(",");
@@ -23,7 +25,6 @@ async function playingNow(ids) {
       WHERE rp.user_id IN (${marks})
         AND rp.is_spectator = 0
         AND r.status = 'in_progress'
-        AND r.max_players > 1
         AND r.started_at IS NOT NULL
         AND r.started_at + INTERVAL r.duration_seconds SECOND > NOW()`,
     ids

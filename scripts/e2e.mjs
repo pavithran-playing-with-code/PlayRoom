@@ -120,9 +120,13 @@ try {
   });
 
   const stamp = Date.now().toString(36).slice(-5);
-  const names = MODE === "teams"
-    ? [`t1${stamp}`, `t2${stamp}`, `t3${stamp}`, `t4${stamp}`]
-    : [`p1${stamp}`, `p2${stamp}`];
+  const names = (process.env.E2E_USERS || "").split(",").filter(Boolean).length
+    ? process.env.E2E_USERS.split(",")
+    : MODE === "teams"
+      ? [`t1${stamp}`, `t2${stamp}`, `t3${stamp}`, `t4${stamp}`]
+      : MODE === "spectate"
+        ? [`s1${stamp}`, `s2${stamp}`, `s3${stamp}`]
+        : [`p1${stamp}`, `p2${stamp}`];
   const sids = [];
   for (const n of names) {
     const sid = await newPlayer(n);
@@ -135,6 +139,7 @@ try {
 
   // host makes the room
   const seats = MODE === "teams" ? 4 : 2;
+  const watcherAt = MODE === "spectate" ? sids.length - 1 : -1;   // last tab watches
   const made = await apiCall(sids[0], "POST", "/api/rooms",
     { game_slug: "numbers", max_players: seats, duration_seconds: 120, ...(MODE === "teams" ? { mode: "teams" } : {}) });
   check("room created", made.status === 201, JSON.stringify(made.body).slice(0, 140));
@@ -144,6 +149,7 @@ try {
 
   // everyone else joins
   for (let i = 1; i < sids.length; i++) {
+    if (i === watcherAt) continue;                    // the watcher comes in later, mid-match
     const j = await apiCall(sids[i], "POST", "/api/rooms/join", { room_code: code });
     check(`${names[i]} joined`, j.body?.success === true, JSON.stringify(j.body).slice(0, 120));
   }
@@ -164,8 +170,11 @@ try {
     await apiCall(sids[3], "PATCH", `/api/rooms/${code}/team`, { team: 2 });
   }
 
-  // open the room in every tab, then start
-  for (let i = 0; i < sids.length; i++) await go(sids[i], `/room/${code}`);
+  // open the room in every tab, then start (the watcher isn't in it yet)
+  for (let i = 0; i < sids.length; i++) {
+    if (i === watcherAt) continue;
+    await go(sids[i], `/room/${code}`);
+  }
   errors.length = 0;                         // only judge what happens from here
   const started = await apiCall(sids[0], "PATCH", `/api/rooms/${code}/start`);
   check("host started the match", started.body?.success === true, JSON.stringify(started.body).slice(0, 140));
@@ -173,6 +182,7 @@ try {
 
   // the board must actually be on screen for everyone
   for (let i = 0; i < sids.length; i++) {
+    if (i === watcherAt) continue;
     const seen = await js(sids[i], `(() => {
       const board = document.querySelector(".gameboard");
       const stats = [...document.querySelectorAll(".gb-stat .gb-l")].map(e => e.textContent).join("|");
@@ -190,6 +200,72 @@ try {
       return t;
     })()`);
     check("team totals are on screen", Array.isArray(strip) && strip.length >= 2, JSON.stringify(strip));
+  }
+
+  if (MODE === "spectate") {
+    // The watcher arrives now, mid-match, exactly as the Watch button does.
+    const join = await apiCall(sids[watcherAt], "POST", "/api/rooms/join", { room_code: code });
+    check("watcher joined as a spectator", join.body?.as_spectator === true, JSON.stringify(join.body).slice(0, 140));
+    await go(sids[watcherAt], `/room/${code}?watch=${await js(sids[0], `1`) && ""}`.replace("?watch=", "?watch=1"));
+    await sleep(4000);
+
+    const view = await js(sids[watcherAt], `(() => {
+      const stat = (l) => { const s = [...document.querySelectorAll(".gb-stat")].find(x => x.querySelector(".gb-l")?.textContent === l);
+        return s ? s.querySelector(".gb-v").textContent : null; };
+      return { badge: document.querySelector(".gb-badge")?.textContent || "",
+               quit: [...document.querySelectorAll("button")].map(b => b.textContent.trim()).find(t => /Leave|Quit/.test(t)) || "",
+               moves: stat("Moves"), score: stat("Score"),
+               switcher: document.querySelectorAll(".spec-switch button").length,
+               tiles: document.querySelectorAll(".gameboard button").length };
+    })()`);
+    check("watcher is in the watch view, not playing", view.quit.includes("Leave"),
+      `quit button says "${view.quit}", badge "${view.badge}"`);
+
+    // Hammer the board. A spectator must not be able to change anything.
+    await js(sids[watcherAt], `(() => {
+      const b = [...document.querySelectorAll(".gameboard button")];
+      for (const el of b.slice(0, 12)) el.click();
+      return b.length;
+    })()`);
+    await sleep(1200);
+    const after = await js(sids[watcherAt], `(() => {
+      const stat = (l) => { const s = [...document.querySelectorAll(".gb-stat")].find(x => x.querySelector(".gb-l")?.textContent === l);
+        return s ? s.querySelector(".gb-v").textContent : null; };
+      return { moves: stat("Moves"), score: stat("Score") };
+    })()`);
+    check("clicking the board does nothing for a spectator",
+      after.moves === view.moves, `moves ${view.moves} -> ${after.moves}`);
+
+    // How fast does a move reach the watcher? Play one and time it.
+    // Number Rush only scores when you tap the number it is asking for, so tap
+    // that one rather than hoping a random tile counts.
+    const t0 = Date.now();
+    const tapped = await js(sids[0], `(() => {
+      const want = document.querySelector(".nr-target, .gb-v")?.textContent?.trim();
+      const btns = [...document.querySelectorAll(".gameboard button")];
+      let hit = btns.find((b) => b.textContent.trim() === "1") || btns[0];
+      if (hit) hit.click();
+      return { want, clicked: hit ? hit.textContent.trim() : null };
+    })()`);
+    console.log("      player tapped:", JSON.stringify(tapped));
+    let lagMs = -1;
+    for (let w = 0; w < 60; w++) {
+      const n = await js(sids[watcherAt], `(() => {
+        const s = [...document.querySelectorAll(".gb-stat")].find(x => x.querySelector(".gb-l")?.textContent === "Score");
+        return s ? s.querySelector(".gb-v").textContent : "";
+      })()`);
+      if (n && n !== "0") { lagMs = Date.now() - t0; break; }
+      await sleep(100);
+    }
+    check("a move reaches the watcher quickly", lagMs >= 0 && lagMs < 1500,
+      lagMs < 0 ? "never arrived within 6s" : `${lagMs}ms`);
+
+    // And the player they are watching must not have been touched.
+    const poll = await apiCall(sids[0], "GET", `/api/rooms/${code}/poll`);
+    const watcherRow = (poll.body?.players || []).find((p) => p.username === names[watcherAt]);
+    check("the watcher never took a seat", watcherRow && !!watcherRow.is_spectator,
+      JSON.stringify(watcherRow && { u: watcherRow.username, spec: watcherRow.is_spectator, moves: watcherRow.moves }));
+    await shot(sids[watcherAt], "spectating");
   }
 
   check("no console errors while playing", errors.length === 0, errors.slice(0, 4).join(" | "));

@@ -176,6 +176,30 @@ export default function useGameEngine({
     setGameOver(true);
   }, []);
 
+  // ── Broadcast my board as it changes, for anyone watching ──
+  // The 2s sync above is what the database and the result are built from; this
+  // is only so a spectator sees a move when it happens instead of up to four
+  // seconds later, once their poll catches up with my sync. Nothing is stored,
+  // so the cost of being wrong is one stale frame.
+  //
+  // Throttled: a fast tapper can fire several moves a second and a spectator
+  // cannot see the difference.
+  const lastLive = useRef(0);
+  useEffect(() => {
+    if (!socket || !isOnline || !roomCode || isSpectator || overRef.current) return;
+    const now = Date.now();
+    if (now - lastLive.current < 180) return;
+    lastLive.current = now;
+    const p = payload();
+    socket.emit("room:live", {
+      code: roomCode,
+      score: p.score,
+      pairs_matched: p.pairs_matched ?? 0,
+      moves: p.moves,
+      game_state: typeof p.game_state === "string" ? p.game_state : null,
+    });
+  }, [socket, isOnline, roomCode, isSpectator, score, moves, extraState, payload]);
+
   // ── Team standings ──
   // Only in a room playing as sides. Built from the same numbers as the
   // opponent strip — my own live score plus whatever the others last synced —

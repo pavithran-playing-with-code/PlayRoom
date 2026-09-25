@@ -48,6 +48,8 @@ function Room() {
   const [starting,  setStarting]  = useState(false);
   const [confirmStart, setConfirmStart] = useState(false);
   const [teamBusy, setTeamBusy] = useState(false);
+  const [joiningWatch, setJoiningWatch] = useState(false);
+  const spectatingRef = useRef(false);
   // The poll carries the mode too, so the team picker survives a refresh
   // before the slower room fetch comes back.
   const [roomMode, setRoomMode] = useState(null);
@@ -69,11 +71,18 @@ function Room() {
   // Derived up here because the polling effect below needs isSpectator.
   const me          = players.find(p => p.user_id === user?.id);
   const isSpectator = !!me?.is_spectator;
+  // Being a player means the room says so. Absence is not a seat: before the
+  // first poll answers, and for anyone who simply opened a live room's URL,
+  // `me` is undefined — and treating that as "player" handed them a playable
+  // board in somebody else's match and started posting scores the server then
+  // rejected. Nobody plays until the room has confirmed who they are.
+  const isPlayer    = !!me && !me.is_spectator;
+  useEffect(() => { spectatingRef.current = isSpectator; }, [isSpectator]);
 
   // Pause the room poll while we're actually playing — the game component runs
   // its own score/opponent sync loop, so a second timer is pure duplicate load.
   // Spectators keep polling: their whole view is rendered from poll data.
-  const pausePolling = notFound || played || (status === "in_progress" && !isSpectator);
+  const pausePolling = notFound || played || (status === "in_progress" && isPlayer);
 
   const fetchRoom = useCallback(async () => {
     try {
@@ -160,13 +169,28 @@ function Room() {
     const refresh = () => poll();
     // A join changes who's here AND the seat count, so refresh both.
     const joined = () => { poll(); fetchRoom(); };
+    // A watched player's board, as it happens. Only a spectator needs it: for
+    // anyone playing, this state drives the waiting room rather than the game,
+    // and re-rendering the page under a live board would cost frames for
+    // nothing.
+    const onLive = (p) => {
+      if (!spectatingRef.current) return;
+      const id = Number(p?.user_id);
+      if (!Number.isFinite(id)) return;
+      setPlayers((prev) => prev.map((x) => (Number(x.user_id) === id
+        ? { ...x, score: p.score, pairs_matched: p.pairs_matched, moves: p.moves,
+            game_state: p.game_state ?? x.game_state }
+        : x)));
+    };
     socket.emit("room:join", code);
+    socket.on("room:live", onLive);
     socket.on("room:players", joined);
     socket.on("room:started", refresh);
     socket.on("room:chat", refresh);
     socket.on("room:ended", refresh);
     return () => {
       socket.emit("room:leave", code);
+      socket.off("room:live", onLive);
       socket.off("room:players", joined);
       socket.off("room:started", refresh);
       socket.off("room:chat", refresh);
@@ -203,8 +227,8 @@ function Room() {
   // records the score. Swapping to the "Game finished" card here used to pull
   // that screen away, and the result was never saved.
   useEffect(() => {
-    if (status === "in_progress" && seed !== null && !isSpectator) setPlayed(true);
-  }, [status, seed, isSpectator]);
+    if (status === "in_progress" && seed !== null && isPlayer) setPlayed(true);
+  }, [status, seed, isPlayer]);
 
   // Close invite popover on outside click / escape.
   useEffect(() => {
@@ -293,6 +317,18 @@ function Room() {
     : shortTeam !== undefined ? `${TEAM_NAMES[shortTeam - 1]} needs at least ${MIN_PER_TEAM} players`
     : null;
 
+  // Arriving at a live room you are not in: the only way in is as a spectator.
+  async function watchThis() {
+    if (joiningWatch) return;
+    setJoiningWatch(true);
+    try {
+      const res = await api.post("/api/rooms/join", { room_code: code });
+      const data = await res.json();
+      if (data.success) { await fetchRoom(); await poll(); }
+    } catch { /* the button stays; they can try again */ }
+    finally { setJoiningWatch(false); }
+  }
+
   async function pickTeam(n) {
     if (!isTeams || status !== "waiting" || teamBusy) return;
     setTeamBusy(true);
@@ -336,7 +372,7 @@ function Room() {
   }
 
   // ── In-game ───────────────────────────────────────────────────────────────
-  if ((played || status === "in_progress") && seed !== null && !isSpectator) {
+  if ((played || status === "in_progress") && seed !== null && isPlayer) {
     const GameComponent = getGameComponent(room?.game_slug);
     return (
       <GameComponent
@@ -354,6 +390,27 @@ function Room() {
           exitToLobby();
         }}
       />
+    );
+  }
+
+  // ── Not in this room, and it has already started ──────────────────────────
+  // Reached by opening a live room's link without joining it. Offer the only
+  // thing that is still possible — watching — instead of a board they would
+  // have been quietly playing on their own.
+  if (status === "in_progress" && !me) {
+    return (
+      <Notice emoji="👀" title="This match is under way">
+        <p className="muted" style={{ marginBottom: 20 }}>
+          You're not in this room, and seats close when a match starts. You can
+          still watch it.
+        </p>
+        <button className="press p-sun full" onClick={watchThis} disabled={joiningWatch}>
+          {joiningWatch ? "Joining…" : "👀 Watch this match"}
+        </button>
+        <button className="press p-white full" style={{ marginTop: 10 }} onClick={() => navigate("/lobby")}>
+          ← Back to lobby
+        </button>
+      </Notice>
     );
   }
 

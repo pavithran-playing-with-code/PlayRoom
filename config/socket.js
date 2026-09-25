@@ -103,6 +103,27 @@ function initSocket(httpServer) {
       }
     });
 
+    // A player's board, as it happens. Ephemeral and never stored: the 2s score
+    // sync is still what the database and the result are built from. This only
+    // exists so a spectator sees a tile clear when it clears, rather than up to
+    // four seconds later when their poll next comes round.
+    //
+    // The sender's id comes from their verified token, never from the payload,
+    // so nobody can broadcast a board as somebody else.
+    socket.on("room:live", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const state = typeof msg.game_state === "string" ? msg.game_state : null;
+      if (state && state.length > 8000) return;          // a board, not a payload
+      socket.to(roomChannel(code)).emit("room:live", {
+        user_id: uid,
+        score: Number(msg.score) || 0,
+        pairs_matched: Number(msg.pairs_matched) || 0,
+        moves: Number(msg.moves) || 0,
+        game_state: state,
+      });
+    });
+
     socket.on("disconnect", () => {
       const set = online.get(uid);
       if (!set) return;

@@ -10,6 +10,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import { makePuzzle, outlinePaths, PIC_W, PIC_H } from "./jigsawBoard";
 import { buildScene } from "./jigsawScene";
 
@@ -66,9 +67,9 @@ function Piece({ option, box, scene, clipId }) {
 
 export default function MissingPiece(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
 
   const [level, setLevel] = useState(1);
   const [tried, setTried] = useState([]);       // options already picked wrongly
@@ -79,6 +80,22 @@ export default function MissingPiece(props) {
   // What taps act on. Two taps can land in the same tick, and the second must
   // see the first: a right answer locks the puzzle until the next one appears.
   const live = useRef({ level: 1, streak: 0, busy: false, tried: [] });
+
+  // Watching draws the same board the player is on: the picture and its options are seeded, so the level and the wrong guesses are enough.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({ level: live.current.level, tried: live.current.tried }),
+    apply: (st) => {
+      live.current.level = st.level;
+      live.current.tried = st.tried || [];
+      setLevel(st.level);
+      setTried(st.tried || []);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
+    extraState: spectate.extraState });
+
   const timers = useRef([]);
   const uid = useRef(0);
   useEffect(() => {
@@ -155,13 +172,6 @@ export default function MissingPiece(props) {
         onQuit={eng.endMatch}
       >
         {({ w, h }) => {
-          if (isSpectator) {
-            return (
-              <div className="muted">
-                👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-              </div>
-            );
-          }
           const L = layout(w, h, puzzle.options.length);
           return (
             <div className={`pz-wrap${L.side ? " side" : ""}`} style={{ gap: L.gap }}>

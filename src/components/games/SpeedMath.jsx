@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import { seededRand, randInt, shuffleInPlace } from "./seededRand";
 
 const CORRECT = 12;   // points per correct answer
@@ -36,14 +37,30 @@ function buildProblems(seed, n = 300) {
 
 export default function SpeedMath(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const problems = useMemo(() => buildProblems(seed), [seed]);
 
   // Which problem is up lives in a ref too: two taps in the same tick must not
   // both be marked against one problem.
   const live = useRef({ idx: 0, streak: 0 });
+
+  // Watching draws the same board the player is on: the questions are seeded, so which one they are on is the whole board.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({ idx: live.current.idx, streak: live.current.streak }),
+    apply: (st) => {
+      live.current.idx = st.idx;
+      live.current.streak = st.streak;
+      setIdx(st.idx);
+      setStreak(st.streak);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
+    extraState: spectate.extraState });
+
   const [idx, setIdx] = useState(0);
   const [streak, setStreak] = useState(0);
   const [flash, setFlash] = useState(null); // 'good' | 'bad'
@@ -121,20 +138,17 @@ export default function SpeedMath(props) {
               >
                 {problem.text}
               </div>
-              {!isSpectator ? (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap }}>
-                  {problem.options.map((opt, i) => (
-                    <button key={`${idx}-${i}`} onClick={() => answer(opt, idx)} className="press p-white"
-                      style={{ height: btnH, padding: 0, fontSize: optFont }}>
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="muted">
-                  👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-                </div>
-              )}
+              {/* The options show while watching too — the buttons simply
+                  refuse the tap, so a watcher sees the question being answered
+                  instead of a line of text. */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap }}>
+                {problem.options.map((opt, i) => (
+                  <button key={`${idx}-${i}`} onClick={() => answer(opt, idx)} className="press p-white"
+                    style={{ height: btnH, padding: 0, fontSize: optFont }}>
+                    {opt}
+                  </button>
+                ))}
+              </div>
             </div>
           );
         }}

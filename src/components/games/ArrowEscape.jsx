@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import { seededRand } from "./seededRand";
 import { COLS, ROWS, generateBoard, occupancy, blockerOf, rayCells, cellKey } from "./arrowBoard";
 
@@ -35,9 +36,9 @@ const DOTS = Array.from({ length: COLS * ROWS }, (_, i) => (
 
 export default function ArrowEscape(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
 
   // What's drawn.
   const [level, setLevel] = useState(1);
@@ -51,6 +52,22 @@ export default function ArrowEscape(props) {
   // that hasn't happened yet. Reading the rendered `arrows` there would
   // silently put the first arrow back on the board.
   const live = useRef({ arrows, level: 1, streak: 0 });
+
+  // Watching draws the same board the player is on: arrows leave one at a time, so which are still on the board has to travel.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({ level: live.current.level, arrows: live.current.arrows }),
+    apply: (st) => {
+      live.current.level = st.level;
+      live.current.arrows = st.arrows || [];
+      setLevel(st.level);
+      setArrows(st.arrows || []);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
+    extraState: spectate.extraState });
+
 
   const svgRef = useRef(null);
   const timers = useRef([]);
@@ -139,11 +156,7 @@ export default function ArrowEscape(props) {
         teams={eng.teams}
         onQuit={eng.endMatch}
       >
-        {({ w, h }) => (isSpectator ? (
-          <div className="muted">
-            👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-          </div>
-        ) : (
+        {({ w, h }) => (
           <div style={{ textAlign: "center" }}>
             <div className="muted eyebrow" style={{ textAlign: "center" }}>
               Tap an arrow · it only leaves if its path is clear
@@ -175,7 +188,7 @@ export default function ArrowEscape(props) {
               </svg>
             </div>
           </div>
-        ))}
+        )}
       </GameFrame>
 
       {eng.gameOver && !isSpectator && (

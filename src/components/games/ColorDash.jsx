@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import { seededRand, shuffleInPlace } from "./seededRand";
 
 // Nine colours far enough apart to tell at a glance: red, orange, yellow,
@@ -39,9 +40,9 @@ function makeRound(seed, i) {
 
 export default function ColorDash(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
 
   const [round, setRound] = useState(0);
   const [streak, setStreak] = useState(0);
@@ -50,6 +51,24 @@ export default function ColorDash(props) {
   const [msg, setMsg] = useState(null);
 
   const live = useRef({ round: 0, streak: 0, best: 0 });
+
+  // Watching draws the same board the player is on: the swatches come from the seed and the round number, so only the round and the streak travel.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({ round: live.current.round, streak: live.current.streak, best: live.current.best }),
+    apply: (st) => {
+      live.current.round = st.round;
+      live.current.streak = st.streak;
+      live.current.best = st.best ?? 0;
+      setRound(st.round);
+      setStreak(st.streak);
+      setBest(st.best ?? 0);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
+    extraState: spectate.extraState });
+
   const uid = useRef(0);
   const timers = useRef([]);
   useEffect(() => {
@@ -133,13 +152,6 @@ export default function ColorDash(props) {
         onQuit={eng.endMatch}
       >
         {({ w, h }) => {
-          if (isSpectator) {
-            return (
-              <div className="muted">
-                👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-              </div>
-            );
-          }
           const top = 96;                         // target card + round timer bar
           const side = Math.floor(Math.max(180, Math.min(w, h - top, 480)));
           const gap = Math.round(side * 0.04);

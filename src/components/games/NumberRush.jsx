@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import { seededRand, shuffleInPlace } from "./seededRand";
 
 const HIT = 3;
@@ -37,9 +38,8 @@ function makeBoard(seed, level) {
 
 export default function NumberRush(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
-
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
   const [level, setLevel] = useState(1);
   const [next, setNext] = useState(1);
@@ -49,6 +49,24 @@ export default function NumberRush(props) {
   // Taps act on this, not on rendered state: two fast taps in one tick must
   // each see the other.
   const live = useRef({ level: 1, next: 1, busy: false });
+
+  // Watching shows the same board the player is on: the grid comes from the
+  // seed and the level, so the level and the next number is all that has to
+  // travel.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({ level: live.current.level, next: live.current.next }),
+    apply: (st) => {
+      live.current.level = st.level;
+      live.current.next = st.next;
+      setLevel(st.level);
+      setNext(st.next);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
+    extraState: spectate.extraState });
+
   const timers = useRef([]);
   const uid = useRef(0);
   useEffect(() => {
@@ -97,14 +115,12 @@ export default function NumberRush(props) {
   }
 
   const oppList = Object.values(eng.opponents);
-  const specScore = spectatorWatching?.score ?? 0;
-  const stats = isSpectator
-    ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
-    : [
-        { label: "Score", value: eng.score.toLocaleString() },
-        { label: "Level", value: level },
-        { label: "Next", value: next > board.n ? "✓" : next },
-      ];
+  // Watching shows the watched player's numbers, not a blank of your own.
+  const stats = [
+    { label: "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
+    { label: "Level", value: level },
+    { label: "Next", value: next > board.n ? "✓" : next },
+  ];
 
   return (
     <>
@@ -119,13 +135,6 @@ export default function NumberRush(props) {
         onQuit={eng.endMatch}
       >
         {({ w, h }) => {
-          if (isSpectator) {
-            return (
-              <div className="muted">
-                👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-              </div>
-            );
-          }
           const { cols, rows } = board;
           const gap = Math.round(Math.max(6, Math.min(12, Math.min(w, h) * 0.018)));
           const hint = 58;                          // the "Find N" pill and the line under the grid

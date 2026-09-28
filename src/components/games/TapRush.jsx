@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import { seededRand } from "./seededRand";
 
 const GRID = 9;          // 3×3
@@ -24,9 +25,9 @@ function buildSequence(seed, n = 800) {
 
 export default function TapRush(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const seq = useMemo(() => buildSequence(seed), [seed]);
 
   // The step lives in a ref as well as state: two taps on the lit tile in the
@@ -38,6 +39,21 @@ export default function TapRush(props) {
   const missRef = useRef(null);
   const flashRef = useRef(null);
   useEffect(() => () => clearTimeout(flashRef.current), []);
+
+  // Watching draws the same board the player is on: the sequence of lit tiles
+  // is seeded, so how far through it they are is the whole picture.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({ step: stepRef.current, hits }),
+    apply: (st) => {
+      stepRef.current = st.step;
+      setStep(st.step);
+      setHits(st.hits ?? 0);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
+    extraState: spectate.extraState });
 
   const active = seq[step % seq.length];
   // Named windowMs, not `window` — that would shadow the global.
@@ -124,11 +140,7 @@ export default function TapRush(props) {
                   );
                 })}
               </div>
-              {isSpectator && (
-                <div className="muted" style={{ marginTop: 16 }}>
-                  👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-                </div>
-              )}
+
             </div>
           );
         }}

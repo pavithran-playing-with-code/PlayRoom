@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import { DIRS, makeBoard, currentMasks, flow, isSolved, openings } from "./pipesBoard";
 
 const INK = "#2E2140";
@@ -45,9 +46,9 @@ function PipeTile({ mask, deg, x, y, wet, isSource }) {
 
 export default function Pipes(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
 
   const [level, setLevel] = useState(1);
   const board = useMemo(() => makeBoard(seed, level), [seed, level]);
@@ -57,6 +58,22 @@ export default function Pipes(props) {
 
   // Taps act on the ref: two taps in the same tick must both count.
   const live = useRef({ level: 1, turns: board.solution.map(() => 0), best: 1, busy: false });
+
+  // Watching draws the same board the player is on: the pipe layout is seeded; how far each one has been turned is what changes.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({ level: live.current.level, turns: live.current.turns }),
+    apply: (st) => {
+      live.current.level = st.level;
+      live.current.turns = st.turns || [];
+      setLevel(st.level);
+      setTurns(st.turns || []);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
+    extraState: spectate.extraState });
+
   const timers = useRef([]);
   const uid = useRef(0);
   useEffect(() => {
@@ -130,13 +147,6 @@ export default function Pipes(props) {
         onQuit={eng.endMatch}
       >
         {({ w, h }) => {
-          if (isSpectator) {
-            return (
-              <div className="muted">
-                👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-              </div>
-            );
-          }
           const { cols, rows } = board;
           const hint = 30, frame = 26;
           const cell = Math.floor(Math.max(28, Math.min(96, (w - frame) / cols, (h - hint - frame - 6) / rows)));

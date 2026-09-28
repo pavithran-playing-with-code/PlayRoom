@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import { seededRand } from "./seededRand";
 
 const N = 3;                       // 3 x 3: eight tiles and a gap
@@ -50,9 +51,9 @@ function makeBoard(seed, level) {
 
 export default function SlidePuzzle(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
 
   const [level, setLevel] = useState(1);
   const start = useMemo(() => makeBoard(seed, level), [seed, level]);
@@ -63,6 +64,24 @@ export default function SlidePuzzle(props) {
 
   // Taps act on the ref, so two taps in one tick can't both slide the same tile.
   const live = useRef({ tiles: start, moves: 0, level: 1, busy: false });
+
+  // Watching draws the same board the player is on: the tiles move rather than being rebuilt, so the arrangement itself has to travel.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({ tiles: live.current.tiles, moves: live.current.moves, level: live.current.level }),
+    apply: (st) => {
+      live.current.tiles = st.tiles;
+      live.current.moves = st.moves;
+      live.current.level = st.level;
+      setTiles(st.tiles);
+      setMoves(st.moves);
+      setLevel(st.level);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
+    extraState: spectate.extraState });
+
   const timers = useRef([]);
   const uid = useRef(0);
   useEffect(() => {
@@ -139,13 +158,6 @@ export default function SlidePuzzle(props) {
         onQuit={eng.endMatch}
       >
         {({ w, h }) => {
-          if (isSpectator) {
-            return (
-              <div className="muted">
-                👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-              </div>
-            );
-          }
           const hint = 34;
           const side = Math.floor(Math.max(160, Math.min(w, h - hint, 440)));
           const gap = Math.round(side * 0.025);

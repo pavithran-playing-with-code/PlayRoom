@@ -40,3 +40,6 @@ tools/
 # share.js runtime state (waiting-room page)
 /.share-state
 /.share-placeholder.pid
+
+# test harness logins (scripts/e2e-tokens.js)
+.e2e-tokens.json

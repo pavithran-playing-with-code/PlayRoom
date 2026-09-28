@@ -9,6 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import { seededRand, shuffleInPlace } from "./seededRand";
 
 const WORDS = [
@@ -35,14 +36,30 @@ function buildRound(seed) {
 
 export default function WordRush(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const round = useMemo(() => buildRound(seed), [seed]);
 
   // idx: which word. picked: indexes into its scrambled letters, in tap order.
   // Held in a ref so two taps in the same tick each see the other.
   const live = useRef({ idx: 0, picked: [], lock: false });
+
+  // Watching draws the same board the player is on: the word list is seeded, so the word index and the letters picked so far are the whole board.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({ idx: live.current.idx, picked: live.current.picked }),
+    apply: (st) => {
+      live.current.idx = st.idx;
+      live.current.picked = st.picked || [];
+      setIdx(st.idx);
+      setPicked(st.picked || []);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
+    extraState: spectate.extraState });
+
   const [idx, setIdx] = useState(0);
   const [picked, setPicked] = useState([]);
   const [solved, setSolved] = useState(0);
@@ -170,13 +187,6 @@ export default function WordRush(props) {
         ) : null}
       >
         {({ w, h }) => {
-          if (isSpectator) {
-            return (
-              <div className="muted">
-                👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-              </div>
-            );
-          }
           const n = cur.word.length;
           const W = Math.min(w, 460);
           const gap = 8;

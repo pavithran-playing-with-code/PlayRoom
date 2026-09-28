@@ -15,6 +15,8 @@ import Pipes from "./Pipes";
 import FlappyDash from "./FlappyDash";
 import SlidePuzzle from "./SlidePuzzle";
 import BlockDrop from "./BlockDrop";
+import TurboRacer from "./TurboRacer";
+import DodgeStorm from "./DodgeStorm";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -98,10 +100,22 @@ export const GAMES = [
     Component: SlidePuzzle,
   },
   {
-    slug: "blocks", name: "Block Drop", icon: "🧱",
-    blurb: "Turn and drop the falling blocks, fill a row and watch it vanish.",
+    slug: "blocks", name: "Block Blast", icon: "🧱",
+    blurb: "Fit the pieces in and clear whole rows and columns.",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--brick)",
     Component: BlockDrop,
+  },
+  {
+    slug: "racer", name: "Turbo Racer", icon: "🏎️",
+    blurb: "Swerve through the traffic, grab the coins, never slow down.",
+    minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--slate)",
+    Component: TurboRacer,
+  },
+  {
+    slug: "storm", name: "Dodge Storm", icon: "⚡",
+    blurb: "Stay alive while the shards close in from every side.",
+    minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--berry)",
+    Component: DodgeStorm,
   },
 ];
 

@@ -1,177 +1,182 @@
 // src/components/games/BlockDrop.jsx
-// Falling blocks, the way you remember them: move, turn, drop, clear lines.
-// 10 columns by 18 rows, seven shapes, one colour each.
+// Block Blast: an 8x8 grid and three pieces at a time. Put a piece down where
+// it fits; fill a whole row or column and it clears. Nothing falls — every
+// piece goes exactly where you choose.
 //
-// Topping out doesn't end your match here — the room's clock does that — so a
-// full board is swept away and you keep playing, with your score and lines
-// intact. The end screen shows lines cleared and the level you reached.
+// Tap to pick a piece, tap the board to drop it. Not drag-and-drop: on a phone
+// a drag fights the browser's own scroll and pull-to-refresh gestures, and your
+// finger covers the very cells you are aiming at. Two taps always land.
 //
-// The rules live in tetrisBoard.js. This file is the screen and the controls.
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// Running out of room doesn't end the match — the room's clock does — so a
+// stuck board is swept and a fresh one dealt, with the score kept.
+//
+// The rules live in blastBoard.js. This file is the screen and the taps.
+import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpectate from "./useSpectate";
 import {
-  COLS, ROWS, PIECES, emptyBoard, spawn, moved, tryRotate, collides,
-  merge, clearLines, dropDistance, pieceCells, rotated, scoreFor, levelFor, dropMs, makeBag,
-} from "./tetrisBoard";
+  SIZE, PIECES, emptyBoard, canPlace, anyFits, place, clearLines,
+  PLACE_POINTS, scoreForClear, makeDealer,
+} from "./blastBoard";
 
-const HARD_DROP_BONUS = 2;        // per row skipped
+const SWEEP_MS = 1100;
 
 export default function BlockDrop(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null,
+    spectatorState = null } = props;
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
-  const { addScore } = eng;
+  const dealer = useRef(null);
+  if (dealer.current === null) dealer.current = makeDealer(seed);
 
-  const bag = useMemo(() => makeBag(seed), [seed]);
   const live = useRef(null);
   if (live.current === null) {
-    live.current = { board: emptyBoard(), piece: spawn(bag.next()), next: bag.next(), lines: 0, level: 1, topouts: 0 };
+    live.current = { board: emptyBoard(), tray: dealer.current.deal(), lines: 0, sweeps: 0, pick: null };
   }
 
-  const [view, setView] = useState({ board: live.current.board, piece: live.current.piece, next: live.current.next });
+  const [board, setBoard] = useState(live.current.board);
+  const [tray, setTray] = useState(live.current.tray);
+  const [pick, setPick] = useState(null);          // index into the tray
   const [lines, setLines] = useState(0);
-  const [level, setLevel] = useState(1);
-  const [topouts, setTopouts] = useState(0);
+  const [sweeps, setSweeps] = useState(0);
+  const [hover, setHover] = useState(null);        // { r, c } for the ghost
   const [msg, setMsg] = useState(null);
-  const overRef = useRef(false);
-  useEffect(() => { overRef.current = eng.gameOver; }, [eng.gameOver]);
   const timers = useRef([]);
   const uid = useRef(0);
   useEffect(() => {
     const t = timers.current;
     return () => t.forEach(clearTimeout);
   }, []);
+  const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
 
-  const show = () => {
-    const s = live.current;
-    setView({ board: s.board, piece: s.piece, next: s.next });
-  };
+  // Watching draws the same board: the pieces are dealt from the seed, but
+  // where they were put is a choice, so the grid itself travels.
+  const spectate = useSpectate({
+    isSpectator, spectatorState,
+    snapshot: () => ({
+      board: live.current.board,
+      tray: live.current.tray.map((p) => (p ? p.k : null)),
+      lines: live.current.lines,
+    }),
+    apply: (st) => {
+      live.current.board = st.board || emptyBoard();
+      live.current.tray = (st.tray || []).map((k) => (k ? PIECES.find((p) => p.k === k) : null));
+      live.current.lines = st.lines || 0;
+      setBoard(live.current.board);
+      setTray(live.current.tray);
+      setLines(live.current.lines);
+      setPick(null);
+    },
+  });
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
+    extraState: spectate.extraState });
+
+  const overRef = useRef(false);
+  useEffect(() => { overRef.current = eng.gameOver; }, [eng.gameOver]);
+
   function say(text, type) {
     const n = ++uid.current;
     setMsg({ text, type });
-    timers.current.push(setTimeout(() => setMsg((m) => (uid.current === n ? null : m)), 1200));
+    later(() => setMsg((m) => (uid.current === n ? null : m)), 1300);
   }
 
-  // Put the piece down, clear any full rows, bring in the next one.
-  function lock(s) {
-    s.board = merge(s.board, s.piece);
-    const { board, cleared } = clearLines(s.board);
-    s.board = board;
-    if (cleared) {
-      s.lines += cleared;
-      s.level = levelFor(s.lines);
-      const gain = scoreFor(cleared, s.level);
-      addScore(gain);
-      setLines(s.lines);
-      setLevel(s.level);
-      say(cleared === 4 ? `Four lines! +${gain}` : `${cleared} line${cleared > 1 ? "s" : ""} +${gain}`, "success");
-    }
-    s.piece = spawn(s.next);
-    s.next = bag.next();
-    if (collides(s.board, s.piece)) {
-      // Topped out. In a timed match that can't be the end, so the board is
-      // swept and play carries on; the score and lines you earned stay.
-      s.topouts += 1;
+  const show = () => {
+    const s = live.current;
+    setBoard(s.board);
+    setTray(s.tray);
+  };
+
+  // Three used up, or nothing left that fits: deal again, and if the board is
+  // genuinely stuck, sweep it. A timed match must never dead-end.
+  function refill(s) {
+    if (s.tray.some(Boolean)) return;
+    s.tray = dealer.current.deal();
+    if (!anyFits(s.board, s.tray)) {
+      s.sweeps += 1;
       s.board = emptyBoard();
-      setTopouts(s.topouts);
-      say("Board full — swept clean!", "error");
+      setSweeps(s.sweeps);
+      say("No room left — board swept!", "error");
     }
   }
 
-  function act(what) {
+  function drop(r, c) {
     if (overRef.current || isSpectator) return;
     const s = live.current;
-    if (what === "left" || what === "right") {
-      const m = moved(s.board, s.piece, what === "left" ? -1 : 1, 0);
-      if (m) s.piece = m;
-    } else if (what === "rotate") {
-      const r = tryRotate(s.board, s.piece, 1);
-      if (r) s.piece = r;
-    } else if (what === "down") {
-      const m = moved(s.board, s.piece, 0, 1);
-      if (m) s.piece = m;
-      else lock(s);
-    } else if (what === "drop") {
-      const d = dropDistance(s.board, s.piece);
-      s.piece = { ...s.piece, y: s.piece.y + d };
-      if (d) addScore(d * HARD_DROP_BONUS);
-      lock(s);
+    if (s.pick === null) { say("Pick a piece first", "info"); return; }
+    const piece = s.tray[s.pick];
+    if (!piece) return;
+    if (!canPlace(s.board, piece, r, c)) { say("It doesn't fit there", "error"); return; }
+
+    s.board = place(s.board, piece, r, c);
+    s.tray = s.tray.map((p, i) => (i === s.pick ? null : p));
+    s.pick = null;
+    eng.addMove();
+    eng.addScore(piece.size * PLACE_POINTS);
+
+    const { board: cleared, cleared: n } = clearLines(s.board);
+    if (n) {
+      s.board = cleared;
+      s.lines += n;
+      const gain = scoreForClear(n);
+      eng.addScore(gain);
+      setLines(s.lines);
+      say(n > 1 ? `${n} lines at once! +${gain}` : `Line cleared! +${gain}`, "success");
     }
+
+    refill(s);
+    setPick(null);
+    setHover(null);
     show();
+
+    // Stuck with pieces still in the tray: sweep after a beat so the player
+    // sees why, rather than the board just emptying under them.
+    if (!anyFits(s.board, s.tray)) {
+      later(() => {
+        const t = live.current;
+        if (overRef.current || anyFits(t.board, t.tray)) return;
+        t.sweeps += 1;
+        t.board = emptyBoard();
+        setSweeps(t.sweeps);
+        say("Nothing fits — board swept!", "error");
+        show();
+      }, SWEEP_MS);
+    }
   }
 
-  // Keyboard, rebound each render so it always sees the current state.
-  useEffect(() => {
-    if (isSpectator) return undefined;
-    const keys = {
-      ArrowLeft: "left", a: "left", A: "left",
-      ArrowRight: "right", d: "right", D: "right",
-      ArrowUp: "rotate", w: "rotate", W: "rotate",
-      ArrowDown: "down", s: "down", S: "down",
-      " ": "drop", Spacebar: "drop",
-    };
-    const onKey = (e) => {
-      const what = keys[e.key];
-      if (!what) return;
-      e.preventDefault();
-      if (e.repeat && what === "drop") return;     // holding space shouldn't slam piece after piece
-      act(what);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
-  // Gravity: one row every dropMs(level), which shortens as the level goes up.
-  useEffect(() => {
-    if (isSpectator) return undefined;
-    let raf;
-    let last = performance.now();
-    let waited = 0;
-    const frame = (now) => {
-      const dt = Math.min(200, now - last);        // a hidden tab mustn't dump a pile of rows
-      last = now;
-      if (!overRef.current) {
-        waited += dt;
-        const every = dropMs(live.current.level);
-        while (waited >= every) {
-          waited -= every;
-          act("down");
-        }
-      }
-      raf = requestAnimationFrame(frame);
-    };
-    raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
-  }); // eslint-disable-line react-hooks/exhaustive-deps
+  function choose(i) {
+    if (overRef.current || isSpectator) return;
+    const s = live.current;
+    if (!s.tray[i]) return;
+    s.pick = s.pick === i ? null : i;
+    setPick(s.pick);
+    setHover(null);
+  }
 
   const oppList = Object.values(eng.opponents);
-  const specScore = spectatorWatching?.score ?? 0;
-  const stats = isSpectator
-    ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
-    : [
-        { label: "Score", value: eng.score.toLocaleString() },
-        { label: "Lines", value: lines },
-        { label: "Level", value: level },
-      ];
+  const stats = [
+    { label: "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
+    { label: "Lines", value: lines },
+    ...(sweeps ? [{ label: "Sweeps", value: sweeps }] : []),
+  ];
 
-  const hold = (what) => (e) => { e.preventDefault(); act(what); };
-  const controls = !isSpectator ? (
-    <>
-      <button className="press p-sun bd-btn" onPointerDown={hold("drop")} aria-label="Hard drop">⤓</button>
-      <button className="press p-white bd-btn" onPointerDown={hold("down")} aria-label="Soft drop">▼</button>
-      <button className="press p-white bd-btn" onPointerDown={hold("left")} aria-label="Move left">◀</button>
-      <button className="press p-white bd-btn" onPointerDown={hold("rotate")} aria-label="Rotate">⟳</button>
-      <button className="press p-white bd-btn" onPointerDown={hold("right")} aria-label="Move right">▶</button>
-    </>
-  ) : null;
+  // Where the picked piece would land, so you can see before you commit.
+  const ghost = new Set();
+  let ghostOk = false;
+  if (pick !== null && hover && tray[pick]) {
+    ghostOk = canPlace(board, tray[pick], hover.r, hover.c);
+    for (const [dr, dc] of tray[pick].cells) {
+      const rr = hover.r + dr, cc = hover.c + dc;
+      if (rr < SIZE && cc < SIZE) ghost.add(rr * SIZE + cc);
+    }
+  }
 
   return (
     <>
       <GameFrame
-        gameName="Block Drop" badge="🧱 BLOCK DROP"
+        gameName="Block Blast" badge="🧱 BLOCK BLAST"
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
@@ -179,55 +184,59 @@ export default function BlockDrop(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
-        controls={controls}
       >
         {({ w, h }) => {
-          if (isSpectator) {
-            return (
-              <div className="muted">
-                👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-              </div>
-            );
-          }
-          const frame = 14;
-          // The next-piece box sits beside the board when there's room for it,
-          // and above the board otherwise — where it costs height.
-          const beside = w > 34 * COLS + 110;
-          const nextH = beside ? 0 : 52;
-          const cell = Math.floor(Math.max(12, Math.min(34,
-            (w - frame - (beside ? 90 : 0)) / COLS, (h - frame - nextH) / ROWS)));
-          const board = view.board.slice();
-          // where this piece would land, so you can aim
-          const ghostY = view.piece.y + dropDistance(view.board, view.piece);
-          for (const [x, y] of pieceCells({ ...view.piece, y: ghostY })) {
-            if (y >= 0 && !board[y * COLS + x]) board[y * COLS + x] = "ghost";
-          }
-          for (const [x, y] of pieceCells(view.piece)) {
-            if (y >= 0) board[y * COLS + x] = PIECES[view.piece.type].color;
-          }
-          const nextCells = rotated(view.next, 0);
-          const nw = Math.max(...nextCells.map(([x]) => x)) + 1;
+          const trayH = 96;
+          const gap = 3;
+          const cell = Math.floor(Math.max(18, Math.min(46,
+            (Math.min(w, h - trayH) - gap * (SIZE - 1)) / SIZE)));
+          const boardPx = cell * SIZE + gap * (SIZE - 1);
           return (
-            <div className={`bd-wrap${beside ? "" : " stacked"}`}>
-              <div className="bd-frame" style={{ width: cell * COLS + frame }}>
-                <div className="bd-grid" style={{ gridTemplateColumns: `repeat(${COLS}, ${cell}px)`, gridAutoRows: `${cell}px` }}>
-                  {board.map((c, i) => (
-                    <span key={i} className={`bd-cell${c === "ghost" ? " ghost" : ""}`}
-                      style={{ background: c && c !== "ghost" ? c : undefined }} />
-                  ))}
+            <div className="bb-wrap">
+              <div className="bb-frame" style={{ width: boardPx + 14 }}>
+                <div className="bb-grid"
+                  style={{ gridTemplateColumns: `repeat(${SIZE}, ${cell}px)`, gridAutoRows: `${cell}px`, gap }}>
+                  {board.map((fill, i) => {
+                    const r = Math.floor(i / SIZE), c = i % SIZE;
+                    const isGhost = ghost.has(i) && !fill;
+                    return (
+                      <span key={i}
+                        className={`bb-cell${fill ? " on" : ""}${isGhost ? (ghostOk ? " ghost" : " nope") : ""}`}
+                        style={fill ? { background: fill } : undefined}
+                        onPointerEnter={() => pick !== null && setHover({ r, c })}
+                        onPointerDown={() => { setHover({ r, c }); drop(r, c); }}
+                      />
+                    );
+                  })}
                 </div>
               </div>
-              <div className="bd-next" aria-label={`Next piece: ${view.next}`}>
-                <span className="muted">Next</span>
-                <span className="bd-mini" style={{ gridTemplateColumns: `repeat(${nw}, ${Math.round(cell * 0.6)}px)`,
-                  gridAutoRows: `${Math.round(cell * 0.6)}px` }}>
-                  {Array.from({ length: nw * 2 }).map((_, i) => {
-                    const x = i % nw, y = Math.floor(i / nw);
-                    const on = nextCells.some(([cx, cy]) => cx === x && cy === y);
-                    return <span key={i} className="bd-cell" style={{ background: on ? PIECES[view.next].color : undefined }} />;
-                  })}
-                </span>
+
+              {/* the three on offer */}
+              <div className="bb-tray" aria-label="Pieces to place">
+                {tray.map((p, i) => (
+                  <button key={i} type="button"
+                    className={`bb-slot${pick === i ? " picked" : ""}${p ? "" : " used"}`}
+                    onClick={() => choose(i)} disabled={!p || isSpectator}
+                    aria-pressed={pick === i}
+                    aria-label={p ? `Piece ${i + 1}, ${p.size} blocks` : "Used"}>
+                    {p && (
+                      <span className="bb-mini"
+                        style={{ gridTemplateColumns: `repeat(${p.w}, 1fr)`, gridAutoRows: "1fr" }}>
+                        {Array.from({ length: p.w * p.h }).map((_, k) => {
+                          const rr = Math.floor(k / p.w), cc = k % p.w;
+                          const on = p.cells.some(([a, b]) => a === rr && b === cc);
+                          return <span key={k} style={{ background: on ? p.colour : "transparent" }} />;
+                        })}
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
+              {!isSpectator && (
+                <div className="muted bb-help">
+                  {pick === null ? "Tap a piece, then tap the board" : "Now tap where it goes"}
+                </div>
+              )}
             </div>
           );
         }}
@@ -235,7 +244,7 @@ export default function BlockDrop(props) {
 
       {eng.gameOver && !isSpectator && (
         <GameOver eng={eng} me={currentUser}
-          extra={`Lines: ${lines} · Level ${level}${topouts ? ` · Boards topped out: ${topouts}` : ""}`} />
+          extra={`Lines cleared: ${lines}${sweeps ? ` · Boards swept: ${sweeps}` : ""}`} />
       )}
     </>
   );

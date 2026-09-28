@@ -738,20 +738,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .sp-help{margin-top:8px;font-size:.8rem}
 
 /* ---------- Block Drop ---------- */
-.bd-wrap{display:flex;align-items:flex-start;justify-content:center;gap:12px}
-.bd-wrap.stacked{flex-direction:column-reverse;align-items:center;gap:6px}
-.bd-wrap.stacked .bd-next{flex-direction:row;gap:8px}
-.bd-frame{padding:7px;border:3px solid var(--ink);border-radius:16px;background:#F3EFE6;box-shadow:0 5px 0 var(--ink)}
-.bd-grid{display:grid;gap:1px;background:rgba(46,33,64,.12);touch-action:manipulation}
-.bd-cell{display:block;background:#FFFCF4;border-radius:3px}
-.bd-cell.ghost{background:rgba(46,33,64,.16)}
-.bd-next{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:.72rem;
-  text-transform:uppercase;letter-spacing:.08em}
-.bd-mini{display:grid;gap:1px}
-.press.bd-btn{flex:1;min-width:0;max-width:110px;padding:13px 0;font-size:1.25rem;touch-action:none;
-  user-select:none;-webkit-user-select:none}
-
-/* ---------- Pipes ---------- */
 .pp-frame{margin:0 auto;padding:10px;border:3px solid var(--ink);border-radius:20px;background:#F6F2EA;
   box-shadow:0 5px 0 var(--ink);transition:background .2s}
 .pp-frame.done{background:var(--lime)}
@@ -769,3 +755,40 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .dino-key{font-size:.7rem;border:2px solid var(--ink);border-radius:6px;padding:1px 6px;opacity:.6}
 @media(hover:none){ .dino-key{display:none} }
 @keyframes pzShake{20%{transform:translateX(-7px)}40%{transform:translateX(7px)}60%{transform:translateX(-4px)}80%{transform:translateX(4px)}}
+
+
+/* ── Block Blast ─────────────────────────────────────────────────────────────
+   An 8x8 grid and a tray of three. Cells are plain squares with a hard inner
+   edge rather than a border, so a full row reads as one solid bar the instant
+   before it clears. */
+.bb-wrap{display:flex;flex-direction:column;align-items:center;gap:10px}
+.bb-frame{padding:7px;border:3px solid var(--ink);border-radius:18px;
+  background:#F3ECE0;box-shadow:0 5px 0 var(--ink)}
+.bb-grid{display:grid;touch-action:manipulation}
+.bb-cell{border-radius:5px;background:#E4DACA;box-shadow:inset 0 -2px 0 rgba(46,33,64,.08)}
+.bb-cell.on{box-shadow:inset 0 -3px 0 rgba(46,33,64,.22)}
+/* where the picked piece would land: green when it fits, red when it doesn't */
+.bb-cell.ghost{background:rgba(181,230,85,.75);box-shadow:inset 0 0 0 2px rgba(46,33,64,.35)}
+.bb-cell.nope{background:rgba(255,107,107,.55);box-shadow:inset 0 0 0 2px rgba(46,33,64,.35)}
+
+.bb-tray{display:flex;align-items:center;justify-content:center;gap:10px}
+.bb-slot{width:84px;height:72px;display:grid;place-items:center;padding:6px;
+  border:3px solid var(--ink);border-radius:16px;background:#fff;
+  box-shadow:0 4px 0 var(--ink);transition:transform .08s ease, box-shadow .08s ease}
+.bb-slot.picked{background:var(--sun);transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+.bb-slot.used{opacity:.25;box-shadow:none;border-style:dashed}
+.bb-slot:disabled{pointer-events:none}
+.bb-mini{display:grid;gap:2px;width:100%;height:100%;place-items:stretch}
+.bb-mini span{border-radius:3px}
+.bb-help{font-size:.8rem}
+@media(max-width:380px){ .bb-slot{width:70px;height:62px} }
+
+/* ── Turbo Racer / Dodge Storm ────────────────────────────────────────────────
+   Both are a single canvas centred in whatever room the frame gives them. The
+   canvas carries the ink outline so the arena reads as an object like every
+   other board here. */
+.tr-pad,.ds-pad{display:grid;place-items:center;touch-action:none;user-select:none;
+  -webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.tr-canvas,.ds-canvas{border:3px solid var(--ink);border-radius:18px;
+  box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
+.press.tr-btn{padding:12px 26px;font-size:1.3rem;--lift:4px}

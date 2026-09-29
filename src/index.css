@@ -792,3 +792,23 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .tr-canvas,.ds-canvas{border:3px solid var(--ink);border-radius:18px;
   box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
 .press.tr-btn{padding:12px 26px;font-size:1.3rem;--lift:4px}
+
+/* ── Maze Runner ──────────────────────────────────────────────────────────────
+   Cells are absolutely positioned so their walls are real borders that meet
+   exactly; a gapped grid would leave hairlines you could see through. */
+.mz-frame{margin:0 auto;padding:6px;border:3px solid var(--ink);border-radius:16px;
+  background:#FFFBF0;box-shadow:0 5px 0 var(--ink);transition:background .2s;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+.mz-frame.done{background:var(--lime)}
+.mz-grid{position:relative}
+.mz-cell{position:absolute;border-style:solid;border-color:var(--ink);border-width:0;
+  display:grid;place-items:center}
+.mz-cell.walked{background:rgba(143,219,92,.22)}
+.mz-cell.goal{background:rgba(255,197,61,.45)}
+.mz-flag{line-height:1;pointer-events:none}
+.mz-token{position:absolute;left:0;top:0;border-radius:999px;background:var(--sky);
+  border:3px solid var(--ink);box-shadow:0 2px 0 var(--ink);
+  transition-property:transform;transition-timing-function:cubic-bezier(.34,1.4,.64,1);
+  pointer-events:none;z-index:2}
+.mz-help{margin-top:6px;font-size:.78rem}
+.press.mz-btn{padding:12px 0;width:58px;font-size:1.1rem;--lift:4px}

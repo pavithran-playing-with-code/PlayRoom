@@ -17,6 +17,7 @@ import SlidePuzzle from "./SlidePuzzle";
 import BlockDrop from "./BlockDrop";
 import TurboRacer from "./TurboRacer";
 import DodgeStorm from "./DodgeStorm";
+import MazeRunner from "./MazeRunner";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -116,6 +117,12 @@ export const GAMES = [
     blurb: "Stay alive while the shards close in from every side.",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--berry)",
     Component: DodgeStorm,
+  },
+  {
+    slug: "maze", name: "Maze Runner", icon: "🧭",
+    blurb: "One way out, and it gets bigger every time you find it.",
+    minPlayers: 1, maxPlayers: 8, tag: "Brain", col: "var(--leaf)",
+    Component: MazeRunner,
   },
 ];
 

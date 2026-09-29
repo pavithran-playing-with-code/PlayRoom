@@ -224,6 +224,7 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('blocks', 'Block Blast', 'Fit the pieces in and clear whole rows and columns.', 1, 8, CONVERT(UNHEX('F09FA7B1') USING utf8mb4), 1),
   ('racer', 'Turbo Racer', 'Swerve through the traffic, grab the coins, never slow down.', 1, 8, CONVERT(UNHEX('F09F8F8EEFB88F') USING utf8mb4), 1),
   ('storm', 'Dodge Storm', 'Stay alive while the shards close in from every side.', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1),
+  ('maze', 'Maze Runner', 'One way out, and it gets bigger every time you find it.', 1, 8, CONVERT(UNHEX('F09FA7AD') USING utf8mb4), 1),
   ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
@@ -231,7 +232,7 @@ ON DUPLICATE KEY UPDATE
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 9 tables and 16 playable games.
+-- Expect 9 tables and 17 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
 SELECT slug, name, icon, max_players FROM game_types WHERE is_active = 1 ORDER BY id;
 

@@ -228,6 +228,7 @@ const GAME_SEED = [
   { slug: "blocks",    name: "Block Blast",       description: "Fit the pieces in and clear whole rows and columns.",              min: 1, max: 8, icon: "🧱", active: 1 },
   { slug: "racer",     name: "Turbo Racer",       description: "Swerve through the traffic, grab the coins, never slow down.",      min: 1, max: 8, icon: "🏎️", active: 1 },
   { slug: "storm",     name: "Dodge Storm",       description: "Stay alive while the shards close in from every side.",            min: 1, max: 8, icon: "⚡", active: 1 },
+  { slug: "maze",      name: "Maze Runner",       description: "One way out, and it gets bigger every time you find it.",           min: 1, max: 8, icon: "🧭", active: 1 },
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
 ];
 

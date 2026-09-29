@@ -3,7 +3,9 @@
 // is the score, and skimming a shard without touching it pays a little extra.
 //
 // Drag anywhere, or hold the arrow keys. Being hit doesn't end the match — the
-// room's clock does — so you start again in a fresh storm keeping your score.
+// room's clock does. A hit costs a few points and drops you into a fresh
+// storm; everything you survived for before it stays on the board. Your score
+// never goes back to zero.
 //
 // The rules live in stormSim.js. This file draws the arena and takes the input.
 import React, { useEffect, useRef, useState } from "react";
@@ -20,6 +22,7 @@ const PLAYER = "#4CC9F0";
 const SHARD = "#FF8FC7";
 const RESTART_MS = 800;
 const KEY_STEP = 7;
+const HIT_COST = 10;               // a hit costs this; what you earned is kept
 
 function draw(ctx, s, k, particles, shake) {
   ctx.setTransform(k, 0, 0, k, 0, 0);
@@ -104,6 +107,8 @@ export default function DodgeStorm(props) {
   const bits = useRef([]);
   const shake = useRef(0);
   const keys = useRef({});
+  // Every finished run's score, kept aside — see TurboRacer for why.
+  const banked = useRef(0);
   const overRef = useRef(false);
   useEffect(() => { overRef.current = eng.gameOver; }, [eng.gameOver]);
 
@@ -166,14 +171,14 @@ export default function DodgeStorm(props) {
           const run = ++runRef.current;
           timers.current.push(setTimeout(() => {
             if (overRef.current || runRef.current !== run) return;
-            const keep = sim.current.points;
+            // Banked here rather than at the hit — see TurboRacer.
+            banked.current = Math.max(0, banked.current + totalScore(sim.current) - HIT_COST);
             sim.current = newStorm((Number(seed) || 1) + run * 613);
-            sim.current.points = keep;
             setMsg({ text: "Again!", type: "info" });
             timers.current.push(setTimeout(() => setMsg(null), 600));
           }, RESTART_MS));
         }
-        const target = totalScore(s);
+        const target = banked.current + totalScore(s);
         if (target !== pushed) { addScore(target - pushed); pushed = target; }
         const alive = Math.floor(s.frame / 60);
         setSurvived((v) => (alive !== v ? alive : v));

@@ -3,8 +3,9 @@
 // that never stops speeding up. Tap a side of the road, press an arrow, or use
 // the two buttons — all three do the same thing.
 //
-// Crashing doesn't end the match; the room's clock does. You lose your run and
-// start again on a fresh road, keeping what you scored.
+// Crashing doesn't end the match; the room's clock does. A crash costs a few
+// points and puts you on a fresh road — everything you scored before it stays
+// on the board. Your score never goes back to zero.
 //
 // The rules live in racerSim.js. This file draws the road and takes the input.
 import React, { useEffect, useRef, useState } from "react";
@@ -19,7 +20,7 @@ import {
 const INK = "#2E2140";
 const ROAD = "#3A3550";
 const VERGE = "#6FBF73";
-const CRASH_COST = 0;              // the run ends; the score already earned stays
+const CRASH_COST = 15;             // a crash costs this; what you earned is kept
 const RESTART_MS = 900;
 
 function rrect(ctx, x, y, w, h, r) {
@@ -137,6 +138,10 @@ export default function TurboRacer(props) {
   // Distance is counted across the whole match. A crash starts a new road,
   // and a number that jumped back to zero would read as losing progress.
   const distBase = useRef(0);
+  // Every completed run's score, kept aside. The live total is this plus
+  // whatever the current road is worth, so starting a new road can never take
+  // points off the board — which is exactly what it used to do.
+  const banked = useRef(0);
   const shake = useRef(0);
   const flash = useRef(0);
   const overRef = useRef(false);
@@ -210,9 +215,11 @@ export default function TurboRacer(props) {
           const run = ++runRef.current;
           timers.current.push(setTimeout(() => {
             if (overRef.current || runRef.current !== run) return;
-            const keep = sim.current.points;
+            // Bank here, not at the moment of the crash: the dead road is still
+            // on screen and still being scored until this fires, so banking
+            // early counted it twice and then dropped the lot.
+            banked.current = Math.max(0, banked.current + totalScore(sim.current) - CRASH_COST);
             sim.current = newRace((Number(seed) || 1) + run * 977);
-            sim.current.points = keep;
             setMsg({ text: "New road — go!", type: "info" });
             timers.current.push(setTimeout(() => setMsg(null), 700));
           }, RESTART_MS));
@@ -220,7 +227,7 @@ export default function TurboRacer(props) {
         // exhaust
         if (Math.random() < 0.6) puff(s.x + (Math.random() - 0.5) * 10, CAR_Y + CAR_H / 2, 1,
           ["#FFA36C", "#FFFFFF"], 0.6, 16);
-        const target = totalScore(s) + CRASH_COST;
+        const target = banked.current + totalScore(s);
         if (target !== pushed) { addScore(target - pushed); pushed = target; }
         const travelled = distBase.current + Math.floor(s.distance / 8);
         setDist((d) => (travelled !== d ? travelled : d));

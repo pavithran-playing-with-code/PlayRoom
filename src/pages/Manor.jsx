@@ -13,7 +13,7 @@ import { useNavigate } from "react-router-dom";
 import {
   newNight, tick, begin, jump, decoy, toggleCrouch, toggleLight, toggleRun, lit, timeText,
 } from "../components/horror/manorSim";
-import { drawManor } from "../components/horror/manorRender";
+import { drawManor, lookBy, SPRINT_PX } from "../components/horror/manorRender";
 import { createManorAudio } from "../components/horror/manorAudio";
 import LandscapeGate, { useUprightTouch, goLandscape, useLandscapeCleanup } from "../components/horror/LandscapeGate";
 
@@ -108,9 +108,10 @@ export default function Manor() {
       if (st) {
         const dx = st.x - st.ox, dy = st.y - st.oy, l = Math.hypot(dx, dy);
         if (l > 10) { ix = dx / Math.max(l, 1) * Math.min(1, l / 50); iy = dy / Math.max(l, 1) * Math.min(1, l / 50); }
+        st.run = l > SPRINT_PX;                          // pushed past the ring: sprint
       }
       const turn = (k.ArrowRight ? 1 : 0) - (k.ArrowLeft ? 1 : 0);
-      tick(s, { ix, iy, turn, shift: !!k.Shift }, dt);
+      tick(s, { ix, iy, turn, shift: !!k.Shift || !!(st && st.run) }, dt);
 
       for (const ev of s.events) audio.current.play(ev);
       s.events.length = 0;
@@ -176,7 +177,7 @@ export default function Manor() {
     if (s.mode === "intro") { begin(s); syncHud(); return; }
     const c = canvasRef.current;
     if (e.pointerType === "mouse" || e.clientX >= view.current.W * 0.5) {
-      if (!look.current) { look.current = { id: e.pointerId, lx: e.clientX }; c.setPointerCapture(e.pointerId); }
+      if (!look.current) { look.current = { id: e.pointerId, lx: e.clientX, ly: e.clientY }; c.setPointerCapture(e.pointerId); }
     } else if (!stick.current) {
       stick.current = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY };
       c.setPointerCapture(e.pointerId);
@@ -185,7 +186,7 @@ export default function Manor() {
   const onMove = (e) => {
     const st = stick.current, lk = look.current, s = sim.current;
     if (st && e.pointerId === st.id) { st.x = e.clientX; st.y = e.clientY; }
-    if (lk && e.pointerId === lk.id && s && s.mode === "play") { s.P.fa += (e.clientX - lk.lx) * 0.005; lk.lx = e.clientX; }
+    if (lk && e.pointerId === lk.id && s && s.mode === "play") { lookBy(s.P, e.clientX - lk.lx, e.clientY - lk.ly); lk.lx = e.clientX; lk.ly = e.clientY; }
   };
   const onEnd = (e) => {
     if (stick.current && e.pointerId === stick.current.id) stick.current = null;
@@ -218,19 +219,19 @@ export default function Manor() {
 
       <div className="hm-msg" style={{ opacity: playing && hud.msg ? 1 : 0 }} aria-live="polite">{playing ? hud.msg : ""}</div>
 
-      <div className={`hm-btns${playing ? "" : " off"}`}>
-        <button className={hud?.runOn ? "on" : ""} onPointerDown={press(toggleRun)}>
-          {hud?.tired && hud?.runOn ? "Tired" : hud?.runOn ? "Run on" : "Run off"}
-        </button>
-        <button style={{ opacity: hud?.decoys ? 1 : 0.4 }} onPointerDown={press(decoy)}>Music box {hud?.decoys}</button>
-        <button className={hud?.light && hud?.bat > 0 ? "on" : ""} onPointerDown={press(toggleLight)}>
+      {/* The three that matter mid-run, under the right thumb: jump, crouch
+          below it, the light to their left. Running is the stick pushed out. */}
+      <div className={`hm-pad${playing ? "" : " off"}`}>
+        <button className="hm-jump" onPointerDown={press(jump)}>Jump</button>
+        <button className={`hm-light${hud?.light && hud?.bat > 0 ? " on" : ""}`} onPointerDown={press(toggleLight)}>
           {hud?.bat <= 0 ? "No power" : hud?.light ? "Light on" : "Light off"}
         </button>
-        <button onPointerDown={press(jump)}>Jump</button>
-        <button className={hud?.crouch ? "on" : ""} onPointerDown={press(toggleCrouch)}>
-          {hud?.crouch ? "Crouch on" : "Crouch off"}
-        </button>
+        <button className={`hm-crouch${hud?.crouch ? " on" : ""}`} onPointerDown={press(toggleCrouch)}>Crouch</button>
       </div>
+      {/* The music box lures the ghost to where you stand: used now and then,
+          so it lives small, under the map. */}
+      <button className={`hm-music${playing ? "" : " off"}`} style={{ opacity: hud?.decoys ? 1 : 0.45 }}
+        onPointerDown={press(decoy)} title="Music box: lures the ghost to where you stand">♪ Music box · {hud?.decoys}</button>
 
       {screen === "menu" && (
         <div className="hm-ov">

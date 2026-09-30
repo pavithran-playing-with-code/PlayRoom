@@ -26,6 +26,18 @@ const ghostsOf = (s) => s.ghosts || [s.G];
 const exitOpen = (s) => (s.exitOpen !== undefined ? s.exitOpen : s.count >= s.need);
 
 const TAU = Math.PI * 2;
+
+// Thumb controls, shared by the solo page and the room game.
+export const SPRINT_PX = 76;           // push the stick this far out and you run
+export const YAW_PER_PX = 0.006;       // right thumb, sideways: radians per pixel
+export const PITCH_PER_PX = 0.0024;    // right thumb, up/down: screen heights per pixel
+export const PITCH_MAX = 0.32;
+
+// A right-thumb drag, applied to a body: turn, and look up or down.
+export function lookBy(body, dx, dy) {
+  body.fa += dx * YAW_PER_PX;
+  body.pitch = Math.max(-PITCH_MAX, Math.min(PITCH_MAX, (body.pitch || 0) - dy * PITCH_PER_PX));
+}
 const PLANE = 0.65;                    // camera plane: ~66° field of view
 
 export function drawGhost(ctx, x, y, s, angry) {
@@ -145,7 +157,8 @@ function scene(ctx, s, W, H, t) {
   const dx = Math.cos(P.fa), dy = Math.sin(P.fa), plx = -dy * PLANE, ply = dx * PLANE;
   const cw = Math.max(2, Math.ceil(W / 360)), cols = Math.ceil(W / cw), zb = new Float32Array(cols);
   const mv = P.noiseR > 0 && !P.entering;
-  const hz = H / 2 + (mv ? Math.sin(s.tm * (P.noiseR > 5 ? 14 : 9)) * (P.noiseR > 5 ? 6 : 3) : 0) +
+  // P.pitch: looking up (positive) or down, as a share of the screen height
+  const hz = H / 2 + (P.pitch || 0) * H + (mv ? Math.sin(s.tm * (P.noiseR > 5 ? 14 : 9)) * (P.noiseR > 5 ? 6 : 3) : 0) +
     (P.shake > 0 ? (Math.random() - 0.5) * P.shake * 24 : 0);
   const eye = 0.5 + P.jz - P.cr * 0.26, L = litBody(P);
   const fl = 0.92 + Math.sin(t * 7) * 0.05 + (Math.random() < 0.02 ? -0.25 * Math.random() : 0);
@@ -539,13 +552,25 @@ export function drawManor(ctx, s, view, t, stick) {
   mini(ctx, s, W - ms - 14, 16 + safeTop, ms, false, t);
 
   if (stick) {
+    // the walk ring, and outside it the run ring: push past to sprint
+    const sdx = stick.x - stick.ox, sdy = stick.y - stick.oy, a = Math.atan2(sdy, sdx);
+    const run = Math.hypot(sdx, sdy) > SPRINT_PX, l = Math.min(SPRINT_PX + 8, Math.hypot(sdx, sdy));
     ctx.strokeStyle = "rgba(233,227,211,.3)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(stick.ox, stick.oy, 50, 0, TAU);
     ctx.stroke();
-    const sdx = stick.x - stick.ox, sdy = stick.y - stick.oy, l = Math.min(50, Math.hypot(sdx, sdy)), a = Math.atan2(sdy, sdx);
-    ctx.fillStyle = "rgba(233,227,211,.35)";
+    ctx.setLineDash([4, 6]);
+    ctx.strokeStyle = run ? "rgba(255,220,160,.8)" : "rgba(233,227,211,.18)";
+    ctx.beginPath();
+    ctx.arc(stick.ox, stick.oy, SPRINT_PX, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = run ? "rgba(255,220,160,.9)" : "rgba(233,227,211,.3)";
+    ctx.font = "11px Georgia";
+    ctx.textAlign = "center";
+    ctx.fillText(run ? "RUNNING" : "push out to run", stick.ox, stick.oy - SPRINT_PX - 8);
+    ctx.fillStyle = run ? "rgba(255,220,160,.55)" : "rgba(233,227,211,.35)";
     ctx.beginPath();
     ctx.arc(stick.ox + Math.cos(a) * l, stick.oy + Math.sin(a) * l, 20, 0, TAU);
     ctx.fill();

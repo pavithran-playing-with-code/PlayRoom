@@ -942,11 +942,19 @@ input::-ms-reveal,input::-ms-clear{display:none}
    underneath it ran straight through the Crouch button. Lift it clear. */
 @media (max-width:600px){ .hm-msg{bottom:calc(env(safe-area-inset-bottom,0px) + 262px)} }
 
-.hm-btns{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 40px);z-index:4;
-  display:grid;grid-template-columns:repeat(2,62px);gap:10px}
-.hm .hm-btns button{width:62px;height:62px;border-radius:50%;padding:0;font-size:11px;background:rgba(21,18,26,.75);
-  touch-action:none}
-.hm .hm-btns button.on{background:#ffdca0;color:#1a1208;border-color:#ffdca0;box-shadow:0 0 18px rgba(255,220,160,.6)}
+/* Under the right thumb: jump, crouch below it, the light to their left. */
+.hm-pad{position:fixed;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
+  z-index:4;display:grid;grid-template-columns:68px 68px;grid-template-rows:68px 68px 68px;gap:4px 10px;
+  grid-template-areas:". jump" "light ." ". crouch"}
+.hm .hm-pad button{width:68px;height:68px;border-radius:50%;padding:0;font-size:12px;background:rgba(21,18,26,.75);touch-action:none}
+.hm .hm-pad .hm-jump{grid-area:jump}
+.hm .hm-pad .hm-light{grid-area:light}
+.hm .hm-pad .hm-crouch{grid-area:crouch}
+.hm .hm-pad button.on{background:#ffdca0;color:#1a1208;border-color:#ffdca0;box-shadow:0 0 18px rgba(255,220,160,.6)}
+/* the music box: small, just under the map (which is min(130px, 30% of the short side) square) */
+.hm .hm-music{position:fixed;z-index:4;right:9px;top:calc(env(safe-area-inset-top,0px) + 30px + min(130px, 30vmin));
+  width:calc(min(130px, 30vmin) + 10px);padding:6px 4px;border-radius:999px;font-size:11px;background:rgba(21,18,26,.75);
+  touch-action:none;white-space:nowrap}
 
 /* Hollow Manor in a room: the clock, your relics, who's still inside, and
    the bar for watching once you're out of it. */
@@ -1011,10 +1019,10 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* Sideways on a phone: a short screen. Buttons in two rows of three so they
    clear the map, words kept left of the buttons, lighter headings. */
 @media (orientation: landscape) and (max-height: 520px){
-  .hm .hm-btns{grid-template-columns:repeat(3,58px);gap:8px;right:calc(12px + env(safe-area-inset-right,0px));
-    bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
-  .hm .hm-btns button{width:58px;height:58px;font-size:10.5px}
-  .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:230px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+  .hm-pad{grid-template-columns:60px 60px;grid-template-rows:60px 60px 60px;gap:2px 8px;
+    right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
+  .hm .hm-pad button{width:60px;height:60px;font-size:11px}
+  .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
     font-size:15px;text-align:left;padding:0}
   .hm-hud{top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(16px + env(safe-area-inset-left,0px));font-size:14px}
   .hmx .hmx-hud{max-width:calc(100% - 200px)}

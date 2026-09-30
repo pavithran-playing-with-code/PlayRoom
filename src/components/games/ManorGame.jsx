@@ -11,14 +11,14 @@
 // rules; the two-thumb controls here are the same as there.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "../../utils/SocketContext";
-import { drawManor } from "../horror/manorRender";
+import { drawManor, lookBy, SPRINT_PX } from "../horror/manorRender";
 import { createManorAudio } from "../horror/manorAudio";
 import {
   createClient, applyTick, stepLocal, report, jump, playing, inIntro, timeLeft, sideOfMe,
   watchedPlayer, cycleWatch, placeName, viewState,
 } from "../horror/manorClient";
 import { say } from "../horror/manorSim";
-import LandscapeGate, { useLandscapeCleanup } from "../horror/LandscapeGate";
+import LandscapeGate, { useAutoLandscape } from "../horror/LandscapeGate";
 
 const REPORT_MS = 66;                  // ~15 a second
 const HUD_MS = 100;
@@ -43,7 +43,8 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
-  useLandscapeCleanup();
+  // Sideways as the house opens — the installed app is otherwise stuck upright.
+  useAutoLandscape();
 
   const syncHud = useCallback(() => {
     const c = client.current;
@@ -159,9 +160,10 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       if (st) {
         const dx = st.x - st.ox, dy = st.y - st.oy, l = Math.hypot(dx, dy);
         if (l > 10) { ix = dx / Math.max(l, 1) * Math.min(1, l / 50); iy = dy / Math.max(l, 1) * Math.min(1, l / 50); }
+        st.run = l > SPRINT_PX;                          // pushed past the ring: sprint
       }
       const turn = (k.ArrowRight ? 1 : 0) - (k.ArrowLeft ? 1 : 0);
-      for (const s of stepLocal(c, { ix, iy, turn, shift: !!k.Shift }, dt, now)) audio.current.play(s);
+      for (const s of stepLocal(c, { ix, iy, turn, shift: !!k.Shift || !!(st && st.run) }, dt, now)) audio.current.play(s);
 
       if (playing(c) && !inIntro(c, now) && socket && now - sentAt.current >= REPORT_MS) {
         sentAt.current = now;
@@ -218,7 +220,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     if (!playing(c)) return;
     const cv = canvasRef.current;
     if (e.pointerType === "mouse" || e.clientX >= view.current.W * 0.5) {
-      if (!look.current) { look.current = { id: e.pointerId, lx: e.clientX }; cv.setPointerCapture(e.pointerId); }
+      if (!look.current) { look.current = { id: e.pointerId, lx: e.clientX, ly: e.clientY }; cv.setPointerCapture(e.pointerId); }
     } else if (!stick.current) {
       stick.current = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY };
       cv.setPointerCapture(e.pointerId);
@@ -227,7 +229,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
   const onMove = (e) => {
     const st = stick.current, lk = look.current, c = client.current;
     if (st && e.pointerId === st.id) { st.x = e.clientX; st.y = e.clientY; }
-    if (lk && e.pointerId === lk.id && c && playing(c)) { c.body.fa += (e.clientX - lk.lx) * 0.005; lk.lx = e.clientX; }
+    if (lk && e.pointerId === lk.id && c && playing(c)) { lookBy(c.body, e.clientX - lk.lx, e.clientY - lk.ly); lk.lx = e.clientX; lk.ly = e.clientY; }
   };
   const onEnd = (e) => {
     if (stick.current && e.pointerId === stick.current.id) stick.current = null;
@@ -308,19 +310,20 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       <div className="hm-msg" style={{ opacity: h && !h.intro && h.msg && !over ? 1 : 0 }} aria-live="polite">{h && !over ? h.msg : ""}</div>
 
       {h && h.playing && !h.intro && (
-        <div className="hm-btns">
-          <button className={h.runOn ? "on" : ""} onPointerDown={press((c) => { c.body.runOn = !c.body.runOn; })}>
-            {h.tired && h.runOn ? "Tired" : h.runOn ? "Run on" : "Run off"}
-          </button>
-          <button style={{ opacity: h.decoys ? 1 : 0.4 }} onPointerDown={press(decoy)}>Music box {h.decoys}</button>
-          <button className={h.light && h.bat > 0 ? "on" : ""} onPointerDown={press((c) => { c.body.light = !c.body.light; })}>
-            {h.bat <= 0 ? "No power" : h.light ? "Light on" : "Light off"}
-          </button>
-          <button onPointerDown={press((c) => { if (jump(c)) audio.current.play({ name: "jump" }); })}>Jump</button>
-          <button className={h.crouch ? "on" : ""} onPointerDown={press((c) => { c.body.crouch = !c.body.crouch; })}>
-            {h.crouch ? "Crouch on" : "Crouch off"}
-          </button>
-        </div>
+        <>
+          {/* Jump, crouch below it, the light to their left: the three that
+              matter mid-run. Running is the stick pushed past its ring. */}
+          <div className="hm-pad">
+            <button className="hm-jump" onPointerDown={press((c) => { if (jump(c)) audio.current.play({ name: "jump" }); })}>Jump</button>
+            <button className={`hm-light${h.light && h.bat > 0 ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}>
+              {h.bat <= 0 ? "No power" : h.light ? "Light on" : "Light off"}
+            </button>
+            <button className={`hm-crouch${h.crouch ? " on" : ""}`} onPointerDown={press((c) => { c.body.crouch = !c.body.crouch; })}>Crouch</button>
+          </div>
+          {/* The music box lures a ghost to where you stand; small, under the map. */}
+          <button className="hm-music" style={{ opacity: h.decoys ? 1 : 0.45 }} onPointerDown={press(decoy)}
+            title="Music box: lures the ghost to where you stand">♪ Music box · {h.decoys}</button>
+        </>
       )}
 
       {/* Out of it — caught, escaped, or only watching: look through someone

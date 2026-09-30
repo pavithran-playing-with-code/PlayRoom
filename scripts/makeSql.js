@@ -61,9 +61,11 @@ for (const [table, column, definition] of COLUMN_MIGRATIONS) {
 
 out.push(``);
 out.push(`-- ── Game catalog ─────────────────────────────────────────────────────────────`);
-out.push(`INSERT INTO game_types (slug, name, description, min_players, max_players, icon, is_active) VALUES`);
-out.push(GAME_SEED.map((g) =>
-  `  (${q(g.slug)}, ${q(g.name)}, ${q(g.description)}, ${g.min}, ${g.max}, ${emoji(g.icon)}, ${g.active})`
+// sort_order is set when a game is first added and never overwritten here, so
+// re-running this file keeps whatever order you have set in the database.
+out.push(`INSERT INTO game_types (slug, name, description, min_players, max_players, icon, is_active, sort_order) VALUES`);
+out.push(GAME_SEED.map((g, i) =>
+  `  (${q(g.slug)}, ${q(g.name)}, ${q(g.description)}, ${g.min}, ${g.max}, ${emoji(g.icon)}, ${g.active}, ${(i + 1) * 10})`
 ).join(",\n"));
 out.push(`ON DUPLICATE KEY UPDATE`);
 out.push(`  name = VALUES(name), description = VALUES(description),`);
@@ -74,7 +76,7 @@ out.push(``);
 out.push(`-- ── Check it worked ──────────────────────────────────────────────────────────`);
 out.push(`-- Expect ${CREATE_ORDER.length} tables and ${GAME_SEED.filter((g) => g.active).length} playable games.`);
 out.push(`SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();`);
-out.push(`SELECT slug, name, icon, max_players FROM game_types WHERE is_active = 1 ORDER BY id;`);
+out.push(`SELECT slug, name, icon, max_players, sort_order FROM game_types WHERE is_active = 1 ORDER BY sort_order, id;`);
 out.push(``);
 out.push(`-- Every foreign key pointing at users(id) must cascade, or deleting an account`);
 out.push(`-- fails with a constraint error. This should return no rows; if it returns any,`);

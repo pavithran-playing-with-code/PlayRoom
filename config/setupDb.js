@@ -62,6 +62,9 @@ const TABLES = {
       max_players TINYINT      NOT NULL DEFAULT 2,
       icon        VARCHAR(16)  NOT NULL DEFAULT '🎮',
       is_active   TINYINT(1)   NOT NULL DEFAULT 1,
+      -- Where the game appears in the lobby and on the home page, lowest
+      -- first. Change it with an UPDATE; no code change or deploy needed.
+      sort_order  INT          NOT NULL DEFAULT 0,
       PRIMARY KEY (id),
       UNIQUE KEY uq_game_types_slug (slug)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
@@ -230,6 +233,7 @@ const GAME_SEED = [
   { slug: "racer",     name: "Turbo Racer",       description: "Swerve through the traffic, grab the coins, never slow down.",      min: 1, max: 8, icon: "🏎️", active: 1 },
   { slug: "storm",     name: "Dodge Storm",       description: "Stay alive while the shards close in from every side.",            min: 1, max: 8, icon: "⚡", active: 1 },
   { slug: "maze",      name: "Maze Runner",       description: "One way out, and it gets bigger every time you find it.",           min: 1, max: 8, icon: "🧭", active: 1 },
+  { slug: "wick",      name: "Wick",              description: "Go down with a lantern. Every step burns oil, and the dark moves when you do.", min: 1, max: 8, icon: "🕯️", active: 1 },
   { slug: "manor",     name: "Hollow Manor",      description: "Take your relics and get out of the house before it finds you.",   min: 1, max: 8, icon: "🏚️", active: 1 },
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
 ];
@@ -249,6 +253,8 @@ const COLUMN_MIGRATIONS = [
   // Team play.
   ["rooms",        "mode", "mode ENUM('free','teams','coop') NOT NULL DEFAULT 'free' AFTER duration_seconds"],
   ["room_players", "team", "team TINYINT NULL DEFAULT NULL AFTER is_spectator"],
+  // The lobby's game order, editable in the database.
+  ["game_types",   "sort_order", "sort_order INT NOT NULL DEFAULT 0 AFTER is_active"],
 ];
 
 // Add a column only if it's missing — keeps existing data, runs safely every time.
@@ -354,13 +360,13 @@ async function main() {
   // 4. Seed / refresh the game catalog.
   for (const g of GAME_SEED) {
     await conn.execute(
-      `INSERT INTO game_types (slug, name, description, min_players, max_players, icon, is_active)
-         VALUES (?,?,?,?,?,?,?)
+      `INSERT INTO game_types (slug, name, description, min_players, max_players, icon, is_active, sort_order)
+         VALUES (?,?,?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name), description = VALUES(description),
          min_players = VALUES(min_players), max_players = VALUES(max_players),
          icon = VALUES(icon), is_active = VALUES(is_active)`,
-      [g.slug, g.name, g.description, g.min, g.max, g.icon, g.active]
+      [g.slug, g.name, g.description, g.min, g.max, g.icon, g.active, (GAME_SEED.indexOf(g) + 1) * 10]
     );
   }
   console.log(`✅ Seeded ${GAME_SEED.length} game types`);

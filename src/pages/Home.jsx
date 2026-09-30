@@ -2,7 +2,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../utils/AuthContext";
-import { GAMES } from "../components/games/registry";
+import useGames from "../components/games/useGames";
 import PeekBuddy from "../components/characters/PeekBuddy";
 
 // Emoji that bob around the hero. Positioned by percentage so they stay put
@@ -22,6 +22,8 @@ const STEPS = [
 ];
 
 export default function Home() {
+  // The order is the database's: game_types.sort_order.
+  const GAMES = useGames();
   const { isLoggedIn } = useAuth();
 
   return (

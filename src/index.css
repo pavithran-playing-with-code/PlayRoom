@@ -985,3 +985,13 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .hmx-name b{font-weight:400;color:#e9e3d3;font-size:16px}
 .hmx-name small{color:#a39a88;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hmx-got{color:var(--c);font-size:14px}
+
+/* WICK in a room: the dark board sits in the ordinary game frame, and the
+   oil, WAIT and FLARE sit in the frame's control strip. */
+.wkg-board{display:flex;flex-direction:column;margin:0 auto;background:#040308;border-radius:18px;overflow:hidden;
+  border:3px solid var(--ink);box-shadow:0 5px 0 var(--ink);touch-action:none;user-select:none;-webkit-user-select:none}
+.wkg-canvas{display:block;cursor:pointer;touch-action:none}
+.wk-msg.wkg-msg{height:58px;max-width:none;font-family:Nunito,system-ui,sans-serif;font-size:.84rem;background:#040308}
+.wk-foot.wkg-foot{max-width:520px;margin:0 auto;padding:8px 10px;border-radius:16px;background:#0a0810;
+  border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink)}
+.wkg-foot .wk-btn{min-height:52px;width:80px}

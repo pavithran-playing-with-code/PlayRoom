@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
-import { GAMES, GAME_MAP } from "../components/games/registry";
+import { GAME_MAP } from "../components/games/registry";
+import useGames from "../components/games/useGames";
 import { useToast, Avatar } from "../components/ui";
 import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
@@ -31,6 +32,8 @@ export default function Lobby() {
 
   // The chosen game lives in the URL (?game=arrows): a game card on the home
   // page opens the lobby with that game already picked, and a refresh keeps it.
+  // Games in the database's order (game_types.sort_order).
+  const GAMES = useGames();
   const [params, setParams] = useSearchParams();
   const game = GAME_MAP[params.get("game")] ? params.get("game") : GAMES[0].slug;
   const setGame = (slug) => setParams({ game: slug }, { replace: true });

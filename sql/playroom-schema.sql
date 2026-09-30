@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS game_types (
   max_players TINYINT      NOT NULL DEFAULT 2,
   icon        VARCHAR(16)  NOT NULL DEFAULT '🎮',
   is_active   TINYINT(1)   NOT NULL DEFAULT 1,
+  -- Where the game appears in the lobby and on the home page, lowest
+  -- first. Change it with an UPDATE; no code change or deploy needed.
+  sort_order  INT          NOT NULL DEFAULT 0,
   PRIMARY KEY (id),
   UNIQUE KEY uq_game_types_slug (slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -207,36 +210,43 @@ SET @sql = (SELECT IF(COUNT(*) > 0, 'DO 0',
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'room_players' AND COLUMN_NAME = 'team');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+SET @sql = (SELECT IF(COUNT(*) > 0, 'DO 0',
+  'ALTER TABLE `game_types` ADD COLUMN sort_order INT NOT NULL DEFAULT 0 AFTER is_active')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'game_types' AND COLUMN_NAME = 'sort_order');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- ── Game catalog ─────────────────────────────────────────────────────────────
-INSERT INTO game_types (slug, name, description, min_players, max_players, icon, is_active) VALUES
-  ('mahjong', 'Mahjong Solitaire', 'Match pairs of free tiles to clear the board. Solo or 1v1!', 1, 8, CONVERT(UNHEX('F09F8084') USING utf8mb4), 1),
-  ('memory', 'Memory Match', 'Flip cards and find matching pairs. Race against friends!', 1, 8, CONVERT(UNHEX('F09F838F') USING utf8mb4), 1),
-  ('speedmath', 'Speed Math', 'Solve as many problems as you can before the clock runs out!', 1, 8, CONVERT(UNHEX('E29E97') USING utf8mb4), 1),
-  ('reaction', 'Tap Rush', 'Tap the lit tiles fast — rack up points against the clock!', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1),
-  ('wordrush', 'Word Rush', 'Unscramble as many words as possible before time''s up!', 1, 8, CONVERT(UNHEX('F09F94A4') USING utf8mb4), 1),
-  ('arrows', 'Arrow Escape', 'Tap an arrow to slide it off the board, but only if its path is clear.', 1, 8, CONVERT(UNHEX('F09F8FB9') USING utf8mb4), 1),
-  ('jigsaw', 'Missing Piece', 'Spot which piece fills the gap in the picture.', 1, 8, CONVERT(UNHEX('F09FA7A9') USING utf8mb4), 1),
-  ('dino', 'Dino Dash', 'Jump the cacti, duck the birds, run as far as you can.', 1, 8, CONVERT(UNHEX('F09FA696') USING utf8mb4), 1),
-  ('numbers', 'Number Rush', 'Tap the numbers in order, one grid after another.', 1, 8, CONVERT(UNHEX('F09F94A2') USING utf8mb4), 1),
-  ('colors', 'Color Dash', 'Tap the swatch that matches the named colour, fast.', 1, 8, CONVERT(UNHEX('F09F8EA8') USING utf8mb4), 1),
-  ('pipes', 'Pipes', 'Turn the pipes until every one joins up to the source.', 1, 8, CONVERT(UNHEX('F09F9AB0') USING utf8mb4), 1),
-  ('flappy', 'Flappy Dash', 'Tap to flap and squeeze through the pipes.', 1, 8, CONVERT(UNHEX('F09F90A4') USING utf8mb4), 1),
-  ('slide', 'Slide Puzzle', 'Slide the tiles until 1-8 are back in order.', 1, 8, CONVERT(UNHEX('F09F9480') USING utf8mb4), 1),
-  ('blocks', 'Block Blast', 'Fit the pieces in and clear whole rows and columns.', 1, 8, CONVERT(UNHEX('F09FA7B1') USING utf8mb4), 1),
-  ('racer', 'Turbo Racer', 'Swerve through the traffic, grab the coins, never slow down.', 1, 8, CONVERT(UNHEX('F09F8F8EEFB88F') USING utf8mb4), 1),
-  ('storm', 'Dodge Storm', 'Stay alive while the shards close in from every side.', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1),
-  ('maze', 'Maze Runner', 'One way out, and it gets bigger every time you find it.', 1, 8, CONVERT(UNHEX('F09FA7AD') USING utf8mb4), 1),
-  ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1),
-  ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0)
+INSERT INTO game_types (slug, name, description, min_players, max_players, icon, is_active, sort_order) VALUES
+  ('mahjong', 'Mahjong Solitaire', 'Match pairs of free tiles to clear the board. Solo or 1v1!', 1, 8, CONVERT(UNHEX('F09F8084') USING utf8mb4), 1, 10),
+  ('memory', 'Memory Match', 'Flip cards and find matching pairs. Race against friends!', 1, 8, CONVERT(UNHEX('F09F838F') USING utf8mb4), 1, 20),
+  ('speedmath', 'Speed Math', 'Solve as many problems as you can before the clock runs out!', 1, 8, CONVERT(UNHEX('E29E97') USING utf8mb4), 1, 30),
+  ('reaction', 'Tap Rush', 'Tap the lit tiles fast — rack up points against the clock!', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1, 40),
+  ('wordrush', 'Word Rush', 'Unscramble as many words as possible before time''s up!', 1, 8, CONVERT(UNHEX('F09F94A4') USING utf8mb4), 1, 50),
+  ('arrows', 'Arrow Escape', 'Tap an arrow to slide it off the board, but only if its path is clear.', 1, 8, CONVERT(UNHEX('F09F8FB9') USING utf8mb4), 1, 60),
+  ('jigsaw', 'Missing Piece', 'Spot which piece fills the gap in the picture.', 1, 8, CONVERT(UNHEX('F09FA7A9') USING utf8mb4), 1, 70),
+  ('dino', 'Dino Dash', 'Jump the cacti, duck the birds, run as far as you can.', 1, 8, CONVERT(UNHEX('F09FA696') USING utf8mb4), 1, 80),
+  ('numbers', 'Number Rush', 'Tap the numbers in order, one grid after another.', 1, 8, CONVERT(UNHEX('F09F94A2') USING utf8mb4), 1, 90),
+  ('colors', 'Color Dash', 'Tap the swatch that matches the named colour, fast.', 1, 8, CONVERT(UNHEX('F09F8EA8') USING utf8mb4), 1, 100),
+  ('pipes', 'Pipes', 'Turn the pipes until every one joins up to the source.', 1, 8, CONVERT(UNHEX('F09F9AB0') USING utf8mb4), 1, 110),
+  ('flappy', 'Flappy Dash', 'Tap to flap and squeeze through the pipes.', 1, 8, CONVERT(UNHEX('F09F90A4') USING utf8mb4), 1, 120),
+  ('slide', 'Slide Puzzle', 'Slide the tiles until 1-8 are back in order.', 1, 8, CONVERT(UNHEX('F09F9480') USING utf8mb4), 1, 130),
+  ('blocks', 'Block Blast', 'Fit the pieces in and clear whole rows and columns.', 1, 8, CONVERT(UNHEX('F09FA7B1') USING utf8mb4), 1, 140),
+  ('racer', 'Turbo Racer', 'Swerve through the traffic, grab the coins, never slow down.', 1, 8, CONVERT(UNHEX('F09F8F8EEFB88F') USING utf8mb4), 1, 150),
+  ('storm', 'Dodge Storm', 'Stay alive while the shards close in from every side.', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1, 160),
+  ('maze', 'Maze Runner', 'One way out, and it gets bigger every time you find it.', 1, 8, CONVERT(UNHEX('F09FA7AD') USING utf8mb4), 1, 170),
+  ('wick', 'Wick', 'Go down with a lantern. Every step burns oil, and the dark moves when you do.', 1, 8, CONVERT(UNHEX('F09F95AFEFB88F') USING utf8mb4), 1, 180),
+  ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1, 190),
+  ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 200)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
   min_players = VALUES(min_players), max_players = VALUES(max_players),
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 9 tables and 18 playable games.
+-- Expect 9 tables and 19 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
-SELECT slug, name, icon, max_players FROM game_types WHERE is_active = 1 ORDER BY id;
+SELECT slug, name, icon, max_players, sort_order FROM game_types WHERE is_active = 1 ORDER BY sort_order, id;
 
 -- Every foreign key pointing at users(id) must cascade, or deleting an account
 -- fails with a constraint error. This should return no rows; if it returns any,

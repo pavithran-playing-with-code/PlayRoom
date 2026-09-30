@@ -19,6 +19,7 @@ import TurboRacer from "./TurboRacer";
 import DodgeStorm from "./DodgeStorm";
 import MazeRunner from "./MazeRunner";
 import ManorGame from "./ManorGame";
+import WickGame from "./WickGame";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -131,6 +132,12 @@ export const GAMES = [
     blurb: "One way out, and it gets bigger every time you find it.",
     minPlayers: 1, maxPlayers: 8, tag: "Brain", col: "var(--leaf)",
     Component: MazeRunner,
+  },
+  {
+    slug: "wick", name: "Wick", icon: "🕯️",
+    blurb: "Go down with a lantern. Every step burns oil, and the dark is full of things that move when you do.",
+    minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--peach)",
+    Component: WickGame,
   },
   {
     slug: "manor", name: "Hollow Manor", icon: "🏚️",

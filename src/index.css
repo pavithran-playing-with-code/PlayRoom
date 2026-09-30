@@ -812,3 +812,49 @@ input::-ms-reveal,input::-ms-clear{display:none}
   pointer-events:none;z-index:2}
 .mz-help{margin-top:6px;font-size:.78rem}
 .press.mz-btn{padding:12px 0;width:58px;font-size:1.1rem;--lift:4px}
+
+/* ── The Hollow ───────────────────────────────────────────────────────────────
+   The only dark screen in the app. It deliberately ignores the page theme:
+   nothing here should feel like the rest of the building. */
+.hollowdoor{display:inline-grid;place-items:center;width:38px;height:38px;flex:none;
+  border:3px solid var(--ink);border-radius:999px;background:#1B1526;font-size:1.05rem;
+  box-shadow:0 3px 0 var(--ink);transition:transform .1s ease, box-shadow .1s ease}
+.hollowdoor:hover{transform:translateY(-2px);box-shadow:0 5px 0 var(--ink)}
+.hollowdoor:active{transform:translateY(3px);box-shadow:0 0 0 var(--ink)}
+@media(max-width:400px){ .hollowdoor{width:34px;height:34px;font-size:.95rem} }
+
+.hollow{position:fixed;inset:0;z-index:200;background:#07060D;color:#CFC8E0;
+  display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px 12px;
+  font-family:Nunito,system-ui,sans-serif;overflow:hidden;
+  height:100svh;touch-action:none;user-select:none;-webkit-user-select:none}
+.hollow-bar{width:100%;max-width:520px;display:flex;align-items:center;gap:14px}
+.hollow-out{color:#8E86A6;font-size:.86rem;font-weight:800;padding:6px 2px;background:none;border:0}
+.hollow-out:hover{color:#CFC8E0}
+.hollow-stat{margin-left:auto;display:flex;flex-direction:column;align-items:center;line-height:1}
+.hollow-stat b{font-family:Fredoka,sans-serif;font-size:1.15rem;color:#EFEAF8}
+.hollow-stat span{font-size:.58rem;letter-spacing:.12em;color:#6E6688;margin-top:3px}
+.hollow-stat + .hollow-stat{margin-left:0}
+
+.hollow-stage{position:relative;flex:1;width:100%;max-width:520px;display:grid;place-items:center;min-height:0}
+.hollow-canvas{border-radius:10px;display:block;box-shadow:0 0 60px rgba(0,0,0,.9)}
+/* Covers the whole screen, not just the board: being caught should not look
+   like a panel opening. */
+.hollow-caught{position:fixed;inset:0;z-index:5;display:grid;place-items:center;align-content:center;
+  gap:22px;background:rgba(74,0,6,.82);animation:hollowIn .1s steps(2)}
+.hollow-eyes{display:flex;gap:26px;animation:hollowStare 1.4s ease-in-out infinite}
+.hollow-eyes span{width:26px;height:26px;border-radius:999px;background:#FFF2F2;
+  box-shadow:0 0 22px rgba(255,200,200,.8)}
+.hollow-shout{font-family:Fredoka,sans-serif;font-size:1.7rem;letter-spacing:.18em;color:#FFE9E9;
+  animation:hollowFlicker .9s steps(3) infinite}
+@keyframes hollowIn{from{opacity:0}}
+@keyframes hollowFlicker{0%,100%{opacity:1}45%{opacity:.55}}
+@keyframes hollowStare{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+
+.hollow-said{min-height:1.2em;font-size:.84rem;font-style:italic;color:#8E86A6;text-align:center}
+.hollow-pad{display:flex;align-items:center;gap:10px}
+.hollow-pad span{display:flex;flex-direction:column;gap:6px}
+.hollow-pad button{width:56px;height:44px;border:2px solid #3A3350;border-radius:12px;
+  background:#15111F;color:#BDB5D0;font-size:1rem}
+.hollow-pad button:active{background:#241D33;color:#fff}
+.hollow-help{font-size:.76rem;color:#6E6688;text-align:center;padding-bottom:4px}
+.hollow-caught-n{color:#8E5A6A}

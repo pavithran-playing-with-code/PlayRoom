@@ -59,6 +59,7 @@ export default function Navbar() {
             </div>
 
             <div className="navme">
+              <HollowDoor />
               {/* Friends' faces with online pips: tap for who's on and last seen */}
               <FriendsDock max={narrow ? 2 : 3} size={32} />
 
@@ -93,12 +94,23 @@ export default function Navbar() {
           </>
         ) : (
           <div className="navme">
+            <HollowDoor />
             {navLink("/login", "Log in")}
             <Link to="/register" className="press p-coral sm">Join free</Link>
           </div>
         )}
       </div>
     </nav>
+  );
+}
+
+// The one door in this building that isn't friendly. Deliberately quiet — no
+// label, no colour, just a shape that doesn't belong on a toy shelf.
+function HollowDoor() {
+  return (
+    <Link to="/hollow" className="hollowdoor" aria-label="The Hollow — a horror game" title="The Hollow">
+      <span aria-hidden="true">🕯️</span>
+    </Link>
   );
 }
 

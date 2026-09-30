@@ -16,6 +16,7 @@ import Room            from "./pages/Room";
 import Leaderboard     from "./pages/Leaderboard";
 import Friends         from "./pages/Friends";
 import Profile         from "./pages/Profile";
+import Hollow          from "./pages/Hollow";
 import { installErrorReporting } from "./utils/reportError";
 
 installErrorReporting();
@@ -44,6 +45,8 @@ export default function App() {
         <Routes>
           {/* Room page has its own full-screen game layout — no Navbar */}
           <Route path="/room/:code" element={<ProtectedRoute><Room /></ProtectedRoute>} />
+          {/* No login, no lobby, no navbar — you walk in and the door shuts. */}
+          <Route path="/hollow" element={<Hollow />} />
 
           {/* All other pages share the Navbar */}
           <Route path="/*" element={<WithNav />} />

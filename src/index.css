@@ -995,3 +995,33 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .wk-foot.wkg-foot{max-width:520px;margin:0 auto;padding:8px 10px;border-radius:16px;background:#0a0810;
   border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink)}
 .wkg-foot .wk-btn{min-height:52px;width:80px}
+
+/* Held upright on a phone or tablet: turn it sideways. */
+.hm-turn{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:24px;text-align:center;background:#050506;color:#e9e3d3;font-family:Georgia,'Times New Roman',serif}
+.hm-turn h2{font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:400;font-style:italic;color:#c81e3a;margin:6px 0 0}
+.hm-turn p{max-width:320px;margin:0;color:#a39a88;line-height:1.55;font-size:15px}
+.hm-turn .hm-turn-small{font-size:13px}
+.hm-turn .hm-turn-note{font-size:13px;color:#ffdca0;font-style:italic}
+.hm-turn-phone{width:46px;height:78px;border:3px solid #e9e3d3;border-radius:9px;position:relative;
+  animation:hmTurn 2.4s ease-in-out infinite}
+.hm-turn-phone span{position:absolute;left:50%;bottom:5px;width:12px;height:3px;margin-left:-6px;border-radius:2px;background:#e9e3d3}
+@keyframes hmTurn{0%,20%{transform:rotate(0)}45%,75%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
+
+/* Sideways on a phone: a short screen. Buttons in two rows of three so they
+   clear the map, words kept left of the buttons, lighter headings. */
+@media (orientation: landscape) and (max-height: 520px){
+  .hm .hm-btns{grid-template-columns:repeat(3,58px);gap:8px;right:calc(12px + env(safe-area-inset-right,0px));
+    bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
+  .hm .hm-btns button{width:58px;height:58px;font-size:10.5px}
+  .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:230px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
+    font-size:15px;text-align:left;padding:0}
+  .hm-hud{top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(16px + env(safe-area-inset-left,0px));font-size:14px}
+  .hmx .hmx-hud{max-width:calc(100% - 200px)}
+  .hmx-who{margin-top:6px}
+  .hm-ov{padding:14px 20px}
+  .hm-ov h1{font-size:30px;margin-bottom:8px}
+  .hm-ov p{font-size:13px;line-height:1.5;margin-bottom:6px}
+  .hm .hm-go{margin-top:8px;padding:10px 26px}
+  .hmx-spec{bottom:calc(env(safe-area-inset-bottom,0px) + 10px)}
+}

@@ -15,6 +15,7 @@ import {
 } from "../components/horror/manorSim";
 import { drawManor } from "../components/horror/manorRender";
 import { createManorAudio } from "../components/horror/manorAudio";
+import LandscapeGate, { useUprightTouch, goLandscape, useLandscapeCleanup } from "../components/horror/LandscapeGate";
 
 const HUD_MS = 80;
 const SHOW_CAUGHT_AFTER = 1.4;     // seconds of its face before the card
@@ -43,6 +44,12 @@ export default function Manor() {
   const [over, setOver] = useState(null);              // { win, title, text, again }
   const syncHud = useCallback(() => setHud(hudOf(sim.current)), []);
 
+  // A landscape game: held upright on a phone, the house waits.
+  const upright = useUprightTouch();
+  const uprightRef = useRef(upright);
+  useEffect(() => { uprightRef.current = upright; stick.current = null; look.current = null; }, [upright]);
+  useLandscapeCleanup();
+
   useEffect(() => {
     document.body.classList.add("in-game");
     audio.current = createManorAudio();
@@ -53,6 +60,7 @@ export default function Manor() {
   }, []);
 
   const newGame = useCallback(() => {
+    goLandscape();                                      // a tap, so the browser allows it
     audio.current.start();
     sim.current = newNight(Math.floor(Math.random() * 1e9) + 1, night.current);
     stick.current = null;
@@ -88,6 +96,7 @@ export default function Manor() {
       last = ts;
       const s = sim.current;
       if (!s || screen === "menu") return;
+      if (uprightRef.current && screen === "game") return;   // paused until turned
 
       const k = keys.current;
       let ix = 0, iy = 0;
@@ -198,6 +207,8 @@ export default function Manor() {
     <div className="hm" ref={rootRef} data-no-fun>
       <canvas ref={canvasRef} className="hm-cv"
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onEnd} onPointerCancel={onEnd} />
+
+      {screen === "game" && <LandscapeGate note="The house waits while you turn." />}
 
       <div className={`hm-hud${playing ? "" : " off"}`}>
         <div>Night {hud?.night} &nbsp;·&nbsp; Relics {hud?.count} / {hud?.need}</div>

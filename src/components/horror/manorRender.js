@@ -494,16 +494,19 @@ export function drawManor(ctx, s, view, t, stick) {
   if (!s) return;
 
   if (s.mode === "intro") {
-    const size = Math.min(W, H) * 0.74, x0 = (W - size) / 2, y0 = (H - size) / 2 + 16;
+    // The map plus a line above and two below, all inside the screen — a
+    // phone on its side is only ~360px tall.
+    const size = Math.max(120, Math.min(W * 0.74, H - 124));
+    const x0 = (W - size) / 2, y0 = (H - size - 100) / 2 + 36;
     mini(ctx, s, x0, y0, size, true, t);
     ctx.fillStyle = "#e9e3d3";
     ctx.textAlign = "center";
     ctx.font = `italic ${Math.max(15, Math.min(22, W / 22))}px Georgia`;
-    ctx.fillText("Memorize the halls. Gold marks the relics.", W / 2, y0 - 24);
+    ctx.fillText("Memorize the halls. Gold marks the relics.", W / 2, y0 - 14);
     ctx.fillStyle = "#a39a88";
     ctx.font = "14px Georgia";
-    ctx.fillText(`The dark falls in ${Math.ceil(s.introT)}s. Tap or press any key to start now.`, W / 2, y0 + size + 30);
-    ctx.fillText("Orange squares: jump over. Purple squares: crouch under.", W / 2, y0 + size + 52);
+    ctx.fillText(`The dark falls in ${Math.ceil(s.introT)}s. Tap or press any key to start now.`, W / 2, y0 + size + 24);
+    ctx.fillText("Orange squares: jump over. Purple squares: crouch under.", W / 2, y0 + size + 44);
     return;
   }
   if (s.mode === "dead") {

@@ -18,6 +18,7 @@ import {
   watchedPlayer, cycleWatch, placeName, viewState,
 } from "../horror/manorClient";
 import { say } from "../horror/manorSim";
+import LandscapeGate, { useLandscapeCleanup } from "../horror/LandscapeGate";
 
 const REPORT_MS = 66;                  // ~15 a second
 const HUD_MS = 100;
@@ -41,6 +42,8 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
   const [gone, setGone] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
+
+  useLandscapeCleanup();
 
   const syncHud = useCallback(() => {
     const c = client.current;
@@ -355,6 +358,9 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       )}
 
       {over && <Results over={over} me={currentUser} onExit={leave} leaving={leaving} />}
+
+      {/* A landscape game. The match can't wait, so say so. */}
+      {h && !over && <LandscapeGate note="The match clock keeps running." />}
     </div>
   );
 }

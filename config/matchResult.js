@@ -40,6 +40,40 @@ function decideResult({ seated, myUserId, myScore, gameSlug }) {
   return (Number(me?.pairs_matched) || 0) >= needed ? "win" : "loss";
 }
 
+// ── Hollow Manor ─────────────────────────────────────────────────────────────
+// The server keeps this game's scores itself (config/manorWorld.js), and
+// they encode the result: 100 a relic, and getting out adds ESCAPE_BONUS plus
+// PLACE_STEP for every place you beat. So "got out" is score >= ESCAPE_BONUS,
+// and a higher escaped score got out earlier.
+//
+// Both steps must be bigger than the most relic points a side can hold (13
+// relics in a four-player co-op: 1300). With smaller ones a side that got out
+// second with more relics tied the side that got out first, and a co-op that
+// took every relic and was then caught read as escaped.
+//
+// Nobody wins without getting out — a free-for-all where everyone is caught
+// has no winner, however many relics they held. Sides are compared on their
+// own score, not a sum over members: every member of a side carries the
+// side's score, so summing would hand the win to the bigger team.
+const ESCAPE_BONUS = 5000;
+const PLACE_STEP = 2000;
+const MAX_RELIC_POINTS = 1300;
+
+function manorResults(room, seated) {
+  const out = new Map();
+  const sideOf = (p) => (room.mode === "coop" ? "all"
+    : room.mode === "teams" && p.team != null ? `t${p.team}` : `p${p.user_id}`);
+  const side = new Map();
+  for (const p of seated) side.set(sideOf(p), Math.max(side.get(sideOf(p)) || 0, cap(p.score)));
+  const escaped = [...side.values()].filter((v) => v >= ESCAPE_BONUS);
+  const best = escaped.length ? Math.max(...escaped) : null;
+  for (const p of seated) {
+    const mine = side.get(sideOf(p));
+    out.set(Number(p.user_id), best !== null && mine === best ? "win" : "loss");
+  }
+  return out;
+}
+
 // Everyone's outcome, decided together.
 //
 // In a team room the sides are ranked on the straight total of their members'
@@ -51,6 +85,7 @@ function decideResult({ seated, myUserId, myScore, gameSlug }) {
 // Anyone who somehow reached the start without a side is scored as their own
 // one-person team rather than being dropped from the reckoning.
 function resultsFor(room, seated) {
+  if (room.game_slug === "manor") return manorResults(room, seated);
   const out = new Map();
 
   if (room.mode === "teams" && seated.some(p => p.team != null)) {
@@ -74,4 +109,4 @@ function resultsFor(room, seated) {
   return out;
 }
 
-module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, cap, decideResult, resultsFor };
+module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, ESCAPE_BONUS, PLACE_STEP, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults };

@@ -82,7 +82,8 @@ const TABLES = {
       duration_seconds INT      NOT NULL DEFAULT 120,
       -- 'free': every player for themselves, ranked by their own score.
       -- 'teams': players pick a side and the sides are ranked by total.
-      mode         ENUM('free','teams') NOT NULL DEFAULT 'free',
+      -- 'coop': everyone on one side against the game (Hollow Manor only).
+      mode         ENUM('free','teams','coop') NOT NULL DEFAULT 'free',
       status       ENUM('waiting','in_progress','finished','abandoned')
                                 NOT NULL DEFAULT 'waiting',
       created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -229,6 +230,7 @@ const GAME_SEED = [
   { slug: "racer",     name: "Turbo Racer",       description: "Swerve through the traffic, grab the coins, never slow down.",      min: 1, max: 8, icon: "🏎️", active: 1 },
   { slug: "storm",     name: "Dodge Storm",       description: "Stay alive while the shards close in from every side.",            min: 1, max: 8, icon: "⚡", active: 1 },
   { slug: "maze",      name: "Maze Runner",       description: "One way out, and it gets bigger every time you find it.",           min: 1, max: 8, icon: "🧭", active: 1 },
+  { slug: "manor",     name: "Hollow Manor",      description: "Take your relics and get out of the house before it finds you.",   min: 1, max: 8, icon: "🏚️", active: 1 },
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
 ];
 
@@ -245,7 +247,7 @@ const COLUMN_MIGRATIONS = [
   // Powers "last seen 5 minutes ago" on the friends list.
   ["users", "last_seen_at",     "last_seen_at TIMESTAMP NULL DEFAULT NULL AFTER created_at"],
   // Team play.
-  ["rooms",        "mode", "mode ENUM('free','teams') NOT NULL DEFAULT 'free' AFTER duration_seconds"],
+  ["rooms",        "mode", "mode ENUM('free','teams','coop') NOT NULL DEFAULT 'free' AFTER duration_seconds"],
   ["room_players", "team", "team TINYINT NULL DEFAULT NULL AFTER is_spectator"],
 ];
 

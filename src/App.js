@@ -17,6 +17,7 @@ import Leaderboard     from "./pages/Leaderboard";
 import Friends         from "./pages/Friends";
 import Profile         from "./pages/Profile";
 import Wick            from "./pages/Wick";
+import Manor           from "./pages/Manor";
 import { installErrorReporting } from "./utils/reportError";
 
 installErrorReporting();
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/room/:code" element={<ProtectedRoute><Room /></ProtectedRoute>} />
           {/* No login, no lobby, no navbar — you walk in and the door shuts. */}
           <Route path="/wick" element={<Wick />} />
+          <Route path="/manor" element={<Manor />} />
 
           {/* All other pages share the Navbar */}
           <Route path="/*" element={<WithNav />} />

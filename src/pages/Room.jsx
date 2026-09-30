@@ -452,8 +452,8 @@ function Room() {
           onGameEnd={exitToLobby}
         />
         {/* Hop between players without leaving. Only worth showing when there
-            is somebody else to hop to. */}
-        {seatedPlayers.length > 1 && (
+            is somebody else to hop to, and when the game doesn't draw its own. */}
+        {seatedPlayers.length > 1 && !GAME_MAP[room?.game_slug]?.ownsSpectating && (
           <div className="spec-switch" role="group" aria-label="Choose who to watch">
             {seatedPlayers.map((p) => (
               <button key={p.user_id} type="button"
@@ -486,6 +486,7 @@ function Room() {
             <span className="chip c-sun">{room?.game_icon || "🎮"} {room?.game_name || "Loading…"}</span>
             {mins && <span className="chip c-sky">⏱️ {mins} min match</span>}
             {isSolo && <span className="chip c-coral">🧍 Solo run</span>}
+            {room?.mode === "coop" && <span className="chip c-grape">🤝 Together</span>}
           </span>
         </div>
 
@@ -684,6 +685,11 @@ function Room() {
           {isSpectator && status === "waiting" && (
             <div className="note" style={{ background: "var(--sky)", marginTop: 20 }}>
               👀 You're spectating — you'll see live scores when the game begins.
+            </div>
+          )}
+          {room?.mode === "coop" && status === "waiting" && (
+            <div className="note" style={{ background: "var(--berry)", marginTop: 20 }}>
+              🤝 You're all on one side: take every relic, and every one of you gets out — or none of you does.
             </div>
           )}
           {!isHost && !isSpectator && status === "waiting" && (

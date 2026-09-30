@@ -816,12 +816,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* ── WICK ────────────────────────────────────────────────────────────────────
    The one dark screen in the app. It ignores the page theme on purpose:
    nothing here should feel like the rest of the building. */
-.hollowdoor{display:inline-grid;place-items:center;width:38px;height:38px;flex:none;
-  border:3px solid var(--ink);border-radius:999px;background:#140F1E;font-size:1.02rem;
-  box-shadow:0 3px 0 var(--ink);transition:transform .1s ease, box-shadow .1s ease}
-.hollowdoor:hover{transform:translateY(-2px);box-shadow:0 5px 0 var(--ink)}
-.hollowdoor:active{transform:translateY(3px);box-shadow:0 0 0 var(--ink)}
-@media(max-width:400px){ .hollowdoor{width:34px;height:34px;font-size:.92rem} }
 
 .wk{position:fixed;inset:0;z-index:200;background:#040308;color:#CFC6D8;height:100svh;
   display:flex;flex-direction:column;align-items:center;gap:6px;
@@ -906,3 +900,88 @@ input::-ms-reveal,input::-ms-clear{display:none}
 @keyframes wkIn{from{opacity:0}}
 @keyframes wkFlicker{0%,100%{opacity:1}50%{opacity:.55}}
 @keyframes wkWick{0%,100%{opacity:1}47%{opacity:.92}50%{opacity:.6}53%{opacity:.95}}
+
+/* ── HOLLOW MANOR ────────────────────────────────────────────────────────────
+   First-person, full screen, its own serif and its own dark. Played from a
+   room (components/games/ManorGame.jsx) or solo at /manor. */
+.hm{position:fixed;inset:0;z-index:200;background:#050506;color:#e9e3d3;overflow:hidden;
+  padding-top:env(safe-area-inset-top,0px);font-family:Georgia,'Times New Roman',serif;
+  touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none;
+  -webkit-tap-highlight-color:transparent}
+.hm-cv{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+.hm-cv:active{cursor:grabbing}
+.hm .off{display:none!important}
+/* the app sets heavier weights on text and buttons; the manor is plain Georgia */
+.hm,.hm p,.hm button,.hm-hud,.hm-msg{font-weight:400}
+.hm button{font:inherit;color:#e9e3d3;background:#15121a;border:1px solid #5b1524;border-radius:6px;
+  padding:13px 30px;font-size:17px;cursor:pointer}
+.hm button:hover{background:#231019;border-color:#c81e3a}
+
+.hm-ov{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:24px;background:rgba(3,3,5,.9);overflow-y:auto}
+.hm-ov h1{font-size:clamp(34px,9vw,64px);font-weight:400;font-style:italic;letter-spacing:.02em;margin:0 0 14px;
+  color:#c81e3a;text-shadow:0 0 30px rgba(200,30,58,.45);font-family:Georgia,'Times New Roman',serif}
+.hm-ov p{max-width:420px;line-height:1.65;color:#a39a88;margin:0 0 10px;font-size:15px}
+.hm-ov .hm-small{margin-top:20px;font-size:13px}
+.hm .hm-go{margin-top:18px}
+.hm .hm-leave{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:10px;background:none;border:0;
+  padding:10px;font-size:14px;color:#a39a88}
+.hm .hm-leave:hover{background:none;color:#e9e3d3}
+
+.hm-hud{position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);left:16px;z-index:3;pointer-events:none;font-size:15px;
+  text-shadow:0 0 6px #000}
+.hm-bar{width:110px;height:5px;background:#222;margin-top:8px;border-radius:3px;overflow:hidden}
+.hm-bar.bat{margin-top:6px}
+.hm-bar i{display:block;height:100%;width:100%;transition:width .1s}
+.hm-bar.stam i{background:#ffdca0}
+.hm-bar.bat i{background:#8fe3a8}
+
+.hm-msg{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);z-index:3;pointer-events:none;
+  text-align:center;color:#ffdca0;font-style:italic;font-size:16px;transition:opacity .4s;text-shadow:0 0 8px #000;padding:0 16px}
+/* On a phone the button grid fills the bottom-right corner, and a message
+   underneath it ran straight through the Crouch button. Lift it clear. */
+@media (max-width:600px){ .hm-msg{bottom:calc(env(safe-area-inset-bottom,0px) + 262px)} }
+
+.hm-btns{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 40px);z-index:4;
+  display:grid;grid-template-columns:repeat(2,62px);gap:10px}
+.hm .hm-btns button{width:62px;height:62px;border-radius:50%;padding:0;font-size:11px;background:rgba(21,18,26,.75);
+  touch-action:none}
+.hm .hm-btns button.on{background:#ffdca0;color:#1a1208;border-color:#ffdca0;box-shadow:0 0 18px rgba(255,220,160,.6)}
+
+/* Hollow Manor in a room: the clock, your relics, who's still inside, and
+   the bar for watching once you're out of it. */
+.hmx .hmx-hud{right:16px;left:16px;max-width:calc(100% - 32px - min(140px,31vw))}
+.hmx-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.hmx-clock{font-size:17px;letter-spacing:.04em;color:#ffdca0}
+.hmx-mine{display:inline-flex;align-items:center;gap:4px}
+.hmx-mine i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--c);display:inline-block}
+.hmx-mine i.got{background:var(--c);box-shadow:0 0 6px var(--c)}
+.hmx-mine b{font-weight:400;margin-left:4px;color:var(--c)}
+.hmx-who{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:9px;font-size:12px;color:#cfc6d8}
+.hmx-p{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.hmx-p i{width:8px;height:8px;border-radius:50%;background:var(--c);display:inline-block}
+.hmx-p.dead{opacity:.45;text-decoration:line-through}
+.hmx-p.out{color:#8fe3a8}
+.hm .hmx-leave{pointer-events:auto;margin-top:10px;padding:6px 12px;font-size:12px;background:rgba(21,18,26,.7)}
+
+.hmx-spec{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:4;
+  display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 16px}
+.hmx-banner{background:rgba(5,5,6,.78);border:1px solid #5b1524;border-radius:8px;padding:10px 16px;
+  text-align:center;font-style:italic;color:#ffdca0;font-size:16px}
+.hmx-banner span{color:#a39a88;font-size:14px}
+.hmx-specbar{display:flex;align-items:center;gap:10px;background:rgba(5,5,6,.78);border-radius:999px;padding:6px}
+.hm .hmx-specbar button{width:48px;height:48px;border-radius:50%;padding:0;font-size:18px}
+.hmx-watching{min-width:150px;text-align:center;font-size:15px}
+.hmx-watching b{font-weight:400;color:var(--c)}
+.hm .hmx-out{padding:10px 26px;font-size:15px}
+
+.hmx-results{overflow-y:auto}
+.hmx-standings{width:100%;max-width:380px;display:flex;flex-direction:column;gap:8px;margin:6px 0 4px}
+.hmx-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;text-align:left;
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-left:4px solid var(--c)}
+.hmx-row.mine{background:rgba(255,220,160,.1);border-color:rgba(255,220,160,.35);border-left-color:var(--c)}
+.hmx-place{width:34px;text-align:center;font-size:20px}
+.hmx-name{flex:1;min-width:0;display:flex;flex-direction:column}
+.hmx-name b{font-weight:400;color:#e9e3d3;font-size:16px}
+.hmx-name small{color:#a39a88;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hmx-got{color:var(--c);font-size:14px}

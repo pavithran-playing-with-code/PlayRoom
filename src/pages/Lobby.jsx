@@ -38,6 +38,7 @@ export default function Lobby() {
   const [duration, setDuration] = useState(120);
   const [isPrivate, setIsPrivate] = useState(false);
   const [teamMode, setTeamMode] = useState(false);
+  const [coopMode, setCoopMode] = useState(false);
   const [creating, setCreating] = useState(false);
 
   const [joinCode, setJoinCode] = useState("");
@@ -53,6 +54,10 @@ export default function Lobby() {
   const MIN_TEAM_SEATS = 4;
   const canTeam = maxPlayers >= MIN_TEAM_SEATS;
   const teams = teamMode && canTeam;
+  // Playing together: only games that have a side to be on, 2 up to their cap.
+  const coopMax = selected.coopMax || 0;
+  const canCoop = coopMax > 0 && maxPlayers >= 2 && maxPlayers <= coopMax;
+  const coop = coopMode && canCoop && !teams;
 
   // Keep maxPlayers valid when switching games.
   useEffect(() => {
@@ -63,6 +68,11 @@ export default function Lobby() {
   useEffect(() => {
     if (!canTeam) setTeamMode(false);
   }, [canTeam]);
+
+  // Some games want a longer clock (a house takes a while to search).
+  useEffect(() => {
+    if (selected.defaultDuration) setDuration(selected.defaultDuration);
+  }, [selected.slug, selected.defaultDuration]);
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -85,7 +95,7 @@ export default function Lobby() {
         game_slug: game, max_players: maxPlayers,
         is_private: isSolo ? true : isPrivate,   // solo rooms are never listed
         duration_seconds: duration,
-        mode: teams ? "teams" : "free",
+        mode: teams ? "teams" : coop ? "coop" : "free",
       });
       const data = await res.json();
       if (!data.success) { toast.error(data.message || "Failed to create room."); return; }
@@ -189,8 +199,8 @@ export default function Lobby() {
                   </span>
                   <strong>{maxPlayers}</strong>
                   <button className="press p-white step" aria-label="One player more"
-                    disabled={maxPlayers >= selected.maxPlayers}
-                    onClick={() => setMaxPlayers(Math.min(selected.maxPlayers, maxPlayers + 1))}>+</button>
+                    disabled={maxPlayers >= (coop ? coopMax : selected.maxPlayers)}
+                    onClick={() => setMaxPlayers(Math.min(coop ? coopMax : selected.maxPlayers, maxPlayers + 1))}>+</button>
                 </span>
               )}
             </div>
@@ -214,16 +224,30 @@ export default function Lobby() {
                 </label>
                 {/* Needs four seats: two sides of two. */}
                 <label className="row"
-                  style={{ gap: 11, fontSize: ".95rem", marginBottom: 22,
+                  style={{ gap: 11, fontSize: ".95rem", marginBottom: coopMax ? 12 : 22,
                     cursor: canTeam ? "pointer" : "not-allowed", opacity: canTeam ? 1 : .45 }}>
                   <input type="checkbox" checked={teams} disabled={!canTeam}
-                    onChange={(e) => setTeamMode(e.target.checked)}
+                    onChange={(e) => { setTeamMode(e.target.checked); if (e.target.checked) setCoopMode(false); }}
                     style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
                   <span>
                     ⚔️ Team match — play as sides, highest total wins
                     {!canTeam && <span className="muted"> · needs {MIN_TEAM_SEATS}+ seats</span>}
                   </span>
                 </label>
+                {/* Together: one side against the game. */}
+                {coopMax > 0 && (
+                  <label className="row"
+                    style={{ gap: 11, fontSize: ".95rem", marginBottom: 22,
+                      cursor: canCoop ? "pointer" : "not-allowed", opacity: canCoop ? 1 : .45 }}>
+                    <input type="checkbox" checked={coop} disabled={!canCoop}
+                      onChange={(e) => { setCoopMode(e.target.checked); if (e.target.checked) setTeamMode(false); }}
+                      style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
+                    <span>
+                      🤝 Play together — everyone gets out, or nobody does
+                      {!canCoop && <span className="muted"> · 2 to {coopMax} players</span>}
+                    </span>
+                  </label>
+                )}
               </>
             )}
 
@@ -233,6 +257,7 @@ export default function Lobby() {
               <span className="chip c-sky">⏱️ {mins} min match</span>
               <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
               {teams && <span className="chip c-grape">⚔️ Teams</span>}
+              {coop && <span className="chip c-grape">🤝 Together</span>}
             </div>
             <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
               {creating ? "Creating…"

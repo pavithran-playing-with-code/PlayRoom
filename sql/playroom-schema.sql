@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   duration_seconds INT      NOT NULL DEFAULT 120,
   -- 'free': every player for themselves, ranked by their own score.
   -- 'teams': players pick a side and the sides are ranked by total.
-  mode         ENUM('free','teams') NOT NULL DEFAULT 'free',
+  -- 'coop': everyone on one side against the game (Hollow Manor only).
+  mode         ENUM('free','teams','coop') NOT NULL DEFAULT 'free',
   status       ENUM('waiting','in_progress','finished','abandoned')
                             NOT NULL DEFAULT 'waiting',
   created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -195,7 +196,7 @@ SET @sql = (SELECT IF(COUNT(*) > 0, 'DO 0',
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 SET @sql = (SELECT IF(COUNT(*) > 0, 'DO 0',
-  'ALTER TABLE `rooms` ADD COLUMN mode ENUM(''free'',''teams'') NOT NULL DEFAULT ''free'' AFTER duration_seconds')
+  'ALTER TABLE `rooms` ADD COLUMN mode ENUM(''free'',''teams'',''coop'') NOT NULL DEFAULT ''free'' AFTER duration_seconds')
   FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'rooms' AND COLUMN_NAME = 'mode');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
@@ -225,6 +226,7 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('racer', 'Turbo Racer', 'Swerve through the traffic, grab the coins, never slow down.', 1, 8, CONVERT(UNHEX('F09F8F8EEFB88F') USING utf8mb4), 1),
   ('storm', 'Dodge Storm', 'Stay alive while the shards close in from every side.', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1),
   ('maze', 'Maze Runner', 'One way out, and it gets bigger every time you find it.', 1, 8, CONVERT(UNHEX('F09FA7AD') USING utf8mb4), 1),
+  ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1),
   ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
@@ -232,7 +234,7 @@ ON DUPLICATE KEY UPDATE
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 9 tables and 17 playable games.
+-- Expect 9 tables and 18 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
 SELECT slug, name, icon, max_players FROM game_types WHERE is_active = 1 ORDER BY id;
 

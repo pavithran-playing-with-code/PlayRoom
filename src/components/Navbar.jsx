@@ -108,7 +108,7 @@ export default function Navbar() {
 // label, no colour, just a shape that doesn't belong on a toy shelf.
 function HollowDoor() {
   return (
-    <Link to="/hollow" className="hollowdoor" aria-label="The Hollow — a horror game" title="The Hollow">
+    <Link to="/wick" className="hollowdoor" aria-label="Wick — a horror game" title="WICK">
       <span aria-hidden="true">🕯️</span>
     </Link>
   );

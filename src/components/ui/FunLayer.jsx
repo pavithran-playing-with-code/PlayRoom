@@ -2,7 +2,8 @@
 // The "wooo" layer. One full-screen canvas, pointer-events:none, mounted once
 // at the app root:
 //
-//   • a little burst wherever you press
+//   • a little burst wherever you press — except inside [data-no-fun], for
+//     a page that should not feel like a toy box
 //   • confetti on demand — any component can fire one without importing this:
 //       window.dispatchEvent(new CustomEvent("pr:confetti", {
 //         detail: { x, y, count, emojis: ["🎉"] }
@@ -55,6 +56,7 @@ export default function FunLayer() {
 
     // ── Press burst ──────────────────────────────────────────────────────────
     const onDown = (e) => {
+      if (e.target?.closest?.("[data-no-fun]")) return;
       for (let i = 0; i < 14; i++) {
         const a = (Math.PI * 2 * i) / 14 + rand(-0.2, 0.2);
         const sp = rand(1.8, 5);

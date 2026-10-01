@@ -5,14 +5,15 @@
 // Solve one and a slightly bigger one appears. There is no losing a maze: the
 // room's clock ends the match, and the score is how many you got through.
 //
-// Arrows, WASD, the arrow pad, or swipe on the maze itself. A move rolls the
-// ball to the end of the corridor — the next wall, turning or the flag.
+// Arrows, WASD, the arrow pad, or swipe anywhere on the board. A move rolls
+// the ball to the end of the corridor — the next wall, turning or the flag.
+// Points are per board cleared (see scoreForBoard): never taken away.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
-import { N, E, S, W, DIRS, makeMaze, isOpen, slide, scoreForSolve } from "./mazeBoard";
+import { N, E, S, W, DIRS, makeMaze, isOpen, slide, scoreForBoard } from "./mazeBoard";
 
 const EASE = 0.28;            // how much of the gap the token closes each frame
 const SOLVED_MS = 700;
@@ -86,7 +87,7 @@ export default function MazeRunner(props) {
     const end = path[path.length - 1];
     s.r = end.r;
     s.c = end.c;
-    s.moves += path.length;            // squares travelled: scored against the shortest route in squares
+    s.moves += 1;                      // one swipe, one move, however far it rolls
     for (const p of path) {
       const key = `${p.r},${p.c}`;
       if (!s.seen.includes(key)) s.seen.push(key);
@@ -99,12 +100,12 @@ export default function MazeRunner(props) {
 
     if (s.r === m.goal.r && s.c === m.goal.c) {
       s.busy = true;
-      const gain = scoreForSolve(m, s.moves);
+      const gain = scoreForBoard(m, s.level, s.moves);
       eng.addScore(gain);
       s.solved += 1;
       setSolved(s.solved);
       setDone(true);
-      say(`Out in ${s.moves} moves! +${gain}`, "success");
+      say(`Board ${s.level} cleared in ${s.moves} moves! +${gain}`, "success");
       later(() => {
         s.level += 1;
         s.r = 0; s.c = 0;
@@ -138,16 +139,26 @@ export default function MazeRunner(props) {
     return () => window.removeEventListener("keydown", onKey);
   });                       // rebound each render, so it always sees the current maze
 
-  // Swipe on the maze itself.
+  // Swipe anywhere on the board. The finger is held (pointer capture), so a
+  // swipe that ends off the maze — up past its top edge, say — still counts;
+  // it used to be lost when the finger lifted outside. A swipe moves as soon
+  // as it has gone far enough, not when the finger lifts, and only once.
   const touch = useRef(null);
-  const onDown = (e) => { touch.current = { x: e.clientX, y: e.clientY }; };
-  const onUp = (e) => {
+  const onDown = (e) => {
+    touch.current = { x: e.clientX, y: e.clientY, id: e.pointerId, used: false };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not supported */ }
+  };
+  const onMove = (e) => {
     const t = touch.current;
-    touch.current = null;
-    if (!t) return;
+    if (!t || t.used || e.pointerId !== t.id) return;
     const dx = e.clientX - t.x, dy = e.clientY - t.y;
     if (Math.abs(dx) < SWIPE_MIN && Math.abs(dy) < SWIPE_MIN) return;
+    t.used = true;
     step(byBit(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? E : W) : (dy > 0 ? S : N)));
+  };
+  const onUp = (e) => {
+    const t = touch.current;
+    if (t && e.pointerId === t.id) touch.current = null;
   };
 
   const oppList = Object.values(eng.opponents);
@@ -197,9 +208,9 @@ export default function MazeRunner(props) {
           const gw = cell * maze.cols, gh = cell * maze.rows;
           const wall = Math.max(2, Math.round(cell * 0.09));
           return (
-            <div style={{ textAlign: "center" }}>
-              <div className={`mz-frame${done ? " done" : ""}`} style={{ width: gw + 12 }}
-                onPointerDown={onDown} onPointerUp={onUp}>
+            <div className="mz-swipe" style={{ width: w, height: h }}
+              onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+              <div className={`mz-frame${done ? " done" : ""}`} style={{ width: gw + 12 }}>
                 <div className="mz-grid" style={{ width: gw, height: gh }}>
                   {maze.cells.map((bits, i) => {
                     const r = Math.floor(i / maze.cols), c = i % maze.cols;

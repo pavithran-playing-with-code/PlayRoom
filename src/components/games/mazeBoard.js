@@ -123,13 +123,35 @@ export function distances(maze, from = maze.start) {
 
 export const shortestPath = (maze) => distances(maze)[idx(maze, maze.goal.r, maze.goal.c)];
 
-// Solving fast is worth more, but a slow solve is still worth something — the
-// floor means a big maze never pays less than a small one you dawdled through.
-export const SOLVE_BASE = 120;
-export const SOLVE_FLOOR = 40;
-export function scoreForSolve(maze, moves) {
-  const best = Math.max(1, shortestPath(maze));
-  const size = maze.rows * maze.cols;
-  const efficiency = Math.max(0, 1 - Math.max(0, moves - best) / (best * 2));
-  return Math.round(SOLVE_FLOOR + size * 1.5 + SOLVE_BASE * efficiency);
+// The fewest moves (rolls) that get from the start to the flag.
+export function fewestRolls(maze) {
+  const key = (r, c) => r * maze.cols + c;
+  const dist = new Map([[key(maze.start.r, maze.start.c), 0]]);
+  const q = [maze.start];
+  for (let h = 0; h < q.length; h++) {
+    const { r, c } = q[h];
+    if (r === maze.goal.r && c === maze.goal.c) return dist.get(key(r, c));
+    for (const d of DIRS) {
+      const p = slide(maze, r, c, d);
+      if (!p.length) continue;
+      const e = p[p.length - 1];
+      if (dist.has(key(e.r, e.c))) continue;
+      dist.set(key(e.r, e.c), dist.get(key(r, c)) + 1);
+      q.push(e);
+    }
+  }
+  return Infinity;
+}
+
+// Points come from boards cleared, and nothing ever takes them away: a board
+// is worth BOARD_BASE, more for each bigger board after it, plus a small
+// bonus for clearing it in few moves that shrinks to nothing — never below.
+// Bumping a wall isn't a move and costs nothing.
+export const BOARD_BASE = 100;
+export const BOARD_STEP = 20;          // board 2 is worth 120, board 3 140…
+export const QUICK_BONUS = 20;         // in the fewest moves possible
+export const BONUS_PER_EXTRA = 4;      // gone after five extra moves
+export function scoreForBoard(maze, level, moves) {
+  const extra = Math.max(0, moves - fewestRolls(maze));
+  return BOARD_BASE + BOARD_STEP * (Math.max(1, level) - 1) + Math.max(0, QUICK_BONUS - BONUS_PER_EXTRA * extra);
 }

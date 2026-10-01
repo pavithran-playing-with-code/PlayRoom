@@ -811,6 +811,9 @@ input::-ms-reveal,input::-ms-clear{display:none}
   transition-property:transform;transition-timing-function:cubic-bezier(.34,1.4,.64,1);
   pointer-events:none;z-index:2}
 .mz-help{margin-top:6px;font-size:.78rem}
+/* the whole board takes swipes, so a swipe that starts or ends off the maze still counts */
+.mz-swipe{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  touch-action:none;user-select:none;-webkit-user-select:none}
 /* the arrow pad: ▲ above, ◀ ▼ ▶ beneath, in Maze Runner's green */
 .mz-pad{display:grid;grid-template-columns:repeat(3,58px);grid-template-rows:repeat(2,48px);gap:6px;
   grid-template-areas:". up ." "left down right";justify-content:center}

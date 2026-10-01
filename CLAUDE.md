@@ -146,8 +146,10 @@ There is no test runner. What works:
   backend, starts a real match, and fails on any console error. Its header says
   how to run it.
 - **Rules that span requests** — `scripts/check-results.js` (a finished match
-  reaches the Hall of Fame) and `scripts/check-spectating.js` (a friend
-  mid-match is visible and watchable). API-level, no browser, quick to run.
+  reaches the Hall of Fame), `scripts/check-spectating.js` (a friend
+  mid-match is visible and watchable) and `scripts/check-email-codes.js`
+  (password-by-code and delete account, with a fake mail relay). API-level,
+  no browser, quick to run.
 
 Register is rate limited to 10 accounts an hour per IP, so a long run of tests
 will start failing with 429 — reuse accounts from an earlier run rather than

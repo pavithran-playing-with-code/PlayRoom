@@ -102,9 +102,33 @@ Set in Render → Environment. Values are not recorded here.
 | `JWT_EXPIRES_IN` | `7d`. |
 | `PRODUCTION_URL` | The live origin, no trailing slash. **Required** — see below. |
 | `GENERATE_SOURCEMAP` | `false`, or the React build can exhaust the free builder's memory. |
+| `MAIL_URL` | The Google Apps Script web app's `/exec` URL. See "Email" below. |
+| `MAIL_SECRET` | The secret word in that script's `SECRET` line. Both must match. |
 
 **Never set `PORT`.** Render assigns it; overriding it makes the service
 unreachable.
+
+### Email
+
+Emailed codes (change password, delete account) go through a Google Apps
+Script, not SMTP: Render's free tier blocks the outgoing mail ports, so
+Nodemailer + Gmail would work on a laptop and fail silently once deployed.
+`config/mailer.js` POSTs `{ secret, to, subject, html }` to the script, which
+sends it from the owner's Gmail with `MailApp.sendEmail`.
+
+- Lives at script.google.com, project **PlayRoom Mail**, under the Gmail
+  account the mail comes from. Deployed as a web app: execute as *Me*, access
+  *Anyone* — it sends nothing unless the secret matches.
+- Limit: about 100 emails a day (a consumer Gmail's MailApp quota). The
+  server allows one code a minute and five an hour per account.
+- After editing the script: Deploy → **Manage deployments** → edit → *New
+  version*. A *New deployment* gets a new URL, and `MAIL_URL` would need
+  changing too.
+- New secret: change `SECRET` in the script (and redeploy as above), then
+  `MAIL_SECRET` on Render and in `.env`.
+- Testing never needs real mail: `scripts/check-email-codes.js` runs a fake
+  relay; start the server with `MAIL_URL=http://127.0.0.1:4590/exec
+  MAIL_SECRET=test`.
 
 ### `PRODUCTION_URL` is not optional
 

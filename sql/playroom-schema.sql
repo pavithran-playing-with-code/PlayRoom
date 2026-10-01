@@ -174,6 +174,20 @@ CREATE TABLE IF NOT EXISTS room_invites (
   CONSTRAINT fk_inv_to   FOREIGN KEY (to_user)   REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS email_codes (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id      INT UNSIGNED NOT NULL,
+  purpose      ENUM('password','delete') NOT NULL,
+  code_hash    VARCHAR(255) NOT NULL,
+  attempts     TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  expires_at   DATETIME     NOT NULL,
+  used_at      DATETIME     NULL,
+  created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_ec_user (user_id, purpose, created_at),
+  CONSTRAINT fk_ec_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ── Columns added after the first release ────────────────────────────────────
 -- CREATE TABLE IF NOT EXISTS skips a table that already exists, so a database
 -- built before one of these columns existed would never gain it. MySQL has no
@@ -245,7 +259,7 @@ ON DUPLICATE KEY UPDATE
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 9 tables and 20 playable games.
+-- Expect 10 tables and 20 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
 SELECT slug, name, icon, max_players, sort_order FROM game_types WHERE is_active = 1 ORDER BY sort_order, id;
 

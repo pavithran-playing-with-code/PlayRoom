@@ -1,0 +1,15 @@
+-- Email codes (change password by email, delete account).
+-- Run once against the production database. Safe to run twice.
+CREATE TABLE IF NOT EXISTS email_codes (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id      INT UNSIGNED NOT NULL,
+  purpose      ENUM('password','delete') NOT NULL,
+  code_hash    VARCHAR(255) NOT NULL,
+  attempts     TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  expires_at   DATETIME     NOT NULL,
+  used_at      DATETIME     NULL,
+  created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_ec_user (user_id, purpose, created_at),
+  CONSTRAINT fk_ec_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

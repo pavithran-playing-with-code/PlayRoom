@@ -292,6 +292,11 @@ function Room() {
   // — room code, invites, chat, empty seats — is noise and stays hidden.
   const isSolo       = (room?.max_players || 0) === 1;
   const seatsLeft    = room ? Math.max(0, (room.max_players || 1) - seatedPlayers.length) : 1;
+  // The last seat just filled: there's nobody left to invite into it, so the
+  // friend list folds itself away rather than sitting open over the room.
+  useEffect(() => {
+    if (room && seatsLeft === 0) setShowInvite(false);
+  }, [room, seatsLeft]);
   // Solo needs nobody; any other room needs one other person. Empty seats are
   // fine, but the host is asked first, so nobody starts a 5-player match by
   // accident while two friends are still typing in the code.

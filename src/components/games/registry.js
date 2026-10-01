@@ -20,6 +20,7 @@ import DodgeStorm from "./DodgeStorm";
 import MazeRunner from "./MazeRunner";
 import ManorGame from "./ManorGame";
 import WickGame from "./WickGame";
+import TypingRace from "./TypingRace";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -145,6 +146,12 @@ export const GAMES = [
     minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--grape)",
     coopMax: 4, defaultDuration: 300, ownsSpectating: true,
     Component: ManorGame,
+  },
+  {
+    slug: "typing", name: "Typing Race", icon: "⌨️",
+    blurb: "Type the words as fast as you can. Same words for everyone, streaks score big.",
+    minPlayers: 1, maxPlayers: 8, tag: "Speed", col: "var(--ice)",
+    Component: TypingRace,
   },
 ];
 

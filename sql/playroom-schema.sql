@@ -237,14 +237,15 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('maze', 'Maze Runner', 'One way out, and it gets bigger every time you find it.', 1, 8, CONVERT(UNHEX('F09FA7AD') USING utf8mb4), 1, 170),
   ('wick', 'Wick', 'Go down with a lantern. Every step burns oil, and the dark moves when you do.', 1, 8, CONVERT(UNHEX('F09F95AFEFB88F') USING utf8mb4), 1, 180),
   ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1, 190),
-  ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 200)
+  ('typing', 'Typing Race', 'Type the words as fast as you can. Same words for everyone, streaks score big.', 1, 8, CONVERT(UNHEX('E28CA8EFB88F') USING utf8mb4), 1, 200),
+  ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 210)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
   min_players = VALUES(min_players), max_players = VALUES(max_players),
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 9 tables and 19 playable games.
+-- Expect 9 tables and 20 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
 SELECT slug, name, icon, max_players, sort_order FROM game_types WHERE is_active = 1 ORDER BY sort_order, id;
 

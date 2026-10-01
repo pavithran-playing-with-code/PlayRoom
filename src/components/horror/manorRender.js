@@ -3,9 +3,8 @@
 // for everything in them, a minimap, and the full-screen moments (the map you
 // memorise at the start, the thing's face when it gets you).
 //
-// Reads the sim; the only thing it writes is `s.expl`, the tiles you have
-// actually seen, which the minimap draws. (The original page meant to do the
-// same but its marking code was never called, so its map stayed blank.)
+// Reads the sim and never writes to it. The map shows the whole house: every
+// road, the relics, and the demons wherever they are.
 //
 // The same picture serves solo and online. What it reads from `s`:
 //   P        the body whose eyes we look through (x, y, fa, jz, cr, light...)
@@ -28,7 +27,8 @@ const exitOpen = (s) => (s.exitOpen !== undefined ? s.exitOpen : s.count >= s.ne
 const TAU = Math.PI * 2;
 
 // Thumb controls, shared by the solo page and the room game.
-export const SPRINT_PX = 76;           // push the stick this far out and you run
+export const STICK_R = 36;            // the walk ring: full speed at its edge
+export const SPRINT_PX = 56;           // push the stick this far out and you run
 export const YAW_PER_PX = 0.006;       // right thumb, sideways: radians per pixel
 export const PITCH_PER_PX = 0.0024;    // right thumb, up/down: screen heights per pixel
 export const PITCH_MAX = 0.32;
@@ -68,18 +68,18 @@ export function drawGhost(ctx, x, y, s, angry) {
   ctx.restore();
 }
 
-// The map: all of it while you memorise, only what you have seen after.
-function mini(ctx, s, x0, y0, size, all, t) {
-  const { N, g, expl, relics, cells, obst, exitT, P } = s;
+// The map. While you memorise it (intro) it also marks the barricades and
+// beams; in play it shows every road, the relics, the batteries, the gate,
+// you, everyone else, and wherever the demons are — but not the obstacles.
+function mini(ctx, s, x0, y0, size, intro, t) {
+  const { N, g, relics, cells, obst, exitT, P } = s;
   const c = size / N;
   ctx.fillStyle = "rgba(0,0,0,.7)";
   ctx.fillRect(x0 - 5, y0 - 5, size + 10, size + 10);
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
-      if (all || expl[y][x]) {
-        ctx.fillStyle = g[y][x] ? "#2b2119" : "#7c6849";
-        ctx.fillRect(x0 + x * c, y0 + y * c, c + 0.5, c + 0.5);
-      }
+      ctx.fillStyle = g[y][x] ? "#2b2119" : "#7c6849";
+      ctx.fillRect(x0 + x * c, y0 + y * c, c + 0.5, c + 0.5);
     }
   }
   const bl = 0.6 + 0.4 * Math.sin(t * 5);
@@ -95,32 +95,51 @@ function mini(ctx, s, x0, y0, size, all, t) {
     ctx.fillStyle = "#8fe3a8";
     ctx.fillRect(x0 + q.x * c - c * 0.5, y0 + q.y * c - c * 0.5, c, c);
   }
-  for (const k in obst) {
-    const ox = +k % N, oy = (+k / N) | 0;
-    if (all || expl[oy][ox]) {
+  if (intro) {
+    for (const k in obst) {
+      const ox = +k % N, oy = (+k / N) | 0;
       ctx.fillStyle = obst[k] === HURDLE ? "#e8a13a" : "#a86bd6";
       ctx.fillRect(x0 + ox * c, y0 + oy * c, c, c);
     }
   }
   ctx.fillStyle = exitOpen(s) ? "#5fd68a" : "#a33";
   ctx.fillRect(x0 + exitT.x * c - c * 0.3, y0 + exitT.y * c - c * 0.3, c * 1.6, c * 1.6);
-  for (const G of ghostsOf(s)) {
-    if (all || Math.hypot(P.x - G.x, P.y - G.y) >= 14) continue;
-    ctx.fillStyle = "#e0203f";
-    ctx.beginPath();
-    ctx.arc(x0 + G.x * c, y0 + G.y * c, c * 1.1, 0, TAU);
-    ctx.fill();
+  // the demons, always, pulsing red (not on the map you memorise: it hasn't moved yet)
+  if (!intro) {
+    const pulse = 0.75 + 0.25 * Math.sin(t * 8);
+    for (const G of ghostsOf(s)) {
+      if (G.x < 0) continue;                         // the stand-in before the first update
+      // red with a white ring: no player dot has a ring, so it can't be
+      // mistaken for a friend in red
+      const gx = x0 + G.x * c, gy = y0 + G.y * c, gr = Math.max(3.5, c * 1.5);
+      ctx.save();
+      ctx.shadowColor = "#ff2040";
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = `rgba(230,30,60,${pulse})`;
+      ctx.beginPath();
+      ctx.arc(gx, gy, gr, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(gx, gy, gr + 1.5, 0, TAU);
+      ctx.stroke();
+    }
   }
   // everyone else, in their colours
   for (const o of s.others || []) {
     ctx.fillStyle = o.color;
+    ctx.strokeStyle = "rgba(0,0,0,.7)";
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(x0 + o.x * c, y0 + o.y * c, c * 0.8, 0, TAU);
+    ctx.arc(x0 + o.x * c, y0 + o.y * c, Math.max(2.5, c * 1.1), 0, TAU);
     ctx.fill();
+    ctx.stroke();
   }
   ctx.fillStyle = "#fff";
   ctx.beginPath();
-  ctx.arc(x0 + P.x * c, y0 + P.y * c, c * 0.9, 0, TAU);
+  ctx.arc(x0 + P.x * c, y0 + P.y * c, Math.max(2.5, c * 1.1), 0, TAU);
   ctx.fill();
   ctx.strokeStyle = "#fff";
   ctx.lineWidth = 1.5;
@@ -130,22 +149,18 @@ function mini(ctx, s, x0, y0, size, all, t) {
   ctx.stroke();
 }
 
-// DDA ray from the player. Marks each floor tile it crosses, and the wall it
-// hits, as seen — as far as the light (or the dark) lets you see.
-function cast(s, rx, ry, seeTo) {
-  const { g, N, P, expl } = s;
+// DDA ray from the player to the first wall.
+function cast(s, rx, ry) {
+  const { g, N, P } = s;
   let mx = P.x | 0, my = P.y | 0;
   const ddx = Math.abs(1 / rx), ddy = Math.abs(1 / ry);
   let sx, sy, sdx, sdy;
   if (rx < 0) { sx = -1; sdx = (P.x - mx) * ddx; } else { sx = 1; sdx = (mx + 1 - P.x) * ddx; }
   if (ry < 0) { sy = -1; sdy = (P.y - my) * ddy; } else { sy = 1; sdy = (my + 1 - P.y) * ddy; }
   let side = 0, n = 0;
-  if (mx >= 0 && my >= 0 && mx < N && my < N) expl[my][mx] = 1;
   while (n++ < 64) {
     if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
     if (mx < 0 || my < 0 || mx >= N || my >= N) break;
-    const dist = side ? sdy - ddy : sdx - ddx;
-    if (dist <= seeTo) expl[my][mx] = 1;
     if (g[my][mx]) break;
   }
   const pd = side ? sdy - ddy : sdx - ddx, wx = side ? P.x + pd * rx : P.y + pd * ry;
@@ -162,7 +177,6 @@ function scene(ctx, s, W, H, t) {
     (P.shake > 0 ? (Math.random() - 0.5) * P.shake * 24 : 0);
   const eye = 0.5 + P.jz - P.cr * 0.26, L = litBody(P);
   const fl = 0.92 + Math.sin(t * 7) * 0.05 + (Math.random() < 0.02 ? -0.25 * Math.random() : 0);
-  const seeTo = L ? 7.5 : 2.2;
 
   ctx.fillStyle = "#050507";
   ctx.fillRect(0, 0, W, hz);
@@ -173,7 +187,7 @@ function scene(ctx, s, W, H, t) {
   ctx.fillRect(0, hz, W, H - hz);
 
   for (let i = 0; i < cols; i++) {
-    const cam = 2 * (i + 0.5) / cols - 1, h = cast(s, dx + plx * cam, dy + ply * cam, seeTo), pd = h.d;
+    const cam = 2 * (i + 0.5) / cols - 1, h = cast(s, dx + plx * cam, dy + ply * cam), pd = h.d;
     zb[i] = pd;
     let b = 0.03 + Math.max(0, 1 - pd / 2.2) * (L ? 0.32 : 0.18) +
       (L ? Math.pow(Math.max(0, 1 - pd / 7.5), 1.4) * (1 - Math.abs(cam) * 0.45) * fl : 0);
@@ -558,7 +572,7 @@ export function drawManor(ctx, s, view, t, stick) {
     ctx.strokeStyle = "rgba(233,227,211,.3)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(stick.ox, stick.oy, 50, 0, TAU);
+    ctx.arc(stick.ox, stick.oy, STICK_R, 0, TAU);
     ctx.stroke();
     ctx.setLineDash([4, 6]);
     ctx.strokeStyle = run ? "rgba(255,220,160,.8)" : "rgba(233,227,211,.18)";
@@ -567,12 +581,12 @@ export function drawManor(ctx, s, view, t, stick) {
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = run ? "rgba(255,220,160,.9)" : "rgba(233,227,211,.3)";
-    ctx.font = "11px Georgia";
+    ctx.font = "10px Georgia";
     ctx.textAlign = "center";
     ctx.fillText(run ? "RUNNING" : "push out to run", stick.ox, stick.oy - SPRINT_PX - 8);
     ctx.fillStyle = run ? "rgba(255,220,160,.55)" : "rgba(233,227,211,.35)";
     ctx.beginPath();
-    ctx.arc(stick.ox + Math.cos(a) * l, stick.oy + Math.sin(a) * l, 20, 0, TAU);
+    ctx.arc(stick.ox + Math.cos(a) * l, stick.oy + Math.sin(a) * l, 15, 0, TAU);
     ctx.fill();
   }
 }

@@ -44,6 +44,24 @@ export function canMove(maze, r, c, dir) {
   return inside(maze, r + dir.dr, c + dir.dc);
 }
 
+// One move: the ball rolls on down the corridor until something makes it
+// stop — a wall ahead, a turning off to either side, or the flag. So a long
+// straight is one swipe, and you can never roll past a turning you might
+// have wanted. Returns the cells it passes through, in order (empty if the
+// way is walled).
+export function slide(maze, r, c, dir) {
+  const path = [];
+  const sides = DIRS.filter((d) => d.bit !== dir.bit && d.bit !== OPPOSITE[dir.bit]);
+  while (canMove(maze, r, c, dir)) {
+    r += dir.dr; c += dir.dc;
+    path.push({ r, c });
+    if (r === maze.goal.r && c === maze.goal.c) break;
+    const at = { r, c };
+    if (sides.some((d) => canMove(maze, at.r, at.c, d))) break;   // a turning: stop and choose
+  }
+  return path;
+}
+
 export function makeMaze(seed, level) {
   const { rows, cols } = sizeFor(level);
   const rand = seededRand((Number(seed) || 1) * 3301 + level * 7919 + 11);

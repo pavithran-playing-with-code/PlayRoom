@@ -13,7 +13,7 @@ import { useNavigate } from "react-router-dom";
 import {
   newNight, tick, begin, jump, decoy, toggleCrouch, toggleLight, toggleRun, lit, timeText,
 } from "../components/horror/manorSim";
-import { drawManor, lookBy, SPRINT_PX } from "../components/horror/manorRender";
+import { drawManor, lookBy, SPRINT_PX, STICK_R } from "../components/horror/manorRender";
 import { createManorAudio } from "../components/horror/manorAudio";
 import { useSideways, goLandscape, toGame } from "../components/horror/LandscapeGate";
 
@@ -109,7 +109,7 @@ export default function Manor() {
       const st = stick.current;
       if (st) {
         const dx = st.x - st.ox, dy = st.y - st.oy, l = Math.hypot(dx, dy);
-        if (l > 10) { ix = dx / Math.max(l, 1) * Math.min(1, l / 50); iy = dy / Math.max(l, 1) * Math.min(1, l / 50); }
+        if (l > 8) { ix = dx / Math.max(l, 1) * Math.min(1, l / STICK_R); iy = dy / Math.max(l, 1) * Math.min(1, l / STICK_R); }
         st.run = l > SPRINT_PX;                          // pushed past the ring: sprint
       }
       const turn = (k.ArrowRight ? 1 : 0) - (k.ArrowLeft ? 1 : 0);

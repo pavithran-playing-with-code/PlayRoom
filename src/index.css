@@ -811,7 +811,16 @@ input::-ms-reveal,input::-ms-clear{display:none}
   transition-property:transform;transition-timing-function:cubic-bezier(.34,1.4,.64,1);
   pointer-events:none;z-index:2}
 .mz-help{margin-top:6px;font-size:.78rem}
-.press.mz-btn{padding:12px 0;width:58px;font-size:1.1rem;--lift:4px}
+/* the arrow pad: ▲ above, ◀ ▼ ▶ beneath, in Maze Runner's green */
+.mz-pad{display:grid;grid-template-columns:repeat(3,58px);grid-template-rows:repeat(2,48px);gap:6px;
+  grid-template-areas:". up ." "left down right";justify-content:center}
+.press.mz-btn{width:58px;height:48px;padding:0;--lift:4px;background:var(--leaf);color:var(--ink);
+  display:grid;place-items:center;border-radius:14px}
+.press.mz-btn:active{background:var(--lime)}
+.mz-up{grid-area:up}
+.mz-left{grid-area:left}
+.mz-down{grid-area:down}
+.mz-right{grid-area:right}
 
 /* ── WICK ────────────────────────────────────────────────────────────────────
    The one dark screen in the app. It ignores the page theme on purpose:
@@ -943,7 +952,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 @media (max-width:600px){ .hm-msg{bottom:calc(env(safe-area-inset-bottom,0px) + 262px)} }
 
 /* Under the right thumb: jump, crouch below it, the light to their left. */
-.hm-pad{position:fixed;right:calc(14px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
+.hm-pad{position:fixed;right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
   z-index:4;display:grid;grid-template-columns:68px 68px;grid-template-rows:68px 68px 68px;gap:4px 10px;
   grid-template-areas:". jump" "light ." ". crouch"}
 .hm .hm-pad button{width:68px;height:68px;border-radius:50%;padding:0;font-size:12px;background:rgba(21,18,26,.75);touch-action:none}
@@ -1019,7 +1028,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
    clear the map, words kept left of the buttons, lighter headings. */
 @media (orientation: landscape) and (max-height: 520px){
   .hm-pad{grid-template-columns:60px 60px;grid-template-rows:60px 60px 60px;gap:2px 8px;
-    right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
+    right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
   .hm .hm-pad button{width:60px;height:60px;font-size:11px}
   .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
     font-size:15px;text-align:left;padding:0}
@@ -1035,7 +1044,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* The same short-landscape layout for the drawn-sideways game: its viewport
    is still portrait, so the media query above never matches it. */
 .hm.hm-rot .hm-pad{grid-template-columns:60px 60px;grid-template-rows:60px 60px 60px;gap:2px 8px;
-    right:calc(12px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
+    right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
 .hm.hm-rot .hm-pad button{width:60px;height:60px;font-size:11px}
 .hm.hm-rot .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
     font-size:15px;text-align:left;padding:0}

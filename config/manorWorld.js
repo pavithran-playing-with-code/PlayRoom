@@ -38,9 +38,11 @@ const INTRO_MS = 8000;                 // ghosts asleep while everyone memorises
 const DECOYS = 2;
 const KEEP_AFTER_MS = 120000;          // a finished house lingers for late hellos
 
-// Colours for players in a free-for-all, and the four team colours the
-// waiting room already names (Red, Yellow, Blue, Green).
-const PLAYER_COLOURS = ["#ff5a5f", "#4cc9f0", "#8fe36b", "#ffc53d", "#c77dff", "#ff9f43", "#2de2c8", "#ff7bd5"];
+// Colours for players in a free-for-all — no reds, which belong to the demon
+// on the map — and the four team colours the waiting room already names
+// (Red, Yellow, Blue, Green; the demon's map dot has a white ring to tell it
+// from the Red team).
+const PLAYER_COLOURS = ["#4cc9f0", "#8fe36b", "#ffc53d", "#c77dff", "#ff9f43", "#2de2c8", "#ff7bd5", "#a0a8ff"];
 const TEAM_COLOURS = ["#ff5a5f", "#ffc53d", "#4cc9f0", "#3dd6c0"];
 const TEAM_NAMES = ["Red", "Yellow", "Blue", "Green"];
 const GOLD = "#ffdca0";

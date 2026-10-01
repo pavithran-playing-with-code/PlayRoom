@@ -73,7 +73,6 @@ export function newNight(seed, night = 1) {
   const s = {
     seed, night, rand, N, g, need, relics, cells, exitT, obst, far,
     env: { g, N, obst },
-    expl: Array.from({ length: N }, () => Array(N).fill(0)),
     G: newGhost(gs[0] + 0.5, gs[1] + 0.5),
     P,
     count: 0,
@@ -96,7 +95,6 @@ export function begin(s) {
   if (s.mode !== "intro") return;
   s.mode = "play";
   s.P.entering = true;
-  for (const row of s.expl) row.fill(0);
   say(s, "You step through the entrance gate...", 3000);
 }
 

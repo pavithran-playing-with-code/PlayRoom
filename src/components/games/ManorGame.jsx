@@ -11,7 +11,7 @@
 // rules; the two-thumb controls here are the same as there.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "../../utils/SocketContext";
-import { drawManor, lookBy, SPRINT_PX } from "../horror/manorRender";
+import { drawManor, lookBy, SPRINT_PX, STICK_R } from "../horror/manorRender";
 import { createManorAudio } from "../horror/manorAudio";
 import {
   createClient, applyTick, stepLocal, report, jump, playing, inIntro, timeLeft, sideOfMe,
@@ -165,7 +165,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       const st = stick.current;
       if (st) {
         const dx = st.x - st.ox, dy = st.y - st.oy, l = Math.hypot(dx, dy);
-        if (l > 10) { ix = dx / Math.max(l, 1) * Math.min(1, l / 50); iy = dy / Math.max(l, 1) * Math.min(1, l / 50); }
+        if (l > 8) { ix = dx / Math.max(l, 1) * Math.min(1, l / STICK_R); iy = dy / Math.max(l, 1) * Math.min(1, l / STICK_R); }
         st.run = l > SPRINT_PX;                          // pushed past the ring: sprint
       }
       const turn = (k.ArrowRight ? 1 : 0) - (k.ArrowLeft ? 1 : 0);

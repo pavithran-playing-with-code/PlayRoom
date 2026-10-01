@@ -48,7 +48,6 @@ export function createClient(init, now = Date.now()) {
     })),
     cells: init.house.batts.map(([x, y, got]) => ({ x, y, got: !!got })),
     ghosts: [], pulses: [], puffs: [],
-    expl: Array.from({ length: N }, () => Array(N).fill(0)),
     hint: {}, msg: "", msgT: 0, tm: 0, ambT: 20, hb: 0, gStep: 0,
     alive: me ? me.alive : false, escaped: me ? me.escaped : false, place: me ? me.place : null,
     decoys: me ? me.decoys : 0,
@@ -246,7 +245,7 @@ export function viewState(c, now = Date.now()) {
     mode: inIntro(c, now) ? "intro" : scared ? "dead" : "play",
     introT: Math.max(0, (SHOW_MAP_MS - (now - c.startLocal)) / 1000),
     deadT: scared ? (now - c.deadAt) / 1000 : 0,
-    N: c.N, g: c.g, expl: c.expl, obst: c.obst, exitT: c.exitT,
+    N: c.N, g: c.g, obst: c.obst, exitT: c.exitT,
     relics: mine, cells: c.cells, pulses: c.pulses, puffs: c.puffs, tm: c.tm,
     // before the first word from the server there are no ghosts yet: a
     // stand-in far away keeps the danger glow and arrows quiet

@@ -5,13 +5,14 @@
 // Solve one and a slightly bigger one appears. There is no losing a maze: the
 // room's clock ends the match, and the score is how many you got through.
 //
-// Arrows, WASD, the four buttons, or swipe on the maze itself.
+// Arrows, WASD, the arrow pad, or swipe on the maze itself. A move rolls the
+// ball to the end of the corridor — the next wall, turning or the flag.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
-import { N, E, S, W, DIRS, makeMaze, isOpen, canMove, scoreForSolve } from "./mazeBoard";
+import { N, E, S, W, DIRS, makeMaze, isOpen, slide, scoreForSolve } from "./mazeBoard";
 
 const EASE = 0.28;            // how much of the gap the token closes each frame
 const SOLVED_MS = 700;
@@ -29,6 +30,7 @@ export default function MazeRunner(props) {
   const [solved, setSolved] = useState(0);
   const [done, setDone] = useState(false);
   const [msg, setMsg] = useState(null);
+  const [roll, setRoll] = useState(1);   // squares in the last move, so a long roll takes a little longer
 
   // Moves act on the ref: two taps in one tick must each see the other.
   const live = useRef({ level: 1, r: 0, c: 0, moves: 0, solved: 0, busy: false, seen: ["0,0"] });
@@ -77,13 +79,19 @@ export default function MazeRunner(props) {
     const s = live.current;
     if (s.busy) return;
     const m = makeMaze(seed, s.level);
-    if (!canMove(m, s.r, s.c, dir)) { say("Wall!", "error"); return; }
+    // Roll to the end of the corridor (see slide() in mazeBoard.js).
+    const path = slide(m, s.r, s.c, dir);
+    if (!path.length) { say("Wall!", "error"); return; }
 
-    s.r += dir.dr;
-    s.c += dir.dc;
-    s.moves += 1;
-    const key = `${s.r},${s.c}`;
-    if (!s.seen.includes(key)) s.seen.push(key);
+    const end = path[path.length - 1];
+    s.r = end.r;
+    s.c = end.c;
+    s.moves += path.length;            // squares travelled: scored against the shortest route in squares
+    for (const p of path) {
+      const key = `${p.r},${p.c}`;
+      if (!s.seen.includes(key)) s.seen.push(key);
+    }
+    setRoll(path.length);
     setPos({ r: s.r, c: s.c });
     setMoves(s.moves);
     setSeen(new Set(s.seen));
@@ -149,13 +157,24 @@ export default function MazeRunner(props) {
     { label: "Moves", value: moves },
   ];
 
+  // An arrow pad: up on its own above, left-down-right beneath, like a
+  // keyboard's arrow keys. Chevrons drawn as SVG, so they're crisp and the
+  // same on every phone (the ▲◀ characters render differently everywhere).
+  const pad = (bit, label, cls, path) => (
+    <button key={label} className={`press mz-btn ${cls}`} aria-label={label}
+      onPointerDown={(e) => { e.preventDefault(); step(byBit(bit)); }}>
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+        <path d={path} fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
   const controls = !isSpectator ? (
-    <>
-      <button className="press p-white mz-btn" onPointerDown={(e) => { e.preventDefault(); step(byBit(W)); }} aria-label="Left">◀</button>
-      <button className="press p-white mz-btn" onPointerDown={(e) => { e.preventDefault(); step(byBit(N)); }} aria-label="Up">▲</button>
-      <button className="press p-white mz-btn" onPointerDown={(e) => { e.preventDefault(); step(byBit(S)); }} aria-label="Down">▼</button>
-      <button className="press p-white mz-btn" onPointerDown={(e) => { e.preventDefault(); step(byBit(E)); }} aria-label="Right">▶</button>
-    </>
+    <div className="mz-pad">
+      {pad(N, "Up", "mz-up", "M6 15l6-6 6 6")}
+      {pad(W, "Left", "mz-left", "M15 6l-6 6 6 6")}
+      {pad(S, "Down", "mz-down", "M6 9l6 6 6-6")}
+      {pad(E, "Right", "mz-right", "M9 6l6 6-6 6")}
+    </div>
   ) : null;
 
   return (
@@ -204,12 +223,12 @@ export default function MazeRunner(props) {
                     style={{
                       width: Math.round(cell * 0.52), height: Math.round(cell * 0.52),
                       transform: `translate(${pos.c * cell + cell * 0.24}px, ${pos.r * cell + cell * 0.24}px)`,
-                      transitionDuration: `${Math.round(1000 * EASE * 0.6)}ms`,
+                      transitionDuration: `${Math.round(1000 * EASE * 0.6) + (roll - 1) * 45}ms`,
                     }} />
                 </div>
               </div>
               <div className="muted mz-help">
-                {maze.rows}×{maze.cols} · swipe, use the arrows, or the buttons
+                {maze.rows}×{maze.cols} · swipe or tap an arrow — the ball rolls to the next turning
               </div>
             </div>
           );

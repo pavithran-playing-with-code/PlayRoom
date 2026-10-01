@@ -125,7 +125,8 @@ const limiter = (max, windowMinutes, message, skip) => rateLimit({
 // Credential endpoints: tight, and IP-keyed by nature (nobody's authenticated yet).
 app.use("/api/auth/login",    limiter(20,  15, "Too many login attempts — try again in a few minutes."));
 app.use("/api/auth/register", limiter(10,  60, "Too many accounts created — try again later."));
-app.use("/api/auth/change-password", limiter(10, 15, "Too many password attempts - try again in a few minutes."));
+// (covers /change-password/verify too: a change is two calls, verify then update)
+app.use("/api/auth/change-password", limiter(30, 15, "Too many password attempts - try again in a few minutes."));
 app.use("/api/auth/email-code",      limiter(10, 60, "Too many codes asked for - try again later."));
 app.use("/api/auth/delete-account",  limiter(10, 15, "Too many attempts - try again in a few minutes."));
 

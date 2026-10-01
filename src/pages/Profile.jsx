@@ -102,21 +102,47 @@ export default function Profile() {
 
   const byEmail = pwBy === "email";
   const proofOk = byEmail ? CODE_RE.test(pw.code) : !!pw.current;
+  const [ticket, setTicket] = useState(null);           // set once you've proved it's you
+  const [verifying, setVerifying] = useState(false);
 
-  async function savePassword(e) {
+  // Step 1: prove it's you — the current password, or the emailed code.
+  async function verify(e) {
     e.preventDefault();
     if (byEmail && !CODE_RE.test(pw.code)) { toast.error("Enter the 6-digit code from the email."); return; }
     if (!byEmail && !pw.current) { toast.error("Enter your current password."); return; }
+    setVerifying(true);
+    try {
+      const res = await api.post("/api/auth/change-password/verify", byEmail ? { code: pw.code } : { current_password: pw.current });
+      const data = await res.json();
+      if (!data.success) { toast.error(data.message || "Couldn't verify that."); return; }
+      setTicket(data.ticket);
+      setPw({ current: "", code: "", next: "", confirm: "" });
+      toast.success("Verified! Now pick your new password.");
+    } catch { toast.error("Couldn't reach the server."); }
+    finally { setVerifying(false); }
+  }
+
+  function startOver() {
+    setTicket(null);
+    setPw({ current: "", code: "", next: "", confirm: "" });
+    pwMail.reset();
+  }
+
+  // Step 2: the new password.
+  async function savePassword(e) {
+    e.preventDefault();
     if (pw.next.length < 6) { toast.error("The new password needs at least 6 characters."); return; }
     if (pw.next !== pw.confirm) { toast.error("The two new passwords don't match."); return; }
     setSavingPw(true);
     try {
-      const proof = byEmail ? { code: pw.code } : { current_password: pw.current };
-      const res = await api.post("/api/auth/change-password", { ...proof, new_password: pw.next });
+      const res = await api.post("/api/auth/change-password", { ticket, new_password: pw.next });
       const data = await res.json();
-      if (!data.success) { toast.error(data.message || "Couldn't change your password."); return; }
-      setPw({ current: "", code: "", next: "", confirm: "" });
-      pwMail.reset();
+      if (!data.success) {
+        toast.error(data.message || "Couldn't change your password.");
+        if (data.expired) startOver();
+        return;
+      }
+      startOver();
       toast.success("Password changed!");
     } catch { toast.error("Couldn't reach the server."); }
     finally { setSavingPw(false); }
@@ -189,50 +215,64 @@ export default function Profile() {
             </button>
           </form>
 
-          <form className="pop" style={{ padding: 26 }} onSubmit={savePassword}>
-            <h2 style={{ fontSize: "1.4rem", marginBottom: 14 }}>🔒 Change password</h2>
+          {!ticket ? (
+            <form className="pop" style={{ padding: 26 }} onSubmit={verify}>
+              <h2 style={{ fontSize: "1.4rem", marginBottom: 6 }}>🔒 Change password</h2>
+              <p className="muted pf-step">Step 1 of 2 · First, show it's you</p>
 
-            <div className="pf-seg" role="tablist" aria-label="How to prove it's you">
-              <button type="button" role="tab" aria-selected={!byEmail} onClick={() => setPwBy("password")}>🔑 Old password</button>
-              <button type="button" role="tab" aria-selected={byEmail} onClick={() => setPwBy("email")}>📧 Email code</button>
-            </div>
-
-            {byEmail ? (
-              <div className="field">
-                <label htmlFor="pf-code">Code from your email</label>
-                <div className="pf-coderow">
-                  <CodeInput id="pf-code" value={pw.code} onChange={(v) => setPw((p) => ({ ...p, code: v }))} />
-                  <button type="button" className="press p-sky" onClick={pwMail.send} disabled={pwMail.sending || pwMail.wait > 0}>
-                    {pwMail.sending ? "Sending…" : pwMail.wait ? `Resend in ${pwMail.wait}s` : pwMail.sent ? "Send again" : "📧 Send code"}
-                  </button>
-                </div>
-                <div className="hint">
-                  {pwMail.sent ? `Sent to ${user?.email}. It works for 10 minutes.` : `We'll email a 6-digit code to ${user?.email}.`}
-                </div>
+              <div className="pf-seg" role="tablist" aria-label="How to prove it's you">
+                <button type="button" role="tab" aria-selected={!byEmail} onClick={() => setPwBy("password")}>🔑 Old password</button>
+                <button type="button" role="tab" aria-selected={byEmail} onClick={() => setPwBy("email")}>📧 Email code</button>
               </div>
-            ) : (
-              <div className="field">
-                <label htmlFor="pf-cur">Current password</label>
-                <PasswordInput id="pf-cur" autoComplete="current-password" value={pw.current} onChange={setField("current")} />
-                <div className="hint">Forgotten it? Use <button type="button" className="linkish" onClick={() => setPwBy("email")}>an email code</button> instead.</div>
-              </div>
-            )}
-            <div className="field">
-              <label htmlFor="pf-new">New password</label>
-              <PasswordInput id="pf-new" autoComplete="new-password" placeholder="at least 6 characters"
-                value={pw.next} onChange={setField("next")} />
-            </div>
-            <div className="field">
-              <label htmlFor="pf-confirm">New password again</label>
-              <PasswordInput id="pf-confirm" autoComplete="new-password" value={pw.confirm} onChange={setField("confirm")} />
-              {mismatch && <div className="hint hint-bad">Doesn't match the new password yet.</div>}
-            </div>
 
-            <button type="submit" className="press p-coral full"
-              disabled={savingPw || !proofOk || !pw.next || !pw.confirm || mismatch}>
-              {savingPw ? "Changing…" : "🔑 Change password"}
-            </button>
-          </form>
+              {byEmail ? (
+                <div className="field">
+                  <label htmlFor="pf-code">Code from your email</label>
+                  <div className="pf-coderow">
+                    <CodeInput id="pf-code" value={pw.code} onChange={(v) => setPw((p) => ({ ...p, code: v }))} />
+                    <button type="button" className="press p-sky" onClick={pwMail.send} disabled={pwMail.sending || pwMail.wait > 0}>
+                      {pwMail.sending ? "Sending…" : pwMail.wait ? `Resend in ${pwMail.wait}s` : pwMail.sent ? "Send again" : "📧 Send code"}
+                    </button>
+                  </div>
+                  <div className="hint">
+                    {pwMail.sent ? `Sent to ${user?.email}. It works for 10 minutes.` : `We'll email a 6-digit code to ${user?.email}.`}
+                  </div>
+                </div>
+              ) : (
+                <div className="field">
+                  <label htmlFor="pf-cur">Current password</label>
+                  <PasswordInput id="pf-cur" autoComplete="current-password" value={pw.current} onChange={setField("current")} />
+                  <div className="hint">Forgotten it? Use <button type="button" className="linkish" onClick={() => setPwBy("email")}>an email code</button> instead.</div>
+                </div>
+              )}
+
+              <button type="submit" className="press p-grape full" disabled={verifying || !proofOk}>
+                {verifying ? "Checking…" : "✅ Verify"}
+              </button>
+            </form>
+          ) : (
+            <form className="pop pf-verified" style={{ padding: 26 }} onSubmit={savePassword}>
+              <h2 style={{ fontSize: "1.4rem", marginBottom: 6 }}>🔒 Change password</h2>
+              <p className="pf-step"><span className="chip c-lime">✅ Verified</span> Step 2 of 2 · Pick your new password</p>
+
+              <div className="field">
+                <label htmlFor="pf-new">New password</label>
+                <PasswordInput id="pf-new" autoComplete="new-password" placeholder="at least 6 characters" autoFocus
+                  value={pw.next} onChange={setField("next")} />
+              </div>
+              <div className="field">
+                <label htmlFor="pf-confirm">New password again</label>
+                <PasswordInput id="pf-confirm" autoComplete="new-password" value={pw.confirm} onChange={setField("confirm")} />
+                {mismatch && <div className="hint hint-bad">Doesn't match the new password yet.</div>}
+              </div>
+
+              <button type="submit" className="press p-coral full"
+                disabled={savingPw || pw.next.length < 6 || !pw.confirm || mismatch}>
+                {savingPw ? "Updating…" : "🔑 Update password"}
+              </button>
+              <button type="button" className="linkish pf-cancel" onClick={startOver}>Cancel</button>
+            </form>
+          )}
         </div>
 
         <div className="pop pf-danger">

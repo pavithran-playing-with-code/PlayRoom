@@ -175,16 +175,57 @@ const PURPOSES = {
   delete:   { subject: "Your PlayRoom code to delete your account",  action: "<b>delete your account</b> — for good" },
 };
 
+// The email, in PlayRoom's toy-box look: cream page, thick ink outlines, a
+// hard shadow (a thicker bottom border — mail clients drop box-shadow), one
+// chunky tile per digit. Tables and inline styles only: that's what Gmail,
+// Outlook and phone mail apps all render the same way.
+const INK = "#2E2140", SUN = "#FFC53D", CREAM = "#FFF6E5", SOFT = "#6C5E85";
+const FONT = "'Trebuchet MS','Arial Rounded MT Bold',Arial,sans-serif";
+
 function codeEmail(username, code, purpose) {
-  return `
-    <div style="font-family:Arial,sans-serif;max-width:440px;margin:auto;padding:24px;border:3px solid #1d1a2f;border-radius:18px">
-      <h2 style="margin:0 0 12px">🎮 PlayRoom</h2>
-      <p>Hi ${username},</p>
-      <p>Use this code to ${PURPOSES[purpose].action}:</p>
-      <p style="font-size:34px;font-weight:bold;letter-spacing:8px;margin:18px 0">${code}</p>
-      <p style="color:#666">It works for ${CODE_MINUTES} minutes. If you didn't ask for it, ignore this email —
-        nothing changes without the code.</p>
-    </div>`;
+  const del = purpose === "delete";
+  const accent = del ? "#FF6B6B" : "#9B5DE5";
+  const tiles = [...code].map((d) => `
+    <td style="padding:0 4px">
+      <div style="width:44px;height:56px;text-align:center;font:900 30px/56px ${FONT};color:${INK};
+                  background:${SUN};border:3px solid ${INK};border-bottom-width:7px;border-radius:12px">${d}</div>
+    </td>`).join("");
+  const what = del
+    ? `Use this code to <b style="color:${accent}">delete your account</b>. This can't be undone.`
+    : "Use this code to <b>change your password</b>.";
+  return `<!doctype html>
+<html><body style="margin:0;padding:0;background:${CREAM}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CREAM};padding:28px 12px">
+  <tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:460px">
+      <tr><td align="center" style="padding-bottom:16px;font:900 26px ${FONT};color:${INK}">
+        🎮 Play<span style="color:${accent}">Room</span>
+      </td></tr>
+      <tr><td style="background:#fff;border:3px solid ${INK};border-bottom-width:8px;border-radius:24px;overflow:hidden">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="background:${accent};padding:14px 24px;font:800 15px ${FONT};color:#fff;letter-spacing:1px;
+                         border-bottom:3px solid ${INK}">
+            ${del ? "🗑️ DELETE ACCOUNT" : "🔒 PASSWORD CODE"}
+          </td></tr>
+          <tr><td style="padding:24px 24px 8px;font:16px/1.5 ${FONT};color:${INK}">
+            Hi <b>${username}</b> 👋<br>${what}
+          </td></tr>
+          <tr><td align="center" style="padding:14px 10px 18px">
+            <table role="presentation" cellpadding="0" cellspacing="0"><tr>${tiles}</tr></table>
+          </td></tr>
+          <tr><td align="center" style="padding:0 24px 24px">
+            <span style="display:inline-block;background:${CREAM};border:2px solid ${INK};border-radius:999px;
+                         padding:6px 14px;font:700 13px ${FONT};color:${INK}">⏱️ Works for ${CODE_MINUTES} minutes</span>
+          </td></tr>
+        </table>
+      </td></tr>
+      <tr><td align="center" style="padding:16px 20px 0;font:13px/1.5 ${FONT};color:${SOFT}">
+        Didn't ask for this? Ignore it — nothing changes without the code.
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`;
 }
 
 // POST /api/auth/email-code { purpose: "password" | "delete" } — mail a code.
@@ -248,13 +289,46 @@ async function checkCode(userId, purpose, code) {
   return u.affectedRows ? null : "That code has already been used.";
 }
 
-// POST /api/auth/change-password - proof is either the current password or
-// a code from /email-code: { current_password | code, new_password }.
+// Changing your password is two steps on the page: prove it's you (the
+// current password, or an emailed code), then pick the new one. Step one
+// hands back a ticket good for 10 minutes — and for one change only: it's
+// tied to the password it was issued against, so once that changes the
+// ticket is dead.
+const TICKET_MINUTES = 10;
+const pwTag = (hash) => crypto.createHash("sha256").update(String(hash)).digest("hex").slice(0, 16);
+
+// POST /api/auth/change-password/verify { current_password | code } -> { ticket }
+router.post("/change-password/verify", verifyToken, async (req, res, next) => {
+  try {
+    const { current_password, code } = req.body || {};
+    const byCode = code !== undefined && code !== null && code !== "";
+    if (!byCode && (typeof current_password !== "string" || !current_password))
+      return res.status(400).json({ success: false, message: "Enter your current password, or a code from your email." });
+
+    const [rows] = await db.execute("SELECT password FROM users WHERE id = ? AND is_active = 1", [req.user.id]);
+    if (!rows.length) return res.status(404).json({ success: false, message: "User not found." });
+
+    if (byCode) {
+      const bad = await checkCode(req.user.id, "password", String(code));
+      if (bad) return res.status(400).json({ success: false, message: bad });
+    } else if (!(await bcrypt.compare(current_password, rows[0].password))) {
+      return res.status(400).json({ success: false, message: "Your current password isn't right." });
+    }
+    const ticket = jwt.sign({ id: req.user.id, pw: pwTag(rows[0].password), use: "pwchange" }, process.env.JWT_SECRET,
+      { expiresIn: `${TICKET_MINUTES}m` });
+    return res.json({ success: true, ticket, minutes: TICKET_MINUTES });
+  } catch (err) { next(err); }
+});
+
+// POST /api/auth/change-password - proof is a ticket from /verify, or (as
+// before) the current password or an emailed code:
+// { ticket | current_password | code, new_password }.
 router.post("/change-password", verifyToken, async (req, res, next) => {
   try {
-    const { current_password, code, new_password } = req.body || {};
+    const { current_password, code, ticket, new_password } = req.body || {};
     const byCode = code !== undefined && code !== null && code !== "";
-    if ((!byCode && (typeof current_password !== "string" || !current_password)) || typeof new_password !== "string")
+    const byTicket = typeof ticket === "string" && ticket !== "";
+    if ((!byCode && !byTicket && (typeof current_password !== "string" || !current_password)) || typeof new_password !== "string")
       return res.status(400).json({ success: false, message: "Current and new password are required." });
     if (new_password.length < 6 || new_password.length > 200)
       return res.status(400).json({ success: false, message: "New password must be 6-200 characters." });
@@ -264,14 +338,19 @@ router.post("/change-password", verifyToken, async (req, res, next) => {
 
     // 400, not 401: the client treats any 401 as "your session expired" and
     // logs you out. A typo in the current password shouldn't do that.
-    if (!byCode && !(await bcrypt.compare(current_password, rows[0].password)))
+    if (byTicket) {
+      let t = null;
+      try { t = jwt.verify(ticket, process.env.JWT_SECRET); } catch { /* expired or forged */ }
+      if (!t || t.use !== "pwchange" || t.id !== req.user.id || t.pw !== pwTag(rows[0].password))
+        return res.status(400).json({ success: false, message: "That took too long — verify it's you again.", expired: true });
+    } else if (!byCode && !(await bcrypt.compare(current_password, rows[0].password)))
       return res.status(400).json({ success: false, message: "Your current password isn't right." });
     if (await bcrypt.compare(new_password, rows[0].password))
       return res.status(400).json({ success: false, message: "That's already your password - pick a new one." });
 
     // the code is checked last, so a new password that would be refused
     // anyway doesn't spend it
-    if (byCode) {
+    if (byCode && !byTicket) {
       const bad = await checkCode(req.user.id, "password", String(code));
       if (bad) return res.status(400).json({ success: false, message: bad });
     }
@@ -328,4 +407,5 @@ router.post("/delete-account", verifyToken, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router._codeEmail = codeEmail;      // for rendering a preview in tests
 module.exports = router;

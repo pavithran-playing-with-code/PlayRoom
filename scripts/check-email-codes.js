@@ -50,7 +50,11 @@ const call = async (path, { method = "GET", token, body } = {}) => {
   return { status: r.status, body: await r.json().catch(() => ({})) };
 };
 const login = async (username, password = PW) => call("/api/auth/login", { method: "POST", body: { username, password } });
-const codeIn = (m) => (m && (m.html.match(/>(\d{6})</) || [])[1]) || null;
+// the code is one digit per tile in the email
+const codeIn = (m) => {
+  const d = m ? [...m.html.matchAll(/border-radius:12px">(\d)<\/div>/g)].map((x) => x[1]).join("") : "";
+  return d.length === 6 ? d : null;
+};
 const lastMail = () => mails[mails.length - 1];
 
 (async () => {
@@ -85,10 +89,31 @@ const lastMail = () => mails[mails.length - 1];
   const back = await call("/api/auth/change-password", { method: "POST", token: tok, body: { current_password: "N3wPass!word", new_password: PW } });
   check("the old way (current password) still works", back.body.success);
 
+  // ── two steps: verify, then the new password (what the page does) ─────────
+  const v0 = await call("/api/auth/change-password/verify", { method: "POST", token: tok, body: { current_password: "nope" } });
+  check("verify with a wrong password: refused (400, so you stay logged in)", v0.status === 400 && !v0.body.ticket);
+  const v1 = await call("/api/auth/change-password/verify", { method: "POST", token: tok, body: { current_password: PW } });
+  check("verify with the right one: a ticket for step two", v1.body.success && !!v1.body.ticket);
+  const t1 = await call("/api/auth/change-password", { method: "POST", token: tok, body: { ticket: v1.body.ticket, new_password: "Tick3t!pass" } });
+  check("the ticket changes the password", t1.body.success && !!(await login(U1, "Tick3t!pass")).body.token, JSON.stringify(t1.body));
+  const t2 = await call("/api/auth/change-password", { method: "POST", token: tok, body: { ticket: v1.body.ticket, new_password: "Again!pass1" } });
+  check("…once: the same ticket can't change it again", t2.status === 400 && t2.body.expired === true && !!(await login(U1, "Tick3t!pass")).body.token);
+  const forged = await call("/api/auth/change-password", { method: "POST", token: tok, body: { ticket: "x.y.z", new_password: "Again!pass1" } });
+  check("a made-up ticket is refused", forged.status === 400);
+  const vb = await call("/api/auth/change-password/verify", { method: "POST", token: tok, body: { current_password: "Tick3t!pass" } });
+  await call("/api/auth/change-password", { method: "POST", token: tok, body: { ticket: vb.body.ticket, new_password: PW } });
+  check("(password put back)", !!(await login(U1)).body.token);
+
   // ── too many wrong tries ───────────────────────────────────────────────────
   // (the resend wait is a minute: use the second account)
   const b = await login(U2);
   const tok2 = b.body.token;
+  await call("/api/auth/email-code", { method: "POST", token: tok2, body: { purpose: "password" } });
+  const vc = await call("/api/auth/change-password/verify", { method: "POST", token: tok2, body: { code: codeIn(lastMail()) } });
+  check("verify with an emailed code: a ticket too", vc.body.success && !!vc.body.ticket, JSON.stringify(vc.body));
+  const vc2 = await call("/api/auth/change-password/verify", { method: "POST", token: tok2, body: { code: codeIn(lastMail()) } });
+  check("…and that code is now spent", vc2.status === 400);
+  await new Promise((r2) => setTimeout(r2, 61000));    // the resend wait, before the next code
   await call("/api/auth/email-code", { method: "POST", token: tok2, body: { purpose: "password" } });
   const code2 = codeIn(lastMail());
   const bad = code2 === "222222" ? "333333" : "222222";

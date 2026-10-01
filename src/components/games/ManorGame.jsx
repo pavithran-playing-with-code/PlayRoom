@@ -18,7 +18,7 @@ import {
   watchedPlayer, cycleWatch, placeName, viewState,
 } from "../horror/manorClient";
 import { say } from "../horror/manorSim";
-import LandscapeGate, { useAutoLandscape } from "../horror/LandscapeGate";
+import { useSideways, toGame } from "../horror/LandscapeGate";
 
 const REPORT_MS = 66;                  // ~15 a second
 const HUD_MS = 100;
@@ -43,8 +43,9 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
-  // Sideways as the house opens — the installed app is otherwise stuck upright.
-  useAutoLandscape();
+  // A landscape game: if the screen stays upright, it draws itself sideways.
+  const [rotated, sideways] = useSideways();
+  useEffect(() => { stick.current = null; look.current = null; }, [rotated]);
 
   const syncHud = useCallback(() => {
     const c = client.current;
@@ -128,14 +129,19 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       const c = canvasRef.current;
       if (!c) return;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const W = window.innerWidth, H = window.innerHeight;
+      // the game's own box: the screen, or the screen turned a quarter
+      const box = rootRef.current;
+      const W = box ? box.clientWidth : window.innerWidth, H = box ? box.clientHeight : window.innerHeight;
       c.width = W * dpr; c.height = H * dpr;
       const safeTop = rootRef.current ? parseFloat(getComputedStyle(rootRef.current).paddingTop) || 0 : 0;
       view.current = { W, H, dpr, safeTop };
     };
     fit();
     window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    // turning the phone (or being drawn turned) changes the box, not always the window
+    const ro = typeof ResizeObserver !== "undefined" && rootRef.current ? new ResizeObserver(fit) : null;
+    if (ro) ro.observe(rootRef.current);
+    return () => { window.removeEventListener("resize", fit); if (ro) ro.disconnect(); };
   }, []);
 
   // ── the loop ───────────────────────────────────────────────────────────────
@@ -219,17 +225,19 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     if (inIntro(c)) { c.skipIntro = true; syncHud(); return; }
     if (!playing(c)) return;
     const cv = canvasRef.current;
-    if (e.pointerType === "mouse" || e.clientX >= view.current.W * 0.5) {
-      if (!look.current) { look.current = { id: e.pointerId, lx: e.clientX, ly: e.clientY }; cv.setPointerCapture(e.pointerId); }
+    const at = toGame(e, sideways.current);
+    if (e.pointerType === "mouse" || at.x >= view.current.W * 0.5) {
+      if (!look.current) { look.current = { id: e.pointerId, lx: at.x, ly: at.y }; cv.setPointerCapture(e.pointerId); }
     } else if (!stick.current) {
-      stick.current = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY };
+      stick.current = { id: e.pointerId, ox: at.x, oy: at.y, x: at.x, y: at.y };
       cv.setPointerCapture(e.pointerId);
     }
   };
   const onMove = (e) => {
     const st = stick.current, lk = look.current, c = client.current;
-    if (st && e.pointerId === st.id) { st.x = e.clientX; st.y = e.clientY; }
-    if (lk && e.pointerId === lk.id && c && playing(c)) { lookBy(c.body, e.clientX - lk.lx, e.clientY - lk.ly); lk.lx = e.clientX; lk.ly = e.clientY; }
+    const at = toGame(e, sideways.current);
+    if (st && e.pointerId === st.id) { st.x = at.x; st.y = at.y; }
+    if (lk && e.pointerId === lk.id && c && playing(c)) { lookBy(c.body, at.x - lk.lx, at.y - lk.ly); lk.lx = at.x; lk.ly = at.y; }
   };
   const onEnd = (e) => {
     if (stick.current && e.pointerId === stick.current.id) stick.current = null;
@@ -261,7 +269,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
   const watchingNow = h && !h.playing && !over;
 
   return (
-    <div className="hm hmx" ref={rootRef} data-no-fun>
+    <div className={`hm hmx${rotated ? " hm-rot" : ""}`} ref={rootRef} data-no-fun>
       <canvas ref={canvasRef} className="hm-cv"
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onEnd} onPointerCancel={onEnd} />
 
@@ -362,8 +370,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
       {over && <Results over={over} me={currentUser} onExit={leave} leaving={leaving} />}
 
-      {/* A landscape game. The match can't wait, so say so. */}
-      {h && !over && <LandscapeGate note="The match clock keeps running." />}
+      {rotated && h && !over && <div className="hm-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
     </div>
   );
 }

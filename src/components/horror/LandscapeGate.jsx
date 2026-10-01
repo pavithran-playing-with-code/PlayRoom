@@ -1,31 +1,36 @@
 // src/components/horror/LandscapeGate.jsx
 // Hollow Manor is first-person with a thumb on each side of the screen: it is
-// a landscape game. On a phone or tablet held upright this covers the game
-// and asks for the device to be turned.
+// a landscape game, whatever the phone thinks.
 //
-// PlayRoom installed on a phone is locked to portrait (manifest.json says so),
-// so turning the phone does nothing there: the page has to ask for landscape
-// itself. An installed app may do that without a tap, so the game asks the
-// moment it opens. In a browser tab it needs a tap, and full screen, so the
-// first touch in the game does it. iPhone Safari lets no page lock
-// orientation; there the only way is to turn the phone, and the card says so.
-import React, { useEffect } from "react";
+// Two layers, because neither works everywhere:
+//
+//   1. Ask the phone to turn the screen (screen.orientation.lock). Chrome on
+//      Android allows it in full screen, which a tab enters on the first
+//      touch; an installed app may be allowed straight away. iPhone Safari
+//      never allows it.
+//   2. Whatever the phone says, if the screen is still upright, the game
+//      draws itself turned a quarter (.hm-rot), so you just turn the phone
+//      and it's sideways. This is what makes it work in the installed app
+//      (manifest.json locks that to portrait, and the lock did not always
+//      take), with rotation lock on, and on an iPhone.
+//
+// While drawn sideways, a touch's screen position has to be turned the same
+// way before the game reads it — see toGame().
+import { useEffect, useRef } from "react";
 import useMedia from "../../utils/useMedia";
 
 // A touch screen, held upright. A laptop with a touchscreen reports a fine
-// pointer, so it is never asked to turn.
+// pointer, so it is never turned.
 const UPRIGHT_TOUCH = "(orientation: portrait) and (pointer: coarse)";
 export const useUprightTouch = () => useMedia(UPRIGHT_TOUCH);
 
-const canLock = () => typeof window !== "undefined" && !!(window.screen?.orientation?.lock);
-
-// Opened from the home-screen icon rather than a browser tab.
 export const isInstalled = () => typeof window !== "undefined" && (
   window.matchMedia("(display-mode: standalone)").matches ||
   window.matchMedia("(display-mode: fullscreen)").matches || window.navigator.standalone === true);
 
-// Sideways. An installed app can lock straight away; a browser tab needs full
-// screen first, which needs a tap. Quietly does nothing where not allowed.
+// Ask for sideways. A browser tab needs full screen first, which needs a
+// tap. Quietly does nothing where not allowed — the drawn-sideways fallback
+// covers that.
 export async function goLandscape() {
   if (typeof window === "undefined" || !window.matchMedia("(pointer: coarse)").matches) return;
   if (!isInstalled()) {
@@ -34,12 +39,22 @@ export async function goLandscape() {
       if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({ navigationUI: "hide" });
     } catch { /* no tap to go on yet */ }
   }
-  try { await window.screen.orientation.lock("landscape"); } catch { /* iOS, or needs the tap */ }
+  try { await window.screen.orientation.lock("landscape"); } catch { /* not allowed here */ }
 }
 
-// For a game screen: sideways as it opens (installed app), or on the first
-// touch (browser tab), and back to normal when it closes.
-export function useAutoLandscape() {
+// Back to normal when the game closes: the rest of PlayRoom is portrait.
+export function leaveLandscape() {
+  try { window.screen?.orientation?.unlock?.(); } catch { /* nothing to undo */ }
+  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch { /* already out */ }
+}
+
+// For a game screen: ask to turn as it opens and on the first touch, and
+// report whether the game must draw itself sideways (`.hm-rot` on the root).
+// Returns [rotated, rotatedRef] — the ref for event handlers.
+export function useSideways() {
+  const rotated = useUprightTouch();
+  const ref = useRef(rotated);
+  ref.current = rotated;
   useEffect(() => {
     goLandscape();
     const onTouch = () => goLandscape();
@@ -49,33 +64,13 @@ export function useAutoLandscape() {
       leaveLandscape();
     };
   }, []);
+  return [rotated, ref];
 }
 
-// Back to normal when the game closes: the rest of PlayRoom is portrait.
-export function leaveLandscape() {
-  try { window.screen?.orientation?.unlock?.(); } catch { /* nothing to undo */ }
-  try { if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen(); } catch { /* already out */ }
-}
-
-export function useLandscapeCleanup() {
-  useEffect(() => leaveLandscape, []);
-}
-
-export default function LandscapeGate({ note = null }) {
-  const upright = useUprightTouch();
-  if (!upright) return null;
-  const lockable = canLock();
-  return (
-    <div className="hm-turn" role="dialog" aria-label="Turn your device sideways">
-      <div className="hm-turn-phone" aria-hidden="true"><span /></div>
-      <h2>Turn it sideways</h2>
-      <p>Hollow Manor is played in landscape: left thumb to walk, right thumb to look.</p>
-      {lockable && <button className="hm-go" onClick={goLandscape}>Play in landscape</button>}
-      <p className="hm-turn-small">
-        {!lockable ? "Turn your phone — if it won't turn, switch off rotation lock."
-          : isInstalled() ? "Tap it if the screen doesn't turn by itself." : "Or just turn your phone."}
-      </p>
-      {note && <p className="hm-turn-note">{note}</p>}
-    </div>
-  );
+// A pointer's position in the game's own frame. Drawn sideways, the game is
+// turned 90° clockwise about the screen's top-right corner, so its x runs
+// down the screen and its y runs right to left.
+export function toGame(e, rotated) {
+  if (!rotated) return { x: e.clientX, y: e.clientY };
+  return { x: e.clientY, y: window.innerWidth - e.clientX };
 }

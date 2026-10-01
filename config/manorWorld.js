@@ -13,6 +13,11 @@
 //   - The server moves the ghosts, and alone decides pickups, catches, who
 //     got out, in what order, and when the match is over. It writes scores
 //     to room_players itself; phones never post a score for this game.
+//   - Doors and lockers are the server's too: a phone asks (manor:use) to
+//     open or shut a door or to get into a locker, and the server checks it
+//     is standing there. A door one player shuts is shut for everyone, and
+//     for the ghosts, which stop to open it. Someone in a locker is invisible
+//     to the ghosts — unless one watched them get in.
 //
 // Modes (rooms.mode):
 //   free   every player for themselves, own-colour relics; first out wins
@@ -37,6 +42,7 @@ const DT = TICK_MS / 1000;
 const INTRO_MS = 8000;                 // ghosts asleep while everyone memorises the map
 const DECOYS = 2;
 const KEEP_AFTER_MS = 120000;          // a finished house lingers for late hellos
+const USE_REACH = 2.2;                 // a door or locker this near (tile centre) is in reach: a step, plus lag
 
 // Colours for players in a free-for-all — no reds, which belong to the demon
 // on the map — and the four team colours the waiting room already names
@@ -99,7 +105,7 @@ function buildWorld(room, seats, elapsedMs) {
     players.set(id, {
       id, name: p.username, avatar: p.avatar, side: side.key,
       color: mode === "free" ? side.color : side.color,
-      x: house.spawn.x, y: house.spawn.y, fa: 0, jz: 0, cr: 0, lit: true, noiseR: 0,
+      x: house.spawn.x, y: house.spawn.y, fa: 0, jz: 0, cr: 0, lit: true, noiseR: 0, hiding: null, snoop: 0,
       at: 0, alive: saved ? saved.alive : true, escaped: saved ? saved.escaped : false,
       place: saved ? saved.place : null, cause: saved ? saved.cause : null, decoys: DECOYS,
     });
@@ -107,7 +113,7 @@ function buildWorld(room, seats, elapsedMs) {
   const w = {
     code: room.room_code, roomId: room.id, mode, seed: room.seed,
     startMs: Date.now() - elapsedMs, durMs: room.duration_seconds * 1000,
-    house, env: { g: house.g, N: house.N, obst: house.obst },
+    house, env: { g: house.g, N: house.N, obst: house.obst, doors: new Set(house.doors) },
     sides, players, pulses: [], places: 0, over: false, reason: null,
     events: [], timer: null, lastScores: new Map(),
   };
@@ -240,15 +246,23 @@ function tick(w) {
   if (now - w.startMs >= w.durMs) { finish(w, "time"); return; }
   const awake = now - w.startMs >= INTRO_MS;
 
-  const targets = living(w).map((p) => ({ id: p.id, x: p.x, y: p.y, lit: p.lit, cr: p.cr, noiseR: p.noiseR }));
+  const targets = living(w).map((p) => ({ id: p.id, x: p.x, y: p.y, lit: p.lit, cr: p.cr, noiseR: p.noiseR, hid: p.hiding }));
   if (awake) {
     w.house.ghosts.forEach((G, gi) => {
       const caught = core.stepGhost(G, w.env, targets, DT, w.house.rand, hustle(w), (name, extra) => {
         if (name === "spotted") ev(w, { type: "spotted", g: gi, id: extra.id });
+        if (name === "door") ev(w, { type: "door", x: extra.x, y: extra.y, open: 1, id: 0 });
       });
       if (caught != null && !w.over) kill(w, caught, "ghost");
     });
     if (w.over) return;
+    // a ghost lingering by a locker opens it in the end
+    for (const p of living(w)) {
+      if (!core.snoopStep(p, w.house.ghosts, DT)) continue;
+      core.leaveLocker(p);
+      kill(w, p.id, "locker");
+      if (w.over) return;
+    }
   }
 
   let scored = false;
@@ -290,7 +304,8 @@ function broadcast(w, now) {
     t: now - w.startMs,
     g: w.house.ghosts.map((G) => [r2(G.x), r2(G.y), G.st === "hunt" ? 1 : 0, G.stun > 0 ? 1 : 0]),
     p: [...w.players.values()].map((p) => [p.id, r2(p.x), r2(p.y), r2(p.fa), r2(p.jz), r2(p.cr), p.lit ? 1 : 0,
-      p.escaped ? 2 : p.alive ? 1 : 0, p.place || 0]),
+      p.escaped ? 2 : p.alive ? 1 : 0, p.place || 0, p.hiding ? 1 : 0]),
+    d: w.house.doors.map((k) => (w.house.g[(k / w.house.N) | 0][k % w.house.N] === core.DOOR ? 1 : 0)).join(""),
     r: w.house.relics.map((r) => (r.got ? 1 : 0)).join(""),
     b: w.house.batts.map((b) => (b.got ? 1 : 0)).join(""),
     s: w.sides.map((s) => [s.key, s.got, s.open ? 1 : 0, s.place || 0]),
@@ -348,7 +363,7 @@ function initFor(w, uid, role) {
     code: w.code, mode: w.mode, you: uid, role,
     elapsed: Date.now() - w.startMs, duration: w.durMs, intro: INTRO_MS,
     house: {
-      N: w.house.N, walls: core.packWalls(w.house.g), exitT: w.house.exitT, obst: w.house.obst,
+      N: w.house.N, walls: core.packWalls(w.house.g), doors: w.house.doors, exitT: w.house.exitT, obst: w.house.obst,
       relics: w.house.relics.map((r) => [r.x, r.y, r.side, r.got ? 1 : 0]),
       batts: w.house.batts.map((b) => [b.x, b.y, b.got ? 1 : 0]),
       spawn: w.house.spawn,
@@ -404,8 +419,9 @@ function attach(server) {
       if (!w || w.over) return;
       const p = w.players.get(uid);
       if (!p || !p.alive || p.escaped) return;
-      const x = num(m.x, 0, w.house.N), y = num(m.y, 0, w.house.N);
       const now = Date.now();
+      if (p.hiding) { p.at = now; return; }            // in a locker: going nowhere
+      const x = num(m.x, 0, w.house.N), y = num(m.y, 0, w.house.N);
       if (x != null && y != null) {
         const since = p.at ? Math.min(1, (now - p.at) / 1000) : 1;
         const far = Math.hypot(x - p.x, y - p.y) > core.MAX_SPEED * since + 0.35;
@@ -417,6 +433,48 @@ function attach(server) {
       p.cr = num(m.cr, 0, 1) ?? 0;
       p.lit = !!m.lit;
       p.noiseR = num(m.n, 0, 8) ?? 0;
+    });
+
+    // Use: { code, act: open | close | hide | out, x, y }. Only the tile in
+    // reach, and only what the tile allows; the answer goes back to the asker
+    // (manor:used) and everyone sees the result in the next tick.
+    socket.on("manor:use", (m) => {
+      if (!m || typeof m.code !== "string") return;
+      const w = worlds.get(m.code.toUpperCase());
+      if (!w || w.over) return;
+      const p = w.players.get(uid);
+      if (!p || !p.alive || p.escaped) return;
+      const reply = (ok, extra) => socket.emit("manor:used", { code: w.code, act: m.act, x: m.x, y: m.y, ok, ...extra });
+      if (m.act === "out") {
+        if (p.hiding) { core.leaveLocker(p); p.at = Date.now(); ev(w, { type: "locker", id: uid, in: 0 }); }
+        return reply(true);
+      }
+      const x = num(m.x, 0, w.house.N - 1), y = num(m.y, 0, w.house.N - 1);
+      if (x == null || y == null || p.hiding) return reply(false);
+      const tx = Math.floor(x), ty = Math.floor(y), g = w.house.g;
+      if (Math.hypot(tx + 0.5 - p.x, ty + 0.5 - p.y) > USE_REACH) return reply(false, { why: "far" });
+      if (m.act === "open") {
+        if (g[ty][tx] !== core.DOOR) return reply(false);
+        g[ty][tx] = core.FLOOR;
+        ev(w, { type: "door", x: tx, y: ty, open: 1, id: uid });
+        return reply(true);
+      }
+      if (m.act === "close") {
+        const bodies = [...living(w).filter((q) => !q.hiding), ...w.house.ghosts];
+        if (!core.canClose(w.env, tx, ty, bodies)) return reply(false);
+        g[ty][tx] = core.DOOR;
+        ev(w, { type: "door", x: tx, y: ty, open: 0, id: uid });
+        return reply(true);
+      }
+      if (m.act === "hide") {
+        if (g[ty][tx] !== core.LOCKER) return reply(false);
+        if ([...w.players.values()].some((q) => q.hiding && q.hiding.x === tx && q.hiding.y === ty)) return reply(false, { why: "taken" });
+        const seenBy = core.watcher(w.house.ghosts, w.env, p, uid);
+        core.hideIn(p, { x: tx, y: ty }, seenBy);
+        ev(w, { type: "locker", id: uid, in: 1 });
+        return reply(true, { seen: !!seenBy });
+      }
+      return reply(false);
     });
 
     socket.on("manor:decoy", (raw) => {

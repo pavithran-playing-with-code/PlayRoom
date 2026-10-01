@@ -11,7 +11,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  newNight, tick, begin, jump, decoy, toggleCrouch, toggleLight, toggleRun, lit, timeText,
+  newNight, tick, begin, jump, decoy, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, lit, timeText,
 } from "../components/horror/manorSim";
 import { drawManor, lookBy, SPRINT_PX, STICK_R } from "../components/horror/manorRender";
 import { createManorAudio } from "../components/horror/manorAudio";
@@ -23,7 +23,7 @@ const SHOW_CAUGHT_AFTER = 1.4;     // seconds of its face before the card
 const hudOf = (s) => s && ({
   mode: s.mode, night: s.night, count: s.count, need: s.need, stam: s.P.stam, bat: s.P.bat,
   light: s.P.light, lit: lit(s), runOn: s.P.runOn, tired: s.P.stamCool > 0, crouch: s.P.crouch,
-  decoys: s.decoys, msg: s.msg,
+  decoys: s.decoys, msg: s.msg, use: actionLabel(s), hiding: !!s.P.hiding,
 });
 
 export default function Manor() {
@@ -157,7 +157,8 @@ export default function Manor() {
       if (k === " ") jump(s);
       if (k === "c") toggleCrouch(s);
       if (k === "r") toggleRun(s);
-      if (k === "e") decoy(s);
+      if (k === "e") doAction(s);
+      if (k === "q") decoy(s);
       syncHud();
     };
     const up = (e) => { keys.current[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; };
@@ -223,9 +224,11 @@ export default function Manor() {
 
       <div className="hm-msg" style={{ opacity: playing && hud.msg ? 1 : 0 }} aria-live="polite">{playing ? hud.msg : ""}</div>
 
-      {/* The three that matter mid-run, under the right thumb: jump, crouch
-          below it, the light to their left. Running is the stick pushed out. */}
+      {/* Under the right thumb: jump, crouch below it, the light to their
+          left, and Use (doors, lockers) beside jump — lit when there is
+          something in front of you to use. Running is the stick pushed out. */}
       <div className={`hm-pad${playing ? "" : " off"}`}>
+        <button className={`hm-use${hud?.use ? " on" : ""}`} onPointerDown={press(doAction)}>{hud?.use || "Use"}</button>
         <button className="hm-jump" onPointerDown={press(jump)}>Jump</button>
         <button className={`hm-light${hud?.light && hud?.bat > 0 ? " on" : ""}`} onPointerDown={press(toggleLight)}>
           {hud?.bat <= 0 ? "No power" : hud?.light ? "Light on" : "Light off"}
@@ -241,14 +244,16 @@ export default function Manor() {
         <div className="hm-ov">
           <button className="hm-leave" onClick={() => navigate("/")}>← Leave</button>
           <h1>Hollow Manor 3D</h1>
-          <p>Five relics are scattered through the manor. Something old lives here, and it listens.</p>
+          <p>Relics are scattered through the rooms of the manor. Something old lives here, and it listens.</p>
           <p>First person now: look around, listen for its footsteps. You enter through one gate, which slams shut behind you. Take all the relics, grab batteries so your light does not die, then leave through the far gate. A red arrow shows where the ghost is when it is near.</p>
           <button className="hm-go" onClick={newGame}>Enter the manor</button>
           <p className="hm-small">
             Move: WASD. Turn: drag the mouse or use the left and right arrows. Each night gets bigger and harder.
-            On a phone, left thumb moves and right thumb looks. Run: Shift. Light: F. Jump: Space. Crouch: C.<br />
-            Run (toggle, or hold Shift) is faster but loud and uses stamina. Music box (E) lures the ghost to a spot:
-            two uses. Light on lets you see far but the ghost spots you from farther. Light off and still = hidden.
+            On a phone, left thumb moves (push it out to run) and right thumb looks. Run: Shift. Use (doors,
+            lockers): E. Music box: Q. Light: F. Jump: Space. Crouch: C.<br />
+            Doors creak when you open them; shut one behind you and it has to stop to open it. Hide in a locker
+            and it walks past, unless it saw you get in. Music box lures the ghost to a spot: two uses. Light on
+            lets you see far but the ghost spots you from farther. Light off and still = hidden.
           </p>
         </div>
       )}

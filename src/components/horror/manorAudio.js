@@ -77,7 +77,33 @@ export function createManorAudio() {
     ghostStep: (v) => tone(52, 0.14, v, "sine", 34),
     heartbeat: (v) => { tone(60, 0.2, 0.55 * v, "sine", 32); later(() => tone(55, 0.2, 0.4 * v, "sine", 30), 190); },
     musicBox: () => [523, 392, 466, 349, 523, 392].forEach((f, i) => later(() => tone(f, 0.5, 0.14, "triangle"), i * 230)),
+    creak: (v = 0.28) => tone(170, 0.5, v, "sawtooth", 85),           // a door; v falls off with distance
+    locker: () => { tone(240, 0.12, 0.08, "square", 120); noise(0.08, 0.1); },
+    buzz: (v = 0.5) => tone(90 + v * 60, 0.08, 0.08, "square"),        // a stuttering light
+    thud: () => later(() => { tone(60, 0.3, 0.5, "sine", 30); noise(0.2, 0.3); }, 330),
+    whisper: (pan = 0.8) => whisper(pan),
   };
+
+  // Breathy noise through a band-pass, from one side: "right behind you".
+  function whisper(pan) {
+    if (!AC) return;
+    try {
+      const n = AC.sampleRate * 1.2, b = AC.createBuffer(1, n, AC.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / n) * (0.5 + 0.5 * Math.sin(i / 900));
+      const src = AC.createBufferSource(), f = AC.createBiquadFilter(), v = AC.createGain();
+      f.type = "bandpass";
+      f.frequency.value = 1900;
+      f.Q.value = 2;
+      v.gain.value = 0.35;
+      src.buffer = b;
+      src.connect(f);
+      f.connect(v);
+      let out = v;
+      if (AC.createStereoPanner) { const pn = AC.createStereoPanner(); pn.pan.value = pan; v.connect(pn); out = pn; }
+      out.connect(mg);
+      src.start();
+    } catch (e) { /* the context was closed */ }
+  }
 
   return {
     start,

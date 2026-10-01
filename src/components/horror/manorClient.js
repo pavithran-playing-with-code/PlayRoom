@@ -6,18 +6,25 @@
 //     reported to the server;
 //   - everyone else and the ghosts, as the server last said, eased toward
 //     each new report so ten updates a second look like motion;
-//   - what the server says happened — relics taken, doors opening, who was
-//     caught, who got out — turned into sounds and a line of text.
+//   - what the server says happened — relics taken, gates opening, who was
+//     caught, who got out — turned into sounds and a line of text;
+//   - doors and lockers: Use acts here at once (so a door you open lets you
+//     straight through) and asks the server, which has the last word — the
+//     door states in every tick put any disagreement right;
+//   - the scares, which are this phone's alone and change nothing.
 //
 // No React and no DOM; ManorGame.jsx draws it and wires the socket.
 import {
-  unpackWalls, newBody, stepBody, jumpBody, litBody, HURDLE,
+  unpackWalls, newBody, stepBody, jumpBody, litBody, HURDLE, FLOOR, DOOR,
+  actionAt, ACTION_LABEL, hideIn, leaveLocker, unstick,
 } from "./manorCore.mjs";
-import { AMBIENT, hints as hintsFor, say } from "./manorSim.js";
+import { AMBIENT, hints as hintsFor, say, scareStep } from "./manorSim.js";
 
 export const SHOW_MAP_MS = 6000;       // the map you memorise; ghosts sleep a little longer
 export const SCARE_MS = 1400;          // the face, when it gets you
 const EASE = 12;                       // how fast others catch up with their last report
+const DOOR_TRUST_MS = 1500;            // a door you just used: your word over the server's for this long
+const HIDE_TRUST_MS = 1500;            // likewise a locker you just got into
 
 const RELIC_LINES = [
   "A child's tooth wrapped in silk. Something stirs.",
@@ -32,6 +39,7 @@ export function createClient(init, now = Date.now()) {
   const N = init.house.N;
   const g = unpackWalls(init.house.walls);
   const obst = init.house.obst || {};
+  const doorList = init.house.doors || [];
   const sides = new Map(init.sides.map((s) => [s.key, { ...s }]));
   const players = new Map(init.players.map((p) => [p.id, {
     ...p, tx: p.x, ty: p.y, tfa: p.fa || 0, fa: p.fa || 0, jz: 0, cr: 0, lit: true,
@@ -41,7 +49,8 @@ export function createClient(init, now = Date.now()) {
   const body = newBody(me ? me.x : init.house.spawn.x, me ? me.y : init.house.spawn.y, me ? me.fa || 0 : 0);
   const c = {
     mode: init.mode, you: init.you, role: me ? "player" : "spectator", code: init.code,
-    N, g, obst, env: { g, N, obst }, exitT: init.house.exitT,
+    N, g, obst, env: { g, N, obst, doors: new Set(doorList) }, exitT: init.house.exitT,
+    doorList, pend: new Map(),            // door tile -> until when our own change stands
     sides, players, mySide, body,
     relics: init.house.relics.map(([x, y, side, got]) => ({
       x, y, side, got: !!got, color: sides.get(side)?.color, mine: init.mode === "coop" || side === mySide,
@@ -49,6 +58,7 @@ export function createClient(init, now = Date.now()) {
     cells: init.house.batts.map(([x, y, got]) => ({ x, y, got: !!got })),
     ghosts: [], pulses: [], puffs: [],
     hint: {}, msg: "", msgT: 0, tm: 0, ambT: 20, hb: 0, gStep: 0,
+    bodies: [], flick: 0, scareT: 25 + Math.random() * 15,
     alive: me ? me.alive : false, escaped: me ? me.escaped : false, place: me ? me.place : null,
     decoys: me ? me.decoys : 0,
     startLocal: now - init.elapsed, durMs: init.duration, introMs: init.intro,
@@ -76,15 +86,26 @@ export function applyTick(c, m, now = Date.now()) {
     const G = c.ghosts[i] || (c.ghosts[i] = { x, y, tx: x, ty: y });
     G.tx = x; G.ty = y; G.st = hunt ? "hunt" : "patrol"; G.stun = stun ? 1 : 0;
   });
-  for (const [id, x, y, fa, jz, cr, lit, state, place] of m.p) {
+  for (const [id, x, y, fa, jz, cr, lit, state, place, hiding] of m.p) {
     const p = c.players.get(id);
     if (!p) continue;
     p.tx = x; p.ty = y; p.tfa = fa; p.jz = jz; p.cr = cr; p.lit = !!lit;
-    p.alive = state !== 0; p.escaped = state === 2; p.place = place || null;
+    p.alive = state !== 0; p.escaped = state === 2; p.place = place || null; p.hiding = !!hiding;
     if (id !== c.you || c.role !== "player") continue;
     // The server is the one who says you were caught or got out.
     if (!p.alive && c.alive) { c.alive = false; c.deadAt = now; }
     if (p.escaped && !c.escaped) { c.escaped = true; c.place = p.place; }
+    // it never took you into that locker (someone beat you to it, or the ask was lost)
+    if (!hiding && c.body.hiding && now - (c.body.hideAt || 0) > HIDE_TRUST_MS) leaveLocker(c.body);
+  }
+  // doors, as the server has them — except one you have only just used
+  if (m.d) {
+    [...m.d].forEach((ch, i) => {
+      const k = c.doorList[i];
+      if (k === undefined || (c.pend.get(k) || 0) > now) return;
+      c.g[(k / c.N) | 0][k % c.N] = ch === "1" ? DOOR : FLOOR;
+    });
+    if (playing(c) && !c.body.hiding) unstick(c.g, c.body);   // a door shut on you in the lag: step clear
   }
   [...m.r].forEach((ch, i) => { if (c.relics[i]) c.relics[i].got = ch === "1"; });
   [...m.b].forEach((ch, i) => { if (c.cells[i]) c.cells[i].got = ch === "1"; });
@@ -103,8 +124,13 @@ export function applyTick(c, m, now = Date.now()) {
       if (mine && c.mode !== "free") say(c, "Every relic taken. The far gate is open!", 4000);
       else if (!mine && c.mode !== "coop") say(c, `${c.sides.get(e.side)?.name || "Someone"} has every relic. Their gate is open.`, 3500);
     } else if (e.type === "dead") {
-      if (e.id === c.you) snd("caught");
-      else say(c, e.cause === "left" ? `${nameOf(c, e.id)} ran out of the house.` : `${nameOf(c, e.id)} was taken.`, 3500);
+      if (e.id === c.you) { snd("caught"); if (e.cause === "locker") say(c, "The locker door creaks open...", 2000); }
+      else say(c, e.cause === "left" ? `${nameOf(c, e.id)} ran out of the house.`
+        : e.cause === "locker" ? `${nameOf(c, e.id)} was dragged out of a locker.` : `${nameOf(c, e.id)} was taken.`, 3500);
+    } else if (e.type === "door" && e.id !== c.you) {
+      // someone else's door, or a ghost's: louder the nearer it is
+      const at = c.body, d = Math.hypot(at.x - e.x - 0.5, at.y - e.y - 0.5);
+      if (d < 14) snd("creak", Math.max(0.03, (e.open ? 0.3 : 0.18) * (1 - d / 14)));
     } else if (e.type === "escaped") {
       if (e.id === c.you) { snd("win"); say(c, c.mode === "free" ? `You got out — ${placeName(e.place)}!` : "You got out!", 4000); }
       else say(c, e.place ? `${nameOf(c, e.id)} got out — ${placeName(e.place)}.` : `${nameOf(c, e.id)} got out.`, 3500);
@@ -164,6 +190,7 @@ export function stepLocal(c, inp, dt, now = Date.now()) {
     say(c, `The far gate is sealed. ${side.need - side.got} of your relics still out there.`, 2500);
   }
   hintsFor(c, P);
+  scareStep(c, P, dt, Math.random, c.ghosts.some((G) => G.st === "hunt"), snd);
   c.ambT -= dt;
   if (c.ambT <= 0 && c.msgT <= 0) { c.ambT = 22 + Math.random() * 15; say(c, AMBIENT[(Math.random() * 4) | 0], 3000); }
 
@@ -199,6 +226,58 @@ export function report(c) {
 
 export function jump(c) { return playing(c) && jumpBody(c.body); }
 
+// ── doors and lockers ────────────────────────────────────────────────────────
+// Bodies a door must not shut on: the ghosts, and everyone else still inside
+// and out in the open.
+const blockersOf = (c) => [
+  ...c.ghosts,
+  ...[...c.players.values()].filter((p) => p.id !== c.you && p.alive && !p.escaped && !p.hiding),
+];
+
+export function actionLabel(c, now = Date.now()) {
+  if (!playing(c) || inIntro(c, now)) return null;
+  const u = actionAt(c.env, c.body, blockersOf(c));
+  return u ? ACTION_LABEL[u.t] : null;
+}
+
+// Use, now, on this phone. Returns { ask, sounds }: `ask` is what to send the
+// server (manor:use), or null if there was nothing to use.
+export function doAction(c, now = Date.now()) {
+  const none = { ask: null, sounds: [] };
+  if (!playing(c) || inIntro(c, now)) return none;
+  const P = c.body;
+  const u = actionAt(c.env, P, blockersOf(c));
+  if (!u) return none;
+  const sounds = [];
+  if (u.t === "open" || u.t === "close") {
+    const open = u.t === "open";
+    c.g[u.y][u.x] = open ? FLOOR : DOOR;
+    c.pend.set(u.y * c.N + u.x, now + DOOR_TRUST_MS);
+    P.noiseT = open ? 0.6 : 0.3;
+    sounds.push({ name: "creak", v: open ? 0.28 : 0.15 });
+    if (!open) say(c, "Door shut. It will have to open it.", 2000);
+  } else if (u.t === "hide") {
+    hideIn(P, u, null);
+    P.hideAt = now;
+    sounds.push({ name: "locker" });
+    say(c, "Stay quiet. Do not let it linger near.", 3500);
+  } else {
+    leaveLocker(P);
+    sounds.push({ name: "locker" });
+  }
+  return { ask: { code: c.code, act: u.t, x: u.x, y: u.y }, sounds };
+}
+
+// The server's answer to a Use.
+export function actionDone(c, r) {
+  if (r.act === "hide") {
+    if (!r.ok) { leaveLocker(c.body); say(c, r.why === "taken" ? "Someone is already hiding in there." : "You could not get in.", 2500); }
+    else if (r.seen) say(c, "It saw you hide. Hold on, or run...", 3500);
+  } else if ((r.act === "open" || r.act === "close") && !r.ok && r.x != null) {
+    c.pend.delete(Math.floor(r.y) * c.N + Math.floor(r.x));   // the next tick puts it right
+  }
+}
+
 // ── watching ─────────────────────────────────────────────────────────────────
 // Once you are out of it — caught, escaped, or only here to watch — you look
 // through somebody else's eyes. Whoever you picked, else the first still inside.
@@ -232,13 +311,14 @@ export function viewState(c, now = Date.now()) {
     P = {
       x: src.x, y: src.y, fa: src.fa || 0, jz: src.jz || 0, cr: src.cr || 0,
       noiseR: 0, shake: 0, entering: false, light: w ? w.lit : true, lightOut: 0, bat: 1,
+      hiding: w && w.hiding ? {} : null,
     };
     const ws = w && c.sides.get(w.side);
     exitOpen = !!(ws && ws.open);
   }
   const mine = c.relics.map((r) => (c.role === "player" || !camId ? r : { ...r, mine: c.mode === "coop" || r.side === c.players.get(camId)?.side }));
   const others = [...c.players.values()]
-    .filter((p) => p.id !== camId && p.alive && !p.escaped)
+    .filter((p) => p.id !== camId && p.alive && !p.escaped && !p.hiding)
     .map((p) => ({ x: p.x, y: p.y, color: p.color, name: p.name, lit: p.lit, cr: p.cr, jz: p.jz }));
   const scared = c.deadAt !== null && now - c.deadAt < SCARE_MS;
   return {
@@ -246,7 +326,7 @@ export function viewState(c, now = Date.now()) {
     introT: Math.max(0, (SHOW_MAP_MS - (now - c.startLocal)) / 1000),
     deadT: scared ? (now - c.deadAt) / 1000 : 0,
     N: c.N, g: c.g, obst: c.obst, exitT: c.exitT,
-    relics: mine, cells: c.cells, pulses: c.pulses, puffs: c.puffs, tm: c.tm,
+    relics: mine, cells: c.cells, pulses: c.pulses, puffs: c.puffs, tm: c.tm, bodies: own ? c.bodies : [],
     // before the first word from the server there are no ghosts yet: a
     // stand-in far away keeps the danger glow and arrows quiet
     P, G: nearestGhost(c, P) || FAR_GHOST, ghosts: c.ghosts.length ? c.ghosts : [FAR_GHOST],

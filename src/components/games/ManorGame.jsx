@@ -14,7 +14,7 @@ import { useSocket } from "../../utils/SocketContext";
 import { drawManor, lookBy, SPRINT_PX, STICK_R } from "../horror/manorRender";
 import { createManorAudio } from "../horror/manorAudio";
 import {
-  createClient, applyTick, stepLocal, report, jump, playing, inIntro, timeLeft, sideOfMe,
+  createClient, applyTick, stepLocal, report, jump, doAction, actionDone, actionLabel, playing, inIntro, timeLeft, sideOfMe,
   watchedPlayer, cycleWatch, placeName, viewState,
 } from "../horror/manorClient";
 import { say } from "../horror/manorSim";
@@ -57,7 +57,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       role: c.role, mode: c.mode, alive: c.alive, escaped: c.escaped, place: c.place, intro: inIntro(c, now),
       left: timeLeft(c, now), msg: c.msg, side: side && { name: side.name, color: side.color, got: side.got, need: side.need, open: side.open },
       stam: c.body.stam, bat: c.body.bat, light: c.body.light, runOn: c.body.runOn, tired: c.body.stamCool > 0,
-      crouch: c.body.crouch, decoys: c.decoys, watching: w && { name: w.name, color: w.color },
+      crouch: c.body.crouch, decoys: c.decoys, watching: w && { name: w.name, color: w.color }, use: actionLabel(c, now),
       players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, escaped: p.escaped, place: p.place })),
       playing: playing(c),
     });
@@ -102,11 +102,18 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       else say(c, r.why === "empty" ? "The music box is empty." : "It is watching you. Break line of sight first!", 2200);
       syncHud();
     };
+    const onUsed = (r) => {
+      const c = client.current;
+      if (!c || r.code !== roomCode) return;
+      actionDone(c, r);
+      syncHud();
+    };
     const onGone = (g) => { if (g.code === roomCode && !client.current) setGone(true); };
     socket.on("manor:init", onInit);
     socket.on("manor:tick", onTick);
     socket.on("manor:over", onOver);
     socket.on("manor:decoyed", onDecoyed);
+    socket.on("manor:used", onUsed);
     socket.on("manor:gone", onGone);
     socket.on("connect", hello);
     hello();
@@ -118,6 +125,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       socket.off("manor:tick", onTick);
       socket.off("manor:over", onOver);
       socket.off("manor:decoyed", onDecoyed);
+      socket.off("manor:used", onUsed);
       socket.off("manor:gone", onGone);
       socket.off("connect", hello);
     };
@@ -183,6 +191,13 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     return () => cancelAnimationFrame(raf);
   }, [socket, syncHud]);
 
+  // Use: doors and lockers. It happens here at once, and the server is asked.
+  const doUse = useCallback((c) => {
+    const r = doAction(c);
+    for (const s of r.sounds) audio.current.play(s);
+    if (r.ask && socket) socket.emit("manor:use", r.ask);
+  }, [socket]);
+
   // ── keyboard ───────────────────────────────────────────────────────────────
   useEffect(() => {
     const down = (e) => {
@@ -202,7 +217,8 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       if (k === " " && jump(c)) audio.current.play({ name: "jump" });
       if (k === "c") c.body.crouch = !c.body.crouch;
       if (k === "r") c.body.runOn = !c.body.runOn;
-      if (k === "e" && socket) socket.emit("manor:decoy", roomCode);
+      if (k === "e") doUse(c);
+      if (k === "q" && socket) socket.emit("manor:decoy", roomCode);
       syncHud();
     };
     const up = (e) => { keys.current[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; };
@@ -215,7 +231,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", blur);
     };
-  }, [socket, roomCode, syncHud]);
+  }, [socket, roomCode, syncHud, doUse]);
 
   // ── thumbs: left moves, right looks ────────────────────────────────────────
   const onDown = (e) => {
@@ -319,9 +335,11 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
       {h && h.playing && !h.intro && (
         <>
-          {/* Jump, crouch below it, the light to their left: the three that
-              matter mid-run. Running is the stick pushed past its ring. */}
+          {/* Jump, crouch below it, the light to their left, and Use (doors,
+              lockers) beside jump, lit when there is something to use.
+              Running is the stick pushed past its ring. */}
           <div className="hm-pad">
+            <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
             <button className="hm-jump" onPointerDown={press((c) => { if (jump(c)) audio.current.play({ name: "jump" }); })}>Jump</button>
             <button className={`hm-light${h.light && h.bat > 0 ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}>
               {h.bat <= 0 ? "No power" : h.light ? "Light on" : "Light off"}

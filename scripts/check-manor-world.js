@@ -77,6 +77,8 @@ function walk(w, ph, id, tx, ty) {
       const v = d[(cx + a) + (cy + b) * N];
       if (v >= 0 && v < d[nx + ny * N]) { nx = cx + a; ny = cy + b; }
     }
+    // a shut door on the way: open it, as a person would
+    if ((nx !== cx || ny !== cy) && g[ny][nx] === coreMod.DOOR) ph.h["manor:use"]({ code: w.code, act: "open", x: nx, y: ny });
     // square up to the middle of the corridor before turning, as a person
     // does; cutting the corner clips the wall and the server refuses it
     let gx = nx === cx && ny === cy ? tx : nx + 0.5, gy = nx === cx && ny === cy ? ty : ny + 0.5;
@@ -118,7 +120,7 @@ let coreMod;
     }
     check("200 houses for 1–8 players: connected, every side's relics all there, nothing stacked", ok, why);
     const sizes = [1, 2, 4, 6, 8].map((n) => coreMod.sizeFor(n));
-    check("the house grows with the crowd", sizes.every((v, i) => i === 0 || v > sizes[i - 1]), sizes.join(" < "));
+    check("the house grows with the crowd", sizes.every((v, i) => i === 0 || v >= sizes[i - 1]) && sizes[4] > sizes[0], sizes.join(" ≤ "));
     check("more ghosts for more players", coreMod.ghostsFor(2) === 1 && coreMod.ghostsFor(4) === 2 && coreMod.ghostsFor(8) === 3);
 
     // fairness: each side's relics sit at a similar spread of distances
@@ -309,15 +311,10 @@ let coreMod;
     G.stun = 0; G.st = "patrol";
     const a = w.players.get(71), b = w.players.get(72);
     // put both in a straight hall with the ghost, b nearer
+    // rooms are 7 wide: cut a straight hall through the first two
     const N = w.house.N, g = w.house.g;
-    let hall = null;
-    for (let y = 1; y < N - 1 && !hall; y++) {
-      let run = 0;
-      for (let x = 1; x < N - 1; x++) {
-        run = g[y][x] || w.house.obst[x + y * N] ? 0 : run + 1;
-        if (run >= 8) { hall = { y, x }; break; }
-      }
-    }
+    const hall = { y: 4, x: 9 };
+    for (let x = 1; x <= 13; x++) { g[hall.y][x] = coreMod.FLOOR; delete w.house.obst[x + hall.y * N]; }
     Object.assign(a, { x: hall.x - 7 + 0.5, y: hall.y + 0.5, lit: true });
     Object.assign(b, { x: hall.x - 4 + 0.5, y: hall.y + 0.5, lit: true });
     Object.assign(G, { x: hall.x + 0.5, y: hall.y + 0.5 });
@@ -334,6 +331,131 @@ let coreMod;
     Object.assign(G2, { x: early.players.get(81).x + 0.2, y: early.players.get(81).y });
     world._tick(early);
     check("while everyone memorises the map, the ghosts sleep", early.players.get(81).alive);
+  }
+
+  // ── doors ──────────────────────────────────────────────────────────────────
+  // Shared: one player shuts it, it's shut for everyone and for the ghosts.
+  {
+    const w = room("free", [{ id: 111 }, { id: 112 }]);
+    const A = phone(111), B = phone(112);
+    const N = w.house.N, g = w.house.g;
+    const k = w.house.doors[0], dx = k % N, dy = (k / N) | 0;
+    const horiz = dx % 8 === 0;
+    const before = horiz ? [dx - 0.5, dy + 0.5] : [dx + 0.5, dy - 0.5];
+    const after = horiz ? [dx + 1.5, dy + 0.5] : [dx + 0.5, dy + 1.5];
+    check("doors start shut", g[dy][dx] === coreMod.DOOR);
+    walk(w, A, 111, before[0], before[1]);
+    const a = w.players.get(111);
+    const far = phone(112);
+    far.h["manor:use"]({ code: w.code, act: "open", x: dx, y: dy });
+    check("someone across the house can't open it", g[dy][dx] === coreMod.DOOR &&
+      far.got.filter((q) => q.ev === "manor:used").pop().p.ok === false);
+    A.h["manor:use"]({ code: w.code, act: "open", x: dx, y: dy });
+    check("standing at it, you can", g[dy][dx] === coreMod.FLOOR && A.got.filter((q) => q.ev === "manor:used").pop().p.ok);
+    sent.length = 0;
+    world._tick(w);
+    const t = sent.filter((q) => q.ev === "manor:tick").pop().payload;
+    check("…and every phone is told: the door, and its creak", t.d[0] === "0" && t.e.some((e) => e.type === "door" && e.open === 1 && e.id === 111));
+    walk(w, A, 111, after[0], after[1]);
+    check("through it", Math.hypot(a.x - after[0], a.y - after[1]) < 0.1);
+    // B in the doorway: it won't shut on him
+    const b = w.players.get(112);
+    Object.assign(b, { x: dx + 0.5, y: dy + 0.5 });
+    A.h["manor:use"]({ code: w.code, act: "close", x: dx, y: dy });
+    check("a door won't shut on someone standing in it", g[dy][dx] === coreMod.FLOOR);
+    Object.assign(b, { x: w.house.spawn.x, y: w.house.spawn.y });
+    A.h["manor:use"]({ code: w.code, act: "close", x: dx, y: dy });
+    check("…and shuts when they've gone", g[dy][dx] === coreMod.DOOR);
+    b.at = Date.now() - 100;
+    B.me(w.code, before[0], before[1]);
+    const bx = b.x;
+    b.at = Date.now() - 100;
+    B.me(w.code, dx + 0.5, dy + 0.5);
+    check("a shut door: nobody walks through it", b.x === bx || b.y !== dy + 0.5);
+    // a ghost: it opens it (with nobody in its sight to stop and stare at)
+    Object.assign(a, { x: w.house.spawn.x, y: w.house.spawn.y });
+    Object.assign(b, { x: w.house.spawn.x, y: w.house.spawn.y });
+    const G = w.house.ghosts[0];
+    Object.assign(G, { x: after[0], y: after[1], stun: 0, st: "search", wait: -99 });
+    coreMod.ghostTarget(G, w.env, before[0] | 0, before[1] | 0);
+    sent.length = 0;
+    for (let i = 0; i < 5 && g[dy][dx] === coreMod.DOOR; i++) world._tick(w);
+    check("a ghost opens a shut door in its way — and the phones hear it", g[dy][dx] === coreMod.FLOOR && G.stun > 0.5 &&
+      lastEv("door").some((e) => e.id === 0 && e.open === 1));
+  }
+
+  // ── lockers ────────────────────────────────────────────────────────────────
+  {
+    const findLocker = (w) => {
+      const g = w.house.g, N = w.house.N;
+      for (let y = 1; y < 8; y++) for (let x = 0; x < 9; x++) {
+        if (g[y][x] !== coreMod.LOCKER) continue;
+        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (g[y + b] && g[y + b][x + a] === coreMod.FLOOR && x + a > 0 && x + a < 8) return { x, y, out: [x + a + 0.5, y + b + 0.5], dir: [a, b] };
+      }
+      // none in the first room: put one in its wall
+      const x = 8, y = 3;
+      g[y][x] = coreMod.LOCKER; g[y - 1][x] = coreMod.WALL; g[y + 1][x] = coreMod.WALL;
+      g[y][x - 1] = coreMod.FLOOR;
+      return { x, y, out: [x - 0.5, y + 0.5], dir: [-1, 0] };
+    };
+    const w = room("free", [{ id: 121 }, { id: 122 }]);
+    const A = phone(121), B = phone(122);
+    const L = findLocker(w);
+    walk(w, A, 121, L.out[0], L.out[1]);
+    const a = w.players.get(121);
+    A.h["manor:use"]({ code: w.code, act: "hide", x: L.x, y: L.y });
+    const r = A.got.filter((q) => q.ev === "manor:used").pop().p;
+    check("into a locker", r.ok && !r.seen && a.hiding && (a.x | 0) === L.x);
+    const bb = w.players.get(122);
+    walk(w, B, 122, L.out[0], L.out[1]);
+    B.h["manor:use"]({ code: w.code, act: "hide", x: L.x, y: L.y });
+    check("one to a locker", B.got.filter((q) => q.ev === "manor:used").pop().p.why === "taken" && !bb.hiding);
+    walk(w, B, 122, w.house.spawn.x, w.house.spawn.y);
+    a.at = Date.now() - 100;
+    A.me(w.code, L.out[0] + 2, L.out[1]);
+    check("hiding, a phone can't walk off", (a.x | 0) === L.x);
+    sent.length = 0;
+    world._tick(w);
+    const t = sent.filter((q) => q.ev === "manor:tick").pop().payload;
+    check("everyone's told you're hidden (so nobody draws you)", t.p.find((q) => q[0] === 121)[9] === 1);
+
+    // a ghost passes by: it doesn't see, hear or catch you
+    const G = w.house.ghosts[0];
+    Object.assign(G, { x: L.out[0] + L.dir[0] * 3, y: L.out[1] + L.dir[1] * 3, stun: 0, st: "patrol" });
+    a.lit = true;
+    world._tick(w);
+    check("a ghost nearby doesn't see someone in a locker", G.st !== "hunt" && a.alive);
+    // lingering: dragged out
+    Object.assign(G, { x: L.out[0], y: L.out[1], stun: 1e9 });
+    for (let i = 0; i < 25; i++) world._tick(w);
+    check("(2.5s lingering by it: not yet)", a.alive);
+    for (let i = 0; i < 8; i++) world._tick(w);
+    check("…three seconds and it opens the door", !a.alive && a.cause === "locker" && !w.over);
+    check("…and the phones are told how", lastEv("dead").some((e) => e.id === 121 && e.cause === "locker"));
+
+    // out again
+    const w2 = room("free", [{ id: 131 }, { id: 132 }]);
+    const C = phone(131);
+    const L2 = findLocker(w2);
+    walk(w2, C, 131, L2.out[0], L2.out[1]);
+    C.h["manor:use"]({ code: w2.code, act: "hide", x: L2.x, y: L2.y });
+    C.h["manor:use"]({ code: w2.code, act: "out" });
+    const c = w2.players.get(131);
+    check("Leave: back where you stood", !c.hiding && Math.abs(c.x - L2.out[0]) < 1e-9 && Math.abs(c.y - L2.out[1]) < 1e-9);
+
+    // seen going in
+    const w3 = room("free", [{ id: 141 }, { id: 142 }]);
+    const D = phone(141);
+    const L3 = findLocker(w3);
+    walk(w3, D, 141, L3.out[0], L3.out[1]);
+    const G3 = w3.house.ghosts[0];
+    Object.assign(G3, { x: L3.out[0] + L3.dir[0] * 3, y: L3.out[1] + L3.dir[1] * 3, stun: 0, st: "hunt", prey: 141, lose: 0 });
+    for (let k = 1; k <= 3; k++) w3.house.g[(L3.out[1] + L3.dir[1] * k) | 0][(L3.out[0] + L3.dir[0] * k) | 0] = coreMod.FLOOR;
+    D.h["manor:use"]({ code: w3.code, act: "hide", x: L3.x, y: L3.y });
+    check("hide while it's watching: it knows", D.got.filter((q) => q.ev === "manor:used").pop().p.seen === true);
+    let n = 0;
+    while (w3.players.get(141).alive && n++ < 60) world._tick(w3);
+    check("…and it comes straight for the locker", !w3.players.get(141).alive && n < 40, `${n / 10}s`);
   }
 
   // ── a restart keeps who was caught and who got out ─────────────────────────
@@ -398,6 +520,45 @@ let coreMod;
     check("…first the face", scared.mode === "dead");
     const later = mc.viewState(cb, Date.now() + 5000);
     check("…then it watches whoever is still inside", later.mode === "play" && later.camId === 101);
+
+    // Use on the phone: at once, then the server agrees — or doesn't
+    {
+      const w4 = room("free", [{ id: 151 }, { id: 152 }]);
+      const E = phone(151), F = phone(152);
+      await E.h["manor:hello"](w4.code);
+      const ce = mc.createClient(E.got.find((q) => q.ev === "manor:init").p);
+      const N4 = w4.house.N, k4 = w4.house.doors[0], x4 = k4 % N4, y4 = (k4 / N4) | 0, hz = x4 % 8 === 0;
+      const at = hz ? [x4 - 0.5, y4 + 0.5] : [x4 + 0.5, y4 - 0.5];
+      walk(w4, E, 151, at[0], at[1]);
+      Object.assign(ce.body, { x: at[0], y: at[1], fa: hz ? 0 : Math.PI / 2 });
+      const later = Date.now() + 60000;
+      check("the phone's Use button reads Open at a shut door", mc.actionLabel(ce, later) === "Open");
+      const u = mc.doAction(ce, later);
+      check("Use opens it on the phone at once, and asks the server", ce.g[y4][x4] === coreMod.FLOOR && u.ask && u.ask.act === "open" && u.sounds.some((q) => q.name === "creak"));
+      // a tick from before the server heard: the phone keeps its own word for a moment
+      sent.length = 0;
+      world._tick(w4);
+      mc.applyTick(ce, sent.filter((q) => q.ev === "manor:tick").pop().payload, later);
+      check("…a stale tick doesn't slam it in your face", ce.g[y4][x4] === coreMod.FLOOR);
+      E.h["manor:use"](u.ask);
+      sent.length = 0;
+      world._tick(w4);
+      mc.applyTick(ce, sent.filter((q) => q.ev === "manor:tick").pop().payload, later + 5000);
+      check("…and once the server has it, they agree", ce.g[y4][x4] === coreMod.FLOOR && w4.house.g[y4][x4] === coreMod.FLOOR);
+      // someone else shuts it: the phone follows the server
+      const f = w4.players.get(152);
+      walk(w4, F, 152, hz ? x4 + 1.5 : x4 + 0.5, hz ? y4 + 0.5 : y4 + 1.5);
+      Object.assign(w4.players.get(151), { x: w4.house.spawn.x, y: w4.house.spawn.y });
+      F.h["manor:use"]({ code: w4.code, act: "close", x: x4, y: y4 });
+      sent.length = 0;
+      world._tick(w4);
+      mc.applyTick(ce, sent.filter((q) => q.ev === "manor:tick").pop().payload, later + 6000);
+      check("a door someone else shuts is shut on your phone too", ce.g[y4][x4] === coreMod.DOOR && f.alive);
+      // a door shut on you in the lag: you're put clear of it, not stuck in it
+      Object.assign(ce.body, { x: x4 + (hz ? 0.5 - 0.6 : 0.5), y: y4 + (hz ? 0.5 : 0.5 - 0.6) });
+      mc.applyTick(ce, sent.filter((q) => q.ev === "manor:tick").pop().payload, later + 7000);
+      check("…and if it shut on you, you're nudged clear rather than stuck", coreMod.canAt(ce.g, ce.body.x, ce.body.y));
+    }
 
     // a latecomer who never had a seat in the house watches
     const S = phone(103);

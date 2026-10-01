@@ -4,7 +4,8 @@
 // memorise at the start, the thing's face when it gets you).
 //
 // Reads the sim and never writes to it. The map shows the whole house: every
-// road, the relics, and the demons wherever they are.
+// room, the doors (brown while shut) and lockers (teal), the relics, and the
+// demons wherever they are.
 //
 // The same picture serves solo and online. What it reads from `s`:
 //   P        the body whose eyes we look through (x, y, fa, jz, cr, light...)
@@ -12,8 +13,10 @@
 //   ghosts   every ghost to draw (solo: just G)
 //   others   other players, online: [{ x, y, color, name, lit, cr, jz }]
 //   exitOpen whether the far gate is open to you (solo: all relics taken)
-// and a relic may carry a `color` (whose it is) and `mine: false`.
-import { HURDLE, BEAM, litBody } from "./manorCore.mjs";
+//   bodies   the scare: bodies dropping from the ceiling, [{ x, y, t }]
+// and a relic may carry a `color` (whose it is) and `mine: false`. P.hiding
+// means we are looking out through the slats of a locker.
+import { HURDLE, BEAM, DOOR, LOCKER, litBody } from "./manorCore.mjs";
 import { dangerOf } from "./manorSim.js";
 
 const GOLD = "255,220,160";
@@ -78,8 +81,18 @@ function mini(ctx, s, x0, y0, size, intro, t) {
   ctx.fillRect(x0 - 5, y0 - 5, size + 10, size + 10);
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
-      ctx.fillStyle = g[y][x] ? "#2b2119" : "#7c6849";
+      const v = g[y][x];
+      ctx.fillStyle = v === LOCKER ? "#4fb3b3" : v ? "#2b2119" : "#7c6849";
       ctx.fillRect(x0 + x * c, y0 + y * c, c + 0.5, c + 0.5);
+      if (v === DOOR) {
+        // a bar lying along the wall it sits in — a different shape from the
+        // full squares of the obstacles, which are much the same colour
+        const along = !g[y][x - 1] || !g[y][x + 1] ? "v" : "h";   // floor to its sides: an up-and-down wall
+        const t = Math.max(1.5, c * 0.45);
+        ctx.fillStyle = "#c08848";
+        if (along === "v") ctx.fillRect(x0 + x * c + (c - t) / 2, y0 + y * c, t, c + 0.5);
+        else ctx.fillRect(x0 + x * c, y0 + y * c + (c - t) / 2, c + 0.5, t);
+      }
     }
   }
   const bl = 0.6 + 0.4 * Math.sin(t * 5);
@@ -194,17 +207,42 @@ function scene(ctx, s, W, H, t) {
     let col = [96, 74, 56];
     const isEx = h.mx === exitT.x && h.my === exitT.y, isEn = h.mx === 0 && h.my === 1;
     const sealed = isEn || (isEx && !exitOpen(s));
+    const tv = h.my >= 0 && h.my < s.N && h.mx >= 0 && h.mx < s.N ? s.g[h.my][h.mx] : 1;
+    const plain = !isEx && !isEn && tv !== DOOR && tv !== LOCKER;
     if (isEx) { col = exitOpen(s) ? [70, 230, 130] : [200, 40, 50]; b += 0.35 * Math.max(0, 1 - pd / 14); }
     else if (isEn) col = [220, 190, 120];
+    else if (tv === DOOR) col = [130, 84, 44];
+    else if (tv === LOCKER) col = [72, 96, 116];
     else if (((h.mx * 7 + h.my * 13) & 3) === 0) col = [86, 66, 64];
     if (h.side) b *= 0.72;
-    if (!isEx && !isEn && (h.u * 3 % 1) < 0.05) b *= 0.55;
+    if (plain && (h.u * 3 % 1) < 0.05) b *= 0.55;
     if (sealed && (h.u * 5 % 1) < 0.35) b *= 0.25;
     b = Math.min(1, b);
     const lh = H / pd, ds = hz - lh * (1 - eye);
     ctx.fillStyle = `rgb(${(col[0] * b) | 0},${(col[1] * b) | 0},${(col[2] * b) | 0})`;
     ctx.fillRect(i * cw, ds, cw + 1, lh);
-    if (!isEx && !isEn) {
+    if (tv === DOOR && !isEx && !isEn) {
+      // a door: dark jambs at the edges, two sunk panels, a brass handle
+      ctx.fillStyle = "rgba(0,0,0,.45)";
+      if (h.u < 0.07 || h.u > 0.93) ctx.fillRect(i * cw, ds, cw + 1, lh);
+      else {
+        if ((h.u > 0.18 && h.u < 0.21) || (h.u > 0.62 && h.u < 0.65)) {
+          ctx.fillRect(i * cw, ds + lh * 0.1, cw + 1, lh * 0.33);
+          ctx.fillRect(i * cw, ds + lh * 0.55, cw + 1, lh * 0.35);
+        } else if (h.u > 0.21 && h.u < 0.62) {
+          for (const f of [0.1, 0.42, 0.55, 0.88]) ctx.fillRect(i * cw, ds + lh * f, cw + 1, Math.max(1, lh * 0.02));
+        }
+        if (h.u > 0.74 && h.u < 0.84) {
+          ctx.fillStyle = `rgb(${(240 * b) | 0},${(200 * b) | 0},${(90 * b) | 0})`;
+          ctx.fillRect(i * cw, ds + lh * 0.5, cw + 1, lh * 0.07);
+        }
+      }
+    } else if (tv === LOCKER && !isEx && !isEn) {
+      // a locker: vents near the top, a seam down each side
+      ctx.fillStyle = "rgba(0,0,0,.55)";
+      for (let k = 0; k < 4; k++) ctx.fillRect(i * cw, ds + lh * (0.14 + k * 0.045), cw + 1, lh * 0.02);
+      if (h.u < 0.04 || h.u > 0.96) ctx.fillRect(i * cw, ds, cw + 1, lh);
+    } else if (plain) {
       ctx.fillStyle = "rgba(0,0,0,.35)";
       for (let k = 1; k < 4; k++) ctx.fillRect(i * cw, ds + lh * k / 4, cw + 1, Math.max(1, lh * 0.015));
     }
@@ -215,6 +253,7 @@ function scene(ctx, s, W, H, t) {
   for (const r of s.relics) if (!r.got) sp.push({ x: r.x, y: r.y, k: "r", color: r.color, mine: r.mine });
   for (const q of s.pulses) sp.push({ x: q.x, y: q.y, k: "m" });
   for (const q of s.puffs) sp.push({ x: q.x, y: q.y, k: "p", t: q.t });
+  for (const q of s.bodies || []) sp.push({ x: q.x, y: q.y, k: "bd", t: q.t });
   for (const k in s.obst) sp.push({ x: (+k % s.N) + 0.5, y: ((+k / s.N) | 0) + 0.5, k: s.obst[k] });
   for (const c of s.cells) if (!c.got) sp.push({ x: c.x, y: c.y, k: "b" });
   for (const G of ghostsOf(s)) sp.push({ x: G.x, y: G.y, k: "g", G });
@@ -228,7 +267,7 @@ function scene(ctx, s, W, H, t) {
   for (const o of sp) {
     if (o.ty < 0.2 || o.ty > 18) continue;
     const ob = o.k === HURDLE || o.k === BEAM, scr = W / 2 * (1 + o.tx / o.ty), u = H / o.ty;
-    const size = (ob || o.k === "p") ? u : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : 0.3);
+    const size = (ob || o.k === "p") ? u : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : o.k === "bd" ? 0.6 : 0.3);
     const cy = hz + (eye - (o.k === "g" ? 0.5 : o.k === "r" || o.k === "b" ? 0.45 : 0.2)) * u;
     const x0 = Math.max(0, Math.floor((scr - size / 2) / cw)), x1 = Math.min(cols - 1, Math.floor((scr + size / 2) / cw));
     ctx.save();
@@ -278,6 +317,30 @@ function scene(ctx, s, W, H, t) {
       ctx.fillRect(scr - size * 0.2, by - size * 0.35, size * 0.4, size * 0.7);
       ctx.fillStyle = "#e9e3d3";
       ctx.fillRect(scr - size * 0.1, by - size * 0.5, size * 0.2, size * 0.15);
+    } else if (o.k === "bd") {
+      // it drops on a rope, swings, and lies there
+      const fall = Math.min(1, o.t / 0.35), by = hz + (eye - (0.95 - fall * 0.85)) * u;
+      const b2 = Math.min(1, 0.15 + Math.max(0, 1 - o.ty / 6));
+      ctx.strokeStyle = `rgba(150,150,150,${1 - fall})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(scr, 0);
+      ctx.lineTo(scr, by - u * 0.3);
+      ctx.stroke();
+      ctx.fillStyle = `rgb(${(70 * b2) | 0},${(52 * b2) | 0},${(56 * b2) | 0})`;
+      if (fall < 1) {
+        ctx.fillRect(scr - u * 0.1, by - u * 0.25, u * 0.2, u * 0.5);
+        ctx.beginPath();
+        ctx.arc(scr, by - u * 0.32, u * 0.09, 0, TAU);
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.ellipse(scr, by + u * 0.08, u * 0.3, u * 0.08, 0, 0, TAU);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(scr + u * 0.3, by + u * 0.05, u * 0.08, 0, TAU);
+        ctx.fill();
+      }
     } else if (o.k === "p") {
       const age = 1 - o.t / 0.9;
       for (let i = 0; i < 8; i++) {
@@ -498,6 +561,18 @@ function drawPlayer(ctx, p, scr, hz, eye, u, L, dist, t) {
   ctx.fillText(p.name || "", scr, top - fs * 0.5);
 }
 
+// Inside a locker: dark, but for four slits to look out through.
+function lockerOverlay(ctx, W, H) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  for (let k = 0; k < 4; k++) ctx.rect(W * 0.12, H * 0.36 + k * H * 0.07, W * 0.76, H * 0.028);
+  ctx.clip("evenodd");
+  ctx.fillStyle = "#07090c";
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+}
+
 function arrow(ctx, W, H, s, ang, radius, size, color) {
   ctx.save();
   ctx.translate(W / 2 + Math.sin(ang - s.P.fa) * radius, H / 2 - Math.cos(ang - s.P.fa) * radius);
@@ -533,7 +608,7 @@ export function drawManor(ctx, s, view, t, stick) {
     ctx.fillStyle = "#a39a88";
     ctx.font = "14px Georgia";
     ctx.fillText(`The dark falls in ${Math.ceil(s.introT)}s. Tap or press any key to start now.`, W / 2, y0 + size + 24);
-    ctx.fillText("Orange squares: jump over. Purple squares: crouch under.", W / 2, y0 + size + 44);
+    ctx.fillText("Orange: jump over · Purple: crouch under · Brown: doors · Teal: lockers to hide in", W / 2, y0 + size + 44);
     return;
   }
   if (s.mode === "dead") {
@@ -548,6 +623,7 @@ export function drawManor(ctx, s, view, t, stick) {
   }
 
   scene(ctx, s, W, H, t);
+  if (s.P.hiding) lockerOverlay(ctx, W, H);
 
   // where to go: the nearest relic, then the gate
   const { P, G } = s;

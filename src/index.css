@@ -954,15 +954,18 @@ input::-ms-reveal,input::-ms-clear{display:none}
    underneath it ran straight through the Crouch button. Lift it clear. */
 @media (max-width:600px){ .hm-msg{bottom:calc(env(safe-area-inset-bottom,0px) + 262px)} }
 
-/* Under the right thumb: jump, crouch below it, the light to their left. */
+/* Under the right thumb: jump, crouch below it, the light to their left,
+   Use (doors, lockers) beside jump. */
 .hm-pad{position:fixed;right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
   z-index:4;display:grid;grid-template-columns:68px 68px;grid-template-rows:68px 68px 68px;gap:4px 10px;
-  grid-template-areas:". jump" "light ." ". crouch"}
+  grid-template-areas:"use jump" "light ." ". crouch"}
 .hm .hm-pad button{width:68px;height:68px;border-radius:50%;padding:0;font-size:12px;background:rgba(21,18,26,.75);touch-action:none}
 .hm .hm-pad .hm-jump{grid-area:jump}
+.hm .hm-pad .hm-use{grid-area:use}
 .hm .hm-pad .hm-light{grid-area:light}
 .hm .hm-pad .hm-crouch{grid-area:crouch}
 .hm .hm-pad button.on{background:#ffdca0;color:#1a1208;border-color:#ffdca0;box-shadow:0 0 18px rgba(255,220,160,.6)}
+.hm .hm-pad .hm-use.on{background:#4fb3b3;color:#061414;border-color:#4fb3b3;box-shadow:0 0 18px rgba(79,179,179,.6)}
 /* the music box: small, just under the map (which is min(130px, 30% of the short side) square) */
 .hm .hm-music{position:fixed;z-index:4;right:9px;top:calc(env(safe-area-inset-top,0px) + 30px + min(130px, 30vmin));
   width:calc(min(130px, 30vmin) + 10px);padding:6px 4px;border-radius:999px;font-size:11px;background:rgba(21,18,26,.75);

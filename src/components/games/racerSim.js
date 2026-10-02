@@ -65,10 +65,16 @@ export const steerTo = (s, lane) => {
 export const distanceScore = (s) => Math.floor(s.distance / DISTANCE_DIVISOR);
 export const totalScore = (s) => distanceScore(s) + s.points;
 
+// A hit is where the cars actually are, not which lane you've asked for.
+// Steering eases the car across over a few frames; judging by the lane you
+// were heading to crashed you into a car in that lane the instant you
+// pressed, while you were still in your own — a gap you could see was
+// never one you could take. Now the bodies must really overlap, across the
+// road and along it, with a little forgiveness at the corners.
 const overlaps = (s, t) => {
-  if (t.lane !== s.lane) return false;
-  const half = t.kind === "coin" ? 14 : CAR_H / 2;
-  return Math.abs(t.y - CAR_Y) < half + CAR_H / 2 - 10;
+  const tx = laneCentre(t.lane);
+  if (t.kind === "coin") return Math.abs(tx - s.x) < CAR_W / 2 + 10 && Math.abs(t.y - CAR_Y) < CAR_H / 2 + 10;
+  return Math.abs(tx - s.x) < CAR_W - 8 && Math.abs(t.y - CAR_Y) < CAR_H - 12;
 };
 
 // One frame. `dtFrames` is how many 60ths of a second have passed, so a slow

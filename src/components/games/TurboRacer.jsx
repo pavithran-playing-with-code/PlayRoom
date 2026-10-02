@@ -1,7 +1,7 @@
 // src/components/games/TurboRacer.jsx
 // Three lanes, traffic coming at you, coins worth swerving for, and a road
-// that never stops speeding up. Tap a side of the road, press an arrow, or use
-// the two buttons — all three do the same thing.
+// that speeds up as you go. Swipe left or right on the road, tap a side of
+// it, press an arrow key, or use the two buttons — they all change lane.
 //
 // Crashing doesn't end the match; the room's clock does. A crash costs a few
 // points and puts you on a fresh road — everything you scored before it stays
@@ -21,6 +21,7 @@ const INK = "#2E2140";
 const ROAD = "#3A3550";
 const VERGE = "#6FBF73";
 const CRASH_COST = 15;             // a crash costs this; what you earned is kept
+const SWIPE_PX = 26;               // a finger this far sideways is a swipe
 const RESTART_MS = 900;
 
 function rrect(ctx, x, y, w, h, r) {
@@ -105,7 +106,7 @@ function draw(ctx, s, k, particles, shake) {
   ctx.restore();
 }
 
-function Stage({ w, h, canvasRef, view, onDown }) {
+function Stage({ w, h, canvasRef, view, onDown, onMove, onUp }) {
   let cssW = Math.min(w, (h * VIEW_W) / VIEW_H);
   let cssH = (cssW * VIEW_H) / VIEW_W;
   if (cssH > h) { cssH = h; cssW = (h * VIEW_W) / VIEW_H; }
@@ -115,6 +116,7 @@ function Stage({ w, h, canvasRef, view, onDown }) {
   useEffect(() => { view.current = pw / VIEW_W; }, [view, pw]);
   return (
     <div className="tr-pad" style={{ width: w, height: h }} onPointerDown={onDown}
+      onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
       onContextMenu={(e) => e.preventDefault()}>
       <canvas ref={canvasRef} width={pw} height={ph} className="tr-canvas"
         style={{ width: cssW, height: cssH }} role="img" aria-label="Turbo Racer: swerve between lanes" />
@@ -181,9 +183,29 @@ export default function TurboRacer(props) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // Tapping a side of the road steers that way.
+  // Swipe left or right to change lane — a lane a swipe, steered the moment
+  // the finger has gone far enough, so a long swipe crosses two. A tap with
+  // no swipe steers toward the side of the road you tapped.
+  const touch = useRef(null);
   const onDown = (e) => {
     if (overRef.current || isSpectator) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not supported */ }
+    touch.current = { id: e.pointerId, x: e.clientX, y: e.clientY, swiped: false };
+  };
+  const onMove = (e) => {
+    const t = touch.current;
+    if (!t || e.pointerId !== t.id) return;
+    const dx = e.clientX - t.x, dy = e.clientY - t.y;
+    if (Math.abs(dx) < SWIPE_PX || Math.abs(dx) < Math.abs(dy)) return;
+    move(dx < 0 ? -1 : 1);
+    t.swiped = true;
+    t.x = e.clientX; t.y = e.clientY;                  // a longer swipe: another lane
+  };
+  const onUp = (e) => {
+    const t = touch.current;
+    if (!t || e.pointerId !== t.id) return;
+    touch.current = null;
+    if (t.swiped || e.type === "pointercancel" || overRef.current || isSpectator) return;
     const box = e.currentTarget.getBoundingClientRect();
     move(e.clientX - box.left < box.width / 2 ? -1 : 1);
   };
@@ -291,7 +313,7 @@ export default function TurboRacer(props) {
               </div>
             );
           }
-          return <Stage w={w} h={h} canvasRef={canvasRef} view={view} onDown={onDown} />;
+          return <Stage w={w} h={h} canvasRef={canvasRef} view={view} onDown={onDown} onMove={onMove} onUp={onUp} />;
         }}
       </GameFrame>
 

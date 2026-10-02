@@ -248,6 +248,8 @@ const GAME_SEED = [
   { slug: "slide",     name: "Slide Puzzle",      description: "Slide the tiles until 1-8 are back in order.",                     min: 1, max: 8, icon: "🔀", active: 1 },
   { slug: "blocks",    name: "Block Blast",       description: "Fit the pieces in and clear whole rows and columns.",              min: 1, max: 8, icon: "🧱", active: 1 },
   { slug: "racer",     name: "Turbo Racer",       description: "Swerve through the traffic, grab the coins, never slow down.",      min: 1, max: 8, icon: "🏎️", active: 1 },
+  { slug: "runner",    name: "Rail Runner",       description: "Run the rails: jump the barriers, slide under the bars, dodge the trains.", min: 1, max: 8, icon: "🏃", active: 1 },
+  { slug: "speedway",  name: "Speedway",          description: "Three laps, one road, everyone on it at once. First across the line wins.", min: 1, max: 8, icon: "🏁", active: 1 },
   { slug: "storm",     name: "Dodge Storm",       description: "Stay alive while the shards close in from every side.",            min: 1, max: 8, icon: "⚡", active: 1 },
   { slug: "maze",      name: "Maze Runner",       description: "One way out, and it gets bigger every time you find it.",           min: 1, max: 8, icon: "🧭", active: 1 },
   { slug: "wick",      name: "Wick",              description: "Go down with a lantern. Every step burns oil, and the dark moves when you do.", min: 1, max: 8, icon: "🕯️", active: 1 },

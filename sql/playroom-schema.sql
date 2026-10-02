@@ -247,19 +247,21 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('slide', 'Slide Puzzle', 'Slide the tiles until 1-8 are back in order.', 1, 8, CONVERT(UNHEX('F09F9480') USING utf8mb4), 1, 130),
   ('blocks', 'Block Blast', 'Fit the pieces in and clear whole rows and columns.', 1, 8, CONVERT(UNHEX('F09FA7B1') USING utf8mb4), 1, 140),
   ('racer', 'Turbo Racer', 'Swerve through the traffic, grab the coins, never slow down.', 1, 8, CONVERT(UNHEX('F09F8F8EEFB88F') USING utf8mb4), 1, 150),
-  ('storm', 'Dodge Storm', 'Stay alive while the shards close in from every side.', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1, 160),
-  ('maze', 'Maze Runner', 'One way out, and it gets bigger every time you find it.', 1, 8, CONVERT(UNHEX('F09FA7AD') USING utf8mb4), 1, 170),
-  ('wick', 'Wick', 'Go down with a lantern. Every step burns oil, and the dark moves when you do.', 1, 8, CONVERT(UNHEX('F09F95AFEFB88F') USING utf8mb4), 1, 180),
-  ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1, 190),
-  ('typing', 'Typing Race', 'Type the words as fast as you can. Same words for everyone, streaks score big.', 1, 8, CONVERT(UNHEX('E28CA8EFB88F') USING utf8mb4), 1, 200),
-  ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 210)
+  ('runner', 'Rail Runner', 'Run the rails: jump the barriers, slide under the bars, dodge the trains.', 1, 8, CONVERT(UNHEX('F09F8F83') USING utf8mb4), 1, 160),
+  ('speedway', 'Speedway', 'Three laps, one road, everyone on it at once. First across the line wins.', 1, 8, CONVERT(UNHEX('F09F8F81') USING utf8mb4), 1, 170),
+  ('storm', 'Dodge Storm', 'Stay alive while the shards close in from every side.', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1, 180),
+  ('maze', 'Maze Runner', 'One way out, and it gets bigger every time you find it.', 1, 8, CONVERT(UNHEX('F09FA7AD') USING utf8mb4), 1, 190),
+  ('wick', 'Wick', 'Go down with a lantern. Every step burns oil, and the dark moves when you do.', 1, 8, CONVERT(UNHEX('F09F95AFEFB88F') USING utf8mb4), 1, 200),
+  ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1, 210),
+  ('typing', 'Typing Race', 'Type the words as fast as you can. Same words for everyone, streaks score big.', 1, 8, CONVERT(UNHEX('E28CA8EFB88F') USING utf8mb4), 1, 220),
+  ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 230)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
   min_players = VALUES(min_players), max_players = VALUES(max_players),
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 10 tables and 20 playable games.
+-- Expect 10 tables and 22 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
 SELECT slug, name, icon, max_players, sort_order FROM game_types WHERE is_active = 1 ORDER BY sort_order, id;
 

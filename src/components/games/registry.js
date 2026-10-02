@@ -16,6 +16,8 @@ import FlappyDash from "./FlappyDash";
 import SlidePuzzle from "./SlidePuzzle";
 import BlockDrop from "./BlockDrop";
 import TurboRacer from "./TurboRacer";
+import RailRunner from "./RailRunner";
+import Speedway from "./Speedway";
 import DodgeStorm from "./DodgeStorm";
 import MazeRunner from "./MazeRunner";
 import ManorGame from "./ManorGame";
@@ -121,6 +123,18 @@ export const GAMES = [
     blurb: "Swerve through the traffic, grab the coins, never slow down.",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--slate)",
     Component: TurboRacer,
+  },
+  {
+    slug: "runner", name: "Rail Runner", icon: "🏃",
+    blurb: "Run the rails: jump the barriers, slide under the bars, dodge the trains.",
+    minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--coral)",
+    Component: RailRunner,
+  },
+  {
+    slug: "speedway", name: "Speedway", icon: "🏁",
+    blurb: "Three laps, one road, everyone on it at once. First across the line wins.",
+    minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--sky)",
+    Component: Speedway,
   },
   {
     slug: "storm", name: "Dodge Storm", icon: "⚡",

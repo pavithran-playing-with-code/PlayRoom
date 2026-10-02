@@ -137,7 +137,11 @@ There is no test runner. What works:
 
 - **Pure logic** — board modules (`tetrisBoard.js`, `pipesBoard.js`,
   `flappySim.js`…) and `config/matchResult.js` are plain JS with no React or
-  database, so they can be exercised from a Node script directly.
+  database, so they can be exercised from a Node script directly
+  (`scripts/check-runner.mjs`, `scripts/check-speedway.mjs`, `check-manor*`).
+- **Speedway is live-shared**: each phone sends its car over the socket
+  (`race:pos`, relayed by `config/socket.js`); everyone else's car is drawn
+  from that. The score sync still decides the result.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

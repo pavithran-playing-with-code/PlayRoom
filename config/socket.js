@@ -124,6 +124,21 @@ function initSocket(httpServer) {
       });
     });
 
+    // Speedway: where my car is, ~10 times a second, so everyone in the room
+    // sees everyone else's car on the same road. Ephemeral like room:live —
+    // the score sync is still what the result is built from — and the
+    // sender is their verified token, never the payload.
+    socket.on("race:pos", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const n = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
+      socket.to(roomChannel(code)).emit("race:pos", {
+        user_id: uid,
+        d: n(msg.d, -1e6, 1e8), x: n(msg.x, -3, 3), s: n(msg.s, 0, 1e5),
+        f: msg.f === null || msg.f === undefined ? null : n(msg.f, 0, 1e4),
+      });
+    });
+
     socket.on("disconnect", () => {
       const set = online.get(uid);
       if (!set) return;

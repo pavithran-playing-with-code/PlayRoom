@@ -813,6 +813,21 @@ input::-ms-reveal,input::-ms-clear{display:none}
   box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
 .press.tr-btn{padding:12px 26px;font-size:1.3rem;--lift:4px}
 
+/* ── Rail Runner (.rr-) and Speedway (.sw-) ──────────────────────────────────
+   The whole board takes swipes / holds, so it never scrolls under a thumb. */
+.rr-pad,.sw-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.rr-canvas,.sw-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
+.rr-help,.sw-help{font-size:.78rem;text-align:center}
+.press.rr-btn{padding:10px 18px;font-size:1.2rem;--lift:4px;min-width:56px}
+.press.sw-btn{padding:12px 22px;font-size:1.15rem;--lift:4px;min-width:64px;touch-action:none}
+.sw-stage{position:relative}
+.sw-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font:900 4.5rem/1 Fredoka,Nunito,sans-serif;
+  color:#fff;-webkit-text-stroke:3px var(--ink);text-shadow:0 5px 0 var(--ink);pointer-events:none;
+  animation:swPop .9s ease-out infinite}
+.sw-count.go{color:var(--lime);animation:none}
+@keyframes swPop{0%{transform:translate(-50%,-50%) scale(1.25)}100%{transform:translate(-50%,-50%) scale(1)}}
+
 /* ── Maze Runner ──────────────────────────────────────────────────────────────
    Cells are absolutely positioned so their walls are real borders that meet
    exactly; a gapped grid would leave hairlines you could see through. */

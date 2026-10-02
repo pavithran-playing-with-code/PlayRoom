@@ -1,10 +1,11 @@
 // src/pages/Room.jsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
 import { useSocket } from "../utils/SocketContext";
 import { getGameComponent, GAME_MAP } from "../components/games/registry";
+import { PlayAgainContext } from "../components/games/PlayAgain";
 import { Avatar, Modal } from "../components/ui";
 import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
@@ -134,6 +135,29 @@ function Room() {
     navigate("/lobby");
   }, [leaveRoom, navigate]);
 
+  // Play again: record this match (as Back to lobby does), then open the next
+  // room — or join the one another player already opened — and go there. A
+  // solo run starts straight away. Returns an error message, or null.
+  const [rematch, setRematch] = useState(null);         // { by, byId, next }: someone opened the next room
+  const playAgain = useCallback(async () => {
+    try { await api.post("/api/leaderboard/update", { room_code: code }); } catch { /* silent */ }
+    try {
+      const res = await api.post(`/api/rooms/${code}/rematch`, {});
+      const data = await res.json();
+      if (!data.success) return data.message || "Couldn't start a new game.";
+      const next = data.room_code;
+      if (data.join) {
+        const j = await (await api.post("/api/rooms/join", { room_code: next })).json();
+        if (!j.success && !/already/i.test(j.message || "")) return j.message || "Couldn't join the new game.";
+      }
+      if (data.solo) await api.patch(`/api/rooms/${next}/start`, {});
+      leaveRoom();
+      navigate(`/room/${next}`);
+      return null;
+    } catch { return "Couldn't reach the server."; }
+  }, [code, leaveRoom, navigate]);
+  const playAgainValue = useMemo(() => ({ start: playAgain, rematch }), [playAgain, rematch]);
+
   // Countdown + auto-redirect when the room doesn't exist.
   // (Polling has already stopped — `pausePolling` covers notFound.)
   useEffect(() => {
@@ -182,7 +206,10 @@ function Room() {
             game_state: p.game_state ?? x.game_state }
         : x)));
     };
+    // another player opened the next room: the results card offers to follow
+    const onRematch = (m) => { if (m && m.code === code) setRematch({ by: m.by, byId: m.byId, next: m.next }); };
     socket.emit("room:join", code);
+    socket.on("room:rematch", onRematch);
     socket.on("room:live", onLive);
     socket.on("room:players", joined);
     socket.on("room:started", refresh);
@@ -190,6 +217,7 @@ function Room() {
     socket.on("room:ended", refresh);
     return () => {
       socket.emit("room:leave", code);
+      socket.off("room:rematch", onRematch);
       socket.off("room:live", onLive);
       socket.off("room:players", joined);
       socket.off("room:started", refresh);
@@ -380,21 +408,23 @@ function Room() {
   if ((played || status === "in_progress") && seed !== null && isPlayer) {
     const GameComponent = getGameComponent(room?.game_slug);
     return (
-      <GameComponent
-        roomCode={code}
-        seed={seed}
-        players={seatedPlayers}
-        currentUser={user}
-        durationSeconds={duration || 120}
-        startedAt={startedAt}
-        serverNow={serverNow}
-        onGameEnd={async () => {
-          // The server reads the validated score from room_players AND decides
-          // the outcome from it — nothing about the result is sent from here.
-          try { await api.post("/api/leaderboard/update", { room_code: code }); } catch { /* silent */ }
-          exitToLobby();
-        }}
-      />
+      <PlayAgainContext.Provider value={playAgainValue}>
+        <GameComponent
+          roomCode={code}
+          seed={seed}
+          players={seatedPlayers}
+          currentUser={user}
+          durationSeconds={duration || 120}
+          startedAt={startedAt}
+          serverNow={serverNow}
+          onGameEnd={async () => {
+            // The server reads the validated score from room_players AND decides
+            // the outcome from it — nothing about the result is sent from here.
+            try { await api.post("/api/leaderboard/update", { room_code: code }); } catch { /* silent */ }
+            exitToLobby();
+          }}
+        />
+      </PlayAgainContext.Provider>
     );
   }
 

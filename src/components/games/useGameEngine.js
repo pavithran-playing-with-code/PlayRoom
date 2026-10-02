@@ -240,6 +240,13 @@ export default function useGameEngine({
   // Leave: make sure the final score has landed, then hand off. Room.jsx asks
   // the server for the official result from there.
   const endingRef = useRef(false);
+  // The final score, saved — without leaving. "Play again" waits on this.
+  const flush = useCallback(async () => {
+    if (!isOnline || isSpectator) return;
+    if (!finalRef.current) finalRef.current = finalSync(roomCode, payload());
+    await finalRef.current;
+  }, [isOnline, isSpectator, roomCode, payload]);
+
   const endMatch = useCallback(async () => {
     if (endingRef.current) return;      // double-click / quit-then-timeout
     endingRef.current = true;
@@ -262,6 +269,6 @@ export default function useGameEngine({
     gameOver, finished, closed, finish,
     opponents, oppScores, won, draw, rank,
     teams,
-    endMatch,
+    endMatch, flush,
   };
 }

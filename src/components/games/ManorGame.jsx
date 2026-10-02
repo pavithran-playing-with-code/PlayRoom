@@ -19,6 +19,7 @@ import {
 } from "../horror/manorClient";
 import { say } from "../horror/manorSim";
 import { useSideways, toGame } from "../horror/LandscapeGate";
+import { usePlayAgain } from "./PlayAgain";
 
 const REPORT_MS = 66;                  // ~15 a second
 const HUD_MS = 100;
@@ -399,6 +400,14 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
 function Results({ over, me, onExit, leaving }) {
   const myId = Number(me?.id);
+  const ctx = usePlayAgain();
+  const [again, setAgain] = useState(null);             // null | "busy" | an error message
+  const rematch = ctx && ctx.rematch && Number(ctx.rematch.byId) !== myId ? ctx.rematch : null;
+  async function playAgain() {
+    if (!ctx || again === "busy") return;
+    setAgain("busy");
+    setAgain((await ctx.start()) || null);
+  }
   const mine = over.sides.find((s) => s.members.some((m) => m.id === myId));
   const coop = over.mode === "coop";
   const headline = coop
@@ -427,6 +436,15 @@ function Results({ over, me, onExit, leaving }) {
           </div>
         ))}
       </div>
+      {ctx && (
+        <>
+          {rematch && <p className="hmx-rematch">🎮 {rematch.by} started a new game — join in!</p>}
+          <button className="hm-go hm-again" onClick={playAgain} disabled={again === "busy" || leaving}>
+            {again === "busy" ? "Setting up…" : rematch ? `🔄 Join ${rematch.by}'s game` : "🔄 Play again"}
+          </button>
+          {again && again !== "busy" && <p className="hmx-rematch">{again}</p>}
+        </>
+      )}
       <button className="hm-go" onClick={onExit} disabled={leaving}>{leaving ? "Saving…" : "Back to the lobby"}</button>
     </div>
   );

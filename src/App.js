@@ -1,6 +1,6 @@
 // src/App.js
 import React, { useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { AuthProvider } from "./utils/AuthContext";
 import { SocketProvider } from "./utils/SocketContext";
 import { PresenceProvider } from "./utils/PresenceContext";
@@ -31,6 +31,14 @@ function ScrollToTop() {
   return null;
 }
 
+// One room page per room code. "Play again" moves you to a new code, and
+// without the key React would keep the old page's state (its seed, "played",
+// the leave-once guard) for the new room.
+function RoomByCode() {
+  const { code } = useParams();
+  return <Room key={code} />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -45,7 +53,7 @@ export default function App() {
         <ScrollToTop />
         <Routes>
           {/* Room page has its own full-screen game layout — no Navbar */}
-          <Route path="/room/:code" element={<ProtectedRoute><Room /></ProtectedRoute>} />
+          <Route path="/room/:code" element={<ProtectedRoute><RoomByCode /></ProtectedRoute>} />
           {/* No login, no lobby, no navbar — you walk in and the door shuts. */}
           <Route path="/wick" element={<Wick />} />
           <Route path="/manor" element={<Manor />} />

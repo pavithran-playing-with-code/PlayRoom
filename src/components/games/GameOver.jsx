@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from "react";
 import { Avatar, avatarColour } from "../ui";
 import { confetti } from "../ui/FunLayer";
+import { usePlayAgain } from "./PlayAgain";
 
 const MEDAL = ["🥇", "🥈", "🥉"];
 
@@ -34,7 +35,18 @@ export default function GameOver(props) {
   } = { ...props, ...fromEng };
 
   const [leaving, setLeaving] = useState(false);
+  const [again, setAgain] = useState(null);             // null | "busy" | an error message
   const multi = isOnline && opponents.length > 0;
+  // Play again: the room page's (so every game has it), or a caller's own.
+  const ctx = usePlayAgain();
+  const rematch = ctx && ctx.rematch && Number(ctx.rematch.byId) !== Number(me?.id) ? ctx.rematch : null;
+  async function playAgain() {
+    if (onPlayAgain) { onPlayAgain(); return; }
+    if (!ctx || again === "busy") return;
+    setAgain("busy");
+    if (eng && eng.flush) { try { await eng.flush(); } catch { /* the last live sync stands */ } }
+    setAgain((await ctx.start()) || null);
+  }
 
   // In a team room the match is decided by the sides, so the headline follows
   // your side — a player can top the scoreboard and still be on the losing
@@ -147,10 +159,17 @@ export default function GameOver(props) {
           </div>
         )}
 
-        {onPlayAgain && (
-          <button className="press p-coral lg full" style={{ marginBottom: 12 }} onClick={onPlayAgain}>
-            🔄 Play again
-          </button>
+        {(onPlayAgain || (ctx && !closed)) && (
+          <>
+            {rematch && (
+              <p className="muted" style={{ marginBottom: 8, fontWeight: 700 }}>🎮 {rematch.by} started a new game — join in!</p>
+            )}
+            <button className="press p-coral lg full" style={{ marginBottom: 12 }} onClick={playAgain}
+              disabled={again === "busy" || leaving}>
+              {again === "busy" ? "Setting up…" : rematch ? `🔄 Join ${rematch.by}'s game` : "🔄 Play again"}
+            </button>
+            {again && again !== "busy" && <p className="hint hint-bad" style={{ marginBottom: 10 }}>{again}</p>}
+          </>
         )}
         <button className="press p-white full" onClick={exit} disabled={leaving}>
           {leaving ? "Saving your score…" : "← Back to lobby"}

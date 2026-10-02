@@ -196,6 +196,75 @@ router.post("/", verifyToken, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/rooms/:code/rematch — "Play again" at the end of a match.
+//
+// The first player to ask opens a new room with the same game and settings
+// and is its host; everyone who asks after that is pointed at that same room
+// ({ join: true }: the page then joins it the usual way, which checks seats
+// and teams). A solo run gets a fresh room of its own ({ solo: true }: the
+// page starts it at once). The others still on the results screen are told
+// over the socket (room:rematch), so they can follow.
+//
+// Which room a match's rematch is lives in memory: it only matters for the
+// minute or two people spend on the results screen, and a restart just
+// means the next person to ask opens another.
+const rematches = new Map();               // old room code -> { code, at }
+const REMATCH_TTL_MS = 30 * 60 * 1000;
+const rematchLocks = new Map();            // old room code -> in-flight promise
+
+router.post("/:code/rematch", verifyToken, async (req, res, next) => {
+  const oldCode = String(req.params.code || "").toUpperCase();
+  // one at a time per room, so two players tapping together share one room
+  const prev = rematchLocks.get(oldCode) || Promise.resolve();
+  let release;
+  const mine = new Promise((r) => { release = r; });
+  const chain = prev.then(() => mine);
+  rematchLocks.set(oldCode, chain);
+  await prev;
+  try {
+    const [rows] = await db.execute(
+      `SELECT r.id, r.status, r.max_players, r.is_private, r.duration_seconds, r.mode, r.game_type_id, gt.slug, gt.is_active
+         FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id WHERE r.room_code = ?`, [oldCode]);
+    if (!rows.length) return res.status(404).json({ success: false, message: "Room not found." });
+    const old = rows[0];
+    const [seat] = await db.execute(
+      "SELECT 1 FROM room_players WHERE room_id = ? AND user_id = ? AND is_spectator = 0", [old.id, req.user.id]);
+    if (!seat.length) return res.status(403).json({ success: false, message: "Only the players can start a rematch." });
+    if (!old.is_active) return res.status(409).json({ success: false, message: "This game isn't available right now." });
+    const solo = Number(old.max_players) === 1;
+
+    // somebody already opened one: join it, if it's still waiting
+    const known = !solo && rematches.get(oldCode);
+    if (known && Date.now() - known.at < REMATCH_TTL_MS) {
+      const [nr] = await db.execute("SELECT status FROM rooms WHERE room_code = ?", [known.code]);
+      if (nr.length && nr[0].status === "waiting") return res.json({ success: true, room_code: known.code, join: true });
+    }
+
+    let code; let tries = 0;
+    do {
+      code = genCode(6);
+      const [ex] = await db.execute("SELECT id FROM rooms WHERE room_code = ?", [code]);
+      if (!ex.length) break;
+    } while (++tries < 10);
+    const seed = Math.floor(Math.random() * 1_000_000);
+    const [ins] = await db.execute(
+      "INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed, duration_seconds, mode, last_activity_at) VALUES (?,?,?,?,?,?,?,?,NOW())",
+      [code, old.game_type_id, req.user.id, old.max_players, old.is_private, seed, old.duration_seconds, old.mode]);
+    await db.execute("INSERT INTO room_players (room_id, user_id, is_host) VALUES (?,?,1)", [ins.insertId, req.user.id]);
+
+    if (!solo) {
+      rematches.set(oldCode, { code, at: Date.now() });
+      for (const [k, v] of rematches) if (Date.now() - v.at > REMATCH_TTL_MS) rematches.delete(k);
+      push(req, oldCode, "room:rematch", { code: oldCode, next: code, by: req.user.username, byId: req.user.id });
+    }
+    return res.status(201).json({ success: true, room_code: code, solo });
+  } catch (err) { next(err); }
+  finally {
+    release();
+    if (rematchLocks.get(oldCode) === chain) rematchLocks.delete(oldCode);
+  }
+});
+
 // POST /api/rooms/join
 router.post("/join", verifyToken, async (req, res, next) => {
   try {

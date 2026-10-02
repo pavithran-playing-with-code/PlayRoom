@@ -1014,6 +1014,10 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .hm .hmx-out{padding:10px 26px;font-size:15px}
 
 .hmx-results{overflow-y:auto}
+/* Play again on the results: the bright one; Back to the lobby stays plain */
+.hm .hm-go.hm-again{background:#ffdca0;color:#1a1208;border-color:#ffdca0;box-shadow:0 0 18px rgba(255,220,160,.45)}
+.hm .hm-go.hm-again:disabled{opacity:.6}
+.hmx-rematch{color:#ffdca0;font-style:italic;margin:12px 0 0}
 .hmx-standings{width:100%;max-width:380px;display:flex;flex-direction:column;gap:8px;margin:6px 0 4px}
 .hmx-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;text-align:left;
   background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-left:4px solid var(--c)}

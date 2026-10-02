@@ -19,7 +19,7 @@
 // and a relic may carry a `color` (whose it is) and `mine: false`. P.hiding
 // ({ kind }) means we are looking out from under a table or bed, or through
 // the slats of a wardrobe.
-import { HURDLE, BEAM, DOOR, SPOT, ROOM_KINDS, roomAt, spotKind, litBody } from "./manorCore.mjs";
+import { HURDLE, BEAM, DOOR, SPOT, ROOM_KINDS, roomAt, spotKind, litBody, los } from "./manorCore.mjs";
 import { dangerOf } from "./manorSim.js";
 
 const GOLD = "255,220,160";
@@ -46,105 +46,151 @@ export function lookBy(body, dx, dy) {
 }
 const PLANE = 0.65;                    // camera plane: ~66° field of view
 
-// The thing: a tall hooded shroud, pale where the torch catches it, ragged
-// at the hem and fading to nothing; in the hood, only darkness and two
-// burning eyes — red when it is hunting. Its sleeves reach for you when it
-// hunts. `s` is its height on screen.
+// The thing. Tall and starved under a torn grey shroud, stained dark at the
+// hem; long black hair hanging in ropes over a cracked white face; black
+// eyes with a red pinprick deep in each; a mouth stretched far too wide, full
+// of teeth; long arms with clawed fingers that reach for you when it hunts.
+// Now and then it twitches — a jolt sideways, there and back. `s` is its
+// height on screen.
 export function drawGhost(ctx, x, y, s, angry, t = 0) {
   ctx.save();
-  ctx.translate(x, y);
-  const aura = ctx.createRadialGradient(0, -s * 0.1, s * 0.05, 0, -s * 0.1, s * 0.75);
-  aura.addColorStop(0, angry ? "rgba(170,20,40,.3)" : "rgba(150,160,190,.2)");
+  // the twitch: a hard jolt every second and a half or so
+  const ph = (t * 0.68) % 1, jolt = ph < 0.05 ? Math.sin(ph * 120) * s * 0.035 : 0;
+  ctx.translate(x + jolt, y);
+  const aura = ctx.createRadialGradient(0, -s * 0.15, s * 0.05, 0, -s * 0.15, s * 0.8);
+  aura.addColorStop(0, angry ? "rgba(160,0,20,.38)" : "rgba(90,100,130,.22)");
   aura.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = aura;
-  ctx.fillRect(-s, -s, s * 2, s * 1.7);
+  ctx.fillRect(-s, -s, s * 2, s * 1.8);
 
-  const cloth = (y0, y1) => {
-    const g = ctx.createLinearGradient(0, y0, 0, y1);
-    g.addColorStop(0, "#e4ded2");
-    g.addColorStop(0.45, "#a39cab");
-    g.addColorStop(1, "rgba(90,84,104,0)");
-    return g;
-  };
-
-  // sleeves: hanging at its sides, lifted towards you when it hunts
   const reach = angry ? 1 : 0, sway = Math.sin(t * 2.1) * s * 0.015;
+  // arms: thin, too long, grey skin, black claws
   for (const side of [-1, 1]) {
-    const sx = side * s * 0.16, sy = -s * 0.3;
-    const ex = side * s * (0.3 + 0.08 * reach), ey = s * (0.12 - 0.3 * reach) + sway;
-    ctx.fillStyle = cloth(sy, s * 0.3);
+    const sx = side * s * 0.15, sy = -s * 0.28;
+    const ex = side * s * (0.27 + 0.13 * reach), ey = s * (0.18 - 0.36 * reach) + sway * side;
+    ctx.strokeStyle = "#9c9488";
+    ctx.lineCap = "round";
+    ctx.lineWidth = Math.max(2, s * 0.032);
     ctx.beginPath();
     ctx.moveTo(sx, sy);
-    ctx.quadraticCurveTo(side * s * 0.34, sy + s * 0.05, ex + side * s * 0.05, ey);
-    ctx.lineTo(ex - side * s * 0.07, ey + s * 0.03);
-    ctx.quadraticCurveTo(side * s * 0.18, -s * 0.1, sx - side * s * 0.04, -s * 0.12);
-    ctx.closePath();
-    ctx.fill();
-    // bony fingers out of the cuff
-    ctx.strokeStyle = "#2a2420";
-    ctx.lineWidth = Math.max(1, s * 0.012);
-    ctx.lineCap = "round";
-    for (let f = -1; f <= 1; f++) {
+    ctx.quadraticCurveTo(side * s * (0.3 + 0.05 * reach), sy + s * 0.12, ex, ey);
+    ctx.stroke();
+    ctx.strokeStyle = "#1a0d0d";                         // claws
+    ctx.lineWidth = Math.max(1, s * 0.011);
+    for (let f = -2; f <= 2; f++) {
       ctx.beginPath();
-      ctx.moveTo(ex, ey + s * 0.02);
-      ctx.lineTo(ex + side * s * 0.03 + f * s * 0.02, ey + s * (reach ? -0.02 : 0.08) + Math.abs(f) * s * 0.01);
+      ctx.moveTo(ex, ey);
+      ctx.quadraticCurveTo(ex + side * s * 0.05, ey + f * s * 0.012, ex + side * s * (0.09 - Math.abs(f) * 0.012), ey + f * s * 0.03 + (reach ? -0.03 : 0.05) * s);
       ctx.stroke();
     }
   }
 
-  // the shroud
-  ctx.fillStyle = cloth(-s * 0.62, s * 0.52);
+  // the shroud: grey, torn into strips at the hem, rust-dark stains
+  const cg = ctx.createLinearGradient(0, -s * 0.5, 0, s * 0.55);
+  cg.addColorStop(0, "#b9b3a8");
+  cg.addColorStop(0.5, "#7f786f");
+  cg.addColorStop(1, "rgba(60,40,38,0)");
+  ctx.fillStyle = cg;
   ctx.beginPath();
-  ctx.moveTo(0, -s * 0.62);
-  ctx.bezierCurveTo(s * 0.19, -s * 0.62, s * 0.23, -s * 0.44, s * 0.2, -s * 0.28);
-  ctx.lineTo(s * 0.3, s * 0.44);
-  const rags = 8;
-  for (let i = 0; i <= rags; i++) {
-    const fx = s * 0.3 - (i * s * 0.6) / rags, wave = Math.sin(t * 3 + i * 1.7) * s * 0.03;
-    ctx.lineTo(fx, s * (i % 2 ? 0.36 : 0.52) + wave);
+  ctx.moveTo(-s * 0.14, -s * 0.42);
+  ctx.quadraticCurveTo(0, -s * 0.47, s * 0.14, -s * 0.42);
+  ctx.lineTo(s * 0.2, -s * 0.2);
+  ctx.lineTo(s * 0.26, s * 0.4);
+  const strips = 9;
+  for (let i = 0; i <= strips; i++) {
+    const fx = s * 0.26 - (i * s * 0.52) / strips, wave = Math.sin(t * 3.2 + i * 1.9) * s * 0.035;
+    ctx.lineTo(fx, s * (i % 2 ? 0.32 : 0.56) + wave);
   }
-  ctx.lineTo(-s * 0.2, -s * 0.28);
-  ctx.bezierCurveTo(-s * 0.23, -s * 0.44, -s * 0.19, -s * 0.62, 0, -s * 0.62);
+  ctx.lineTo(-s * 0.2, -s * 0.2);
+  ctx.closePath();
   ctx.fill();
-  // folds
-  ctx.strokeStyle = "rgba(60,54,70,.35)";
-  ctx.lineWidth = Math.max(1, s * 0.012);
-  for (const fx of [-0.1, 0.02, 0.13]) {
+  ctx.fillStyle = "rgba(90,14,14,.45)";                  // stains
+  for (const [fx, fy, r] of [[-0.08, 0.2, 0.06], [0.1, 0.32, 0.05], [-0.02, 0.4, 0.07], [0.12, 0.05, 0.035]]) {
     ctx.beginPath();
-    ctx.moveTo(s * fx * 0.7, -s * 0.2);
-    ctx.quadraticCurveTo(s * fx * 1.2, s * 0.1, s * fx * 1.7, s * 0.4);
-    ctx.stroke();
+    ctx.ellipse(s * fx, s * fy, s * r, s * r * 1.6, 0.2, 0, TAU);
+    ctx.fill();
   }
 
-  // the hood: a black hollow where a face should be
-  const hollow = ctx.createRadialGradient(0, -s * 0.37, s * 0.02, 0, -s * 0.37, s * 0.15);
-  hollow.addColorStop(0, "#000");
-  hollow.addColorStop(0.75, "#0b080e");
-  hollow.addColorStop(1, "rgba(30,24,36,.0)");
-  ctx.fillStyle = hollow;
+  // the head: hair in long black ropes first, then the face through it
+  ctx.fillStyle = "#070507";
   ctx.beginPath();
-  ctx.ellipse(0, -s * 0.37, s * 0.12, s * 0.16, 0, 0, TAU);
+  ctx.ellipse(0, -s * 0.47, s * 0.12, s * 0.1, 0, Math.PI, 0);
   ctx.fill();
-  ctx.strokeStyle = "rgba(240,234,224,.5)";          // the lit rim of the hood
-  ctx.lineWidth = Math.max(1, s * 0.012);
+  ctx.strokeStyle = "#0a0709";
+  ctx.lineCap = "round";
+  for (let i = 0; i < 9; i++) {
+    const hx = -s * 0.12 + (i * s * 0.24) / 8;
+    const len = s * (0.26 + 0.1 * Math.sin(i * 2.3)), swing = Math.sin(t * 1.7 + i) * s * 0.012;
+    ctx.lineWidth = Math.max(1.5, s * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(hx, -s * 0.5);
+    ctx.quadraticCurveTo(hx * 1.4 + swing, -s * 0.3, hx * 1.2 + swing * 2, -s * 0.5 + len);
+    ctx.stroke();
+  }
+  // the face: long, cracked, dead white
+  const fg = ctx.createRadialGradient(0, -s * 0.36, s * 0.01, 0, -s * 0.36, s * 0.12);
+  fg.addColorStop(0, "#efe9df");
+  fg.addColorStop(1, "#a59e95");
+  ctx.fillStyle = fg;
   ctx.beginPath();
-  ctx.ellipse(0, -s * 0.37, s * 0.125, s * 0.165, 0, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.ellipse(0, -s * 0.355, s * 0.075, s * 0.115, 0, 0, TAU);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(40,20,20,.55)";                // cracks
+  ctx.lineWidth = Math.max(0.8, s * 0.004);
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.05, -s * 0.44); ctx.lineTo(-s * 0.025, -s * 0.4); ctx.lineTo(-s * 0.04, -s * 0.37);
+  ctx.moveTo(s * 0.045, -s * 0.3); ctx.lineTo(s * 0.03, -s * 0.27); ctx.lineTo(s * 0.05, -s * 0.25);
   ctx.stroke();
+  // eye sockets: black, sunken, too big
+  ctx.fillStyle = "#050204";
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(side * s * 0.033, -s * 0.385, s * 0.026, s * 0.022, side * 0.3, 0, TAU);
+    ctx.fill();
+  }
+  // the mouth: stretched open, too wide, teeth
+  const gape = angry ? 0.075 : 0.05;
+  ctx.fillStyle = "#080204";
+  ctx.beginPath();
+  ctx.ellipse(0, -s * 0.29, s * 0.03, s * gape * 0.75, 0, 0, TAU);
+  ctx.fill();
+  ctx.fillStyle = "#d8cfbf";
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();                                     // top teeth
+    ctx.moveTo(i * s * 0.011 - s * 0.005, -s * (0.29 + gape * 0.7));
+    ctx.lineTo(i * s * 0.011 + s * 0.005, -s * (0.29 + gape * 0.7));
+    ctx.lineTo(i * s * 0.011, -s * (0.29 + gape * 0.4));
+    ctx.fill();
+    ctx.beginPath();                                     // bottom teeth
+    ctx.moveTo(i * s * 0.011 - s * 0.005, -s * (0.29 - gape * 0.7));
+    ctx.lineTo(i * s * 0.011 + s * 0.005, -s * (0.29 - gape * 0.7));
+    ctx.lineTo(i * s * 0.011, -s * (0.29 - gape * 0.4));
+    ctx.fill();
+  }
+  // hair falling across the face, over everything
+  ctx.strokeStyle = "rgba(8,5,7,.92)";
+  for (const [hx, len] of [[-0.06, 0.24], [0.045, 0.2], [-0.015, 0.12]]) {
+    ctx.lineWidth = Math.max(1, s * 0.016);
+    ctx.beginPath();
+    ctx.moveTo(s * hx, -s * 0.47);
+    ctx.quadraticCurveTo(s * hx * 0.6 + Math.sin(t + hx * 9) * s * 0.01, -s * 0.38, s * hx * 0.9, -s * 0.47 + s * len);
+    ctx.stroke();
+  }
   ctx.restore();
-  ghostEyes(ctx, x, y, s, angry, t);
+  ghostEyes(ctx, x + jolt, y, s, angry, t);
 }
 
 // Its eyes alone — drawn at full strength even when the rest of it is lost
 // in the dark, so you always see them first.
 export function ghostEyes(ctx, x, y, s, angry, t = 0) {
-  const glow = 0.75 + 0.25 * Math.sin(t * 9);
+  const glow = 0.7 + 0.3 * Math.sin(t * 9);
   ctx.save();
-  ctx.shadowColor = angry ? "#ff1e3c" : "#fff3c0";
-  ctx.shadowBlur = s * 0.06;
-  ctx.fillStyle = angry ? `rgba(255,40,60,${glow})` : `rgba(255,240,200,${glow * 0.8})`;
+  ctx.shadowColor = "#ff1030";
+  ctx.shadowBlur = s * (angry ? 0.07 : 0.04);
+  ctx.fillStyle = `rgba(255,${angry ? 30 : 70},${angry ? 50 : 60},${glow})`;
   for (const side of [-1, 1]) {
-    ctx.beginPath();
-    ctx.ellipse(x + side * s * 0.042, y - s * 0.355, s * 0.022, s * (angry ? 0.013 : 0.009), side * 0.25, 0, TAU);
+    ctx.beginPath();                                     // a pinprick deep in each socket
+    ctx.arc(x + side * s * 0.033, y - s * 0.385, s * (angry ? 0.009 : 0.006), 0, TAU);
     ctx.fill();
   }
   ctx.restore();
@@ -160,11 +206,9 @@ export function mapRect(view) {
 
 const roomOf = (s, k) => ROOM_KINDS[(s.rooms && s.rooms[k]) || 0];
 
-// Each relic is a thing, not a dot: drawn as its own object in a badge of its
-// owner's colour, on the map and on its distance marker. Shapes that can't be
-// mistaken for each other at a glance. Which is which follows the relic's
-// place in the house's list, so every phone in a room agrees.
-export const RELIC_ICONS = ["🗝️", "💍", "🕯️", "💀", "🔔", "👑", "🧸", "📿", "🪞"];
+// What you collect is a key: drawn as one in a badge of its owner's colour,
+// on the map and on its distance marker.
+export const RELIC_ICONS = ["🗝️"];
 export const relicIcon = (i) => RELIC_ICONS[((i % RELIC_ICONS.length) + RELIC_ICONS.length) % RELIC_ICONS.length];
 
 function relicBadge(ctx, x, y, rad, icon, color, alpha = 1, glow = 0) {
@@ -405,7 +449,7 @@ function scene(ctx, s, W, H, t) {
   for (const o of sp) {
     if (o.ty < 0.2 || o.ty > 18) continue;
     const ob = o.k === HURDLE || o.k === BEAM, scr = W / 2 * (1 + o.tx / o.ty), u = H / o.ty;
-    const size = (ob || o.k === "p" || o.k === "f") ? u : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : o.k === "bd" ? 0.6 : 0.3);
+    const size = (ob || o.k === "p" || o.k === "f") ? u : o.k === "o" ? u * 1.6 : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : o.k === "bd" ? 0.6 : 0.3);
     const cy = hz + (eye - (o.k === "g" ? 0.5 : o.k === "r" || o.k === "b" ? 0.45 : 0.2)) * u;
     const x0 = Math.max(0, Math.floor((scr - size / 2) / cw)), x1 = Math.min(cols - 1, Math.floor((scr + size / 2) / cw));
     ctx.save();
@@ -431,13 +475,7 @@ function scene(ctx, s, W, H, t) {
       gr.addColorStop(1, `rgba(${rc},0)`);
       ctx.fillStyle = gr;
       ctx.fillRect(scr - size * 2, by - size * 2, size * 4, size * 4);
-      ctx.fillStyle = o.color ? `rgb(${rc})` : "#fff3d0";
-      ctx.beginPath();
-      ctx.moveTo(scr, by - size * 0.6);
-      ctx.lineTo(scr + size * 0.35, by);
-      ctx.lineTo(scr, by + size * 0.6);
-      ctx.lineTo(scr - size * 0.35, by);
-      ctx.fill();
+      drawKey(ctx, scr, by, size * 1.3, o.color ? `rgb(${rc})` : "#ffd66b", t + o.x);
       ctx.globalAlpha = 1;
     } else if (o.k === "o") {
       drawPlayer(ctx, o.o, scr, hz, eye, u, L, o.ty, t);
@@ -601,6 +639,33 @@ function drawFurniture(ctx, o, scr, u, hz, eye, L, t) {
   }
 }
 
+// A key, floating and turning slowly: a ring bow, a shaft, two teeth.
+function drawKey(ctx, x, y, size, color, t) {
+  const turn = Math.cos(t * 1.6);                      // a slow spin: it narrows edge-on
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(-0.5);
+  ctx.scale(Math.max(0.25, Math.abs(turn)), 1);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(1.5, size * 0.09);
+  ctx.lineCap = "round";
+  ctx.beginPath();                                     // the bow
+  ctx.arc(0, -size * 0.28, size * 0.17, 0, TAU);
+  ctx.stroke();
+  ctx.beginPath();                                     // the shaft
+  ctx.moveTo(0, -size * 0.11);
+  ctx.lineTo(0, size * 0.42);
+  ctx.stroke();
+  ctx.fillRect(0, size * 0.22, size * 0.16, size * 0.07);   // the teeth
+  ctx.fillRect(0, size * 0.34, size * 0.22, size * 0.08);
+  ctx.fillStyle = "rgba(255,255,255,.55)";             // a glint
+  ctx.beginPath();
+  ctx.arc(-size * 0.06, -size * 0.34, size * 0.035, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawObstacle(ctx, s, o, scr, u, hz, eye, L, t) {
   const cm = o.tx / o.ty / PLANE;
   const br = Math.min(1, (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cm) * 0.45) : 0) * 1.3 + Math.max(0, 1 - o.ty / 2.2) * 0.3 + 0.06);
@@ -753,43 +818,103 @@ function drawBeam(ctx, o, x, u, hz, eye, br, pulse, rat, t) {
   }
 }
 
-// Another player in the halls: a dark cloaked shape with their colour on the
-// lantern and their name over their head, so you can tell who is who.
+// Another player in the halls: a person. Head with a beanie in their colour,
+// a jacket in their colour over dark trousers, arms, legs that step as they
+// walk, a lantern in one hand when their torch is on — and their name above
+// them, so you can tell who is who.
 function drawPlayer(ctx, p, scr, hz, eye, u, L, dist, t) {
   const rc = rgbOf(p.color);
-  const br = Math.min(1, (L ? Math.pow(Math.max(0, 1 - dist / 7.5), 1.2) : 0) + Math.max(0, 1 - dist / 2.2) * 0.4 + 0.12);
+  const br = Math.min(1, (L ? Math.pow(Math.max(0, 1 - dist / 7.5), 1.2) : 0) + Math.max(0, 1 - dist / 2.2) * 0.4 + 0.18);
+  const shade = (r, g, b) => `rgb(${(r * br) | 0},${(g * br) | 0},${(b * br) | 0})`;
+  const [cr, cg, cb] = rc.split(",").map(Number);
   const crouch = p.cr > 0.5 ? 0.72 : 1;
-  const foot = hz + eye * u - (p.jz || 0) * u, h = u * 0.62 * crouch, w = u * 0.26;
-  const top = foot - h;
-  if (p.lit) {
-    // their lantern's glow first, so the body stands in it
-    const gl = ctx.createRadialGradient(scr + w * 0.5, foot - h * 0.45, 1, scr + w * 0.5, foot - h * 0.45, u * 0.6);
-    gl.addColorStop(0, `rgba(${rc},.55)`);
+  const foot = hz + eye * u - (p.jz || 0) * u;
+  const H = u * 0.68 * crouch;                            // their height on screen
+  const walk = p.moving ? Math.sin(t * 9 + (p.x + p.y) * 3) : 0;
+  const lw = Math.max(1.5, H * 0.07);
+
+  if (p.lit) {                                           // the lantern's glow first
+    const gx = scr + H * 0.2, gy = foot - H * 0.42, gr = H * 0.55;
+    const gl = ctx.createRadialGradient(gx, gy, 1, gx, gy, gr);
+    gl.addColorStop(0, `rgba(${rc},.32)`);
     gl.addColorStop(1, `rgba(${rc},0)`);
     ctx.fillStyle = gl;
-    ctx.fillRect(scr - u, foot - h - u * 0.4, u * 2, h + u * 0.8);
+    ctx.beginPath();
+    ctx.arc(gx, gy, gr, 0, TAU);
+    ctx.fill();
   }
-  ctx.fillStyle = `rgba(${(40 * br) | 0},${(34 * br) | 0},${(48 * br) | 0},.96)`;
+  ctx.lineCap = "round";
+  // legs, stepping
+  ctx.strokeStyle = shade(46, 42, 56);
+  ctx.lineWidth = lw * 1.2;
+  const hipY = foot - H * 0.42;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(scr + side * H * 0.05, hipY);
+    ctx.lineTo(scr + side * H * 0.07 + walk * side * H * 0.08, foot - lw * 0.5);
+    ctx.stroke();
+  }
+  // the jacket: their colour
+  ctx.fillStyle = shade(cr, cg, cb);
+  const shY = foot - H * 0.78;
   ctx.beginPath();
-  ctx.moveTo(scr, top);
-  ctx.quadraticCurveTo(scr - w * 0.6, top + h * 0.1, scr - w * 0.55, top + h * 0.5);
-  ctx.lineTo(scr - w * 0.7, foot);
-  ctx.lineTo(scr + w * 0.7, foot);
-  ctx.lineTo(scr + w * 0.55, top + h * 0.5);
-  ctx.quadraticCurveTo(scr + w * 0.6, top + h * 0.1, scr, top);
+  ctx.moveTo(scr - H * 0.13, shY);
+  ctx.quadraticCurveTo(scr, shY - H * 0.04, scr + H * 0.13, shY);
+  ctx.lineTo(scr + H * 0.12, hipY + H * 0.02);
+  ctx.lineTo(scr - H * 0.12, hipY + H * 0.02);
+  ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = `rgba(${rc},${0.5 + br * 0.5})`;
-  ctx.lineWidth = Math.max(1.5, u * 0.012);
+  ctx.strokeStyle = "rgba(0,0,0,.55)";
+  ctx.lineWidth = Math.max(1, lw * 0.35);
   ctx.stroke();
-  ctx.fillStyle = p.lit ? `rgb(${rc})` : `rgba(${rc},.35)`;
+  ctx.beginPath();                                       // the zip
+  ctx.moveTo(scr, shY + H * 0.02);
+  ctx.lineTo(scr, hipY);
+  ctx.stroke();
+  // arms: one swinging, one holding the lantern out
+  ctx.strokeStyle = shade(cr * 0.85, cg * 0.85, cb * 0.85);
+  ctx.lineWidth = lw;
   ctx.beginPath();
-  ctx.arc(scr + w * 0.62, foot - h * 0.42, Math.max(2, u * 0.035), 0, TAU);
+  ctx.moveTo(scr - H * 0.13, shY + H * 0.03);
+  ctx.lineTo(scr - H * 0.17 - walk * H * 0.05, hipY - H * 0.02);
+  ctx.stroke();
+  const handX = scr + H * 0.21, handY = shY + H * 0.24;
+  ctx.beginPath();
+  ctx.moveTo(scr + H * 0.13, shY + H * 0.03);
+  ctx.lineTo(handX, handY);
+  ctx.stroke();
+  // the lantern
+  ctx.fillStyle = shade(40, 32, 26);
+  ctx.fillRect(handX - H * 0.035, handY, H * 0.07, H * 0.1);
+  ctx.fillStyle = p.lit ? `rgb(${rc})` : `rgba(${rc},.25)`;
+  ctx.fillRect(handX - H * 0.022, handY + H * 0.018, H * 0.044, H * 0.064);
+  // the head: face, and a beanie in their colour
+  const headY = shY - H * 0.12, hr = H * 0.085;
+  ctx.fillStyle = shade(222, 186, 158);
+  ctx.beginPath();
+  ctx.arc(scr, headY, hr, 0, TAU);
   ctx.fill();
+  ctx.fillStyle = shade(cr * 0.75, cg * 0.75, cb * 0.75);
+  ctx.beginPath();
+  ctx.arc(scr, headY - hr * 0.1, hr * 1.05, Math.PI, 0);
+  ctx.fill();
+  ctx.fillRect(scr - hr * 1.08, headY - hr * 0.2, hr * 2.16, hr * 0.3);
+  ctx.fillStyle = "rgba(20,14,12,.8)";                   // eyes
+  ctx.beginPath();
+  ctx.arc(scr - hr * 0.35, headY + hr * 0.25, Math.max(0.8, hr * 0.12), 0, TAU);
+  ctx.arc(scr + hr * 0.35, headY + hr * 0.25, Math.max(0.8, hr * 0.12), 0, TAU);
+  ctx.fill();
+  // name
   const fs = Math.max(10, Math.min(18, u * 0.09));
-  ctx.font = `${fs}px Georgia`;
+  ctx.font = `bold ${fs}px Georgia`;
   ctx.textAlign = "center";
-  ctx.fillStyle = `rgba(${rc},${Math.min(1, 0.4 + br)})`;
-  ctx.fillText(p.name || "", scr, top - fs * 0.5);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(0,0,0,.8)";
+  // the name tag carries the distance too, so there's no separate marker
+  const tag = `${p.name || ""} · ${metres(dist)}`;
+  ctx.strokeText(tag, scr, headY - hr - fs * 0.6);
+  ctx.fillStyle = `rgb(${rc})`;
+  ctx.fillText(tag, scr, headY - hr - fs * 0.6);
 }
 
 // The view from a hiding spot. Under a table: the dark underside above, the
@@ -867,7 +992,11 @@ function markers(ctx, s, W, H, t) {
     list.push({ x: r.x, y: r.y, kind: "relic", icon: relicIcon(i), color: r.color || "#ffdca0", label: "", main: r === nearest });
   });
   if (exitOpen(s)) list.push({ x: s.exitT.x + 0.5, y: s.exitT.y + 0.5, kind: "exit", color: "#5fd68a", label: "Way out", main: !left.length });
-  for (const o of s.others || []) list.push({ x: o.x, y: o.y, kind: "friend", color: o.color, label: o.name || "", main: true });
+  // a friend in plain sight wears their distance on their name tag instead
+  for (const o of s.others || []) {
+    const inSight = Math.hypot(o.x - P.x, o.y - P.y) < 9 && los(s.g, P.x, P.y, o.x, o.y);
+    list.push({ x: o.x, y: o.y, kind: "friend", color: o.color, label: o.name || "", main: true, inSight });
+  }
 
   const mr = mapRect({ W, H, safeTop: 0 });
   const edgeL = 46, edgeR = mr.x0 - 34;               // clear of the HUD's bars and the map
@@ -880,6 +1009,7 @@ function markers(ctx, s, W, H, t) {
     m.tx = inv * (dy * rx - dx * ry);
     m.ty = inv * (-ply * rx + plx * ry);
     m.ahead = m.ty > 0.3 && Math.abs(m.tx / m.ty) < 0.92;
+    if (m.ahead && m.inSight) m.skip = true;
     // in view but out past where the edge stacks sit: join the stack instead,
     // so the two never sit on top of each other
     if (m.ahead) {
@@ -987,11 +1117,11 @@ export function drawManor(ctx, s, view, t, stick) {
     ctx.fillStyle = "#e9e3d3";
     ctx.textAlign = "center";
     ctx.font = `italic ${Math.max(15, Math.min(22, W / 22))}px Georgia`;
-    ctx.fillText("Memorize the halls. Gold marks the relics.", W / 2, y0 - 14);
+    ctx.fillText("Memorize the halls. Gold marks the keys.", W / 2, y0 - 14);
     ctx.fillStyle = "#a39a88";
     ctx.font = "14px Georgia";
     ctx.fillText(`The dark falls in ${Math.ceil(s.introT)}s. Tap or press any key to start now.`, W / 2, y0 + size + 24);
-    ctx.fillText("Gold: relics · Brown bars: doors · Red: the way out (it opens when you have them all)", W / 2, y0 + size + 44);
+    ctx.fillText("Gold: keys · Brown bars: doors · Red: the way out (it opens when you have them all)", W / 2, y0 + size + 44);
     return;
   }
   if (s.mode === "dead") {

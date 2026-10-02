@@ -126,12 +126,12 @@ export default function Manor() {
           night.current++;
           setOver({
             win: true, title: "You escaped", again: `Enter night ${night.current}`,
-            text: `You slip out through the far gate. Time in the manor: ${t}. The next night has a bigger manor, more relics and a faster ghost.`,
+            text: `You slip out through the far gate. Time in the manor: ${t}. The next night has a bigger manor, more keys and a faster ghost.`,
           });
         } else {
           setOver({
             win: false, title: "Caught", again: "Try again",
-            text: `It found you in the dark. Relics taken: ${s.count} of ${s.need}. Time: ${t}.`,
+            text: `It found you in the dark. Keys taken: ${s.count} of ${s.need}. Time: ${t}.`,
           });
         }
         setScreen("over");
@@ -221,7 +221,7 @@ export default function Manor() {
       {rotated && screen === "game" && <div className="hm-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
 
       <div className={`hm-hud${playing ? "" : " off"}`}>
-        <div>Night {hud?.night} &nbsp;·&nbsp; Relics {hud?.count} / {hud?.need}</div>
+        <div>Night {hud?.night} &nbsp;·&nbsp; Keys {hud?.count} / {hud?.need}</div>
         <div className="hm-room">📍 {hud?.room}</div>
         <div className="hm-bar stam"><i style={{ width: `${(hud?.stam ?? 1) * 100}%` }} /></div>
         <div className="hm-bar bat"><i style={{ width: `${(hud?.bat ?? 1) * 100}%` }} /></div>
@@ -248,10 +248,10 @@ export default function Manor() {
         <div className="hm-ov">
           <button className="hm-leave" onClick={() => navigate("/")}>← Leave</button>
           <h1>Hollow Manor 3D</h1>
-          <p>Relics are scattered through the rooms of the manor. Something old lives here, and it listens.</p>
+          <p>Keys are scattered through the rooms of the manor. Something old lives here, and it listens.</p>
           <p>Every room has a name on the map — tap the map to see it big. Hide under a table or a bed, or in a
             wardrobe, and it cannot catch you.</p>
-          <p>First person now: look around, listen for its footsteps. You enter through one gate, which slams shut behind you. Take all the relics, grab batteries so your light does not die, then leave through the far gate. A red arrow shows where the ghost is when it is near.</p>
+          <p>First person now: look around, listen for its footsteps. You enter through one gate, which slams shut behind you. Take all the keys, grab batteries so your light does not die, then leave through the far gate. A red arrow shows where the ghost is when it is near.</p>
           <button className="hm-go" onClick={newGame}>Enter the manor</button>
           <p className="hm-small">
             Move: WASD. Turn: drag the mouse or use the left and right arrows. Each night gets bigger and harder.

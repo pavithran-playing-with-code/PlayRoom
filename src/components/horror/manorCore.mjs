@@ -163,7 +163,11 @@ export function genHouse(N, rand) {
       for (let k = 0, put = 0; k < 8 && put < want; k++) {
         const x = 2 + ROOM * i + ((rand() * 5) | 0), y = 2 + ROOM * j + ((rand() * 5) | 0);
         if (clear.has(y * N + x) || (x < 4 && y < 4) || g[y][x] !== FLOOR) continue;
-        if (D4.some(([a, b]) => g[y + b][x + a] === SPOT)) continue;
+        // floor all round it, corners too: two pieces touching at a corner
+        // leave a gap you can see but can't fit through
+        let boxed = false;
+        for (let b = -1; b <= 1 && !boxed; b++) for (let a = -1; a <= 1; a++) if ((a || b) && g[y + b][x + a] !== FLOOR) { boxed = true; break; }
+        if (boxed) continue;
         g[y][x] = SPOT;
         spots.push([x, y]);
         put++;
@@ -216,7 +220,17 @@ export function los(g, ax, ay, bx, by) {
   return true;
 }
 
-const solid = (g, x, y) => { const row = g[y | 0]; return !row || row[x | 0] !== FLOOR; };
+// Furniture is drawn a little smaller than its tile, so it stops you a
+// little inside the tile's edge too — you can brush past a table's corner.
+const SPOT_EDGE = 0.1;
+const solid = (g, x, y) => {
+  const row = g[y | 0];
+  if (!row) return true;
+  const v = row[x | 0];
+  if (v !== SPOT) return v !== FLOOR;
+  const fx = x - Math.floor(x), fy = y - Math.floor(y);
+  return fx > SPOT_EDGE && fx < 1 - SPOT_EDGE && fy > SPOT_EDGE && fy < 1 - SPOT_EDGE;
+};
 export const canAt = (g, x, y) =>
   !(solid(g, x - R, y - R) || solid(g, x + R, y - R) || solid(g, x - R, y + R) || solid(g, x + R, y + R));
 

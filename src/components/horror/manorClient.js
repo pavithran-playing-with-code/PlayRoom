@@ -27,10 +27,10 @@ const DOOR_TRUST_MS = 1500;            // a door you just used: your word over t
 const HIDE_TRUST_MS = 1500;            // likewise a locker you just got into
 
 const RELIC_LINES = [
-  "A child's tooth wrapped in silk. Something stirs.",
-  "A cracked locket. It whispers your name.",
-  "A wedding ring, still warm. The walls lean closer.",
-  "A black candle. Footsteps overhead.",
+  "An iron key, cold as the grave. Something stirs.",
+  "A brass key on a rotten ribbon. It whispers your name.",
+  "A tiny key, still warm. The walls lean closer.",
+  "A black key. Footsteps overhead.",
 ];
 const PLACE = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"];
 export const placeName = (n) => PLACE[n] || `${n}th`;
@@ -67,7 +67,7 @@ export function createClient(init, now = Date.now()) {
     over: init.over || null,
   };
   if (me && !me.alive && !me.left) c.deadAt = now - SCARE_MS;  // came back while caught
-  if (c.role === "player" && c.alive) say(c, "Find your relics, then the far gate. Get out as often as you can before the clock runs out!", 5000);
+  if (c.role === "player" && c.alive) say(c, "Find your keys, then the far gate. Get out as often as you can before the clock runs out!", 5000);
   return c;
 }
 
@@ -122,11 +122,11 @@ export function applyTick(c, m, now = Date.now()) {
   for (const e of m.e || []) {
     const mine = e.side && e.side === c.mySide;
     if (e.type === "relic") {
-      if (e.id === c.you) { snd("relic"); say(c, e.got >= e.need ? "The last relic. The gate is open. Run." : RELIC_LINES[(e.got - 1) % 4], 4000); }
+      if (e.id === c.you) { snd("relic"); say(c, e.got >= e.need ? "The last key. The gate is open. Run." : RELIC_LINES[(e.got - 1) % 4], 4000); }
       else if (mine) { snd("relic"); say(c, `${nameOf(c, e.id)} found one. ${e.got} of ${e.need}.`, 3000); }
     } else if (e.type === "open") {
-      if (mine && c.mode !== "free") say(c, "Every relic taken. The far gate is open!", 4000);
-      else if (!mine && c.mode !== "coop") say(c, `${c.sides.get(e.side)?.name || "Someone"} has every relic. Their gate is open.`, 3500);
+      if (mine && c.mode !== "free") say(c, "Every key taken. The far gate is open!", 4000);
+      else if (!mine && c.mode !== "coop") say(c, `${c.sides.get(e.side)?.name || "Someone"} has every key. Their gate is open.`, 3500);
     } else if (e.type === "dead") {
       if (e.id === c.you) { if (e.cause !== "left") snd("caught"); }       // the banner says the rest
       else say(c, e.cause === "left" ? `${nameOf(c, e.id)} left the house.` : `${nameOf(c, e.id)} was caught!`, 3000);
@@ -134,7 +134,7 @@ export function applyTick(c, m, now = Date.now()) {
       // back at the entrance: after being caught, or for another round
       const P = c.body;
       P.x = e.x; P.y = e.y; P.fa = 0; P.pitch = 0; P.hiding = null; P.lastTile = -1; P.jz = 0; P.vz = 0;
-      if (e.why === "caught") say(c, "Back in. Your relics are still yours.", 2600);
+      if (e.why === "caught") say(c, "Back in. Your keys are still yours.", 2600);
     } else if (e.type === "gaveup" && e.id === c.you) {
       say(c, "It gives up and drifts away...", 3000);
     } else if (e.type === "door" && e.id !== c.you) {
@@ -142,8 +142,8 @@ export function applyTick(c, m, now = Date.now()) {
       const at = c.body, d = Math.hypot(at.x - e.x - 0.5, at.y - e.y - 0.5);
       if (d < 14) snd("creak", Math.max(0.03, (e.open ? 0.3 : 0.18) * (1 - d / 14)));
     } else if (e.type === "escaped") {
-      if (e.id === c.you) { snd("win"); say(c, `You got out! +1000 — back in for round ${e.escapes + 1}. Find the relics again!`, 4500); }
-      else if (mine) { snd("win"); say(c, `${nameOf(c, e.id)} got out! +1000 for your side. Find the relics again!`, 4000); }
+      if (e.id === c.you) { snd("win"); say(c, `You got out! +1000 — back in for round ${e.escapes + 1}. Find the keys again!`, 4500); }
+      else if (mine) { snd("win"); say(c, `${nameOf(c, e.id)} got out! +1000 for your side. Find the keys again!`, 4000); }
       else say(c, `${nameOf(c, e.id)} got out (${e.escapes}).`, 3000);
     } else if (e.type === "battery" && e.id === c.you) {
       c.body.bat = Math.min(1, c.body.bat + 0.6);
@@ -196,7 +196,7 @@ export function stepLocal(c, inp, dt, now = Date.now()) {
   const side = sideOfMe(c);
   const ex = c.exitT.x + 0.5, ey = c.exitT.y + 0.5;
   if (side && !side.open && Math.hypot(ex - P.x, ey - P.y) < 1.2 && c.msgT <= 0) {
-    say(c, `The far gate is sealed. ${side.need - side.got} of your relics still out there.`, 2500);
+    say(c, `The far gate is sealed. ${side.need - side.got} of your keys still out there.`, 2500);
   }
   hintsFor(c, P);
   scareStep(c, P, dt, Math.random, c.ghosts.some((G) => G.st === "hunt"), snd);
@@ -341,7 +341,8 @@ export function viewState(c, now = Date.now()) {
   const mine = c.relics.map((r) => (c.role === "player" || !camId ? r : { ...r, mine: c.mode === "coop" || r.side === c.players.get(camId)?.side }));
   const others = [...c.players.values()]
     .filter((p) => p.id !== camId && p.alive && !p.left && !p.hiding)
-    .map((p) => ({ x: p.x, y: p.y, color: p.color, name: p.name, lit: p.lit, cr: p.cr, jz: p.jz }));
+    .map((p) => ({ x: p.x, y: p.y, color: p.color, name: p.name, lit: p.lit, cr: p.cr, jz: p.jz,
+      moving: Math.hypot(p.tx - p.x, p.ty - p.y) > 0.015 }));         // still easing toward its last report: walking
   const scared = c.deadAt !== null && now - c.deadAt < SCARE_MS;
   return {
     mode: inIntro(c, now) ? "intro" : scared ? "dead" : "play",

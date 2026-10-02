@@ -29,12 +29,12 @@ export const INTRO_S = 9;              // seconds to memorise the map
 export const DECOYS = 2;
 
 const RELIC_LINES = [
-  "A child's tooth wrapped in silk. Something stirs.",
-  "A cracked locket. It whispers your name.",
-  "A wedding ring, still warm. The walls lean closer.",
-  "A black candle. Footsteps overhead.",
+  "An iron key, cold as the grave. Something stirs.",
+  "A brass key on a rotten ribbon. It whispers your name.",
+  "A tiny key, still warm. The walls lean closer.",
+  "A black key. Footsteps overhead.",
 ];
-const LAST_RELIC = "The last relic. The gate is open. Run.";
+const LAST_RELIC = "The last key. The gate is open. Run.";
 export const AMBIENT = [
   "Something is breathing behind you...",
   "The floorboards creak. Not from you.",
@@ -193,7 +193,7 @@ function update(s, inp, dt) {
     s.g[1][0] = WALL;
     emit(s, "gateSlam");
     s.G.stun = 3;
-    say(s, "The gate slams shut behind you. Find the relics, then the far gate.", 5000);
+    say(s, "The gate slams shut behind you. Find the keys, then the far gate.", 5000);
   }
 
   const ct = (P.y | 0) * N + (P.x | 0);
@@ -231,7 +231,7 @@ function update(s, inp, dt) {
   const ex = s.exitT.x + 0.5, ey = s.exitT.y + 0.5;
   if (Math.hypot(ex - P.x, ey - P.y) < 1.2) {
     if (s.count >= s.need) { s.mode = "won"; emit(s, "win"); return; }
-    else if (s.msgT <= 0) say(s, "The far gate is sealed. Find all the relics.", 2500);
+    else if (s.msgT <= 0) say(s, "The far gate is sealed. Find all the keys.", 2500);
   }
 
   if (!P.entering) {

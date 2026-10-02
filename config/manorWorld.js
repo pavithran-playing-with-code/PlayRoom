@@ -49,6 +49,7 @@ const DECOYS = 2;
 const KEEP_AFTER_MS = 120000;          // a finished house lingers for late hellos
 const RESPAWN_MS = 2400;               // caught: the scare, then back in at the entrance
 const RELIC_POINTS = 100;
+const SNAP_AFTER = 4;                  // reports out of step before the phone is put back
 const USE_REACH = 2.2;                 // a door or locker this near (tile centre) is in reach: a step, plus lag
 
 // Colours for players in a free-for-all — no reds, which belong to the demon
@@ -443,9 +444,29 @@ function attach(server) {
       if (p.hiding) { p.at = now; return; }            // in a locker: going nowhere
       const x = num(m.x, 0, w.house.N), y = num(m.y, 0, w.house.N);
       if (x != null && y != null) {
+        // Accept it if you could have got there. If not, don't just keep the
+        // old spot — one refusal used to freeze you there for good (every
+        // later report looked like a teleport from it), and a ghost could
+        // catch that frozen "you" while you walked about somewhere else.
+        // Instead follow at running pace, and if the phone and the house
+        // still disagree a moment later, or the phone has you inside a wall
+        // or a shut door, put the phone back where the house has you.
         const since = p.at ? Math.min(1, (now - p.at) / 1000) : 1;
-        const far = Math.hypot(x - p.x, y - p.y) > core.MAX_SPEED * since + 0.35;
-        if (!far && core.canAt(w.house.g, x, y)) { p.x = x; p.y = y; }
+        const allowed = core.MAX_SPEED * since + 0.35;
+        const d = Math.hypot(x - p.x, y - p.y);
+        const okThere = core.canAt(w.house.g, x, y);
+        if (d <= allowed && okThere) { p.x = x; p.y = y; p.off = 0; }
+        else {
+          if (d > allowed) {
+            const k = allowed / d, nx = p.x + (x - p.x) * k, ny = p.y + (y - p.y) * k;
+            if (core.canAt(w.house.g, nx, ny)) { p.x = nx; p.y = ny; }
+          }
+          p.off = (p.off || 0) + 1;
+          if (!okThere || p.off >= SNAP_AFTER) {
+            p.off = 0;
+            socket.emit("manor:snap", { code: w.code, x: p.x, y: p.y });
+          }
+        }
       }
       p.at = now;
       p.fa = num(m.fa, -1e4, 1e4) ?? p.fa;

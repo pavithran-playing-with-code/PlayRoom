@@ -26,6 +26,8 @@ import {
 } from "./blastBoard";
 
 const SWEEP_MS = 1100;
+// A tray piece's cell size: as big as fits the slot, the same in both directions.
+const miniCell = (p) => Math.max(8, Math.min(16, Math.floor(54 / Math.max(p.w, p.h))));
 const DRAG_MIN = 8;            // px a finger moves before a press becomes a drag
 const LIFT = 34;               // how far above the finger the dragged piece floats
 
@@ -115,7 +117,7 @@ export default function BlockDrop(props) {
   function drop(r, c) {
     if (overRef.current || isSpectator) return;
     const s = live.current;
-    if (s.pick === null) { say("Pick a piece first", "info"); return; }
+    if (s.pick === null) return;                      // the help line says what to do
     const piece = s.tray[s.pick];
     if (!piece) return;
     if (!canPlace(s.board, piece, r, c)) { say("It doesn't fit there", "error"); return; }
@@ -282,8 +284,10 @@ export default function BlockDrop(props) {
                     aria-pressed={pick === i}
                     aria-label={p ? `Piece ${i + 1}, ${p.size} blocks` : "Used"}>
                     {p && (
+                      // square cells, so a piece looks the shape it is on the
+                      // board: a straight four is a thin line, not a fat block
                       <span className="bb-mini"
-                        style={{ gridTemplateColumns: `repeat(${p.w}, 1fr)`, gridAutoRows: "1fr" }}>
+                        style={{ gridTemplateColumns: `repeat(${p.w}, ${miniCell(p)}px)`, gridAutoRows: `${miniCell(p)}px` }}>
                         {Array.from({ length: p.w * p.h }).map((_, k) => {
                           const rr = Math.floor(k / p.w), cc = k % p.w;
                           const on = p.cells.some(([a, b]) => a === rr && b === cc);

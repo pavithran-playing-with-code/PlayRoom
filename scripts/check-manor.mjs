@@ -56,7 +56,9 @@ const park = (s) => { s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9; };
       for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
         if (s.g[y][x] !== SPOT) continue;
         if (!(x % 8 && y % 8)) { ok = false; why = `hiding spot in a wall at ${x},${y}`; }
-        if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => s.g[y + b] && s.g[y + b][x + a] === FLOOR)) { ok = false; why = `hiding spot at ${x},${y} with no floor beside it`; }
+        for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) {
+          if ((a || b) && s.g[y + b][x + a] !== FLOOR) { ok = false; why = `hiding spot at ${x},${y} touches something at its side or corner — a gap you can't pass`; }
+        }
       }
       const e = s.exitT, beside = e.x === N - 1 ? [N - 2, e.y] : [e.x, N - 2];
       if (s.g[e.y][e.x] !== WALL || d[beside[0] + beside[1] * N] < 0) { ok = false; why = `seed ${seed} night ${night}: gate not on a reachable wall`; }
@@ -363,7 +365,7 @@ function atSpot(seed = 51) {
 
 // ── scares ───────────────────────────────────────────────────────────────────
 {
-  const s = inside(61); park(s);
+  const s = inside(62); park(s);
   const seen = new Set();
   const g0 = { ...s.G };
   for (let t = 0; t < 400; t += DT) {

@@ -287,7 +287,8 @@ let coreMod;
     const p = w.players.get(51);
     p.at = Date.now() - 100;
     ph.me(w.code, p.x + 10, p.y);
-    check("a teleport is refused", p.x === w.house.spawn.x);
+    check("a teleport is refused: you get no further than a sprint would take you", p.x < w.house.spawn.x + 1);
+    Object.assign(p, { x: w.house.spawn.x, y: w.house.spawn.y });
     p.at = Date.now() - 100;
     ph.me(w.code, 0.5, 0.5);
     check("a step into a wall is refused", p.x === w.house.spawn.x && p.y === w.house.spawn.y);
@@ -398,6 +399,27 @@ let coreMod;
     for (let i = 0; i < 5 && g[dy][dx] === coreMod.DOOR; i++) world._tick(w);
     check("a ghost opens a shut door in its way — and the phones hear it", g[dy][dx] === coreMod.FLOOR && G.stun > 0.5 &&
       lastEv("door").some((e) => e.id === 0 && e.open === 1));
+  }
+
+  // ── the house and the phone never drift apart ───────────────────────────
+  {
+    const w = room("free", [{ id: 211 }, { id: 212 }]);
+    const A = phone(211);
+    for (let y = 1; y < 8; y++) for (let x = 1; x < 8; x++) w.house.g[y][x] = coreMod.FLOOR;
+    const a = w.players.get(211);
+    Object.assign(a, { x: 1.5, y: 4.5, at: Date.now() - 100 });
+    // one report too far (a lag spike): then the phone carries on from there
+    A.me(w.code, 4.5, 4.5);
+    for (let i = 0; i < 6; i++) { a.at = Date.now() - 100; A.me(w.code, 5.5, 4.5); }
+    const snaps = A.got.filter((q) => q.ev === "manor:snap");
+    check("one refused report doesn't freeze you: the house follows, or puts the phone back",
+      a.x > 3 || snaps.length > 0, `house has you at ${a.x.toFixed(2)}, ${snaps.length} snap(s)`);
+    check("…and the two end up in the same place", Math.abs(a.x - 5.5) < 0.01 || (snaps.length && Math.abs(snaps.pop().p.x - a.x) < 1e-9));
+    // the phone claims you're inside a wall: put back at once
+    A.got.length = 0;
+    a.at = Date.now() - 100;
+    A.me(w.code, a.x, 0.5);
+    check("a phone that has you in a wall is put back straight away", A.got.some((q) => q.ev === "manor:snap"));
   }
 
   // ── a door you're touching opens, even if the server's idea of you lags ───

@@ -111,12 +111,19 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       actionDone(c, r);
       syncHud();
     };
+    // the house and this phone disagreed about where you are: the house wins
+    const onSnap = (m) => {
+      const c = client.current;
+      if (!c || m.code !== roomCode || c.body.hiding) return;
+      c.body.x = m.x; c.body.y = m.y;
+    };
     const onGone = (g) => { if (g.code === roomCode && !client.current) setGone(true); };
     socket.on("manor:init", onInit);
     socket.on("manor:tick", onTick);
     socket.on("manor:over", onOver);
     socket.on("manor:decoyed", onDecoyed);
     socket.on("manor:used", onUsed);
+    socket.on("manor:snap", onSnap);
     socket.on("manor:gone", onGone);
     socket.on("connect", hello);
     hello();
@@ -129,6 +136,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       socket.off("manor:over", onOver);
       socket.off("manor:decoyed", onDecoyed);
       socket.off("manor:used", onUsed);
+      socket.off("manor:snap", onSnap);
       socket.off("manor:gone", onGone);
       socket.off("connect", hello);
     };
@@ -426,8 +434,8 @@ function Results({ over, me, onExit, leaving }) {
     : winners.length ? (over.mode === "teams" ? `${winners[0].name} wins` : `${winners[0].members[0]?.name || "Someone"} wins`)
     : "Nobody got out";
   const sub = coop
-    ? (mine && mine.escapes ? `${mine.score} points together — ${plural(mine.total, "relic", "relics")} found.` : "Get out at least once before the clock runs out to win.")
-    : "1000 for every time out, 100 a relic. You have to get out at least once to win.";
+    ? (mine && mine.escapes ? `${mine.score} points together — ${plural(mine.total, "key", "keys")} found.` : "Get out at least once before the clock runs out to win.")
+    : "1000 for every time out, 100 a key. You have to get out at least once to win.";
   return (
     <div className="hm-ov hmx-results">
       <h1>{headline}</h1>

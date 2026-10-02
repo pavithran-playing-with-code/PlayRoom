@@ -67,7 +67,7 @@ export function createClient(init, now = Date.now()) {
     over: init.over || null,
   };
   if (me && !me.alive && !me.left) c.deadAt = now - SCARE_MS;  // came back while caught
-  if (c.role === "player" && c.alive) say(c, "Find your keys, then the far gate. Get out as often as you can before the clock runs out!", 5000);
+  if (c.role === "player" && c.alive) say(c, "Find your keys, then the far gate. First one out wins — get out before the clock runs out!", 5000);
   return c;
 }
 
@@ -142,9 +142,9 @@ export function applyTick(c, m, now = Date.now()) {
       const at = c.body, d = Math.hypot(at.x - e.x - 0.5, at.y - e.y - 0.5);
       if (d < 14) snd("creak", Math.max(0.03, (e.open ? 0.3 : 0.18) * (1 - d / 14)));
     } else if (e.type === "escaped") {
-      if (e.id === c.you) { snd("win"); say(c, `You got out! +1000 — back in for round ${e.escapes + 1}. Find the keys again!`, 4500); }
-      else if (mine) { snd("win"); say(c, `${nameOf(c, e.id)} got out! +1000 for your side. Find the keys again!`, 4000); }
-      else say(c, `${nameOf(c, e.id)} got out (${e.escapes}).`, 3000);
+      if (e.id === c.you) { snd("win"); say(c, "You got out!", 3000); }
+      else if (mine) { snd("win"); say(c, `${nameOf(c, e.id)} got out — your side wins!`, 3000); }
+      else { snd("caught"); say(c, `${nameOf(c, e.id)} got out first.`, 3000); }
     } else if (e.type === "battery" && e.id === c.you) {
       c.body.bat = Math.min(1, c.body.bat + 0.6);
       snd("battery");

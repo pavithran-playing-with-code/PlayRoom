@@ -24,7 +24,6 @@ import { usePlayAgain } from "./PlayAgain";
 const REPORT_MS = 66;                  // ~15 a second
 const HUD_MS = 100;
 
-const MEDAL = ["", "🥇", "🥈", "🥉"];
 
 export default function ManorGame({ roomCode, currentUser, isSpectator = false, spectatorWatching = null, onGameEnd }) {
   const { socket } = useSocket() || {};
@@ -428,14 +427,16 @@ function Results({ over, me, onExit, leaving }) {
   const winners = top.length ? top.filter((s) => s.score === top[0].score) : [];
   const iWon = !!mine && winners.some((s) => s.key === mine.key);
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const timeUp = over.reason === "time";
+  const winnerName = (w) => (over.mode === "teams" ? `${w.name} team` : w.members[0]?.name || "Someone");
   const headline = coop
-    ? (mine && mine.escapes ? `You got out ${plural(mine.escapes, "time", "times")}!` : "Nobody got out")
-    : iWon ? (winners.length > 1 ? "A draw at the top!" : over.mode === "teams" ? `${mine.name} wins!` : "You win!")
-    : winners.length ? (over.mode === "teams" ? `${winners[0].name} wins` : `${winners[0].members[0]?.name || "Someone"} wins`)
-    : "Nobody got out";
+    ? (mine && mine.escapes ? "You got out!" : "The house kept you")
+    : iWon ? (over.mode === "teams" ? `${mine.name} team wins!` : "You got out — you win!")
+    : winners.length ? `${winnerName(winners[0])} got out first`
+    : timeUp ? "The night ran out" : "Nobody got out";
   const sub = coop
-    ? (mine && mine.escapes ? `${mine.score} points together — ${plural(mine.total, "key", "keys")} found.` : "Get out at least once before the clock runs out to win.")
-    : "1000 for every time out, 100 a key. You have to get out at least once to win.";
+    ? (mine && mine.escapes ? `Through the far gate together — ${mine.score} points.` : timeUp ? "The clock ran out before you found the way out." : "Nobody made it out.")
+    : winners.length ? "First one out wins." : "Nobody got out before the clock ran out — nobody wins.";
   return (
     <div className="hm-ov hmx-results">
       <h1>{headline}</h1>
@@ -443,10 +444,10 @@ function Results({ over, me, onExit, leaving }) {
       <div className="hmx-standings">
         {over.sides.map((s, i) => (
           <div key={s.key} className={`hmx-row${mine && s.key === mine.key ? " mine" : ""}`} style={{ "--c": s.color }}>
-            <span className="hmx-place">{s.escapes ? (MEDAL[i + 1] || i + 1) : "✕"}</span>
+            <span className="hmx-place">{s.escapes ? "🏆" : "✕"}</span>
             <span className="hmx-name">
               <b>{over.mode === "free" ? s.members[0]?.name : s.name}</b>
-              <small>🚪 {plural(s.escapes, "time out", "times out")} · {plural(s.total, "relic", "relics")}{over.mode !== "free" ? ` · ${s.members.map((m) => m.name).join(", ")}` : ""}</small>
+              <small>{s.escapes ? "Got out · " : ""}{plural(s.total, "key", "keys")}{over.mode !== "free" ? ` · ${s.members.map((m) => m.name).join(", ")}` : ""}</small>
             </span>
             <span className="hmx-got">{s.score}</span>
           </div>

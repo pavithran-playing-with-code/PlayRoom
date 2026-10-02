@@ -19,21 +19,20 @@
 //     ghosts, which stop to open it. Someone hiding is safe from the ghosts;
 //     one that watched them hide searches the spot a while, then gives up.
 //
-// A match lasts the room's whole clock (or until everyone has left):
-//   - caught: a scare, then back in at the entrance RESPAWN_MS later, keeping
-//     the relics you'd found;
-//   - got out (every relic of your side, then the far gate): +ESCAPE_POINTS
-//     for your side, and you go back in for another round — your side's
-//     relics are put back and its gate shuts again.
-// Score = escapes × ESCAPE_POINTS + every relic ever taken × 100.
+// A match ends the moment a side gets out (every key of theirs, then the far
+// gate) — they've won — or when the clock runs out, or once everyone has
+// left. Until then, being caught isn't the end: a scare, then back in at the
+// entrance RESPAWN_MS later, keeping the keys you'd found.
+// Score = escapes × ESCAPE_POINTS + every key taken × 100.
 //
 // Modes (rooms.mode):
 //   free   every player for themselves, own-colour relics
 //   teams  a colour per team; the team's relics and escapes are shared — any
 //          member walking out once the gate is open scores for the team
 //   coop   all together, gold relics, one score
-// When the clock stops, the highest score wins — but only a side that got out
-// at least once can win (config/matchResult.js decides, from stored scores).
+// The side that got out has the only score at or over ESCAPE_POINTS, so it
+// wins; if the clock ran out first, nobody did (config/matchResult.js
+// decides, from stored scores).
 const path = require("path");
 const { pathToFileURL } = require("url");
 const db = require("./db");
@@ -229,18 +228,13 @@ function kill(w, id, cause) {
   ev(w, { type: "dead", id: p.id, cause });
 }
 
-// Through the far gate with the gate open: the side scores, and goes again —
-// its relics back where they were, its gate shut, and this player back at
-// the entrance.
+// Through the far gate with the gate open: that side has won, and the match
+// is over for everyone — the results, then Play again or leave.
 function escape(w, p) {
   const side = sideOf(w, p);
   side.escapes++;
-  side.got = 0;
-  side.open = false;
-  for (const r of w.house.relics) if (r.side === side.key) r.got = false;
-  toSpawn(w, p);
   ev(w, { type: "escaped", id: p.id, side: side.key, escapes: side.escapes });
-  ev(w, { type: "respawn", id: p.id, x: p.x, y: p.y, why: "escaped" });
+  finish(w, "escaped");
 }
 
 function hustle(w) {
@@ -305,7 +299,7 @@ function tick(w) {
       ev(w, { type: "battery", i, id: p.id });
     }
     const ex = w.house.exitT.x + 0.5, ey = w.house.exitT.y + 0.5;
-    if (side.open && Math.hypot(ex - p.x, ey - p.y) < core.EXIT_R) { escape(w, p); scored = true; }
+    if (side.open && Math.hypot(ex - p.x, ey - p.y) < core.EXIT_R) { escape(w, p); return; }
   }
   w.pulses.forEach((q) => { q.t -= DT; });
   w.pulses = w.pulses.filter((q) => q.t > 0);

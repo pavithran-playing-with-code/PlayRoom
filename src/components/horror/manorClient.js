@@ -8,7 +8,7 @@
 //     each new report so ten updates a second look like motion;
 //   - what the server says happened — relics taken, gates opening, who was
 //     caught, who got out — turned into sounds and a line of text;
-//   - doors and lockers: Use acts here at once (so a door you open lets you
+//   - doors and hiding spots: Use acts here at once (so a door you open lets you
 //     straight through) and asks the server, which has the last word — the
 //     door states in every tick put any disagreement right;
 //   - the scares, which are this phone's alone and change nothing.
@@ -16,7 +16,7 @@
 // No React and no DOM; ManorGame.jsx draws it and wires the socket.
 import {
   unpackWalls, newBody, stepBody, jumpBody, litBody, HURDLE, FLOOR, DOOR,
-  actionAt, ACTION_LABEL, hideIn, leaveLocker, unstick,
+  actionAt, ACTION_LABEL, hideIn, leaveLocker, unstick, roomAt, spotKind, ROOM_KINDS,
 } from "./manorCore.mjs";
 import { AMBIENT, hints as hintsFor, say, scareStep } from "./manorSim.js";
 
@@ -51,6 +51,7 @@ export function createClient(init, now = Date.now()) {
     mode: init.mode, you: init.you, role: me ? "player" : "spectator", code: init.code,
     N, g, obst, env: { g, N, obst, doors: new Set(doorList) }, exitT: init.house.exitT,
     doorList, pend: new Map(),            // door tile -> until when our own change stands
+    rooms: init.house.rooms || [],
     sides, players, mySide, body,
     relics: init.house.relics.map(([x, y, side, got]) => ({
       x, y, side, got: !!got, color: sides.get(side)?.color, mine: init.mode === "coop" || side === mySide,
@@ -127,6 +128,8 @@ export function applyTick(c, m, now = Date.now()) {
       if (e.id === c.you) { snd("caught"); if (e.cause === "locker") say(c, "The locker door creaks open...", 2000); }
       else say(c, e.cause === "left" ? `${nameOf(c, e.id)} ran out of the house.`
         : e.cause === "locker" ? `${nameOf(c, e.id)} was dragged out of a locker.` : `${nameOf(c, e.id)} was taken.`, 3500);
+    } else if (e.type === "gaveup" && e.id === c.you) {
+      say(c, "It gives up and drifts away...", 3000);
     } else if (e.type === "door" && e.id !== c.you) {
       // someone else's door, or a ghost's: louder the nearer it is
       const at = c.body, d = Math.hypot(at.x - e.x - 0.5, at.y - e.y - 0.5);
@@ -260,7 +263,7 @@ export function doAction(c, now = Date.now()) {
     hideIn(P, u, null);
     P.hideAt = now;
     sounds.push({ name: "locker" });
-    say(c, "Stay quiet. Do not let it linger near.", 3500);
+    say(c, `You hide ${WHERE[u.kind]}. It cannot find you here.`, 3500);
   } else {
     leaveLocker(P);
     sounds.push({ name: "locker" });
@@ -268,11 +271,16 @@ export function doAction(c, now = Date.now()) {
   return { ask: { code: c.code, act: u.t, x: u.x, y: u.y }, sounds };
 }
 
+const WHERE = { table: "under the table", bed: "under the bed", wardrobe: "in the wardrobe" };
+
+// The room someone is in, by name.
+export const roomNameAt = (c, at) => (at && c.rooms.length ? ROOM_KINDS[c.rooms[roomAt(c.N, at.tx ?? at.x, at.ty ?? at.y)] || 0][0] : "");
+
 // The server's answer to a Use.
 export function actionDone(c, r) {
   if (r.act === "hide") {
     if (!r.ok) { leaveLocker(c.body); say(c, r.why === "taken" ? "Someone is already hiding in there." : "You could not get in.", 2500); }
-    else if (r.seen) say(c, "It saw you hide. Hold on, or run...", 3500);
+    else if (r.seen) say(c, "It saw you hide. Stay still — it will give up.", 3500);
   } else if ((r.act === "open" || r.act === "close") && !r.ok && r.x != null) {
     c.pend.delete(Math.floor(r.y) * c.N + Math.floor(r.x));   // the next tick puts it right
   }
@@ -311,7 +319,7 @@ export function viewState(c, now = Date.now()) {
     P = {
       x: src.x, y: src.y, fa: src.fa || 0, jz: src.jz || 0, cr: src.cr || 0,
       noiseR: 0, shake: 0, entering: false, light: w ? w.lit : true, lightOut: 0, bat: 1,
-      hiding: w && w.hiding ? {} : null,
+      hiding: w && w.hiding ? { kind: spotKind(w.tx | 0, w.ty | 0) } : null,
     };
     const ws = w && c.sides.get(w.side);
     exitOpen = !!(ws && ws.open);
@@ -325,7 +333,7 @@ export function viewState(c, now = Date.now()) {
     mode: inIntro(c, now) ? "intro" : scared ? "dead" : "play",
     introT: Math.max(0, (SHOW_MAP_MS - (now - c.startLocal)) / 1000),
     deadT: scared ? (now - c.deadAt) / 1000 : 0,
-    N: c.N, g: c.g, obst: c.obst, exitT: c.exitT,
+    N: c.N, g: c.g, obst: c.obst, exitT: c.exitT, rooms: c.rooms,
     relics: mine, cells: c.cells, pulses: c.pulses, puffs: c.puffs, tm: c.tm, bodies: own ? c.bodies : [],
     // before the first word from the server there are no ghosts yet: a
     // stand-in far away keeps the danger glow and arrows quiet

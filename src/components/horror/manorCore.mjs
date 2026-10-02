@@ -14,20 +14,67 @@
 export const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 export const R = 0.28;                 // a body's radius, in tiles
 export const HURDLE = "h";             // barricade: jump it
-export const BEAM = "w";               // low beam: crouch under it
+export const BEAM = "w";               // low beam: crouch under it (no longer placed: there's no crouch button)
 export const CATCH_R = 0.55;           // this close and it has you
 export const PICK_R = 0.6;             // this close and a relic is yours
 export const EXIT_R = 1.2;             // this close to the far gate and you are out
 
 // What a tile is. Anything but FLOOR stops a body and blocks sight; a ghost
-// can path through a DOOR (it stops to open it), never through a LOCKER.
+// can path through a DOOR (it stops to open it), never through a SPOT.
 export const FLOOR = 0;
 export const WALL = 1;
 export const DOOR = 2;                 // a closed door. Open, its tile is FLOOR again.
-export const LOCKER = 3;               // a locker set into a wall: step in and hide
+export const SPOT = 3;                 // furniture to hide in: a table, a bed or a wardrobe
 
-export const SNOOP_R = 2.2;            // a ghost this near your locker is snooping
-export const SNOOP_MAX = 3;            // seconds of snooping before it opens the door
+// Which piece of furniture a hiding spot is — from where it stands, so every
+// phone in a room agrees without being told.
+export const SPOT_KINDS = ["table", "bed", "wardrobe"];
+export const spotKind = (x, y) => SPOT_KINDS[(x * 7 + y * 13) % 3];
+
+export const SNIFF_S = 3;              // a ghost that saw you hide searches the spot this long, then gives up
+
+// Rooms have names, and each its own wall colour, so the map gives
+// directions ("through the Library to the Chapel") and you can tell where you
+// are by looking. The first room is always the Entrance Hall.
+// [name, short name for the map, wall colour]
+export const ROOM_KINDS = [
+  ["Entrance Hall", "Hall", [120, 92, 66]],
+  ["Kitchen", "Kitchen", [150, 140, 120]],
+  ["Library", "Library", [70, 104, 74]],
+  ["Chapel", "Chapel", [108, 82, 140]],
+  ["Nursery", "Nursery", [156, 102, 124]],
+  ["Study", "Study", [118, 82, 56]],
+  ["Ballroom", "Ballroom", [150, 124, 68]],
+  ["Cellar", "Cellar", [86, 86, 96]],
+  ["Dining Room", "Dining", [136, 62, 58]],
+  ["Bedroom", "Bedroom", [86, 98, 142]],
+  ["Bathroom", "Bath", [92, 140, 146]],
+  ["Gallery", "Gallery", [138, 112, 98]],
+  ["Parlour", "Parlour", [126, 72, 102]],
+  ["Attic", "Attic", [112, 98, 78]],
+  ["Music Room", "Music", [80, 72, 128]],
+  ["Pantry", "Pantry", [130, 116, 80]],
+  ["Armoury", "Armoury", [94, 98, 104]],
+  ["Greenhouse", "Garden", [74, 126, 78]],
+  ["Laundry", "Laundry", [120, 128, 140]],
+  ["Crypt", "Crypt", [72, 76, 72]],
+  ["Playroom", "Toys", [158, 124, 62]],
+  ["Guest Room", "Guest", [104, 122, 98]],
+  ["Workshop", "Shop", [128, 96, 68]],
+  ["Wine Cellar", "Wine", [100, 50, 66]],
+  ["Servants' Hall", "Servants", [104, 92, 84]],
+];
+
+// rooms[k] (k = j·RN + i, the room in column i, row j) -> an index into ROOM_KINDS
+export function nameRooms(RN, rand) {
+  const rest = shuffle(ROOM_KINDS.map((_, i) => i).slice(1), rand);
+  return Array.from({ length: RN * RN }, (_, k) => (k === 0 ? 0 : rest[(k - 1) % rest.length]));
+}
+// Which room a point is in (walls belong to the room on the low side).
+export function roomAt(N, x, y) {
+  const RN = (N - 1) / 8, cl = (v) => Math.min(RN - 1, Math.max(0, Math.floor((v - 0.5) / 8)));
+  return cl(y) * RN + cl(x);
+}
 
 // Park-Miller, the same generator as games/seededRand.js.
 export function rng(seed) {
@@ -48,12 +95,13 @@ export function shuffle(arr, rand) {
 // Rooms, not a maze: a grid of 7×7 rooms (8 tiles apart, walls shared), each
 // joined to its neighbours by a one-tile doorway. A random tree of doorways
 // makes every room reachable; extra ones make loops to run round. About half
-// the doorways have a door, starting shut. Each room gets a little furniture
-// (single blocks, never in front of a doorway) and a couple of lockers set
-// into its walls. Barricades and beams go only in open doorways.
+// the doorways have a door, starting shut. Each room gets a block or two of
+// furniture (never in front of a doorway) and a hiding spot or two — a
+// table, a bed or a wardrobe standing in the room. Barricades go only in
+// open doorways.
 //
-// N must be 1 + 8·rooms-per-side. Returns { g, doors, gaps, lockers }:
-// doors and gaps are tile indices (y·N + x), lockers are [x, y].
+// N must be 1 + 8·rooms-per-side. Returns { g, doors, gaps, spots }:
+// doors and gaps are tile indices (y·N + x), spots are [x, y].
 
 export const ROOM = 8;
 export const houseSize = (rooms) => 1 + ROOM * rooms;
@@ -62,7 +110,7 @@ export function genHouse(N, rand) {
   const RN = (N - 1) / ROOM;
   for (let tries = 0; ; tries++) {
     const g = Array.from({ length: N }, () => Array(N).fill(WALL));
-    const doors = [], gaps = [], lockers = [];
+    const doors = [], gaps = [], spots = [];
     for (let j = 0; j < RN; j++) for (let i = 0; i < RN; i++) {
       for (let y = 1 + ROOM * j; y < ROOM + ROOM * j; y++) for (let x = 1 + ROOM * i; x < ROOM + ROOM * i; x++) g[y][x] = FLOOR;
     }
@@ -100,7 +148,7 @@ export function genHouse(N, rand) {
     // furniture, except on the last try, which is bare and always connected
     if (tries < 39) {
       for (let j = 0; j < RN; j++) for (let i = 0; i < RN; i++) {
-        const n = 2 + ((rand() * 3) | 0);
+        const n = 1 + ((rand() * 2) | 0);
         for (let k = 0; k < n; k++) {
           const x = 2 + ROOM * i + ((rand() * 5) | 0), y = 2 + ROOM * j + ((rand() * 5) | 0);
           if (!clear.has(y * N + x) && !(x < 4 && y < 4)) g[y][x] = WALL;
@@ -108,15 +156,18 @@ export function genHouse(N, rand) {
       }
     }
 
-    // lockers: in a stretch of plain wall, not beside a doorway or another locker
-    for (let j = 0; j < RN; j++) for (let i = 0; i < RN; i++) for (let k = 0; k < 2; k++) {
-      const sd = (rand() * 4) | 0, o = 1 + ((rand() * 5) | 0);
-      let x, y, ax = 0, ay = 0;
-      if (sd < 2) { x = ROOM * i + (sd ? ROOM : 0); y = 1 + ROOM * j + o; ay = 1; }
-      else { y = ROOM * j + (sd === 3 ? ROOM : 0); x = 1 + ROOM * i + o; ax = 1; }
-      if ((x === 0 && y === 1) || g[y][x] !== WALL || g[y - ay][x - ax] !== WALL || g[y + ay][x + ax] !== WALL) continue;
-      g[y][x] = LOCKER;
-      lockers.push([x, y]);
+    // hiding spots: furniture standing in the room, with floor around it,
+    // never in front of a doorway or in the first corner
+    for (let j = 0; j < RN; j++) for (let i = 0; i < RN; i++) {
+      const want = j === 0 && i === 0 ? 1 : 2;
+      for (let k = 0, put = 0; k < 8 && put < want; k++) {
+        const x = 2 + ROOM * i + ((rand() * 5) | 0), y = 2 + ROOM * j + ((rand() * 5) | 0);
+        if (clear.has(y * N + x) || (x < 4 && y < 4) || g[y][x] !== FLOOR) continue;
+        if (D4.some(([a, b]) => g[y + b][x + a] === SPOT)) continue;
+        g[y][x] = SPOT;
+        spots.push([x, y]);
+        put++;
+      }
     }
 
     // every floor tile must be reachable from the start (furniture can wall a
@@ -124,7 +175,7 @@ export function genHouse(N, rand) {
     const d = dmap(g, N, 1, 1);
     let ok = true;
     for (let y = 0; y < N && ok; y++) for (let x = 0; x < N; x++) if (g[y][x] === FLOOR && d[x + y * N] < 0) { ok = false; break; }
-    if (ok || tries >= 39) return { g, doors, gaps, lockers };
+    if (ok || tries >= 39) return { g, doors, gaps, spots };
   }
 }
 
@@ -191,15 +242,14 @@ export function farGate(g, N, d0, cells) {
   return { far, exitT: far[0] === N - 2 ? { x: N - 1, y: far[1] } : { x: far[0], y: N - 1 } };
 }
 
-// Barricades and beams, alternating, in about two in three open doorways —
-// never one listed in `avoid` ("x,y"), nor the first room's own.
+// Barricades to jump, in about half the open doorways — never one listed in
+// `avoid` ("x,y").
 export function gapObstacles(gaps, N, rand, avoid = new Set()) {
   const obst = {};
-  let on = 0;
   for (const k of gaps) {
     const x = k % N, y = (k / N) | 0;
     if (avoid.has(`${x},${y}`)) continue;
-    if (rand() < 0.65) { obst[k] = on % 2 ? BEAM : HURDLE; on++; }
+    if (rand() < 0.5) obst[k] = HURDLE;
   }
   return obst;
 }
@@ -217,7 +267,7 @@ export function newBody(x, y, fa = 0) {
   return {
     x, y, fa, jz: 0, vz: 0, cr: 0, crouch: false, stam: 1, stamCool: 0, runOn: false,
     noiseR: 0, noiseT: 0, stepT: 0, shake: 0, bat: 1, light: true, lightOut: 0,
-    entering: false, lastTile: -1, hiding: null, snoop: 0,
+    entering: false, lastTile: -1, hiding: null,
   };
 }
 
@@ -259,9 +309,9 @@ export function stepBody(p, env, inp, dt, emit) {
 
   const wantRun = (inp.shift || p.runOn) && moving;
   const run = wantRun && p.stam > 0 && p.stamCool <= 0 && p.cr < 0.5;
-  if (run) { p.stam = Math.max(0, p.stam - dt * 0.22); if (p.stam === 0) p.stamCool = 1; }
+  if (run) { p.stam = Math.max(0, p.stam - dt * 0.18); if (p.stam === 0) p.stamCool = 1; }
   else { p.stamCool -= dt; if (!wantRun || p.stamCool > 0) p.stam = Math.min(1, p.stam + dt * (moving ? 0.2 : 0.4)); }
-  const sp = p.cr > 0.5 ? 1.7 : run ? 5.4 : 3;
+  const sp = p.cr > 0.5 ? WALK_SPEED * 0.6 : run ? RUN_SPEED : WALK_SPEED;
 
   if (moving) {
     const f = -iy, sd = ix, c = Math.cos(p.fa), n = Math.sin(p.fa);
@@ -278,14 +328,18 @@ export function stepBody(p, env, inp, dt, emit) {
   return moving;
 }
 
-// The fastest anyone can legitimately cover ground: a sprint (5.4 tiles/s)
-// plus slack for jitter. The server refuses reported moves faster than this.
-export const MAX_SPEED = 6.2;
+// Tiles a second. Slow enough to steer on a phone; a run still outpaces a
+// hunting ghost (ghostSpeed tops out at 3).
+export const WALK_SPEED = 2.3;
+export const RUN_SPEED = 4.2;
+// The fastest anyone can legitimately cover ground: a sprint plus slack for
+// jitter. The server refuses reported moves faster than this.
+export const MAX_SPEED = RUN_SPEED + 0.8;
 
-// ── doors and lockers ────────────────────────────────────────────────────────
+// ── doors and hiding spots ───────────────────────────────────────────────────
 // What "Use" would do right now: the tile a step in front of you. A shut door
-// opens, an open one closes (unless someone is standing in it), a locker
-// takes you in, and in a locker Use lets you out. `blockers`: other bodies
+// opens, an open one closes (unless someone is standing in it), a hiding spot
+// takes you in, and hidden, Use lets you out. `blockers`: other bodies
 // and ghosts, [{ x, y }], that a door must not close on.
 
 const inTile = (b, tx, ty) => Math.abs(b.x - tx - 0.5) < 0.52 + R && Math.abs(b.y - ty - 0.5) < 0.52 + R;
@@ -297,7 +351,7 @@ export function actionAt(env, p, blockers = []) {
   const row = env.g[ty];
   if (!row || tx < 0 || tx >= env.N) return null;
   const v = row[tx];
-  if (v === LOCKER) return { t: "hide", x: tx, y: ty };
+  if (v === SPOT) return { t: "hide", x: tx, y: ty, kind: spotKind(tx, ty) };
   if (v === DOOR) return { t: "open", x: tx, y: ty };
   if (v === FLOOR && env.doors && env.doors.has(ty * env.N + tx) && !inTile(p, tx, ty) &&
       !blockers.some((b) => b && inTile(b, tx, ty))) return { t: "close", x: tx, y: ty };
@@ -319,11 +373,10 @@ export function watcher(ghosts, env, p, id) {
   return null;
 }
 
-// Into the locker at u = { x, y }, facing out. `seenBy`: the ghost that
-// watched you go in, if one did — it will come straight for the locker.
+// Into the hiding spot at u = { x, y }, facing out. `seenBy`: the ghost that
+// watched you go in, if one did — it will come and search the spot.
 export function hideIn(p, u, seenBy) {
-  p.hiding = { x: u.x, y: u.y, bx: p.x, by: p.y, bfa: p.fa, ghost: seenBy || null };
-  p.snoop = 0;
+  p.hiding = { x: u.x, y: u.y, kind: spotKind(u.x, u.y), bx: p.x, by: p.y, bfa: p.fa, ghost: seenBy || null };
   p.fa = Math.atan2(p.y - (u.y + 0.5), p.x - (u.x + 0.5));
   p.x = u.x + 0.5;
   p.y = u.y + 0.5;
@@ -336,29 +389,15 @@ export function leaveLocker(p) {
   if (!h) return;
   p.x = h.bx; p.y = h.by; p.fa = h.bfa;
   p.hiding = null;
-  p.snoop = 0;
-}
-
-// A ghost lingering by your locker wears your nerve down; three seconds of it
-// (much less if it saw you get in) and it opens the door. Returns true then.
-export function snoopStep(p, ghosts, dt) {
-  if (!p.hiding) return false;
-  let gd = Infinity;
-  for (const G of ghosts) gd = Math.min(gd, Math.hypot(G.x - p.x, G.y - p.y));
-  if (gd < SNOOP_R) {
-    p.snoop += dt * (p.hiding.ghost ? 4 : 1);
-    return p.snoop > SNOOP_MAX;
-  }
-  p.snoop = Math.max(0, p.snoop - dt * 0.5);
-  return false;
 }
 
 // ── the thing ────────────────────────────────────────────────────────────────
 // A ghost patrols, hears noise, and hunts anyone it can see. On first sight it
 // freezes for a beat — the warning — then comes. `hustle` adds to its hunting
 // speed as the house empties. A shut door stops it for a moment while it
-// opens it (with a creak you can hear); someone hiding is invisible to it,
-// unless it watched them get in.
+// opens it (with a creak you can hear). Someone hiding is safe: it can't see
+// or catch them. If it watched them hide it comes and searches the spot for
+// a few seconds — frightening, not fatal — then gives up.
 
 export function newGhost(x, y) {
   return { stun: 0, x, y, st: "patrol", tx: 0, ty: 0, dm: null, wait: 0, lose: 0, rt: 0, prey: null };
@@ -373,32 +412,43 @@ export function ghostPatrol(G, env, rand) {
   ghostTarget(G, env, c[0], c[1]);
 }
 
-// Can it see this body? 6 tiles with the torch on, 2.2 without, less again
-// crouched, and only along a clear line. Never someone in a locker.
+// Can it see this body? 5 tiles with the torch on, 2 without, less again
+// crouched, and only along a clear line. Never someone hiding.
 export function ghostSees(G, env, t) {
   if (t.hid) return false;
   const d = Math.hypot(t.x - G.x, t.y - G.y);
-  return d < (t.lit ? 6 : 2.2) * (t.cr > 0.5 ? 0.7 : 1) && los(env.g, G.x, G.y, t.x, t.y);
+  return d < (t.lit ? 5 : 2) * (t.cr > 0.5 ? 0.7 : 1) && los(env.g, G.x, G.y, t.x, t.y);
 }
 
 export function ghostSpeed(G, hustle = 0) {
   if (G.stun > 0) return 0;
-  if (G.st === "hunt") return Math.min(3.4, 2.5 + hustle);
-  return G.st === "search" ? 2.1 : 1.4;
+  if (G.st === "hunt") return Math.min(3, 2.2 + hustle);
+  return G.st === "search" ? 1.8 : 1.2;
 }
 
 // One step of one ghost. `targets`: the living, [{ id, x, y, lit, cr, noiseR,
 // hid }] — `hid` is the body's `hiding` while it is in a locker.
-// `emit(name, extra)` hears "spotted", "lost" and "door" ({ x, y }: it opened
-// one). Returns the id of whoever it caught this step, or null.
+// `emit(name, extra)` hears "spotted", "lost", "door" ({ x, y }: it opened
+// one) and "gaveup" ({ id }: it searched a hiding spot and found nothing).
+// Returns the id of whoever it caught this step, or null.
 export function stepGhost(G, env, targets, dt, rand, hustle, emit) {
   if (G.stun > 0) G.stun -= dt;
 
-  // it watched someone get into a locker: it goes to the locker door
+  // it watched someone hide: it goes to the spot, searches, and gives up
   for (const t of targets) {
     if (!t.hid || t.hid.ghost !== G) continue;
-    G.st = "hunt"; G.prey = t.id; G.lose = 0; G.rt -= dt;
-    if (G.rt <= 0) { ghostTarget(G, env, t.hid.bx | 0, t.hid.by | 0); G.rt = 0.5; }
+    G.st = "hunt"; G.prey = t.id; G.lose = 0;
+    if (Math.hypot(G.x - t.hid.bx, G.y - t.hid.by) < 1.2) {
+      G.sniff = (G.sniff || 0) + dt;
+      if (G.sniff > SNIFF_S) {
+        t.hid.ghost = null; G.sniff = 0;
+        G.st = "search"; G.wait = 0; G.prey = null;
+        emit("gaveup", { id: t.id });
+      }
+    } else {
+      G.rt -= dt;
+      if (G.rt <= 0) { ghostTarget(G, env, t.hid.bx | 0, t.hid.by | 0); G.rt = 0.5; }
+    }
   }
 
   let seen = null, seenD = Infinity;
@@ -470,22 +520,24 @@ export function stepGhost(G, env, targets, dt, rand, hustle, emit) {
 // sorted by distance, then dealt in snake order (1,2,3,3,2,1,…), so nobody
 // gets all the near ones.
 
-// The house grows with the crowd: 3×3 rooms alone, up to 6×6 for eight.
+// The house grows with the crowd, but stays small enough to learn: 3×3
+// rooms for up to three, 4×4 up to six, 5×5 for more.
 export function sizeFor(players) {
   const n = Math.max(1, players);
-  return houseSize(n <= 1 ? 3 : n <= 3 ? 4 : n <= 6 ? 5 : 6);
+  return houseSize(n <= 3 ? 3 : n <= 6 ? 4 : 5);
 }
 export const ghostsFor = (players) => (players >= 7 ? 3 : players >= 4 ? 2 : 1);
 
 export function buildHouse(seed, { players, sides }) {
   const rand = rng((Number(seed) || 1) * 7 + 99991);
   const N = sizeFor(players);
-  const { g, doors, gaps, lockers } = genHouse(N, rand);
+  const { g, doors, gaps, spots: hideSpots } = genHouse(N, rand);
   const doorways = new Set([...doors, ...gaps]);
   const d0 = dmap(g, N, 1, 1);
   const cells = shuffle(roomFloors(g, N, doorways), rand);
   const { exitT } = farGate(g, N, d0, cells);
-  g[exitT.y][exitT.x] = WALL;                          // never a locker
+  g[exitT.y][exitT.x] = WALL;
+  const rooms = nameRooms((N - 1) / ROOM, rand);
   const taken = new Set(["1,1", "2,1", "1,2"]);
   const key = (c) => `${c[0]},${c[1]}`;
 
@@ -546,13 +598,13 @@ export function buildHouse(seed, { players, sides }) {
 
   return {
     N, g, exitT, relics, batts, obst, ghosts, doors,
-    lockers: lockers.filter(([x, y]) => g[y][x] === LOCKER),
+    spots: hideSpots, rooms,
     spawn: { x: 1.5, y: 1.5 }, rand,
   };
 }
 
 // The house as a string of rows, for sending: '#' wall, '.' floor, 'D' a
-// shut door, 'L' a locker. Which doorways have doors travels separately.
+// shut door, 'L' a hiding spot. Which doorways have doors travels separately.
 const CH = [".", "#", "D", "L"];
 export const packWalls = (g) => g.map((r) => r.map((v) => CH[v] || "#").join("")).join("/");
 export const unpackWalls = (s) => s.split("/").map((r) => [...r].map((ch) => { const v = CH.indexOf(ch); return v < 0 ? WALL : v; }));

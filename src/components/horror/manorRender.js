@@ -3,9 +3,10 @@
 // for everything in them, a minimap, and the full-screen moments (the map you
 // memorise at the start, the thing's face when it gets you).
 //
-// Reads the sim and never writes to it. The map shows the whole house: every
-// room, the doors (brown while shut) and lockers (teal), the relics, and the
-// demons wherever they are.
+// Reads the sim and never writes to it. The map is for finding your way:
+// every room with its name, the doors, the relics, the way out, you, your
+// friends, and the demons wherever they are — nothing else. Tap it for a big
+// one. Each room has its own wall colour, so you can tell where you are.
 //
 // The same picture serves solo and online. What it reads from `s`:
 //   P        the body whose eyes we look through (x, y, fa, jz, cr, light...)
@@ -14,9 +15,11 @@
 //   others   other players, online: [{ x, y, color, name, lit, cr, jz }]
 //   exitOpen whether the far gate is open to you (solo: all relics taken)
 //   bodies   the scare: bodies dropping from the ceiling, [{ x, y, t }]
+//   rooms    which ROOM_KINDS each room is (names and wall colours)
 // and a relic may carry a `color` (whose it is) and `mine: false`. P.hiding
-// means we are looking out through the slats of a locker.
-import { HURDLE, BEAM, DOOR, LOCKER, litBody } from "./manorCore.mjs";
+// ({ kind }) means we are looking out from under a table or bed, or through
+// the slats of a wardrobe.
+import { HURDLE, BEAM, DOOR, SPOT, ROOM_KINDS, roomAt, spotKind, litBody } from "./manorCore.mjs";
 import { dangerOf } from "./manorSim.js";
 
 const GOLD = "255,220,160";
@@ -43,78 +46,177 @@ export function lookBy(body, dx, dy) {
 }
 const PLANE = 0.65;                    // camera plane: ~66° field of view
 
-export function drawGhost(ctx, x, y, s, angry) {
+// The thing: a tall hooded shroud, pale where the torch catches it, ragged
+// at the hem and fading to nothing; in the hood, only darkness and two
+// burning eyes — red when it is hunting. Its sleeves reach for you when it
+// hunts. `s` is its height on screen.
+export function drawGhost(ctx, x, y, s, angry, t = 0) {
   ctx.save();
   ctx.translate(x, y);
-  const gr = ctx.createRadialGradient(0, -s * 0.1, s * 0.05, 0, 0, s * 0.7);
-  gr.addColorStop(0, "#f3efe4");
-  gr.addColorStop(1, "#8f8895");
-  ctx.fillStyle = gr;
+  const aura = ctx.createRadialGradient(0, -s * 0.1, s * 0.05, 0, -s * 0.1, s * 0.75);
+  aura.addColorStop(0, angry ? "rgba(170,20,40,.3)" : "rgba(150,160,190,.2)");
+  aura.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = aura;
+  ctx.fillRect(-s, -s, s * 2, s * 1.7);
+
+  const cloth = (y0, y1) => {
+    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    g.addColorStop(0, "#e4ded2");
+    g.addColorStop(0.45, "#a39cab");
+    g.addColorStop(1, "rgba(90,84,104,0)");
+    return g;
+  };
+
+  // sleeves: hanging at its sides, lifted towards you when it hunts
+  const reach = angry ? 1 : 0, sway = Math.sin(t * 2.1) * s * 0.015;
+  for (const side of [-1, 1]) {
+    const sx = side * s * 0.16, sy = -s * 0.3;
+    const ex = side * s * (0.3 + 0.08 * reach), ey = s * (0.12 - 0.3 * reach) + sway;
+    ctx.fillStyle = cloth(sy, s * 0.3);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.quadraticCurveTo(side * s * 0.34, sy + s * 0.05, ex + side * s * 0.05, ey);
+    ctx.lineTo(ex - side * s * 0.07, ey + s * 0.03);
+    ctx.quadraticCurveTo(side * s * 0.18, -s * 0.1, sx - side * s * 0.04, -s * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    // bony fingers out of the cuff
+    ctx.strokeStyle = "#2a2420";
+    ctx.lineWidth = Math.max(1, s * 0.012);
+    ctx.lineCap = "round";
+    for (let f = -1; f <= 1; f++) {
+      ctx.beginPath();
+      ctx.moveTo(ex, ey + s * 0.02);
+      ctx.lineTo(ex + side * s * 0.03 + f * s * 0.02, ey + s * (reach ? -0.02 : 0.08) + Math.abs(f) * s * 0.01);
+      ctx.stroke();
+    }
+  }
+
+  // the shroud
+  ctx.fillStyle = cloth(-s * 0.62, s * 0.52);
   ctx.beginPath();
-  ctx.arc(0, -s * 0.1, s * 0.4, Math.PI, 0);
-  const w = 6;
-  for (let i = 0; i <= w; i++) ctx.lineTo(s * 0.4 - i * (s * 0.8 / w), s * 0.45 + (i % 2 ? s * 0.1 : 0));
-  ctx.closePath();
+  ctx.moveTo(0, -s * 0.62);
+  ctx.bezierCurveTo(s * 0.19, -s * 0.62, s * 0.23, -s * 0.44, s * 0.2, -s * 0.28);
+  ctx.lineTo(s * 0.3, s * 0.44);
+  const rags = 8;
+  for (let i = 0; i <= rags; i++) {
+    const fx = s * 0.3 - (i * s * 0.6) / rags, wave = Math.sin(t * 3 + i * 1.7) * s * 0.03;
+    ctx.lineTo(fx, s * (i % 2 ? 0.36 : 0.52) + wave);
+  }
+  ctx.lineTo(-s * 0.2, -s * 0.28);
+  ctx.bezierCurveTo(-s * 0.23, -s * 0.44, -s * 0.19, -s * 0.62, 0, -s * 0.62);
   ctx.fill();
-  ctx.shadowColor = "#c81e3a";
-  ctx.shadowBlur = angry ? s * 0.25 : 0;
-  ctx.fillStyle = angry ? "#e0203f" : "#0a0a0a";
+  // folds
+  ctx.strokeStyle = "rgba(60,54,70,.35)";
+  ctx.lineWidth = Math.max(1, s * 0.012);
+  for (const fx of [-0.1, 0.02, 0.13]) {
+    ctx.beginPath();
+    ctx.moveTo(s * fx * 0.7, -s * 0.2);
+    ctx.quadraticCurveTo(s * fx * 1.2, s * 0.1, s * fx * 1.7, s * 0.4);
+    ctx.stroke();
+  }
+
+  // the hood: a black hollow where a face should be
+  const hollow = ctx.createRadialGradient(0, -s * 0.37, s * 0.02, 0, -s * 0.37, s * 0.15);
+  hollow.addColorStop(0, "#000");
+  hollow.addColorStop(0.75, "#0b080e");
+  hollow.addColorStop(1, "rgba(30,24,36,.0)");
+  ctx.fillStyle = hollow;
   ctx.beginPath();
-  ctx.ellipse(-s * 0.15, -s * 0.12, s * 0.07, s * 0.11, 0, 0, TAU);
-  ctx.ellipse(s * 0.15, -s * 0.12, s * 0.07, s * 0.11, 0, 0, TAU);
+  ctx.ellipse(0, -s * 0.37, s * 0.12, s * 0.16, 0, 0, TAU);
   ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = "#0a0a0a";
+  ctx.strokeStyle = "rgba(240,234,224,.5)";          // the lit rim of the hood
+  ctx.lineWidth = Math.max(1, s * 0.012);
   ctx.beginPath();
-  ctx.ellipse(0, s * 0.16, s * 0.09, s * (angry ? 0.17 : 0.12), 0, 0, TAU);
-  ctx.fill();
+  ctx.ellipse(0, -s * 0.37, s * 0.125, s * 0.165, 0, Math.PI * 1.05, Math.PI * 1.95);
+  ctx.stroke();
+  ctx.restore();
+  ghostEyes(ctx, x, y, s, angry, t);
+}
+
+// Its eyes alone — drawn at full strength even when the rest of it is lost
+// in the dark, so you always see them first.
+export function ghostEyes(ctx, x, y, s, angry, t = 0) {
+  const glow = 0.75 + 0.25 * Math.sin(t * 9);
+  ctx.save();
+  ctx.shadowColor = angry ? "#ff1e3c" : "#fff3c0";
+  ctx.shadowBlur = s * 0.06;
+  ctx.fillStyle = angry ? `rgba(255,40,60,${glow})` : `rgba(255,240,200,${glow * 0.8})`;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(x + side * s * 0.042, y - s * 0.355, s * 0.022, s * (angry ? 0.013 : 0.009), side * 0.25, 0, TAU);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
-// The map. While you memorise it (intro) it also marks the barricades and
-// beams; in play it shows every road, the relics, the batteries, the gate,
-// you, everyone else, and wherever the demons are — but not the obstacles.
-function mini(ctx, s, x0, y0, size, intro, t) {
-  const { N, g, relics, cells, obst, exitT, P } = s;
-  const c = size / N;
-  ctx.fillStyle = "rgba(0,0,0,.7)";
+// Where the small map sits, and how big: shared with the pages, which open
+// the big map when you tap it.
+export function mapRect(view) {
+  const { W, H, safeTop = 0 } = view;
+  const size = Math.min(170, Math.min(W, H) * 0.42);
+  return { x0: W - size - 14, y0: 16 + safeTop, size };
+}
+
+const roomOf = (s, k) => ROOM_KINDS[(s.rooms && s.rooms[k]) || 0];
+
+// The map: rooms (each faintly its own colour, with its name), doors, the
+// relics, the way out, you, your friends and the demons. Nothing else — no
+// furniture, no barricades, no batteries.
+function mini(ctx, s, x0, y0, size, intro, t, big = false) {
+  const { N, g, relics, exitT, P } = s;
+  const c = size / N, RN = (N - 1) / 8;
+  ctx.fillStyle = big ? "rgba(5,4,8,.92)" : "rgba(0,0,0,.72)";
   ctx.fillRect(x0 - 5, y0 - 5, size + 10, size + 10);
+  // floors, tinted by room
+  for (let j = 0; j < RN; j++) for (let i = 0; i < RN; i++) {
+    const [r, gg, b] = roomOf(s, j * RN + i)[2];
+    ctx.fillStyle = `rgb(${(110 + r * 0.25) | 0},${(92 + gg * 0.25) | 0},${(66 + b * 0.25) | 0})`;
+    ctx.fillRect(x0 + (1 + i * 8) * c, y0 + (1 + j * 8) * c, 7 * c + 0.5, 7 * c + 0.5);
+  }
+  // walls; open doorways show as floor; shut doors as a bar in the wall
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
       const v = g[y][x];
-      ctx.fillStyle = v === LOCKER ? "#4fb3b3" : v ? "#2b2119" : "#7c6849";
+      if (v === 0 || v === SPOT) {
+        if (x % 8 === 0 || y % 8 === 0) { ctx.fillStyle = "#8a7552"; ctx.fillRect(x0 + x * c, y0 + y * c, c + 0.5, c + 0.5); }
+        continue;
+      }
+      // furniture blocks inside a room are left off: only the room's walls
+      if (v === 1 && x % 8 && y % 8) continue;
+      ctx.fillStyle = "#2b2119";
       ctx.fillRect(x0 + x * c, y0 + y * c, c + 0.5, c + 0.5);
       if (v === DOOR) {
-        // a bar lying along the wall it sits in — a different shape from the
-        // full squares of the obstacles, which are much the same colour
-        const along = !g[y][x - 1] || !g[y][x + 1] ? "v" : "h";   // floor to its sides: an up-and-down wall
-        const t = Math.max(1.5, c * 0.45);
+        const along = !g[y][x - 1] || !g[y][x + 1] ? "v" : "h";
+        const th = Math.max(1.5, c * 0.5);
         ctx.fillStyle = "#c08848";
-        if (along === "v") ctx.fillRect(x0 + x * c + (c - t) / 2, y0 + y * c, t, c + 0.5);
-        else ctx.fillRect(x0 + x * c, y0 + y * c + (c - t) / 2, c + 0.5, t);
+        if (along === "v") ctx.fillRect(x0 + x * c + (c - th) / 2, y0 + y * c, th, c + 0.5);
+        else ctx.fillRect(x0 + x * c, y0 + y * c + (c - th) / 2, c + 0.5, th);
       }
     }
   }
+  // room names
+  const fs = Math.max(7, Math.min(big ? 16 : 10, 7 * c * 0.2));
+  ctx.font = `bold ${fs}px Georgia`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (let j = 0; j < RN; j++) for (let i = 0; i < RN; i++) {
+    const name = roomOf(s, j * RN + i)[big ? 0 : 1];
+    const cx = x0 + (4.5 + i * 8) * c, cy = y0 + (4.5 + j * 8) * c;
+    ctx.fillStyle = "rgba(30,20,12,.55)";
+    ctx.fillText(name, cx, cy, 7 * c - 2);
+  }
+  ctx.textBaseline = "alphabetic";
+
   const bl = 0.6 + 0.4 * Math.sin(t * 5);
   for (const r of relics) {
     if (r.got) continue;
     ctx.fillStyle = `rgba(${r.color ? rgbOf(r.color) : GOLD},${r.mine === false ? 0.45 : bl})`;
     ctx.beginPath();
-    ctx.arc(x0 + r.x * c, y0 + r.y * c, c * (r.mine === false ? 0.6 : 0.9), 0, TAU);
+    ctx.arc(x0 + r.x * c, y0 + r.y * c, Math.max(2.5, c * (r.mine === false ? 0.6 : 0.9)), 0, TAU);
     ctx.fill();
   }
-  for (const q of cells) {
-    if (q.got) continue;
-    ctx.fillStyle = "#8fe3a8";
-    ctx.fillRect(x0 + q.x * c - c * 0.5, y0 + q.y * c - c * 0.5, c, c);
-  }
-  if (intro) {
-    for (const k in obst) {
-      const ox = +k % N, oy = (+k / N) | 0;
-      ctx.fillStyle = obst[k] === HURDLE ? "#e8a13a" : "#a86bd6";
-      ctx.fillRect(x0 + ox * c, y0 + oy * c, c, c);
-    }
-  }
+  // the way out
   ctx.fillStyle = exitOpen(s) ? "#5fd68a" : "#a33";
   ctx.fillRect(x0 + exitT.x * c - c * 0.3, y0 + exitT.y * c - c * 0.3, c * 1.6, c * 1.6);
   // the demons, always, pulsing red (not on the map you memorise: it hasn't moved yet)
@@ -150,9 +252,10 @@ function mini(ctx, s, x0, y0, size, intro, t) {
     ctx.fill();
     ctx.stroke();
   }
+  // you, with the way you're facing
   ctx.fillStyle = "#fff";
   ctx.beginPath();
-  ctx.arc(x0 + P.x * c, y0 + P.y * c, Math.max(2.5, c * 1.1), 0, TAU);
+  ctx.arc(x0 + P.x * c, y0 + P.y * c, Math.max(3, c * 1.1), 0, TAU);
   ctx.fill();
   ctx.strokeStyle = "#fff";
   ctx.lineWidth = 1.5;
@@ -160,6 +263,12 @@ function mini(ctx, s, x0, y0, size, intro, t) {
   ctx.moveTo(x0 + P.x * c, y0 + P.y * c);
   ctx.lineTo(x0 + (P.x + Math.cos(P.fa) * 3) * c, y0 + (P.y + Math.sin(P.fa) * 3) * c);
   ctx.stroke();
+  if (!big && !intro) {
+    ctx.fillStyle = "rgba(233,227,211,.55)";
+    ctx.font = "9px Georgia";
+    ctx.textAlign = "right";
+    ctx.fillText("tap for big map", x0 + size, y0 + size + 14);
+  }
 }
 
 // DDA ray from the player to the first wall.
@@ -174,7 +283,7 @@ function cast(s, rx, ry) {
   while (n++ < 64) {
     if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
     if (mx < 0 || my < 0 || mx >= N || my >= N) break;
-    if (g[my][mx]) break;
+    if (g[my][mx] && g[my][mx] !== SPOT) break;
   }
   const pd = side ? sdy - ddy : sdx - ddx, wx = side ? P.x + pd * rx : P.y + pd * ry;
   return { d: Math.max(0.05, pd), side, mx, my, u: wx - Math.floor(wx) };
@@ -188,14 +297,17 @@ function scene(ctx, s, W, H, t) {
   // P.pitch: looking up (positive) or down, as a share of the screen height
   const hz = H / 2 + (P.pitch || 0) * H + (mv ? Math.sin(s.tm * (P.noiseR > 5 ? 14 : 9)) * (P.noiseR > 5 ? 6 : 3) : 0) +
     (P.shake > 0 ? (Math.random() - 0.5) * P.shake * 24 : 0);
-  const eye = 0.5 + P.jz - P.cr * 0.26, L = litBody(P);
+  // hidden under a table or bed you're low on the floor
+  const low = P.hiding && P.hiding.kind !== "wardrobe";
+  const eye = low ? 0.14 : 0.5 + P.jz - P.cr * 0.26, L = litBody(P);
+  const here = s.rooms ? roomOf(s, roomAt(s.N, P.x, P.y))[2] : [60, 44, 30];
   const fl = 0.92 + Math.sin(t * 7) * 0.05 + (Math.random() < 0.02 ? -0.25 * Math.random() : 0);
 
   ctx.fillStyle = "#050507";
   ctx.fillRect(0, 0, W, hz);
   const fg = ctx.createLinearGradient(0, hz, 0, H);
   fg.addColorStop(0, "#000");
-  fg.addColorStop(1, L ? "#241a11" : "#0d0906");
+  fg.addColorStop(1, L ? `rgb(${(here[0] * 0.3) | 0},${(here[1] * 0.3) | 0},${(here[2] * 0.3) | 0})` : "#0d0906");
   ctx.fillStyle = fg;
   ctx.fillRect(0, hz, W, H - hz);
 
@@ -204,16 +316,16 @@ function scene(ctx, s, W, H, t) {
     zb[i] = pd;
     let b = 0.03 + Math.max(0, 1 - pd / 2.2) * (L ? 0.32 : 0.18) +
       (L ? Math.pow(Math.max(0, 1 - pd / 7.5), 1.4) * (1 - Math.abs(cam) * 0.45) * fl : 0);
-    let col = [96, 74, 56];
+    // each room its own colour: the room on our side of the wall we hit
+    let col = s.rooms ? roomOf(s, roomAt(s.N, P.x + (dx + plx * cam) * (pd - 0.02), P.y + (dy + ply * cam) * (pd - 0.02)))[2] : [96, 74, 56];
     const isEx = h.mx === exitT.x && h.my === exitT.y, isEn = h.mx === 0 && h.my === 1;
     const sealed = isEn || (isEx && !exitOpen(s));
     const tv = h.my >= 0 && h.my < s.N && h.mx >= 0 && h.mx < s.N ? s.g[h.my][h.mx] : 1;
-    const plain = !isEx && !isEn && tv !== DOOR && tv !== LOCKER;
+    const plain = !isEx && !isEn && tv !== DOOR;
     if (isEx) { col = exitOpen(s) ? [70, 230, 130] : [200, 40, 50]; b += 0.35 * Math.max(0, 1 - pd / 14); }
     else if (isEn) col = [220, 190, 120];
     else if (tv === DOOR) col = [130, 84, 44];
-    else if (tv === LOCKER) col = [72, 96, 116];
-    else if (((h.mx * 7 + h.my * 13) & 3) === 0) col = [86, 66, 64];
+    else if (((h.mx * 7 + h.my * 13) & 3) === 0) col = col.map((v) => v * 0.88);
     if (h.side) b *= 0.72;
     if (plain && (h.u * 3 % 1) < 0.05) b *= 0.55;
     if (sealed && (h.u * 5 % 1) < 0.35) b *= 0.25;
@@ -237,11 +349,6 @@ function scene(ctx, s, W, H, t) {
           ctx.fillRect(i * cw, ds + lh * 0.5, cw + 1, lh * 0.07);
         }
       }
-    } else if (tv === LOCKER && !isEx && !isEn) {
-      // a locker: vents near the top, a seam down each side
-      ctx.fillStyle = "rgba(0,0,0,.55)";
-      for (let k = 0; k < 4; k++) ctx.fillRect(i * cw, ds + lh * (0.14 + k * 0.045), cw + 1, lh * 0.02);
-      if (h.u < 0.04 || h.u > 0.96) ctx.fillRect(i * cw, ds, cw + 1, lh);
     } else if (plain) {
       ctx.fillStyle = "rgba(0,0,0,.35)";
       for (let k = 1; k < 4; k++) ctx.fillRect(i * cw, ds + lh * k / 4, cw + 1, Math.max(1, lh * 0.015));
@@ -254,6 +361,9 @@ function scene(ctx, s, W, H, t) {
   for (const q of s.pulses) sp.push({ x: q.x, y: q.y, k: "m" });
   for (const q of s.puffs) sp.push({ x: q.x, y: q.y, k: "p", t: q.t });
   for (const q of s.bodies || []) sp.push({ x: q.x, y: q.y, k: "bd", t: q.t });
+  for (const [x, y] of spotsOf(s)) {
+    if (Math.abs(x + 0.5 - P.x) < 12 && Math.abs(y + 0.5 - P.y) < 12) sp.push({ x: x + 0.5, y: y + 0.5, k: "f", kind: spotKind(x, y) });
+  }
   for (const k in s.obst) sp.push({ x: (+k % s.N) + 0.5, y: ((+k / s.N) | 0) + 0.5, k: s.obst[k] });
   for (const c of s.cells) if (!c.got) sp.push({ x: c.x, y: c.y, k: "b" });
   for (const G of ghostsOf(s)) sp.push({ x: G.x, y: G.y, k: "g", G });
@@ -267,7 +377,7 @@ function scene(ctx, s, W, H, t) {
   for (const o of sp) {
     if (o.ty < 0.2 || o.ty > 18) continue;
     const ob = o.k === HURDLE || o.k === BEAM, scr = W / 2 * (1 + o.tx / o.ty), u = H / o.ty;
-    const size = (ob || o.k === "p") ? u : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : o.k === "bd" ? 0.6 : 0.3);
+    const size = (ob || o.k === "p" || o.k === "f") ? u : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : o.k === "bd" ? 0.6 : 0.3);
     const cy = hz + (eye - (o.k === "g" ? 0.5 : o.k === "r" || o.k === "b" ? 0.45 : 0.2)) * u;
     const x0 = Math.max(0, Math.floor((scr - size / 2) / cw)), x1 = Math.min(cols - 1, Math.floor((scr + size / 2) / cw));
     ctx.save();
@@ -279,15 +389,11 @@ function scene(ctx, s, W, H, t) {
     if (o.k === "g") {
       const cam = o.tx / o.ty / PLANE;
       const gb = (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cam) * 0.45) : 0) + Math.max(0, 1 - o.ty / 2.2) * 0.3;
+      const gy = cy + Math.sin(t * 3) * size * 0.03, hunting = o.G.st === "hunt";
       ctx.globalAlpha = Math.min(1, gb * 1.5 + 0.04) * (0.85 + 0.15 * Math.sin(t * 9));
-      drawGhost(ctx, scr, cy + Math.sin(t * 3) * size * 0.03, size * 1.15, o.G.st === "hunt");
+      drawGhost(ctx, scr, gy, size * 1.15, hunting, t);
       ctx.globalAlpha = 1;
-      // its eyes, which you can always see
-      ctx.fillStyle = `rgba(224,32,63,${0.5 + 0.4 * Math.sin(t * 10)})`;
-      ctx.beginPath();
-      ctx.arc(scr - size * 0.17, cy - size * 0.14, size * 0.045, 0, TAU);
-      ctx.arc(scr + size * 0.17, cy - size * 0.14, size * 0.045, 0, TAU);
-      ctx.fill();
+      ghostEyes(ctx, scr, gy, size * 1.15, hunting, t);       // its eyes, which you can always see
     } else if (o.k === "r") {
       const by = cy + Math.sin(t * 2.5 + o.x) * size * 0.15;
       const gr = ctx.createRadialGradient(scr, by, 1, scr, by, size * 1.6);
@@ -317,6 +423,8 @@ function scene(ctx, s, W, H, t) {
       ctx.fillRect(scr - size * 0.2, by - size * 0.35, size * 0.4, size * 0.7);
       ctx.fillStyle = "#e9e3d3";
       ctx.fillRect(scr - size * 0.1, by - size * 0.5, size * 0.2, size * 0.15);
+    } else if (o.k === "f") {
+      drawFurniture(ctx, o, scr, u, hz, eye, L, t);
     } else if (o.k === "bd") {
       // it drops on a rope, swings, and lies there
       const fall = Math.min(1, o.t / 0.35), by = hz + (eye - (0.95 - fall * 0.85)) * u;
@@ -368,6 +476,101 @@ function scene(ctx, s, W, H, t) {
   vg.addColorStop(1, `rgba(${(dg * 90) | 0},0,4,${0.7 + dg * 0.25})`);
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, W, H);
+}
+
+// The hiding spots, from all the tiles marked SPOT (cached per house).
+const spotCache = new WeakMap();
+function spotsOf(s) {
+  if (s.spots) return s.spots;
+  let list = spotCache.get(s.g);
+  if (!list) {
+    list = [];
+    s.g.forEach((row, y) => row.forEach((v, x) => { if (v === SPOT) list.push([x, y]); }));
+    spotCache.set(s.g, list);
+  }
+  return list;
+}
+
+// Furniture you can hide in. Billboards like everything else; heights are in
+// wall units, so they sit on the floor at the right size.
+function drawFurniture(ctx, o, scr, u, hz, eye, L, t) {
+  const cm = o.tx / o.ty / PLANE;
+  const br = Math.min(1, (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cm) * 0.45) : 0) * 1.25 + Math.max(0, 1 - o.ty / 2.2) * 0.3 + 0.07);
+  const rgb = (r, g, b, a = 1) => `rgba(${(r * br) | 0},${(g * br) | 0},${(b * br) | 0},${a})`;
+  const foot = hz + eye * u, Y = (h) => foot - h * u;            // h: height above the floor
+  const w = u * 0.88, x = scr - w / 2;
+  if (o.kind === "table") {
+    // a long cloth to the floor, and the dark gap under it
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    ctx.fillRect(x + w * 0.04, Y(0.06), w * 0.92, u * 0.06);
+    ctx.fillStyle = rgb(60, 40, 26);                               // the legs in the gap
+    ctx.fillRect(x + w * 0.08, Y(0.07), w * 0.04, u * 0.07);
+    ctx.fillRect(x + w * 0.88, Y(0.07), w * 0.04, u * 0.07);
+    const cloth = ctx.createLinearGradient(0, Y(0.42), 0, Y(0.06));
+    cloth.addColorStop(0, rgb(214, 196, 176));
+    cloth.addColorStop(1, rgb(150, 126, 112));
+    ctx.fillStyle = cloth;
+    ctx.beginPath();
+    ctx.moveTo(x, Y(0.42));
+    ctx.lineTo(x + w, Y(0.42));
+    ctx.lineTo(x + w * 1.02, Y(0.08));
+    for (let i = 8; i >= 0; i--) ctx.lineTo(x + (w * i) / 8, Y(i % 2 ? 0.05 : 0.08));   // a scalloped hem
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = rgb(110, 90, 78, 0.7);                       // folds
+    ctx.lineWidth = Math.max(1, u * 0.006);
+    for (const f of [0.2, 0.45, 0.7]) { ctx.beginPath(); ctx.moveTo(x + w * f, Y(0.4)); ctx.lineTo(x + w * (f + 0.03), Y(0.09)); ctx.stroke(); }
+    ctx.fillStyle = rgb(92, 60, 36);                               // the tabletop's edge
+    ctx.fillRect(x - w * 0.02, Y(0.45), w * 1.04, u * 0.035);
+    ctx.fillStyle = rgb(230, 210, 120);                            // a candle, unlit
+    ctx.fillRect(scr - u * 0.015, Y(0.55), u * 0.03, u * 0.1);
+  } else if (o.kind === "bed") {
+    ctx.fillStyle = "rgba(0,0,0,.6)";                              // the dark under the bed
+    ctx.fillRect(x, Y(0.12), w, u * 0.12);
+    ctx.fillStyle = rgb(70, 46, 30);
+    ctx.fillRect(x, Y(0.12), w * 0.04, u * 0.12);
+    ctx.fillRect(x + w * 0.96, Y(0.12), w * 0.04, u * 0.12);
+    ctx.fillStyle = rgb(88, 58, 38);                               // frame
+    ctx.fillRect(x, Y(0.2), w, u * 0.08);
+    ctx.fillStyle = rgb(200, 196, 188);                            // mattress
+    ctx.fillRect(x, Y(0.3), w, u * 0.1);
+    ctx.fillStyle = rgb(120, 40, 52);                              // a heavy blanket, half off
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.35, Y(0.31));
+    ctx.lineTo(x + w, Y(0.31));
+    ctx.lineTo(x + w, Y(0.14));
+    ctx.quadraticCurveTo(x + w * 0.6, Y(0.1), x + w * 0.35, Y(0.16));
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = rgb(226, 222, 212);                            // pillow
+    ctx.beginPath();
+    ctx.ellipse(x + w * 0.17, Y(0.33), w * 0.12, u * 0.04, 0, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = rgb(78, 50, 32);                               // headboard
+    ctx.fillRect(x - w * 0.02, Y(0.62), w * 0.06, u * 0.62);
+    ctx.beginPath();
+    ctx.ellipse(x + w * 0.01, Y(0.62), w * 0.05, u * 0.03, 0, 0, TAU);
+    ctx.fill();
+  } else {
+    // a tall wardrobe: two doors, brass handles, slatted vents
+    const ww = u * 0.7, wx = scr - ww / 2;
+    ctx.fillStyle = rgb(84, 54, 34);
+    ctx.fillRect(wx, Y(0.95), ww, u * 0.95);
+    ctx.fillStyle = rgb(104, 70, 44);
+    ctx.fillRect(wx - ww * 0.04, Y(0.99), ww * 1.08, u * 0.05);    // crown
+    ctx.fillStyle = rgb(40, 26, 16);
+    ctx.fillRect(scr - u * 0.004, Y(0.92), Math.max(1, u * 0.008), u * 0.86);   // the seam between the doors
+    ctx.fillStyle = "rgba(0,0,0,.45)";
+    for (const side of [-1, 1]) {
+      for (let k = 0; k < 5; k++) ctx.fillRect(scr + side * ww * 0.27 - ww * 0.16, Y(0.85 - k * 0.04), ww * 0.32, Math.max(1, u * 0.012));
+    }
+    ctx.fillStyle = rgb(220, 180, 90);
+    ctx.fillRect(scr - u * 0.04, Y(0.5), u * 0.018, u * 0.06);
+    ctx.fillRect(scr + u * 0.022, Y(0.5), u * 0.018, u * 0.06);
+    ctx.fillStyle = rgb(60, 40, 26);
+    ctx.fillRect(wx + ww * 0.05, Y(0.02), ww * 0.08, u * 0.04);    // feet
+    ctx.fillRect(wx + ww * 0.87, Y(0.02), ww * 0.08, u * 0.04);
+  }
 }
 
 function drawObstacle(ctx, s, o, scr, u, hz, eye, L, t) {
@@ -561,14 +764,55 @@ function drawPlayer(ctx, p, scr, hz, eye, u, L, dist, t) {
   ctx.fillText(p.name || "", scr, top - fs * 0.5);
 }
 
-// Inside a locker: dark, but for four slits to look out through.
-function lockerOverlay(ctx, W, H) {
+// The view from a hiding spot. Under a table: the dark underside above, the
+// hem of the cloth hanging across the top of the view, a leg either side.
+// Under a bed: slats and mattress above, bare boards around. In a wardrobe:
+// dark, but for the slits between the slats.
+function hidingOverlay(ctx, W, H, kind, t) {
   ctx.save();
+  if (kind === "wardrobe") {
+    ctx.beginPath();
+    ctx.rect(0, 0, W, H);
+    for (let k = 0; k < 4; k++) ctx.rect(W * 0.12, H * 0.36 + k * H * 0.07, W * 0.76, H * 0.028);
+    ctx.clip("evenodd");
+    ctx.fillStyle = "#0a0806";
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+    return;
+  }
+  const top = H * 0.4;
+  const under = ctx.createLinearGradient(0, 0, 0, top);
+  under.addColorStop(0, "#050403");
+  under.addColorStop(1, kind === "bed" ? "#1d1714" : "#17110c");
+  ctx.fillStyle = under;
+  ctx.fillRect(0, 0, W, top);
+  if (kind === "bed") {
+    ctx.fillStyle = "rgba(0,0,0,.6)";                              // slats
+    for (let k = 1; k < 7; k++) ctx.fillRect(0, (top * k) / 7, W, Math.max(2, H * 0.012));
+  } else {
+    ctx.strokeStyle = "rgba(0,0,0,.5)";                            // planks
+    ctx.lineWidth = 2;
+    for (let k = 1; k < 6; k++) { ctx.beginPath(); ctx.moveTo((W * k) / 6, 0); ctx.lineTo((W * k) / 6 + W * 0.04, top); ctx.stroke(); }
+  }
+  // the hem: cloth for a table, a hanging blanket for a bed, swaying a little
+  const sway = Math.sin(t * 1.3) * H * 0.006;
+  ctx.fillStyle = kind === "bed" ? "#3c1219" : "#5f554b";
   ctx.beginPath();
-  ctx.rect(0, 0, W, H);
-  for (let k = 0; k < 4; k++) ctx.rect(W * 0.12, H * 0.36 + k * H * 0.07, W * 0.76, H * 0.028);
-  ctx.clip("evenodd");
-  ctx.fillStyle = "#07090c";
+  ctx.moveTo(0, top - H * 0.02);
+  const n = 14;
+  for (let i = 0; i <= n; i++) ctx.lineTo((W * i) / n, top + (i % 2 ? H * 0.05 : H * 0.085) + sway);
+  ctx.lineTo(W, top - H * 0.02);
+  ctx.closePath();
+  ctx.fill();
+  // a leg on each side
+  ctx.fillStyle = "#0c0906";
+  ctx.fillRect(0, 0, W * 0.07, H);
+  ctx.fillRect(W * 0.93, 0, W * 0.07, H);
+  // and the dark closing in from the edges
+  const vg = ctx.createRadialGradient(W / 2, H * 0.7, H * 0.2, W / 2, H * 0.7, W * 0.7);
+  vg.addColorStop(0, "rgba(0,0,0,0)");
+  vg.addColorStop(1, "rgba(0,0,0,.75)");
+  ctx.fillStyle = vg;
   ctx.fillRect(0, 0, W, H);
   ctx.restore();
 }
@@ -589,7 +833,7 @@ function arrow(ctx, W, H, s, ang, radius, size, color) {
 
 // view: { W, H, dpr, safeTop }; stick: the move thumb, if down.
 export function drawManor(ctx, s, view, t, stick) {
-  const { W, H, dpr, safeTop } = view;
+  const { W, H, dpr } = view;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, W, H);
@@ -608,14 +852,14 @@ export function drawManor(ctx, s, view, t, stick) {
     ctx.fillStyle = "#a39a88";
     ctx.font = "14px Georgia";
     ctx.fillText(`The dark falls in ${Math.ceil(s.introT)}s. Tap or press any key to start now.`, W / 2, y0 + size + 24);
-    ctx.fillText("Orange: jump over · Purple: crouch under · Brown: doors · Teal: lockers to hide in", W / 2, y0 + size + 44);
+    ctx.fillText("Gold: relics · Brown bars: doors · Red: the way out (it opens when you have them all)", W / 2, y0 + size + 44);
     return;
   }
   if (s.mode === "dead") {
     const k = Math.min(1, s.deadT / 0.5), size = Math.min(W, H) * (0.7 + k * 0.9), sh = (1 - Math.min(1, s.deadT)) * 18;
     ctx.save();
     ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh);
-    drawGhost(ctx, W / 2, H / 2, size, true);
+    drawGhost(ctx, W / 2, H / 2 + size * 0.15, size, true, t);
     ctx.restore();
     ctx.fillStyle = `rgba(200,30,58,${Math.max(0, 0.8 - s.deadT * 1.2)})`;
     ctx.fillRect(0, 0, W, H);
@@ -623,7 +867,7 @@ export function drawManor(ctx, s, view, t, stick) {
   }
 
   scene(ctx, s, W, H, t);
-  if (s.P.hiding) lockerOverlay(ctx, W, H);
+  if (s.P.hiding) hidingOverlay(ctx, W, H, s.P.hiding.kind || "wardrobe", t);
 
   // where to go: the nearest relic, then the gate
   const { P, G } = s;
@@ -638,8 +882,17 @@ export function drawManor(ctx, s, view, t, stick) {
     arrow(ctx, W, H, s, Math.atan2(G.y - P.y, G.x - P.x), Math.min(W, H) * 0.36, 8 + k * 16, `rgba(224,32,63,${0.35 + k * 0.6})`);
   }
 
-  const ms = Math.min(130, Math.min(W, H) * 0.3);
-  mini(ctx, s, W - ms - 14, 16 + safeTop, ms, false, t);
+  const mr = mapRect(view);
+  mini(ctx, s, mr.x0, mr.y0, mr.size, false, t);
+  if (view.bigMap) {
+    // the whole house, big, over the game (which carries on underneath)
+    const bs = Math.min(W - 40, H - 56);
+    mini(ctx, s, (W - bs) / 2, (H - bs) / 2 + 8, bs, false, t, true);
+    ctx.fillStyle = "#e9e3d3";
+    ctx.font = "italic 14px Georgia";
+    ctx.textAlign = "center";
+    ctx.fillText("Tap anywhere to close the map", W / 2, (H - bs) / 2 - 6);
+  }
 
   if (stick) {
     // the walk ring, and outside it the run ring: push past to sprint

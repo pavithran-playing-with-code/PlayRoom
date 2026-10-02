@@ -968,21 +968,22 @@ input::-ms-reveal,input::-ms-clear{display:none}
    underneath it ran straight through the Crouch button. Lift it clear. */
 @media (max-width:600px){ .hm-msg{bottom:calc(env(safe-area-inset-bottom,0px) + 262px)} }
 
-/* Under the right thumb: jump, crouch below it, the light to their left,
-   Use (doors, lockers) beside jump. */
+/* Under the right thumb: jump, Use (doors, hiding spots) beside it, the
+   light below Use. */
 .hm-pad{position:fixed;right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
-  z-index:4;display:grid;grid-template-columns:68px 68px;grid-template-rows:68px 68px 68px;gap:4px 10px;
-  grid-template-areas:"use jump" "light ." ". crouch"}
+  z-index:4;display:grid;grid-template-columns:68px 68px;grid-template-rows:68px 68px;gap:8px 10px;
+  grid-template-areas:"use jump" "light ."}
 .hm .hm-pad button{width:68px;height:68px;border-radius:50%;padding:0;font-size:12px;background:rgba(21,18,26,.75);touch-action:none}
 .hm .hm-pad .hm-jump{grid-area:jump}
 .hm .hm-pad .hm-use{grid-area:use}
 .hm .hm-pad .hm-light{grid-area:light}
-.hm .hm-pad .hm-crouch{grid-area:crouch}
+.hm-room{margin-top:6px;color:#ffdca0;font-style:italic;text-shadow:0 0 6px #000}
 .hm .hm-pad button.on{background:#ffdca0;color:#1a1208;border-color:#ffdca0;box-shadow:0 0 18px rgba(255,220,160,.6)}
 .hm .hm-pad .hm-use.on{background:#4fb3b3;color:#061414;border-color:#4fb3b3;box-shadow:0 0 18px rgba(79,179,179,.6)}
-/* the music box: small, just under the map (which is min(130px, 30% of the short side) square) */
-.hm .hm-music{position:fixed;z-index:4;right:9px;top:calc(env(safe-area-inset-top,0px) + 30px + min(130px, 30vmin));
-  width:calc(min(130px, 30vmin) + 10px);padding:6px 4px;border-radius:999px;font-size:11px;background:rgba(21,18,26,.75);
+/* the music box: small, just under the map (which is min(170px, 42% of the short side) square,
+   with a "tap for big map" line under it) */
+.hm .hm-music{position:fixed;z-index:4;right:9px;top:calc(env(safe-area-inset-top,0px) + 44px + min(170px, 42vmin));
+  width:calc(min(170px, 42vmin) + 10px);padding:6px 4px;border-radius:999px;font-size:11px;background:rgba(21,18,26,.75);
   touch-action:none;white-space:nowrap}
 
 /* Hollow Manor in a room: the clock, your relics, who's still inside, and
@@ -1047,7 +1048,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* Sideways on a phone: a short screen. Buttons in two rows of three so they
    clear the map, words kept left of the buttons, lighter headings. */
 @media (orientation: landscape) and (max-height: 520px){
-  .hm-pad{grid-template-columns:60px 60px;grid-template-rows:60px 60px 60px;gap:2px 8px;
+  .hm-pad{grid-template-columns:60px 60px;grid-template-rows:60px 60px;gap:6px 8px;
     right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
   .hm .hm-pad button{width:60px;height:60px;font-size:11px}
   .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
@@ -1063,7 +1064,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 }
 /* The same short-landscape layout for the drawn-sideways game: its viewport
    is still portrait, so the media query above never matches it. */
-.hm.hm-rot .hm-pad{grid-template-columns:60px 60px;grid-template-rows:60px 60px 60px;gap:2px 8px;
+.hm.hm-rot .hm-pad{grid-template-columns:60px 60px;grid-template-rows:60px 60px;gap:6px 8px;
     right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
 .hm.hm-rot .hm-pad button{width:60px;height:60px;font-size:11px}
 .hm.hm-rot .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);

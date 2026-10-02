@@ -13,11 +13,11 @@
 //   - The server moves the ghosts, and alone decides pickups, catches, who
 //     got out, in what order, and when the match is over. It writes scores
 //     to room_players itself; phones never post a score for this game.
-//   - Doors and lockers are the server's too: a phone asks (manor:use) to
-//     open or shut a door or to get into a locker, and the server checks it
-//     is standing there. A door one player shuts is shut for everyone, and
-//     for the ghosts, which stop to open it. Someone in a locker is invisible
-//     to the ghosts — unless one watched them get in.
+//   - Doors and hiding spots are the server's: a phone asks (manor:use) to
+//     open or shut a door or to hide, and the server checks it is standing
+//     there. A door one player shuts is shut for everyone, and for the
+//     ghosts, which stop to open it. Someone hiding is safe from the ghosts;
+//     one that watched them hide searches the spot a while, then gives up.
 //
 // Modes (rooms.mode):
 //   free   every player for themselves, own-colour relics; first out wins
@@ -56,7 +56,7 @@ const GOLD = "#ffdca0";
 // How many relics each side hunts for. A team's share grows with its size,
 // so the work per person stays about the same whatever the split.
 const needFor = (mode, members, players) =>
-  mode === "coop" ? 3 * players + 1 : mode === "teams" ? 2 * members + 1 : 3;
+  mode === "coop" ? 2 * players + 1 : mode === "teams" ? members + 2 : 3;
 
 // The rules in manorCore.mjs are an ES module shared with the browser. The
 // server is CommonJS, so it loads them once, asynchronously, at start-up.
@@ -105,7 +105,7 @@ function buildWorld(room, seats, elapsedMs) {
     players.set(id, {
       id, name: p.username, avatar: p.avatar, side: side.key,
       color: mode === "free" ? side.color : side.color,
-      x: house.spawn.x, y: house.spawn.y, fa: 0, jz: 0, cr: 0, lit: true, noiseR: 0, hiding: null, snoop: 0,
+      x: house.spawn.x, y: house.spawn.y, fa: 0, jz: 0, cr: 0, lit: true, noiseR: 0, hiding: null,
       at: 0, alive: saved ? saved.alive : true, escaped: saved ? saved.escaped : false,
       place: saved ? saved.place : null, cause: saved ? saved.cause : null, decoys: DECOYS,
     });
@@ -252,17 +252,11 @@ function tick(w) {
       const caught = core.stepGhost(G, w.env, targets, DT, w.house.rand, hustle(w), (name, extra) => {
         if (name === "spotted") ev(w, { type: "spotted", g: gi, id: extra.id });
         if (name === "door") ev(w, { type: "door", x: extra.x, y: extra.y, open: 1, id: 0 });
+        if (name === "gaveup") ev(w, { type: "gaveup", id: extra.id });
       });
       if (caught != null && !w.over) kill(w, caught, "ghost");
     });
     if (w.over) return;
-    // a ghost lingering by a locker opens it in the end
-    for (const p of living(w)) {
-      if (!core.snoopStep(p, w.house.ghosts, DT)) continue;
-      core.leaveLocker(p);
-      kill(w, p.id, "locker");
-      if (w.over) return;
-    }
   }
 
   let scored = false;
@@ -364,6 +358,7 @@ function initFor(w, uid, role) {
     elapsed: Date.now() - w.startMs, duration: w.durMs, intro: INTRO_MS,
     house: {
       N: w.house.N, walls: core.packWalls(w.house.g), doors: w.house.doors, exitT: w.house.exitT, obst: w.house.obst,
+      rooms: w.house.rooms,
       relics: w.house.relics.map((r) => [r.x, r.y, r.side, r.got ? 1 : 0]),
       batts: w.house.batts.map((b) => [b.x, b.y, b.got ? 1 : 0]),
       spawn: w.house.spawn,
@@ -467,7 +462,7 @@ function attach(server) {
         return reply(true);
       }
       if (m.act === "hide") {
-        if (g[ty][tx] !== core.LOCKER) return reply(false);
+        if (g[ty][tx] !== core.SPOT) return reply(false);
         if ([...w.players.values()].some((q) => q.hiding && q.hiding.x === tx && q.hiding.y === ty)) return reply(false, { why: "taken" });
         const seenBy = core.watcher(w.house.ghosts, w.env, p, uid);
         core.hideIn(p, { x: tx, y: ty }, seenBy);

@@ -58,8 +58,9 @@ function room(mode, seats, { elapsed = 9000, duration = 300 } = {}) {
   const r = { id: codeN, room_code: code, seed: 4242 + codeN, mode, duration_seconds: duration };
   const w = world._buildWorld(r, seats.map((s, i) => ({ user_id: s.id, team: s.team ?? null, username: s.name || `p${s.id}`, avatar: "🙂", game_state: s.state || null, i })), elapsed);
   world._worlds.set(code, w);
-  // park every ghost out of harm's way unless a test wants one
-  for (const G of w.house.ghosts) { G.x = w.house.N - 1.5; G.y = w.house.N - 1.5; G.stun = 1e9; }
+  // park every ghost out of harm's way (off the map, where it can see nobody)
+  // unless a test wants one
+  for (const G of w.house.ghosts) { G.x = -50; G.y = -50; G.stun = 1e9; }
   return w;
 }
 
@@ -204,12 +205,12 @@ let coreMod;
   // ── co-op ──────────────────────────────────────────────────────────────────
   {
     const w = room("coop", [{ id: 11 }, { id: 12 }, { id: 13 }]);
-    check("co-op: one side, gold, 3 relics a head + 1", w.sides.length === 1 && w.sides[0].need === 10 && w.sides[0].color === "#ffdca0");
+    check("co-op: one side, gold, 2 relics a head + 1", w.sides.length === 1 && w.sides[0].need === 7 && w.sides[0].color === "#ffdca0");
     const P = [phone(11), phone(12), phone(13)];
     // anyone can take any relic
     const rs = w.house.relics;
     rs.forEach((r, i) => { walk(w, P[i % 3], 11 + (i % 3), r.x, r.y); world._tick(w); });
-    check("any of you can take any relic", w.sides[0].got === 10 && w.sides[0].open);
+    check("any of you can take any relic", w.sides[0].got === 7 && w.sides[0].open);
     const [ex, ey] = exitSpot(w);
     walk(w, P[0], 11, ex, ey); world._tick(w);
     walk(w, P[1], 12, ex, ey); world._tick(w);
@@ -240,7 +241,7 @@ let coreMod;
     const w = room("teams", [{ id: 41, team: 1 }, { id: 42, team: 1 }, { id: 43, team: 1 }, { id: 44, team: 2 }, { id: 45, team: 2 }]);
     const ph = { 41: phone(41), 42: phone(42), 43: phone(43), 44: phone(44), 45: phone(45) };
     const red = w.sides.find((s) => s.key === "t1"), yel = w.sides.find((s) => s.key === "t2");
-    check("teams: a colour and a relic set per team, sized to the team", red.need === 7 && yel.need === 5 && red.color !== yel.color);
+    check("teams: a colour and a relic set per team, sized to the team", red.need === 5 && yel.need === 4 && red.color !== yel.color);
     // Yellow does it all: collect, one member caught, the other out
     w.house.relics.filter((r) => r.side === "t2").forEach((r) => { walk(w, ph[44], 44, r.x, r.y); world._tick(w); });
     check("a team's door opens when its relics are all taken", yel.open && !red.open);
@@ -251,7 +252,7 @@ let coreMod;
     const G = w.house.ghosts[0];
     G.x = w.players.get(45).x + 0.1; G.y = w.players.get(45).y; G.stun = 0;
     world._tick(w);
-    G.stun = 1e9; G.x = w.house.N - 1.5; G.y = w.house.N - 1.5;
+    G.stun = 1e9; G.x = -50; G.y = -50;
     check("…and is placed once nobody's left inside", yel.place === 1);
     check("the others play on", !w.over);
     // Red: relics, then all three out
@@ -384,78 +385,75 @@ let coreMod;
       lastEv("door").some((e) => e.id === 0 && e.open === 1));
   }
 
-  // ── lockers ────────────────────────────────────────────────────────────────
+  // ── hiding spots ───────────────────────────────────────────────────────────
   {
-    const findLocker = (w) => {
-      const g = w.house.g, N = w.house.N;
-      for (let y = 1; y < 8; y++) for (let x = 0; x < 9; x++) {
-        if (g[y][x] !== coreMod.LOCKER) continue;
-        for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (g[y + b] && g[y + b][x + a] === coreMod.FLOOR && x + a > 0 && x + a < 8) return { x, y, out: [x + a + 0.5, y + b + 0.5], dir: [a, b] };
-      }
-      // none in the first room: put one in its wall
-      const x = 8, y = 3;
-      g[y][x] = coreMod.LOCKER; g[y - 1][x] = coreMod.WALL; g[y + 1][x] = coreMod.WALL;
-      g[y][x - 1] = coreMod.FLOOR;
-      return { x, y, out: [x - 0.5, y + 0.5], dir: [-1, 0] };
+    // A table in the first room, with clear floor to its west: you stand at
+    // (4.5, 4.5); a ghost three tiles further west can see you there.
+    const setSpot = (w) => {
+      const g = w.house.g;
+      for (let y = 1; y < 8; y++) for (let x = 1; x < 8; x++) g[y][x] = coreMod.FLOOR;
+      g[4][5] = coreMod.SPOT;
+      return { x: 5, y: 4, out: [4.5, 4.5] };
     };
     const w = room("free", [{ id: 121 }, { id: 122 }]);
     const A = phone(121), B = phone(122);
-    const L = findLocker(w);
+    const L = setSpot(w);
     walk(w, A, 121, L.out[0], L.out[1]);
     const a = w.players.get(121);
     A.h["manor:use"]({ code: w.code, act: "hide", x: L.x, y: L.y });
     const r = A.got.filter((q) => q.ev === "manor:used").pop().p;
-    check("into a locker", r.ok && !r.seen && a.hiding && (a.x | 0) === L.x);
+    check("into a hiding spot", r.ok && !r.seen && a.hiding && (a.x | 0) === L.x);
     const bb = w.players.get(122);
-    walk(w, B, 122, L.out[0], L.out[1]);
+    walk(w, B, 122, L.out[0], L.out[1] - 1);
     B.h["manor:use"]({ code: w.code, act: "hide", x: L.x, y: L.y });
-    check("one to a locker", B.got.filter((q) => q.ev === "manor:used").pop().p.why === "taken" && !bb.hiding);
+    check("one to a hiding spot", B.got.filter((q) => q.ev === "manor:used").pop().p.why === "taken" && !bb.hiding);
     walk(w, B, 122, w.house.spawn.x, w.house.spawn.y);
     a.at = Date.now() - 100;
-    A.me(w.code, L.out[0] + 2, L.out[1]);
+    A.me(w.code, L.out[0] - 2, L.out[1]);
     check("hiding, a phone can't walk off", (a.x | 0) === L.x);
     sent.length = 0;
     world._tick(w);
     const t = sent.filter((q) => q.ev === "manor:tick").pop().payload;
     check("everyone's told you're hidden (so nobody draws you)", t.p.find((q) => q[0] === 121)[9] === 1);
 
-    // a ghost passes by: it doesn't see, hear or catch you
+    // a ghost passes by: it doesn't see, hear or catch you — however long it stays
     const G = w.house.ghosts[0];
-    Object.assign(G, { x: L.out[0] + L.dir[0] * 3, y: L.out[1] + L.dir[1] * 3, stun: 0, st: "patrol" });
+    Object.assign(G, { x: 1.5, y: 4.5, stun: 0, st: "patrol" });
     a.lit = true;
     world._tick(w);
-    check("a ghost nearby doesn't see someone in a locker", G.st !== "hunt" && a.alive);
-    // lingering: dragged out
-    Object.assign(G, { x: L.out[0], y: L.out[1], stun: 1e9 });
-    for (let i = 0; i < 25; i++) world._tick(w);
-    check("(2.5s lingering by it: not yet)", a.alive);
-    for (let i = 0; i < 8; i++) world._tick(w);
-    check("…three seconds and it opens the door", !a.alive && a.cause === "locker" && !w.over);
-    check("…and the phones are told how", lastEv("dead").some((e) => e.id === 121 && e.cause === "locker"));
+    check("a ghost nearby doesn't see someone hiding", !(G.st === "hunt" && G.prey === 121) && a.alive);
+    Object.assign(G, { x: L.out[0], y: L.out[1], stun: 0 });
+    for (let i = 0; i < 80; i++) world._tick(w);
+    check("hidden, you're safe: eight seconds right beside you and nothing", a.alive && !w.over);
 
     // out again
     const w2 = room("free", [{ id: 131 }, { id: 132 }]);
     const C = phone(131);
-    const L2 = findLocker(w2);
+    const L2 = setSpot(w2);
     walk(w2, C, 131, L2.out[0], L2.out[1]);
     C.h["manor:use"]({ code: w2.code, act: "hide", x: L2.x, y: L2.y });
     C.h["manor:use"]({ code: w2.code, act: "out" });
     const c = w2.players.get(131);
     check("Leave: back where you stood", !c.hiding && Math.abs(c.x - L2.out[0]) < 1e-9 && Math.abs(c.y - L2.out[1]) < 1e-9);
 
-    // seen going in
+    // seen going in: it searches, gives up, and you live
     const w3 = room("free", [{ id: 141 }, { id: 142 }]);
     const D = phone(141);
-    const L3 = findLocker(w3);
+    const L3 = setSpot(w3);
     walk(w3, D, 141, L3.out[0], L3.out[1]);
     const G3 = w3.house.ghosts[0];
-    Object.assign(G3, { x: L3.out[0] + L3.dir[0] * 3, y: L3.out[1] + L3.dir[1] * 3, stun: 0, st: "hunt", prey: 141, lose: 0 });
-    for (let k = 1; k <= 3; k++) w3.house.g[(L3.out[1] + L3.dir[1] * k) | 0][(L3.out[0] + L3.dir[0] * k) | 0] = coreMod.FLOOR;
+    Object.assign(G3, { x: 1.5, y: 4.5, stun: 0, st: "hunt", prey: 141, lose: 0 });
     D.h["manor:use"]({ code: w3.code, act: "hide", x: L3.x, y: L3.y });
     check("hide while it's watching: it knows", D.got.filter((q) => q.ev === "manor:used").pop().p.seen === true);
-    let n = 0;
-    while (w3.players.get(141).alive && n++ < 60) world._tick(w3);
-    check("…and it comes straight for the locker", !w3.players.get(141).alive && n < 40, `${n / 10}s`);
+    sent.length = 0;
+    let n = 0, came = false;
+    while (w3.players.get(141).hiding && w3.players.get(141).hiding.ghost && n++ < 150) {
+      world._tick(w3);
+      if (Math.hypot(G3.x - L3.out[0], G3.y - L3.out[1]) < 1.2) came = true;
+    }
+    check("…it comes to search the spot", came);
+    check("…gives up, and you're still alive", w3.players.get(141).alive && !w3.players.get(141).hiding.ghost, `${n / 10}s`);
+    check("…and that phone is told it gave up", lastEv("gaveup").some((e) => e.id === 141));
   }
 
   // ── a restart keeps who was caught and who got out ─────────────────────────

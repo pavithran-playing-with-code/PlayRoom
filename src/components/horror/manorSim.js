@@ -2,12 +2,13 @@
 // HOLLOW MANOR, solo — a first-person walk through a house of rooms at night:
 // take every relic, keep the torch fed with batteries, leave by the far gate.
 // Something patrols the rooms. It hears running, sees torchlight, and hunts.
-// Doors creak open and can be shut behind you; lockers hide you, unless it
-// watched you get in. Now and then the house tries to frighten you (scareStep)
+// Doors creak open and can be shut behind you; tables, beds and wardrobes
+// hide you — it can't catch you there, and if it watched you go in it only
+// searches a while and gives up. Now and then the house tries to frighten you (scareStep)
 // — cosmetic only: it never changes what the ghost does.
 //
 // Ported from a standalone page; the numbers are the original's. The house,
-// movement, doors, lockers and the ghost are manorCore.mjs, shared with the multiplayer game
+// movement, doors, hiding spots and the ghost are manorCore.mjs, shared with the multiplayer game
 // and the server. This file is the solo night around them: nights that grow,
 // the memorise-the-map intro, the walk in through the gate, the music box,
 // and the lines it says to you.
@@ -15,14 +16,15 @@
 // Nothing here draws or plays sound: anything the page should hear about is
 // pushed onto `s.events`. No React and no DOM, so it runs from a Node script.
 import {
-  D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, LOCKER, rng, shuffle, genHouse, houseSize, dmap, floors, roomFloors,
+  D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, rng, shuffle, genHouse, houseSize, dmap, floors, roomFloors,
+  nameRooms, roomAt, ROOM_KINDS,
   los, canAt, farGate, gapObstacles,
   newBody, litBody, mvOK as bodyMvOK, jumpBody, stepBody,
   newGhost, ghostTarget, ghostPatrol, ghostSees, ghostSpeed as speedOf, stepGhost,
-  actionAt, ACTION_LABEL, watcher, hideIn, leaveLocker, snoopStep,
+  actionAt, ACTION_LABEL, watcher, hideIn, leaveLocker,
 } from "./manorCore.mjs";
 
-export { D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, LOCKER, dmap, floors, los, canAt };
+export { D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, dmap, floors, los, canAt, ROOM_KINDS, roomAt };
 export const INTRO_S = 9;              // seconds to memorise the map
 export const DECOYS = 2;
 
@@ -40,9 +42,10 @@ export const AMBIENT = [
   "Cold air brushes your neck.",
 ];
 
-// Bigger and fuller every night: 3×3 rooms, then 4×4, then 5×5.
+// A little bigger and fuller with the nights, but never a hard map: 3×3
+// rooms for the first two nights, 4×4 after that.
 export function nightSize(night) {
-  return { N: houseSize(Math.min(5, 2 + night)), need: Math.min(8, 4 + night) };
+  return { N: houseSize(night <= 2 ? 3 : 4), need: Math.min(6, 3 + night) };
 }
 
 // ── a night ──────────────────────────────────────────────────────────────────
@@ -50,11 +53,11 @@ export function nightSize(night) {
 export function newNight(seed, night = 1) {
   const rand = rng((Number(seed) || 1) + night * 104729);
   let { N, need } = nightSize(night);
-  const { g, doors, gaps } = genHouse(N, rand);
+  const { g, doors, gaps, spots } = genHouse(N, rand);
   const d0 = dmap(g, N, 1, 1);
   const f = shuffle(roomFloors(g, N, new Set([...doors, ...gaps])), rand);
   const { far, exitT } = farGate(g, N, d0, f);
-  g[exitT.y][exitT.x] = WALL;           // the far gate, never a locker
+  g[exitT.y][exitT.x] = WALL;           // the far gate
   g[1][0] = FLOOR;                      // the entrance gate, open until you are through
 
   const relics = [];
@@ -76,7 +79,8 @@ export function newNight(seed, night = 1) {
 
   const P = newBody(0.5, 1.5, 0);
   const s = {
-    seed, night, rand, N, g, need, relics, cells, exitT, obst, far,
+    seed, night, rand, N, g, need, relics, cells, exitT, obst, far, spots,
+    rooms: nameRooms((N - 1) / 8, rand),
     env: { g, N, obst, doors: new Set(doors) },
     G: newGhost(gs[0] + 0.5, gs[1] + 0.5),
     P,
@@ -108,7 +112,7 @@ export function begin(s) {
 
 export const mvOK = (s, nx, ny) => bodyMvOK(s.env, s.P, nx, ny);
 
-// Use: open or shut the door in front of you, get into a locker, get out.
+// Use: open or shut the door in front of you, hide, come out.
 // Opening is loud (it carries like a landing); shutting is quieter.
 export function doAction(s) {
   if (s.mode !== "play") return;
@@ -123,7 +127,8 @@ export function doAction(s) {
     const seenBy = watcher([s.G], s.env, P, 1);
     hideIn(P, u, seenBy);
     emit(s, "locker");
-    say(s, seenBy ? "It saw you hide. Hold on, or run..." : "Stay quiet. Do not let it linger near.", 3500);
+    const where = { table: "under the table", bed: "under the bed", wardrobe: "in the wardrobe" }[u.kind];
+    say(s, seenBy ? `It saw you get ${where}. Stay still — it will give up.` : `You hide ${where}. It cannot find you here.`, 3500);
   } else { leaveLocker(P); emit(s, "locker"); }
 }
 export const actionLabel = (s) => {
@@ -234,13 +239,9 @@ function update(s, inp, dt) {
       if (name === "spotted") emit(s, "spotted");
       if (name === "lost") say(s, "It lost you...", 2500);
       if (name === "door") emit(s, "creak", Math.max(0.03, 0.3 * (1 - Math.hypot(P.x - e.x, P.y - e.y) / 14)));
+      if (name === "gaveup") say(s, "It gives up and drifts away...", 3000);
     });
     if (got != null) caught(s);
-    else if (snoopStep(P, [s.G], dt)) {
-      leaveLocker(P);
-      say(s, "The locker door creaks open...", 2000);
-      caught(s);
-    }
   }
   if (s.mode !== "play") return;
 
@@ -308,7 +309,7 @@ export function scareStep(s, P, dt, rand, hunting, snd) {
 }
 
 // "A barricade blocks the way" the first time one is in front of you; the
-// same for the first door and the first locker.
+// same for the first door and the first hiding spot.
 export function hints(s, P) {
   if (s.msgT <= 0 && !P.hiding) {
     const u = actionAt(s.env, P);
@@ -316,7 +317,7 @@ export function hints(s, P) {
       s.hint[u.t] = 1;
       say(s, u.t === "open"
         ? "A shut door. Use opens it, but it creaks. Shut it behind you to slow it down."
-        : "A locker. Use to hide inside. It walks past if it did not see you get in.", 4000);
+        : `${u.kind === "wardrobe" ? "A wardrobe" : u.kind === "bed" ? "A bed" : "A table"}. Use to hide — it cannot catch you there.`, 4000);
       return;
     }
   }
@@ -328,7 +329,7 @@ export function hints(s, P) {
       da = Math.atan2(Math.sin(da), Math.cos(da));
       if (Math.abs(da) < 0.7 && !s.hint[s.obst[k]] && s.msgT <= 0) {
         s.hint[s.obst[k]] = 1;
-        say(s, s.obst[k] === HURDLE ? "A barricade blocks the way. Jump over it! (Space or Jump)" : "A low beam. Crouch under it! (C or Crouch)", 3500);
+        say(s, "A barricade blocks the way. Jump over it! (Space or Jump)", 3500);
       }
     }
   }
@@ -345,3 +346,6 @@ export const timeText = (sec) => {
   const n = Math.floor(sec);
   return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, "0")}`;
 };
+
+// The room you're in, by name.
+export const roomName = (s, x = s.P.x, y = s.P.y) => ROOM_KINDS[s.rooms[roomAt(s.N, x, y)]][0];

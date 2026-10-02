@@ -11,11 +11,11 @@
 // rules; the two-thumb controls here are the same as there.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "../../utils/SocketContext";
-import { drawManor, lookBy, SPRINT_PX, STICK_R } from "../horror/manorRender";
+import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R } from "../horror/manorRender";
 import { createManorAudio } from "../horror/manorAudio";
 import {
   createClient, applyTick, stepLocal, report, jump, doAction, actionDone, actionLabel, playing, inIntro, timeLeft, sideOfMe,
-  watchedPlayer, cycleWatch, placeName, viewState,
+  watchedPlayer, cycleWatch, placeName, viewState, roomNameAt,
 } from "../horror/manorClient";
 import { say } from "../horror/manorSim";
 import { useSideways, toGame } from "../horror/LandscapeGate";
@@ -58,6 +58,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       left: timeLeft(c, now), msg: c.msg, side: side && { name: side.name, color: side.color, got: side.got, need: side.need, open: side.open },
       stam: c.body.stam, bat: c.body.bat, light: c.body.light, runOn: c.body.runOn, tired: c.body.stamCool > 0,
       crouch: c.body.crouch, decoys: c.decoys, watching: w && { name: w.name, color: w.color }, use: actionLabel(c, now),
+      room: roomNameAt(c, playing(c) ? c.body : w || c.body),
       players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, escaped: p.escaped, place: p.place })),
       playing: playing(c),
     });
@@ -142,7 +143,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       const W = box ? box.clientWidth : window.innerWidth, H = box ? box.clientHeight : window.innerHeight;
       c.width = W * dpr; c.height = H * dpr;
       const safeTop = rootRef.current ? parseFloat(getComputedStyle(rootRef.current).paddingTop) || 0 : 0;
-      view.current = { W, H, dpr, safeTop };
+      view.current = { W, H, dpr, safeTop, bigMap: view.current.bigMap };
     };
     fit();
     window.addEventListener("resize", fit);
@@ -191,7 +192,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     return () => cancelAnimationFrame(raf);
   }, [socket, syncHud]);
 
-  // Use: doors and lockers. It happens here at once, and the server is asked.
+  // Use: doors and hiding spots. It happens here at once, and the server is asked.
   const doUse = useCallback((c) => {
     const r = doAction(c);
     for (const s of r.sounds) audio.current.play(s);
@@ -215,7 +216,6 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       keys.current[k] = true;
       if (k === "f") c.body.light = !c.body.light;
       if (k === " " && jump(c)) audio.current.play({ name: "jump" });
-      if (k === "c") c.body.crouch = !c.body.crouch;
       if (k === "r") c.body.runOn = !c.body.runOn;
       if (k === "e") doUse(c);
       if (k === "q" && socket) socket.emit("manor:decoy", roomCode);
@@ -239,9 +239,13 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     audio.current.start();
     if (!c) return;
     if (inIntro(c)) { c.skipIntro = true; syncHud(); return; }
+    const at = toGame(e, sideways.current);
+    // the map: tap it for the big one, tap again (anywhere) to close it
+    const v = view.current, m = mapRect(v);
+    if (v.bigMap) { v.bigMap = false; return; }
+    if (at.x >= m.x0 - 6 && at.y <= m.y0 + m.size + 18 && at.y >= m.y0 - 6) { v.bigMap = true; return; }
     if (!playing(c)) return;
     const cv = canvasRef.current;
-    const at = toGame(e, sideways.current);
     if (e.pointerType === "mouse" || at.x >= view.current.W * 0.5) {
       if (!look.current) { look.current = { id: e.pointerId, lx: at.x, ly: at.y }; cv.setPointerCapture(e.pointerId); }
     } else if (!stick.current) {
@@ -317,6 +321,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
               <div className="hm-bar bat"><i style={{ width: `${h.bat * 100}%` }} /></div>
             </>
           )}
+          {h.room && <div className="hm-room">📍 {h.room}</div>}
           <div className="hmx-who">
             {h.players.map((p) => (
               <span key={p.id} className={`hmx-p${p.alive ? "" : " dead"}${p.escaped ? " out" : ""}`} style={{ "--c": p.color }}
@@ -335,16 +340,15 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
       {h && h.playing && !h.intro && (
         <>
-          {/* Jump, crouch below it, the light to their left, and Use (doors,
-              lockers) beside jump, lit when there is something to use.
-              Running is the stick pushed past its ring. */}
+          {/* Jump, Use beside it (doors, hiding spots — lit when there is
+              something to use), the light below. Running is the stick
+              pushed past its ring. */}
           <div className="hm-pad">
             <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
             <button className="hm-jump" onPointerDown={press((c) => { if (jump(c)) audio.current.play({ name: "jump" }); })}>Jump</button>
             <button className={`hm-light${h.light && h.bat > 0 ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}>
               {h.bat <= 0 ? "No power" : h.light ? "Light on" : "Light off"}
             </button>
-            <button className={`hm-crouch${h.crouch ? " on" : ""}`} onPointerDown={press((c) => { c.body.crouch = !c.body.crouch; })}>Crouch</button>
           </div>
           {/* The music box lures a ghost to where you stand; small, under the map. */}
           <button className="hm-music" style={{ opacity: h.decoys ? 1 : 0.45 }} onPointerDown={press(decoy)}

@@ -4,10 +4,10 @@
 //
 // The house must always be finishable (every relic and the far gate reachable,
 // every barricade and beam passable), the thing must behave as the page tells
-// you it does — doors, lockers and all — and a bot that walks the rooms,
+// you it does — doors, hiding spots and all — and a bot that walks the rooms,
 // opening doors as it goes, must be able to get out.
 import {
-  HURDLE, BEAM, FLOOR, WALL, DOOR, LOCKER, INTRO_S, DECOYS, nightSize, dmap, floors, los, newNight, tick, begin,
+  HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, INTRO_S, DECOYS, nightSize, dmap, floors, los, newNight, tick, begin,
   jump, decoy, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, mvOK, lit, seesYou, ghostSpeed,
 } from "../src/components/horror/manorSim.js";
 
@@ -47,21 +47,23 @@ const park = (s) => { s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9; };
           if ((s.g[y][x] === FLOOR || s.g[y][x] === DOOR) && !(x === 0 && y === 1)) { ok = false; why = `seed ${seed} night ${night}: hole in the outer wall at ${x},${y}`; }
         }
       }
-      // doors sit in the walls between rooms, lockers in plain wall facing a room
+      // doors sit in the walls between rooms; hiding spots stand in a room, with floor beside them
       for (const k of s.env.doors) {
         const x = k % N, y = (k / N) | 0;
         if (x % 8 && y % 8) { ok = false; why = `door inside a room at ${x},${y}`; }
         if (s.g[y][x] !== DOOR) { ok = false; why = `door at ${x},${y} not shut to start`; }
       }
       for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-        if (s.g[y][x] !== LOCKER) continue;
-        if (x % 8 && y % 8) { ok = false; why = `locker inside a room at ${x},${y}`; }
-        if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => s.g[y + b] && s.g[y + b][x + a] === FLOOR)) { ok = false; why = `locker at ${x},${y} faces no floor`; }
+        if (s.g[y][x] !== SPOT) continue;
+        if (!(x % 8 && y % 8)) { ok = false; why = `hiding spot in a wall at ${x},${y}`; }
+        if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => s.g[y + b] && s.g[y + b][x + a] === FLOOR)) { ok = false; why = `hiding spot at ${x},${y} with no floor beside it`; }
       }
       const e = s.exitT, beside = e.x === N - 1 ? [N - 2, e.y] : [e.x, N - 2];
       if (s.g[e.y][e.x] !== WALL || d[beside[0] + beside[1] * N] < 0) { ok = false; why = `seed ${seed} night ${night}: gate not on a reachable wall`; }
       for (const r of s.relics) if (d[(r.x | 0) + (r.y | 0) * N] < 12) { ok = false; why = `relic too near the start`; }
       minRelics = Math.min(minRelics, s.relics.length);
+      if (Object.values(s.obst).some((o) => o !== HURDLE)) { ok = false; why = "a low beam (there's no crouch any more)"; }
+      if (!s.spots.length) { ok = false; why = "nowhere to hide"; }
       for (const k in s.obst) {
         const x = k % N, y = (k / N) | 0, g = s.g;
         const doorway = (!g[y][x - 1] && !g[y][x + 1] && g[y - 1][x] && g[y + 1][x]) || (!g[y - 1][x] && !g[y + 1][x] && g[y][x - 1] && g[y][x + 1]);
@@ -71,10 +73,10 @@ const park = (s) => { s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9; };
       if (s.need !== s.relics.length) { ok = false; why = `need ${s.need} vs ${s.relics.length} relics`; }
     }
   }
-  check("1050 houses: one piece, walled in, gate reachable, doors and lockers in the walls, obstacles only in open doorways", ok, why);
+  check("1050 houses: one piece, walled in, gate reachable, doors in the walls, hiding spots in the rooms, only barricades, only in open doorways", ok, why);
   check("the same seed builds the same house", sameAll);
   check("every house has relics to find", minRelics >= 3, `fewest ${minRelics}`);
-  check("houses grow each night: 3×3 rooms, 4×4, then 5×5", nightSize(1).N === 25 && nightSize(2).N === 33 && nightSize(3).N === 41 && nightSize(9).N === 41);
+  check("small houses: 3×3 rooms for two nights, then 4×4, never more", nightSize(1).N === 25 && nightSize(2).N === 25 && nightSize(3).N === 33 && nightSize(9).N === 33);
 }
 
 // ── going in ─────────────────────────────────────────────────────────────────
@@ -123,11 +125,9 @@ const park = (s) => { s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9; };
     const through = horiz ? skilled.P.x > x + 1 : skilled.P.y > y + 1;
     return { blocked, through };
   };
-  const h = tryObstacle(HURDLE), w = tryObstacle(BEAM);
+  const h = tryObstacle(HURDLE);
   check("a barricade stops you walking", h && h.blocked);
   check("…and you can jump it", h && h.through);
-  check("a low beam stops you walking", w && w.blocked);
-  check("…and you can crouch under it", w && w.through);
 
   const j = inside(5); park(j);
   toggleCrouch(j);
@@ -191,8 +191,8 @@ function hall(seed = 11) {
 {
   const { s } = hall();
   check("(set-up) torch on, 8 tiles apart down a hall: out of sight", !seesYou(s));
-  s.G.x -= 2.5;
-  check("5.5 tiles with the torch on: it sees you", seesYou(s));
+  s.G.x -= 3.5;
+  check("4.5 tiles with the torch on: it sees you", seesYou(s));
   toggleLight(s);
   check("torch off at the same distance: it does not", !seesYou(s));
   toggleLight(s);
@@ -203,16 +203,18 @@ function hall(seed = 11) {
   check("…and does not move while frozen", Math.abs(s.G.x - gx) < 1e-9);
   run(s, 0.5);
   check("then it comes", s.G.x < gx);
-  check("hunting speed is 2.5, plus a little per relic and per night", Math.abs(ghostSpeed(s) - 2.5) < 1e-9);
+  check("hunting speed is 2.2, plus a little per relic and per night", Math.abs(ghostSpeed(s) - 2.2) < 1e-9);
   s.count = 3; s.night = 2;
-  check("…faster with relics taken and nights survived", Math.abs(ghostSpeed(s) - (2.5 + 0.36 + 0.08)) < 1e-9);
+  check("…faster with relics taken and nights survived", Math.abs(ghostSpeed(s) - (2.2 + 0.36 + 0.08)) < 1e-9);
+  s.count = 9; s.night = 9;
+  check("…but never faster than you can run", ghostSpeed(s) === 3 && 3 < 4.2);
   s.count = 0; s.night = 1;
   run(s, 4);
   check("stand in the open and it gets you", s.mode === "dead" && s.events.some((e) => e.name === "caught"));
 
   // lost you: break the line for 5 seconds
   const h2 = hall(40).s;
-  h2.G.x -= 3;                          // 5 tiles: inside torch range
+  h2.G.x -= 4;                          // 4 tiles: inside torch range
   run(h2, DT);
   h2.G.stun = 0;
   check("(set-up) hunting", h2.G.st === "hunt");
@@ -241,7 +243,7 @@ function hall(seed = 11) {
   decoy(s);
   check("two uses, then it is empty", s.decoys === 0 && /empty/.test(s.msg));
   const { s: h } = hall(80);
-  h.G.x -= 3;
+  h.G.x -= 4;
   run(h, DT);
   const before = h.decoys;
   decoy(h);
@@ -294,14 +296,14 @@ function atDoor(seed = 41) {
   check("…stopping to do it (1.1s), with a creak you can hear", g.G.stun > 1 && g.events.some((e) => e.name === "creak"));
 }
 
-// ── lockers ──────────────────────────────────────────────────────────────────
-// Stand before a locker, facing it.
-function atLocker(seed = 51) {
+// ── hiding spots ─────────────────────────────────────────────────────────────
+// Stand beside a table, bed or wardrobe, facing it.
+function atSpot(seed = 51) {
   for (let sd = seed; sd < seed + 50; sd++) {
     const s = inside(sd); park(s);
     const N = s.N;
     for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
-      if (s.g[y][x] !== LOCKER) continue;
+      if (s.g[y][x] !== SPOT) continue;
       for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         if (s.g[y + b][x + a] !== FLOOR) continue;
         Object.assign(s.P, { x: x + a + 0.5, y: y + b + 0.5, fa: Math.atan2(-b, -a) });
@@ -309,53 +311,54 @@ function atLocker(seed = 51) {
       }
     }
   }
-  throw new Error("no locker");
+  throw new Error("no hiding spot");
 }
 {
-  const { s, x, y, out } = atLocker();
-  check("facing a locker, Use says Hide", actionLabel(s) === "Hide");
+  const { s, x, y, out } = atSpot();
+  check("facing a table, bed or wardrobe, Use says Hide", actionLabel(s) === "Hide");
   doAction(s);
-  check("Use takes you in; you look out through the slats", !!s.P.hiding && (s.P.x | 0) === x && (s.P.y | 0) === y);
-  check("…and it did not see you, so it is not coming", !s.P.hiding.ghost && /Stay quiet/.test(s.msg));
-  check("in a locker, Use says Leave", actionLabel(s) === "Leave");
+  check("Use takes you in", !!s.P.hiding && (s.P.x | 0) === x && (s.P.y | 0) === y && ["table", "bed", "wardrobe"].includes(s.P.hiding.kind));
+  check("…and it did not see you, so it is not coming", !s.P.hiding.ghost && /cannot find you/.test(s.msg));
+  check("hidden, Use says Leave", actionLabel(s) === "Leave");
   run(s, 0.5, { ...still, iy: -1, shift: true });
   check("hiding, you cannot walk off, and you make no sound", (s.P.x | 0) === x && s.P.noiseR === 0);
   jump(s);
   check("…nor jump", s.P.vz === 0);
-
-  // it walks right past
   s.G.stun = 0; s.G.st = "patrol";
   s.G.x = out[0] + 0.5 + (out[0] === x ? 3 : 0); s.G.y = out[1] + 0.5 + (out[1] === y ? 3 : 0);
-  toggleLight(s); toggleLight(s);                  // the torch on: it would see you in the open
   run(s, 0.8);
-  check("it walks right past a locker it did not see you get into", s.mode === "play" && !seesYou(s));
-  // but lingering wears you down
-  s.G.stun = 1e9; s.G.x = out[0] + 0.5; s.G.y = out[1] + 0.5;
-  run(s, 2.5);
-  check("(lingering by it for 2.5s: not yet)", s.mode === "play");
-  run(s, 0.7);
-  check("…but if it lingers three seconds, it opens the door", s.mode === "dead" && s.events.some((e) => e.name === "caught"));
-  const l = atLocker(51).s;
+  check("it walks right past", s.mode === "play" && !seesYou(s));
+  // standing right beside you, for a long time: still nothing
+  s.G.stun = 0; s.G.x = out[0] + 0.5; s.G.y = out[1] + 0.5;
+  run(s, 8);
+  check("hidden, you are safe: it can stand right beside you and never catch you", s.mode === "play");
+  const l = atSpot(51).s;
   doAction(l);
   doAction(l);
   check("Use again lets you out where you stood", !l.P.hiding && Math.abs(l.P.x - (out[0] + 0.5)) < 1e-9 && Math.abs(l.P.y - (out[1] + 0.5)) < 1e-9);
 
-  // hide in front of it and it knows
-  const w = atLocker(51), ws = w.s;
-  // it stands four tiles behind you, in the same room, with nothing between
-  for (let k = 1; k <= 4; k++) ws.g[w.out[1] + w.dir[1] * k][w.out[0] + w.dir[0] * k] = FLOOR;
+  // hide in front of it: it searches the spot, then gives up
+  const w = atSpot(51), ws = w.s;
+  const [ox, oy] = w.out;
+  const away = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([a, b]) =>
+    [1, 2, 3].every((k) => (ox + a * k) % 8 !== 0 && (oy + b * k) % 8 !== 0 && ox + a * k > 0 && oy + b * k > 0 && ws.g[oy + b * k][ox + a * k] !== SPOT));
+  for (const k of [1, 2, 3]) ws.g[oy + away[1] * k][ox + away[0] * k] = FLOOR;   // nothing between
   ws.G.stun = 0; ws.G.st = "patrol";
-  ws.G.x = ws.P.x + w.dir[0] * 4; ws.G.y = ws.P.y + w.dir[1] * 4;
+  ws.G.x = ox + 0.5 + away[0] * 3; ws.G.y = oy + 0.5 + away[1] * 3;
   run(ws, DT);
   ws.G.stun = 0;
   check("(set-up) it is hunting you", ws.G.st === "hunt");
-  {
-    doAction(ws);
-    check("hide while it watches and it knows where you went", !!ws.P.hiding && ws.P.hiding.ghost === ws.G && /saw you hide/.test(ws.msg));
-    let t = 0;
-    while (ws.mode === "play" && t < 6) { tick(ws, still, DT); t += DT; }
-    check("…it comes straight for the locker and drags you out — fast", ws.mode === "dead" && t < 4, `${t.toFixed(2)}s`);
+  doAction(ws);
+  check("hide while it watches and it knows where you went", !!ws.P.hiding && ws.P.hiding.ghost === ws.G && /saw you/.test(ws.msg));
+  let t = 0, came = false;
+  while (ws.P.hiding && ws.P.hiding.ghost && t < 15) {
+    tick(ws, still, DT); t += DT;
+    if (Math.hypot(ws.G.x - (ox + 0.5), ws.G.y - (oy + 0.5)) < 1.2) came = true;
   }
+  check("…it comes to the spot and searches it", came);
+  check("…then gives up, and you live", ws.mode === "play" && !ws.P.hiding.ghost && /gives up/.test(ws.msg), `${t.toFixed(1)}s`);
+  run(ws, 3);
+  check("…and goes away", ws.mode === "play" && ws.G.st !== "hunt");
 }
 
 // ── scares ───────────────────────────────────────────────────────────────────
@@ -375,7 +378,7 @@ function atLocker(seed = 51) {
     [...seen].join(","));
   check("…and none of them moves the thing or touches the rules", s.G.x === g0.x && s.G.y === g0.y && s.mode === "play");
   const h = hall(71).s;
-  h.G.x -= 3;
+  h.G.x -= 4;
   run(h, DT);
   h.scareT = 0;
   h.G.stun = 1e9;
@@ -441,9 +444,7 @@ function walkOut(seed, night) {
     const aim = (next[0] === px && next[1] === py) ? (left.length ? [target.x, target.y] : [s.exitT.x + 0.5, s.exitT.y + 0.5]) : [tx, ty];
     s.P.fa = Math.atan2(aim[1] - s.P.y, aim[0] - s.P.x);
     if (s.g[next[1]][next[0]] === DOOR && actionLabel(s) === "Open") doAction(s);   // a shut door: open it
-    const ob = s.obst[next[0] + next[1] * N], onBeam = s.obst[px + py * N] === BEAM;
-    const want = ob === BEAM || onBeam;
-    if (want !== s.P.crouch) toggleCrouch(s);
+    const ob = s.obst[next[0] + next[1] * N];
     if (ob === HURDLE && Math.hypot(tx - s.P.x, ty - s.P.y) < 1.0) jump(s);
     tick(s, { ...still, iy: -1 }, DT);
     t += DT;

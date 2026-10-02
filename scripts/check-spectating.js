@@ -9,7 +9,7 @@
 
 require("dotenv").config();
 
-const API = "http://127.0.0.1:4399";
+const API = process.env.E2E_API || "http://127.0.0.1:4399";
 const pw = "Passw0rd!23";
 const stamp = Date.now().toString(36).slice(-5);
 

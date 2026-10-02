@@ -11,6 +11,9 @@
 //   3. REACT_APP_API_URL=http://127.0.0.1:4399 BUILD_PATH=<dir> npx react-scripts build
 //   4. node scripts/e2e.mjs <dir> <screenshot-prefix> [free|teams]
 //
+// E2E_API moves the backend it talks to, for checking a path that sits in
+// front of the server — the share proxy in scripts/placeholder.js, say.
+//
 // It creates throwaway accounts and rooms, so point it at a development
 // database, never production.
 //
@@ -24,7 +27,7 @@ import path from "node:path";
 
 const ROOT = process.argv[2], SHOTS = process.argv[3], MODE = process.argv[4] || "free";
 const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const WEB = 4700, API = "http://127.0.0.1:4399";
+const WEB = 4700, API = process.env.E2E_API || "http://127.0.0.1:4399";
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json" };
 
 const server = http.createServer((req, res) => {

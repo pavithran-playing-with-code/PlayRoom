@@ -15,13 +15,18 @@
  *
  * With the fixed link, visitors never hit a raw browser error while this
  * laptop is on: they see "Getting PlayRoom ready…" while it starts or rebuilds,
- * the game while it runs, and "PlayRoom is closed" after Ctrl+C. Those two pages
- * come from scripts/placeholder.js, which keeps running after this window closes.
+ * the game while it runs, and "PlayRoom is closed" after Ctrl+C. All three come
+ * from scripts/placeholder.js, which Funnel points at permanently and which
+ * forwards to the game server whenever that is up. Funnel's own config is
+ * written once and never swapped — swapping it leaves a gap in which the link
+ * does not fail politely, it hangs, and the phone says "site can't be reached".
  */
 const { spawn, spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const net = require("net");
+const dns = require("dns");
+const https = require("https");
 
 require("dotenv").config();
 
@@ -67,9 +72,41 @@ function tsStatus(ts) {
   try { return JSON.parse(r.stdout); } catch { return null; }
 }
 
-// On Windows the Tailscale background service keeps running after the app is
-// closed, but without the app it sits in "NoState" and can't serve anything.
-// Start the app ourselves instead of failing with a confusing error.
+// Windows runs Tailscale as two things: a background service (tailscaled,
+// which does the actual networking) and a tray app. Only the service can serve
+// a Funnel.
+//
+// This used to start the tray app and wait a minute and a half. When the
+// service is stopped — which is the usual reason the CLI says it cannot
+// connect — that wait was for something nobody had started, so it always
+// timed out and always fell back to a random Cloudflare link. Starting the
+// service takes about two seconds and does not need admin rights.
+const svcState = () => {
+  const r = spawnSync("powershell", ["-NoProfile", "-Command",
+    "(Get-Service -Name Tailscale -ErrorAction SilentlyContinue).Status"], { encoding: "utf8" });
+  return (r.stdout || "").trim();          // "Running" | "Stopped" | ""
+};
+
+function startService() {
+  const r = spawnSync("powershell", ["-NoProfile", "-Command",
+    "try { Start-Service -Name Tailscale -ErrorAction Stop; 'ok' } catch { $_.Exception.Message }"],
+    { encoding: "utf8" });
+  return (r.stdout || "").trim();
+}
+
+// Poll fast and give up early: a working Tailscale answers in a second or two,
+// and a broken one will not start answering because we waited longer.
+async function settle(ts, seconds, note) {
+  for (let i = 0; i < seconds * 4; i++) {
+    const st = tsStatus(ts);
+    if (st?.BackendState === "Running") return st;
+    if (st?.BackendState === "NeedsLogin") return st;
+    if (note && i === 8) line(note);
+    await sleep(250);
+  }
+  return tsStatus(ts);
+}
+
 async function tailscaleReady(ts) {
   let st = tsStatus(ts);
   if (st?.BackendState === "Running") return st;
@@ -77,58 +114,114 @@ async function tailscaleReady(ts) {
     line("⚠️  Tailscale is installed but signed out — open the Tailscale app and sign in.");
     return null;
   }
-  if (process.platform === "win32" && fs.existsSync(TS_APP)) {
-    line("⏳ Starting the Tailscale app… (from cold this can take up to a minute)");
-    spawn(TS_APP, [], { detached: true, stdio: "ignore" }).unref();
-    // A warm start connects in ~2 s, but a cold start once took longer than
-    // the 25 s this used to allow — and silently fell back to a random
-    // Cloudflare link even though Tailscale was seconds from ready.
-    for (let i = 1; i <= 90; i++) {
-      await sleep(1000);
-      st = tsStatus(ts);
-      if (st?.BackendState === "Running") { line("✅ Tailscale is up."); return st; }
-      if (st?.BackendState === "NeedsLogin") {
-        line("⚠️  Tailscale needs you to sign in — open the Tailscale app.");
+
+  if (process.platform === "win32") {
+    // The service first: without it the CLI cannot talk to anything.
+    const svc = svcState();
+    if (svc && svc !== "Running") {
+      line("⏳ Tailscale's service is stopped — starting it…");
+      const out = startService();
+      if (out !== "ok") {
+        line(`⚠️  Couldn't start the Tailscale service: ${out}`);
+        line("   Start it yourself with:  Start-Service Tailscale");
+        line("   (or open the Tailscale app once), then run npm run share again.");
         return null;
       }
-      if (i % 15 === 0) line(`   …still waiting for Tailscale (${i}s)`);
+      st = await settle(ts, 12);
+      if (st?.BackendState === "Running") { line("✅ Tailscale is up."); return st; }
+    }
+
+    // Service is up but the backend still isn't: the tray app owns the login
+    // session, so give it a nudge.
+    if (st?.BackendState !== "Running" && fs.existsSync(TS_APP)) {
+      line("⏳ Starting the Tailscale app…");
+      spawn(TS_APP, [], { detached: true, stdio: "ignore" }).unref();
+      st = await settle(ts, 20, "   …still waiting for Tailscale");
+      if (st?.BackendState === "Running") { line("✅ Tailscale is up."); return st; }
     }
   }
-  line(`⚠️  Tailscale isn't connected (state: ${st?.BackendState || "unknown"}).`);
-  line("   When the Tailscale icon shows Connected, press Ctrl+C and run npm run share");
-  line("   again to get your fixed link back.");
+
+  if (st?.BackendState === "NeedsLogin") {
+    line("⚠️  Tailscale needs you to sign in — open the Tailscale app.");
+    return null;
+  }
+  line(`⚠️  Tailscale isn't connected (state: ${st?.BackendState || "service not answering"}).`);
+  line("   Try:  Start-Service Tailscale");
+  line("   then run npm run share again to get your fixed link back.");
   return null;
 }
 
 // ── 1b. the waiting room (scripts/placeholder.js) ────────────────────────────
-async function placeholderUp() {
+// Which game port the running waiting room forwards to, or null if whatever
+// is on that port isn't ours.
+async function placeholderTarget() {
   try {
-    const r = await fetch(`http://127.0.0.1:${PH_PORT}/__placeholder`);
-    return (await r.text()) === "playroom-placeholder";
-  } catch { return false; }
+    const [tag, port] = (await (await fetch(`http://127.0.0.1:${PH_PORT}/__placeholder`)).text()).split(" ");
+    // -1 is one left over from before it forwarded at all: still ours, still
+    // needs replacing.
+    return tag === "playroom-placeholder" ? Number(port) || -1 : null;
+  } catch { return null; }
+}
+
+function stopPlaceholder() {
+  try { process.kill(Number(fs.readFileSync(PID_FILE, "utf8"))); } catch { /* already gone */ }
 }
 
 // Start it detached, so it keeps serving the "closed" page after this window
-// is gone. Reuse it if an earlier run already started it.
+// is gone. Reuse the one from an earlier run — unless that run used a
+// different SHARE_PORT, in which case it is forwarding to a port with nothing
+// on it and every visitor would see "closed" while the game is right here.
 async function ensurePlaceholder() {
-  if (await placeholderUp()) return true;
-  if (await portInUse(PH_PORT)) return false;          // someone else owns the port
-  spawn(process.execPath, [path.join(__dirname, "placeholder.js"), String(PH_PORT)], {
+  const running = await placeholderTarget();
+  if (running === PORT) return true;
+  if (running !== null) {
+    stopPlaceholder();
+    for (let i = 0; i < 20 && (await portInUse(PH_PORT)); i++) await sleep(150);
+  } else if (await portInUse(PH_PORT)) {
+    return false;                                      // someone else owns the port
+  }
+  spawn(process.execPath, [path.join(__dirname, "placeholder.js"), String(PH_PORT), String(PORT)], {
     cwd: ROOT, detached: true, stdio: "ignore", windowsHide: true,
   }).unref();
   for (let i = 0; i < 20; i++) {
     await sleep(150);
-    if (await placeholderUp()) return true;
+    if ((await placeholderTarget()) === PORT) return true;
   }
   return false;
 }
 
-// Point the fixed link at the waiting room, showing the given page. --bg makes
-// Funnel keep it up after this process exits.
-function showPlaceholder(ts, state) {
+// Which page the waiting room shows. It re-reads this on every request, so
+// this is the whole of "switch to the closed page".
+function setState(state) {
   try { fs.writeFileSync(STATE, state); } catch { /* page defaults to "closed" */ }
-  spawnSync(ts, ["funnel", "reset"], { stdio: "ignore" });
-  spawnSync(ts, ["funnel", "--bg", String(PH_PORT)], { stdio: "ignore" });
+}
+
+// Write the Funnel config. Also the repair when a public entry point has gone
+// bad: writing it again re-registers the link with all of them.
+function applyFunnel(ts) {
+  const r = spawnSync(ts, ["funnel", "--bg", String(PH_PORT)], { encoding: "utf8" });
+  // First run ever: Tailscale asks the account owner to switch Funnel on.
+  const approve = ((r.stdout || "") + (r.stderr || "")).match(/https:\/\/login\.tailscale\.com\/f\/funnel\S*/);
+  if (approve) {
+    line("👉 One-time step: open this link and click Enable:\n     " + approve[0]);
+    line("   Then run npm run share again.\n");
+    return false;
+  }
+  return r.status === 0;
+}
+
+// Funnel points at the waiting room and stays there for good — the waiting
+// room forwards to the game. Don't rewrite a config that is already right:
+// every write is a few seconds in which the public link serves nothing.
+function ensureFunnel(ts) {
+  const want = `http://127.0.0.1:${PH_PORT}`;
+  try {
+    const cfg = JSON.parse(spawnSync(ts, ["serve", "status", "--json"], { encoding: "utf8" }).stdout);
+    const web = Object.values(cfg?.Web || {})[0];
+    const funnelOn = Object.values(cfg?.AllowFunnel || {}).some(Boolean);
+    if (funnelOn && web?.Handlers?.["/"]?.Proxy === want) return true;
+  } catch { /* no config yet, or an old Tailscale without --json */ }
+  return applyFunnel(ts);
 }
 
 // npm run share:off — fixed link fully offline, waiting room stopped.
@@ -144,7 +237,83 @@ function stopEverything() {
   line("   Run npm run share to open it again.\n");
 }
 
-// ── 1c. Cloudflare quick tunnel (the fallback) ───────────────────────────────
+// ── 1c. is the link reachable from outside? ──────────────────────────────────
+// Opening it on this laptop proves nothing. The laptop is on the tailnet, so
+// the hostname resolves to the machine itself and the request never goes near
+// Tailscale's public entry points. A phone has no such shortcut — which is how
+// the link could work here and show "site can't be reached" there. So ask
+// public DNS where the rest of the world gets sent, and try those addresses.
+async function publicAddresses(host) {
+  const r = new dns.promises.Resolver();
+  r.setServers(["1.1.1.1", "8.8.8.8"]);                 // deliberately not MagicDNS
+  const [v4, v6] = await Promise.all([
+    r.resolve4(host).catch(() => []),
+    r.resolve6(host).catch(() => []),
+  ]);
+  return { v4, v6 };
+}
+
+function reaches(ip, host, family) {
+  return new Promise((resolve) => {
+    const req = https.request(
+      { host: ip, family, servername: host, port: 443, path: "/api/health",
+        headers: { Host: host }, timeout: 8000 },
+      (res) => { res.resume(); resolve(res.statusCode === 200); }
+    );
+    req.on("timeout", () => { req.destroy(); resolve(false); });
+    req.on("error", () => resolve(false));
+    req.end();
+  });
+}
+
+// Whether this machine has IPv6 at all. Without checking, a failed IPv6 test
+// would blame Tailscale for a route the local network simply doesn't have.
+function hasIPv6() {
+  return new Promise((resolve) => {
+    const s = net.connect({ host: "2606:4700:4700::1111", port: 443, family: 6 });
+    const done = (v) => { s.destroy(); resolve(v); };
+    s.setTimeout(2500, () => done(false));
+    s.once("connect", () => done(true));
+    s.once("error", () => done(false));
+  });
+}
+
+// Which of the published addresses are not serving the game.
+async function failing(host) {
+  const { v4 } = await publicAddresses(host);
+  const ok = await Promise.all(v4.map((ip) => reaches(ip, host, 4)));
+  return v4.filter((_, i) => !ok[i]);
+}
+
+// Poll until every published IPv4 address serves the game, so the link we print
+// is one a friend can actually open. It normally takes a second or two.
+//
+// One address going bad while the others are fine is a real state, not a
+// theoretical one: the entry point still accepts the connection and then drops
+// the TLS handshake, which a browser reports as "this site can't be reached"
+// without trying any of the others. Writing the Funnel config again clears it.
+async function waitForPublic(host, ts) {
+  const { v4, v6 } = await publicAddresses(host);
+  if (!v4.length && !v6.length) return { verdict: "unknown" };
+  let repaired = false;
+
+  for (let i = 0; i < 30; i++) {
+    const ok = await Promise.all(v4.map((ip) => reaches(ip, host, 4)));
+    if (v4.length && ok.every(Boolean)) {
+      const v6ok = v6.length && (await hasIPv6())
+        ? (await Promise.all(v6.map((ip) => reaches(ip, host, 6)))).every(Boolean)
+        : null;                                         // null: couldn't tell
+      return { verdict: "ok", v6ok };
+    }
+    // Give a fresh config a few seconds to reach every entry point before
+    // deciding one of them is stuck.
+    if (i === 6 && !repaired) { repaired = true; applyFunnel(ts); }
+    await sleep(1000);
+  }
+  return { verdict: "unreachable" };
+}
+
+// ── 1d. Cloudflare quick tunnel (the fallback) ───────────────────────────────
 // Preference order: a portable copy in tools/ (no admin, no PATH surprises),
 // then anything installed system-wide. If neither exists we fetch the official
 // single-file binary from Cloudflare's GitHub releases into tools/.
@@ -257,14 +426,21 @@ function announce(url, fixed) {
   let waitingRoom = false;
   if (fixedUrl) {
     line(`✅ Tailscale connected — fixed link: ${fixedUrl}`);
+    setState("starting");
     waitingRoom = await ensurePlaceholder();
-    if (waitingRoom) {
-      showPlaceholder(ts, "starting");
+    if (waitingRoom && ensureFunnel(ts)) {
       line("🪧 Anyone opening the link right now sees \"Getting PlayRoom ready…\"");
     } else {
-      line(`⚠️  Couldn't start the waiting-room page (port ${PH_PORT} is busy) — carrying on without it.`);
+      line(waitingRoom
+        ? "⚠️  Couldn't point the fixed link at this machine."
+        : `⚠️  Couldn't start the waiting room — is port ${PH_PORT} busy?`);
+      line("   Falling back to a Cloudflare link so the game is still shareable.");
+      waitingRoom = false;
+      fixedUrl = null;
     }
-  } else {
+  }
+
+  if (!fixedUrl) {
     if (ts) line("↪️  Using a Cloudflare link instead (it changes every run).");
     cf = findCloudflared();
     if (cf) line("✅ cloudflared found");
@@ -274,7 +450,7 @@ function announce(url, fixed) {
   // From here on, bailing out should leave friends a "closed" page, not the
   // "getting ready" one forever.
   const fail = (msg) => {
-    if (waitingRoom) showPlaceholder(ts, "closed");
+    if (waitingRoom) setState("closed");
     die(msg);
   };
 
@@ -319,26 +495,39 @@ function announce(url, fixed) {
 
   // ── tunnel ──
   line("🌍 Opening public link…\n");
-  let tunnel;
+  let tunnel = null, watch = null;
   if (fixedUrl) {
-    // Swap the waiting room out for the game.
-    spawnSync(ts, ["funnel", "reset"], { stdio: "ignore" });
-    tunnel = spawn(ts, ["funnel", String(PORT)], { stdio: ["ignore", "pipe", "pipe"] });
+    // Nothing to switch over: Funnel already points at the waiting room, and
+    // the waiting room started forwarding to the game the moment it came up.
+    // All that's left is to confirm the outside world can see it, because
+    // this laptop's own view of the link goes a different way round.
     const host = new URL(fixedUrl).host;
-    let announced = false, askedApproval = false;
-    const scan = (buf) => {
-      const text = String(buf);
-      // First run ever: Tailscale asks the account owner to switch Funnel on.
-      const approve = text.match(/https:\/\/login\.tailscale\.com\/f\/funnel\S*/);
-      if (approve && !askedApproval) {
-        askedApproval = true;
-        line("👉 One-time step: open this link and click Enable:\n     " + approve[0]);
-        line("   This window carries on by itself once you approve.\n");
-      }
-      if (!announced && text.includes(host)) { announced = true; announce(fixedUrl, true); }
-    };
-    tunnel.stdout.on("data", scan);
-    tunnel.stderr.on("data", scan);
+    const { verdict, v6ok } = await waitForPublic(host, ts);
+
+    // An entry point can go bad hours into a session, and this laptop is the
+    // last place that would notice: it reaches the game over the tailnet,
+    // never through the public ones. So keep checking on the phone's behalf.
+    watch = setInterval(async () => {
+      const bad = await failing(host);
+      if (!bad.length) return;
+      if (!(await failing(host)).length) return;       // a blip, not a fault
+      line("🔧 Part of the public link stopped answering — re-registering it…");
+      applyFunnel(ts);
+    }, 120000);
+    watch.unref();
+
+    if (verdict === "unreachable") {
+      line("⚠️  The link works on this laptop but nothing outside can reach it yet.");
+      line("   Check Funnel is enabled for this device:");
+      line("     https://login.tailscale.com/admin/machines  →  this machine  →  Funnel");
+      line("   The game is still playable here: http://localhost:" + PORT + "\n");
+    } else if (verdict === "unknown") {
+      line("ℹ️  Couldn't look up the public address (DNS blocked?) — printing the link anyway.");
+    } else if (v6ok === false) {
+      line("⚠️  Reachable over IPv4 but not IPv6. A phone on mobile data usually tries");
+      line("   IPv6 first, so if it says \"site can't be reached\", turn Wi-Fi on.");
+    }
+    announce(fixedUrl, true);
   } else {
     tunnel = spawn(cf, ["tunnel", "--url", `http://localhost:${PORT}`], { stdio: ["ignore", "pipe", "pipe"] });
     let announced = false;
@@ -357,16 +546,17 @@ function announce(url, fixed) {
     if (closing) return;
     closing = true;
     line("\n\n🛑 Closing PlayRoom…");
-    try { tunnel.kill(); } catch { /* already gone */ }
+    clearInterval(watch);
+    try { tunnel?.kill(); } catch { /* already gone */ }
     try { server.kill(); } catch { /* already gone */ }
     if (fixedUrl) {
-      if (await ensurePlaceholder()) {
-        showPlaceholder(ts, "closed");
-        line("🪧 Friends opening the link now see \"PlayRoom is closed right now\".");
-        line("   (npm run share:off takes the link fully offline.)");
-      } else {
-        spawnSync(ts, ["funnel", "reset"], { stdio: "ignore" });
-      }
+      // Only the page changes. Funnel keeps pointing at the waiting room, so
+      // there is never a moment where the link answers with nothing — and if
+      // this window is closed outright and none of this runs, the waiting room
+      // sees the game port stop answering and shows the same page anyway.
+      setState("closed");
+      line("🪧 Friends opening the link now see \"PlayRoom is closed right now\".");
+      line("   (npm run share:off takes the link fully offline.)");
     }
     setTimeout(() => process.exit(0), 300);
   };
@@ -374,5 +564,5 @@ function announce(url, fixed) {
   process.on("SIGTERM", shutdown);
   process.on("SIGHUP", shutdown);      // Windows: the console window was closed
   server.on("exit", shutdown);
-  tunnel.on("exit", shutdown);
+  tunnel?.on("exit", shutdown);   // only the Cloudflare fallback has one
 })();

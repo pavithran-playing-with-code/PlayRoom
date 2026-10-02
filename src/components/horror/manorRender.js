@@ -817,6 +817,112 @@ function hidingOverlay(ctx, W, H, kind, t) {
   ctx.restore();
 }
 
+// ── markers, as in a shooter ─────────────────────────────────────────────────
+// Every relic you still need, every friend still inside, and the way out once
+// it's open, each with how far it is — through walls. In front of you, a
+// marker floats over the thing itself; anywhere else it waits at the edge of
+// the screen with an arrow showing which way to turn.
+export const METRES_PER_TILE = 2;
+const metres = (d) => `${Math.max(1, Math.round(d * METRES_PER_TILE))} m`;
+
+function markers(ctx, s, W, H, t) {
+  const { P } = s;
+  const dx = Math.cos(P.fa), dy = Math.sin(P.fa), plx = -dy * PLANE, ply = dx * PLANE;
+  const inv = 1 / (plx * dy - dx * ply);
+  const hz = H / 2 + (P.pitch || 0) * H;
+  const list = [];
+  const left = s.relics.filter((r) => !r.got && r.mine !== false);
+  let nearest = null;
+  for (const r of left) if (!nearest || Math.hypot(r.x - P.x, r.y - P.y) < Math.hypot(nearest.x - P.x, nearest.y - P.y)) nearest = r;
+  for (const r of left) {
+    list.push({ x: r.x, y: r.y, kind: "relic", color: r.color || "#ffdca0", label: "", main: r === nearest });
+  }
+  if (exitOpen(s)) list.push({ x: s.exitT.x + 0.5, y: s.exitT.y + 0.5, kind: "exit", color: "#5fd68a", label: "Way out", main: !left.length });
+  for (const o of s.others || []) list.push({ x: o.x, y: o.y, kind: "friend", color: o.color, label: o.name || "", main: true });
+
+  const mr = mapRect({ W, H, safeTop: 0 });
+  const edgeL = 46, edgeR = mr.x0 - 34;               // clear of the HUD's bars and the map
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const m of list) {
+    const rx = m.x - P.x, ry = m.y - P.y;
+    m.d = Math.hypot(rx, ry);
+    m.tx = inv * (dy * rx - dx * ry);
+    m.ty = inv * (-ply * rx + plx * ry);
+    m.ahead = m.ty > 0.3 && Math.abs(m.tx / m.ty) < 0.92;
+    const a = Math.atan2(ry, rx) - P.fa;
+    m.side = m.ahead ? 0 : Math.atan2(Math.sin(a), Math.cos(a)) < 0 ? -1 : 1;
+  }
+  // at each edge only the three nearest (friends first), so the stack stays
+  // between the HUD and the buttons; far ones first, so near ones draw on top
+  for (const sd of [-1, 1]) {
+    const edge = list.filter((m) => m.side === sd).sort((a, b) => (a.kind === "friend" ? -1 : 0) - (b.kind === "friend" ? -1 : 0) || a.d - b.d);
+    edge.slice(3).forEach((m) => { m.skip = true; });
+    edge.slice(0, 3).forEach((m, k) => { m.slot = k; });
+  }
+  list.sort((a, b) => b.d - a.d);
+  for (const m of list) {
+    if (m.skip) continue;
+    const { tx, ty, ahead } = m;
+    const size = m.main ? 1 : 0.78;
+    const alpha = m.main ? 1 : 0.7;
+    let x, y;
+    const side = m.side;
+    if (ahead) {
+      x = W / 2 * (1 + tx / ty);
+      y = hz - Math.max(34, Math.min(H * 0.32, (H / ty) * 0.18 + 30));
+    } else {
+      // at the edge on the side to turn to
+      x = side < 0 ? edgeL : edgeR;
+      y = H * 0.3 + m.slot * 38;
+    }
+    ctx.globalAlpha = alpha;
+    // the pin: a diamond for a relic, a door for the way out, a ring for a friend
+    const r = 8 * size;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(0,0,0,.75)";
+    ctx.fillStyle = m.color;
+    ctx.beginPath();
+    if (m.kind === "relic") {
+      ctx.moveTo(x, y - r * 1.3); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r * 1.3); ctx.lineTo(x - r, y); ctx.closePath();
+      if (m.main) { ctx.save(); ctx.shadowColor = m.color; ctx.shadowBlur = 12 + 4 * Math.sin(t * 5); ctx.fill(); ctx.restore(); }
+    } else if (m.kind === "exit") {
+      ctx.rect(x - r * 0.8, y - r * 1.2, r * 1.6, r * 2.4);
+    } else {
+      ctx.arc(x, y, r, 0, TAU);
+    }
+    ctx.fill();
+    ctx.stroke();
+    if (m.kind === "friend") {                        // a dot in the middle: it's a person
+      ctx.fillStyle = "rgba(0,0,0,.6)";
+      ctx.beginPath(); ctx.arc(x, y, r * 0.35, 0, TAU); ctx.fill();
+    }
+    // the turn arrow, off screen
+    if (side) {
+      const ax = x + side * (r + 9);
+      ctx.fillStyle = m.color;
+      ctx.beginPath();
+      ctx.moveTo(ax + side * 7, y); ctx.lineTo(ax - side * 2, y - 6); ctx.lineTo(ax - side * 2, y + 6); ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+    // name and distance, outlined so they read on any wall
+    const text = m.label ? `${m.label} · ${metres(m.d)}` : metres(m.d);
+    ctx.font = `bold ${Math.round(12 * size + 1)}px Georgia`;
+    const tyy = y + r * 1.3 + 10;
+    // at an edge the words grow away from it, never under the map or off screen
+    ctx.textAlign = side < 0 ? "left" : side > 0 ? "right" : "center";
+    const txx = side < 0 ? x - r - 2 : side > 0 ? x + r + 2 : x;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(0,0,0,.85)";
+    ctx.strokeText(text, txx, tyy);
+    ctx.fillStyle = m.kind === "relic" ? "#fff3d0" : m.color;
+    ctx.fillText(text, txx, tyy);
+  }
+  ctx.restore();
+}
+
 function arrow(ctx, W, H, s, ang, radius, size, color) {
   ctx.save();
   ctx.translate(W / 2 + Math.sin(ang - s.P.fa) * radius, H / 2 - Math.cos(ang - s.P.fa) * radius);
@@ -869,11 +975,9 @@ export function drawManor(ctx, s, view, t, stick) {
   scene(ctx, s, W, H, t);
   if (s.P.hiding) hidingOverlay(ctx, W, H, s.P.hiding.kind || "wardrobe", t);
 
-  // where to go: the nearest relic, then the gate
+  // where everything is, and how far: relics, friends, the way out
   const { P, G } = s;
-  const tg = s.relics.filter((r) => !r.got && r.mine !== false).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y))[0];
-  const tx = tg ? tg.x : s.exitT.x + 0.5, ty = tg ? tg.y : s.exitT.y + 0.5;
-  arrow(ctx, W, H, s, Math.atan2(ty - P.y, tx - P.x), Math.min(W, H) * 0.3, 12, "rgba(255,220,160,.45)");
+  markers(ctx, s, W, H, t);
 
   // where it is, when it is near: redder and bigger the closer it gets
   const d = G ? Math.hypot(P.x - G.x, P.y - G.y) : Infinity;

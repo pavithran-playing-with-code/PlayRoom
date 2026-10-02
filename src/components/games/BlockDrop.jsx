@@ -3,15 +3,19 @@
 // it fits; fill a whole row or column and it clears. Nothing falls — every
 // piece goes exactly where you choose.
 //
-// Tap to pick a piece, tap the board to drop it. Not drag-and-drop: on a phone
-// a drag fights the browser's own scroll and pull-to-refresh gestures, and your
-// finger covers the very cells you are aiming at. Two taps always land.
+// Drag a piece from the tray onto the board and let go. While you drag, the
+// piece floats a little above your finger — so the finger never covers the
+// cells you're aiming at — and the board shows where it would land, green if
+// it fits. The tray and the board don't scroll under a drag (touch-action),
+// and the piece is held by pointer capture, so a drag that strays is still
+// yours. Tapping a piece and then the board still works too.
 //
 // Running out of room doesn't end the match — the room's clock does — so a
 // stuck board is swept and a fresh one dealt, with the score kept.
 //
 // The rules live in blastBoard.js. This file is the screen and the taps.
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
@@ -22,6 +26,8 @@ import {
 } from "./blastBoard";
 
 const SWEEP_MS = 1100;
+const DRAG_MIN = 8;            // px a finger moves before a press becomes a drag
+const LIFT = 34;               // how far above the finger the dragged piece floats
 
 export default function BlockDrop(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
@@ -43,6 +49,10 @@ export default function BlockDrop(props) {
   const [sweeps, setSweeps] = useState(0);
   const [hover, setHover] = useState(null);        // { r, c } for the ghost
   const [msg, setMsg] = useState(null);
+  const [drag, setDrag] = useState(null);          // { i, x, y } while a piece is being dragged
+  const dragRef = useRef(null);                    // { i, id, sx, sy, moved }
+  const gridRef = useRef(null);
+  const geom = useRef({ cell: 30, gap: 3 });       // the board's cell size, from the last render
   const timers = useRef([]);
   const uid = useRef(0);
   useEffect(() => {
@@ -155,6 +165,55 @@ export default function BlockDrop(props) {
     setHover(null);
   }
 
+  // ── dragging a piece ───────────────────────────────────────────────────────
+  // Where would the dragged piece land? Its top-left cell is under the
+  // floating piece's top-left corner, rounded to the nearest cell.
+  function targetFor(i, x, y) {
+    const piece = live.current.tray[i];
+    const grid = gridRef.current;
+    if (!piece || !grid) return null;
+    const { cell, gap } = geom.current, step = cell + gap;
+    const pw = piece.w * step - gap, ph = piece.h * step - gap;
+    const left = x - pw / 2, top = y - LIFT - ph;
+    const rect = grid.getBoundingClientRect();
+    const r = Math.round((top - rect.top) / step), c = Math.round((left - rect.left) / step);
+    if (r < -1 || c < -1 || r > SIZE || c > SIZE) return null;   // nowhere near the board
+    return { r, c };
+  }
+
+  function dragStart(i, e) {
+    if (overRef.current || isSpectator || !live.current.tray[i]) return;
+    e.preventDefault();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not supported */ }
+    dragRef.current = { i, id: e.pointerId, sx: e.clientX, sy: e.clientY, moved: false };
+  }
+  function dragMove(e) {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.id) return;
+    if (!d.moved && Math.hypot(e.clientX - d.sx, e.clientY - d.sy) < DRAG_MIN) return;
+    if (!d.moved) {
+      d.moved = true;
+      live.current.pick = d.i;
+      setPick(d.i);
+    }
+    setDrag({ i: d.i, x: e.clientX, y: e.clientY });
+    setHover(targetFor(d.i, e.clientX, e.clientY));
+  }
+  function dragEnd(e) {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.id) return;
+    dragRef.current = null;
+    setDrag(null);
+    if (!d.moved) { choose(d.i); return; }               // a tap: pick it, then tap the board
+    const at = e.type === "pointercancel" ? null : targetFor(d.i, e.clientX, e.clientY);
+    const piece = live.current.tray[d.i];
+    if (at && piece && canPlace(live.current.board, piece, at.r, at.c)) { drop(at.r, at.c); return; }
+    if (at) say("It doesn't fit there", "error");
+    live.current.pick = null;                           // back to the tray
+    setPick(null);
+    setHover(null);
+  }
+
   const oppList = Object.values(eng.opponents);
   const stats = [
     { label: "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
@@ -191,10 +250,11 @@ export default function BlockDrop(props) {
           const cell = Math.floor(Math.max(18, Math.min(46,
             (Math.min(w, h - trayH) - gap * (SIZE - 1)) / SIZE)));
           const boardPx = cell * SIZE + gap * (SIZE - 1);
+          geom.current = { cell, gap };
           return (
             <div className="bb-wrap">
               <div className="bb-frame" style={{ width: boardPx + 14 }}>
-                <div className="bb-grid"
+                <div className="bb-grid" ref={gridRef}
                   style={{ gridTemplateColumns: `repeat(${SIZE}, ${cell}px)`, gridAutoRows: `${cell}px`, gap }}>
                   {board.map((fill, i) => {
                     const r = Math.floor(i / SIZE), c = i % SIZE;
@@ -203,7 +263,7 @@ export default function BlockDrop(props) {
                       <span key={i}
                         className={`bb-cell${fill ? " on" : ""}${isGhost ? (ghostOk ? " ghost" : " nope") : ""}`}
                         style={fill ? { background: fill } : undefined}
-                        onPointerEnter={() => pick !== null && setHover({ r, c })}
+                        onPointerEnter={() => pick !== null && !drag && setHover({ r, c })}
                         onPointerDown={() => { setHover({ r, c }); drop(r, c); }}
                       />
                     );
@@ -215,8 +275,10 @@ export default function BlockDrop(props) {
               <div className="bb-tray" aria-label="Pieces to place">
                 {tray.map((p, i) => (
                   <button key={i} type="button"
-                    className={`bb-slot${pick === i ? " picked" : ""}${p ? "" : " used"}`}
-                    onClick={() => choose(i)} disabled={!p || isSpectator}
+                    className={`bb-slot${pick === i ? " picked" : ""}${p ? "" : " used"}${drag && drag.i === i ? " dragging" : ""}`}
+                    onPointerDown={(e) => dragStart(i, e)} onPointerMove={dragMove}
+                    onPointerUp={dragEnd} onPointerCancel={dragEnd}
+                    disabled={!p || isSpectator}
                     aria-pressed={pick === i}
                     aria-label={p ? `Piece ${i + 1}, ${p.size} blocks` : "Used"}>
                     {p && (
@@ -234,9 +296,23 @@ export default function BlockDrop(props) {
               </div>
               {!isSpectator && (
                 <div className="muted bb-help">
-                  {pick === null ? "Tap a piece, then tap the board" : "Now tap where it goes"}
+                  {drag ? "Let go where it fits" : pick === null ? "Drag a piece onto the board" : "Now tap where it goes — or drag it"}
                 </div>
               )}
+
+              {/* the piece in your hand, floating above your finger */}
+              {drag && tray[drag.i] && createPortal(
+                <div className="bb-float" style={{
+                  left: drag.x - (tray[drag.i].w * (cell + gap) - gap) / 2,
+                  top: drag.y - LIFT - (tray[drag.i].h * (cell + gap) - gap),
+                  gridTemplateColumns: `repeat(${tray[drag.i].w}, ${cell}px)`, gridAutoRows: `${cell}px`, gap,
+                }}>
+                  {Array.from({ length: tray[drag.i].w * tray[drag.i].h }).map((_, k) => {
+                    const p = tray[drag.i], rr = Math.floor(k / p.w), cc = k % p.w;
+                    const on = p.cells.some(([a, b]) => a === rr && b === cc);
+                    return <span key={k} className={on ? "on" : ""} style={on ? { background: p.colour } : undefined} />;
+                  })}
+                </div>, document.body)}
             </div>
           );
         }}

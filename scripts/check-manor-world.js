@@ -36,7 +36,7 @@ const fakeIo = {
 };
 
 const world = require("../config/manorWorld");
-const { manorResults, ESCAPE_BONUS, PLACE_STEP, MAX_RELIC_POINTS, MAX_SCORE_PER_GAME } = require("../config/matchResult");
+const { manorResults, ESCAPE_POINTS, MAX_RELIC_POINTS, MAX_SCORE_PER_GAME } = require("../config/matchResult");
 
 let fails = 0;
 const check = (name, ok, extra = "") => {
@@ -132,14 +132,14 @@ let coreMod;
     check("relics are dealt fairly: every player's are about as far away", spread < 0.25, `walking distance per player ${sums.join(", ")}`);
   }
 
-  // ── a free-for-all ─────────────────────────────────────────────────────────
+  // ── a free-for-all: the whole clock ────────────────────────────────────────
   {
     const w = room("free", [{ id: 1, name: "Asha" }, { id: 2, name: "Ben" }, { id: 3, name: "Cy" }]);
     const A = phone(1), B = phone(2), C = phone(3);
+    const score = (id) => Number(w.lastScores.get(id).split("|")[0]);
     check("everyone has a colour of their own", new Set([...w.players.values()].map((p) => p.color)).size === 3);
     check("three relics each", w.sides.every((s) => s.need === 3 && w.house.relics.filter((r) => r.side === s.key).length === 3));
 
-    // Asha walks onto one of Ben's relics: not hers, nothing happens
     const bens = w.house.relics.find((r) => r.side === "p2");
     walk(w, A, 1, bens.x, bens.y);
     world._tick(w);
@@ -148,55 +148,76 @@ let coreMod;
     const [ex, ey] = exitSpot(w);
     walk(w, A, 1, ex, ey);
     world._tick(w);
-    check("the gate stays shut until your relics are all taken", !w.players.get(1).escaped);
+    check("the gate stays shut until your relics are all taken", w.sides[0].escapes === 0);
 
     for (const r of w.house.relics.filter((q) => q.side === "p1")) { walk(w, A, 1, r.x, r.y); world._tick(w); }
     check("walk onto your own and it's yours", w.sides[0].got === 3 && w.sides[0].open);
-    check("…and the score is written by the server", writes.some((q) => /UPDATE room_players SET score/.test(q.sql) && q.args[0] === 300 && q.args[4] === 1));
+    check("…and the score is written by the server: 100 a relic", score(1) === 300);
+    sent.length = 0;
     walk(w, A, 1, ex, ey);
     world._tick(w);
     const a = w.players.get(1);
-    check("all three and the gate: out, first", a.escaped && a.place === 1);
-    check("first out scores its relics + the escape + 8 places beaten", writes.filter((q) => q.args && q.args[4] === 1).pop().args[0] === 300 + ESCAPE_BONUS + 8 * PLACE_STEP);
-
-    for (const r of w.house.relics.filter((q) => q.side === "p2")) { walk(w, B, 2, r.x, r.y); world._tick(w); }
-    walk(w, B, 2, ex, ey);
+    check("all three and the gate: out — +1000", w.sides[0].escapes === 1 && score(1) === ESCAPE_POINTS + 300);
+    check("…and the match goes on", !w.over);
+    check("…you're back at the entrance for another round", a.alive && Math.hypot(a.x - w.house.spawn.x, a.y - w.house.spawn.y) < 1e-9 &&
+      lastEv("respawn").some((e) => e.id === 1 && e.why === "escaped"));
+    check("…with your relics put back and your gate shut", w.sides[0].got === 0 && !w.sides[0].open &&
+      w.house.relics.filter((r) => r.side === "p1").every((r) => !r.got));
+    // round two
+    for (const r of w.house.relics.filter((q) => q.side === "p1")) { walk(w, A, 1, r.x, r.y); world._tick(w); }
+    walk(w, A, 1, ex, ey);
     world._tick(w);
-    check("second out is second", w.players.get(2).place === 2);
-    check("the match goes on while anyone is inside", !w.over);
+    check("get out again: another +1000, every relic counted", w.sides[0].escapes === 2 && score(1) === 2 * ESCAPE_POINTS + 600, String(score(1)));
 
-    // the thing gets Cy
+    // the thing gets Cy: a scare, then back in — not out of the match
     const G = w.house.ghosts[0];
     const cy = w.players.get(3);
-    G.x = cy.x + 0.2; G.y = cy.y; G.stun = 0;
+    walk(w, C, 3, w.house.relics.find((r) => r.side === "p3").x, w.house.relics.find((r) => r.side === "p3").y);
     world._tick(w);
-    check("a ghost on top of you: caught", !cy.alive && cy.cause === "ghost");
-    check("everyone out or caught: the match ends", w.over && w.reason === "done");
+    const cyGot = w.sides[2].got;
+    G.x = cy.x + 0.2; G.y = cy.y; G.stun = 0;
+    sent.length = 0;
+    world._tick(w);
+    G.stun = 1e9; G.x = -50; G.y = -50;
+    check("a ghost on top of you: caught", !cy.alive && cy.caught === 1 && lastEv("dead").some((e) => e.id === 3 && e.cause === "ghost"));
+    check("…but the match goes on", !w.over);
+    world._tick(w);
+    check("…not back yet (a moment for the scare)", !cy.alive);
+    cy.respawnAt = Date.now() - 1;
+    world._tick(w);
+    check("…then back in at the entrance", cy.alive && Math.hypot(cy.x - w.house.spawn.x, cy.y - w.house.spawn.y) < 1e-9 && lastEv("respawn").some((e) => e.id === 3 && e.why === "caught"));
+    check("…keeping the relics you'd found", w.sides[2].got === cyGot && cyGot === 1);
+
+    // Ben gets out once
+    for (const r of w.house.relics.filter((q) => q.side === "p2")) { walk(w, B, 2, r.x, r.y); world._tick(w); }
+    walk(w, B, 2, ex, ey); world._tick(w);
+    check("the match runs until the clock stops", !w.over);
+    w.startMs -= w.durMs;
+    world._tick(w);
+    check("the clock stops: over", w.over && w.reason === "time");
     await new Promise((r) => setTimeout(r, 30));
     check("the room is closed and the results recorded", writes.some((q) => /UPDATE rooms SET status = 'finished'/.test(q.sql)) && recorded.includes(w.roomId));
-    const over = sent.filter((s) => s.ev === "manor:over").pop();
-    check("the final order is who got out first", over && over.payload.sides.map((s) => s.key).join(",") === "p1,p2,p3", over && over.payload.sides.map((s) => `${s.key}:${s.place}`).join(" "));
-
-    const res = manorResults({ mode: "free", game_slug: "manor" }, [1, 2, 3].map((id) => ({ user_id: id, score: w.lastScores.get(id).split("|")[0] })));
-    check("results: first out wins, the rest lose", res.get(1) === "win" && res.get(2) === "loss" && res.get(3) === "loss");
+    const over = sent.filter((x) => x.ev === "manor:over").pop();
+    check("the final order is by score", over && over.payload.sides.map((x) => x.key).join(",") === "p1,p2,p3", over && over.payload.sides.map((x) => `${x.key}:${x.score}`).join(" "));
+    const res = manorResults({ mode: "free", game_slug: "manor" }, [1, 2, 3].map((id) => ({ user_id: id, score: score(id) })));
+    check("results: the most points wins; the rest lose", res.get(1) === "win" && res.get(2) === "loss" && res.get(3) === "loss");
   }
 
   // ── the score scale ────────────────────────────────────────────────────────
   {
-    // the most relic points any side can hold: a four-player co-op
-    const most = (3 * 4 + 1) * 100;
-    check("no side can hold more relic points than the scale allows for", most <= MAX_RELIC_POINTS);
-    check("getting out beats any number of relics", ESCAPE_BONUS > MAX_RELIC_POINTS);
-    check("a place beats any number of relics", PLACE_STEP > MAX_RELIC_POINTS);
-    check("first place with every relic still fits under the score cap", ESCAPE_BONUS + 8 * PLACE_STEP + MAX_RELIC_POINTS <= MAX_SCORE_PER_GAME);
-    const caughtWithAll = manorResults({ mode: "coop" }, [{ user_id: 1, score: most }, { user_id: 2, score: most }]);
-    check("co-op that took every relic and was caught: a loss", caughtWithAll.get(1) === "loss");
+    // the most relic points a side can hold in one round: a four-player co-op
+    const most = (2 * 4 + 1) * 100;
+    check("one round's relics fit the scale", most <= MAX_RELIC_POINTS);
+    check("getting out is worth more than a round's relics, so 'got out' reads off the score", ESCAPE_POINTS > MAX_RELIC_POINTS);
+    check("ten times out, every relic each time, fits under the score cap", 10 * (ESCAPE_POINTS + MAX_RELIC_POINTS) <= MAX_SCORE_PER_GAME);
+    const res = manorResults({ mode: "free" }, [{ user_id: 1, score: 1300 }, { user_id: 2, score: 1300 }, { user_id: 3, score: 900 }]);
+    check("level at the top: a draw", res.get(1) === "draw" && res.get(2) === "draw" && res.get(3) === "loss");
   }
 
   // ── nobody gets out ────────────────────────────────────────────────────────
   {
-    const res = manorResults({ mode: "free" }, [{ user_id: 1, score: 300 }, { user_id: 2, score: 200 }]);
-    check("everyone caught: nobody wins, however many relics", res.get(1) === "loss" && res.get(2) === "loss");
+    const res = manorResults({ mode: "free" }, [{ user_id: 1, score: 800 }, { user_id: 2, score: 200 }]);
+    check("nobody got out: nobody wins, however many relics", res.get(1) === "loss" && res.get(2) === "loss");
     const w = room("free", [{ id: 1 }, { id: 2 }], { elapsed: 301000 });
     world._tick(w);
     check("the clock runs out: the match ends", w.over && w.reason === "time");
@@ -207,33 +228,32 @@ let coreMod;
     const w = room("coop", [{ id: 11 }, { id: 12 }, { id: 13 }]);
     check("co-op: one side, gold, 2 relics a head + 1", w.sides.length === 1 && w.sides[0].need === 7 && w.sides[0].color === "#ffdca0");
     const P = [phone(11), phone(12), phone(13)];
-    // anyone can take any relic
     const rs = w.house.relics;
     rs.forEach((r, i) => { walk(w, P[i % 3], 11 + (i % 3), r.x, r.y); world._tick(w); });
     check("any of you can take any relic", w.sides[0].got === 7 && w.sides[0].open);
     const [ex, ey] = exitSpot(w);
     walk(w, P[0], 11, ex, ey); world._tick(w);
-    walk(w, P[1], 12, ex, ey); world._tick(w);
-    check("out one by one: not over until you're all out", !w.over && w.players.get(11).escaped && w.players.get(12).escaped);
-    walk(w, P[2], 13, ex, ey); world._tick(w);
-    check("all out: you all win", w.over && w.reason === "won");
+    check("one of you out: the team scores, and goes again", w.sides[0].escapes === 1 && !w.sides[0].open && !w.over);
+    const G = w.house.ghosts[0];
+    const p12 = w.players.get(12);
+    G.x = p12.x + 0.1; G.y = p12.y; G.stun = 0;
+    world._tick(w);
+    G.stun = 1e9; G.x = -50; G.y = -50;
+    check("one of you caught: not the end — the others play on", !p12.alive && !w.over);
+    w.startMs -= w.durMs;
+    world._tick(w);
     const s = w.lastScores.get(11).split("|")[0];
     const res = manorResults({ mode: "coop" }, [11, 12, 13].map((id) => ({ user_id: id, score: s })));
-    check("…and it's recorded as a win for every one of you", [11, 12, 13].every((id) => res.get(id) === "win"));
+    check("got out once by the end: a win for every one of you", w.over && [11, 12, 13].every((id) => res.get(id) === "win"));
 
-    const w2 = room("coop", [{ id: 21 }, { id: 22 }]);
-    phone(21); const ph22 = phone(22);
-    walk(w2, ph22, 22, w2.house.relics[0].x, w2.house.relics[0].y);   // away from 21
-    const G = w2.house.ghosts[0];
-    G.x = w2.players.get(22).x + 0.1; G.y = w2.players.get(22).y; G.stun = 0;
-    world._tick(w2);
-    check("co-op: one of you caught and it's over for both", w2.over && w2.reason === "lost" && w2.players.get(21).alive);
-    const res2 = manorResults({ mode: "coop" }, [{ user_id: 21, score: 0 }, { user_id: 22, score: 0 }]);
-    check("…lost for both", res2.get(21) === "loss" && res2.get(22) === "loss");
+    const res2 = manorResults({ mode: "coop" }, [{ user_id: 21, score: 700 }, { user_id: 22, score: 700 }]);
+    check("never got out: lost for both", res2.get(21) === "loss" && res2.get(22) === "loss");
 
     const w3 = room("coop", [{ id: 31 }, { id: 32 }]);
     world.forfeit(w3.code, 31);
-    check("co-op: walk out and your friends lose with you", w3.over && w3.reason === "lost" && w3.players.get(31).cause === "left");
+    check("co-op: one leaves, the other plays on", !w3.over && w3.players.get(31).left && w3.players.get(32).alive);
+    world.forfeit(w3.code, 32);
+    check("…and when everyone has left, it's over", w3.over && w3.reason === "done");
   }
 
   // ── teams ──────────────────────────────────────────────────────────────────
@@ -242,26 +262,21 @@ let coreMod;
     const ph = { 41: phone(41), 42: phone(42), 43: phone(43), 44: phone(44), 45: phone(45) };
     const red = w.sides.find((s) => s.key === "t1"), yel = w.sides.find((s) => s.key === "t2");
     check("teams: a colour and a relic set per team, sized to the team", red.need === 5 && yel.need === 4 && red.color !== yel.color);
-    // Yellow does it all: collect, one member caught, the other out
     w.house.relics.filter((r) => r.side === "t2").forEach((r) => { walk(w, ph[44], 44, r.x, r.y); world._tick(w); });
     check("a team's door opens when its relics are all taken", yel.open && !red.open);
     const [ex, ey] = exitSpot(w);
     walk(w, ph[44], 44, ex, ey); world._tick(w);
-    check("one member out: the team isn't placed while a teammate is inside", w.players.get(44).escaped && !yel.place);
-    walk(w, ph[45], 45, w.house.relics[0].x, w.house.relics[0].y);    // somewhere nobody else is
-    const G = w.house.ghosts[0];
-    G.x = w.players.get(45).x + 0.1; G.y = w.players.get(45).y; G.stun = 0;
-    world._tick(w);
-    G.stun = 1e9; G.x = -50; G.y = -50;
-    check("…and is placed once nobody's left inside", yel.place === 1);
-    check("the others play on", !w.over);
-    // Red: relics, then all three out
+    check("one member out: the whole team scores", yel.escapes === 1);
     w.house.relics.filter((r) => r.side === "t1").forEach((r, i) => { const id = 41 + (i % 3); walk(w, ph[id], id, r.x, r.y); world._tick(w); });
-    for (const id of [41, 42, 43]) { walk(w, ph[id], id, ex, ey); world._tick(w); }
-    check("second team out is second", red.place === 2 && w.over);
+    walk(w, ph[41], 41, ex, ey); world._tick(w);
+    w.house.relics.filter((r) => r.side === "t2").forEach((r) => { walk(w, ph[45], 45, r.x, r.y); world._tick(w); });
+    walk(w, ph[45], 45, ex, ey); world._tick(w);
+    check("both teams out; Yellow twice", red.escapes === 1 && yel.escapes === 2 && !w.over);
+    w.startMs -= w.durMs;
+    world._tick(w);
     const score = (id) => w.lastScores.get(id).split("|")[0];
     const res = manorResults({ mode: "teams" }, [41, 42, 43, 44, 45].map((id) => ({ user_id: id, team: id < 44 ? 1 : 2, score: score(id) })));
-    check("results: the first team out wins — even the member who was caught", res.get(44) === "win" && res.get(45) === "win");
+    check("results: the team with the most points wins — every member of it", res.get(44) === "win" && res.get(45) === "win");
     check("the bigger team doesn't win on a sum", res.get(41) === "loss" && res.get(42) === "loss");
   }
 
@@ -301,7 +316,7 @@ let coreMod;
     check("…but not while it's staring at you", !r2.ok && r2.why === "watched");
 
     world.forfeit(w2.code, 61);
-    check("leaving counts as caught, and the seat's result still counts", !w2.players.get(61).alive && w2.players.get(61).cause === "left" && !w2.over);
+    check("leaving: out for good, your score still counts, the others play on", !w2.players.get(61).alive && w2.players.get(61).left && !w2.over);
   }
 
   // ── the thing, with a crowd ────────────────────────────────────────────────
@@ -385,6 +400,26 @@ let coreMod;
       lastEv("door").some((e) => e.id === 0 && e.open === 1));
   }
 
+  // ── a door you're touching opens, even if the server's idea of you lags ───
+  {
+    const w = room("free", [{ id: 201 }, { id: 202 }]);
+    const A = phone(201);
+    const N = w.house.N, k = w.house.doors[0], dx = k % N, dy = (k / N) | 0, hz = dx % 8 === 0;
+    const at = hz ? [dx - 0.5, dy + 0.5] : [dx + 0.5, dy - 0.5];
+    walk(w, A, 201, at[0], at[1]);
+    const a = w.players.get(201);
+    // the server last heard of you a running step and a half back, 250ms ago
+    const back = hz ? [at[0] - 1.5, at[1]] : [at[0], at[1] - 1.5];
+    Object.assign(a, { x: back[0], y: back[1], at: Date.now() - 250 });
+    A.h["manor:use"]({ code: w.code, act: "open", x: dx, y: dy, px: at[0], py: at[1] });
+    check("a door you're at opens though the server's last report of you lags", w.house.g[dy][dx] === coreMod.FLOOR);
+    w.house.g[dy][dx] = coreMod.DOOR;
+    Object.assign(a, { x: 1.5, y: 1.5, at: Date.now() - 50 });
+    A.h["manor:use"]({ code: w.code, act: "open", x: dx, y: dy, px: at[0], py: at[1] });
+    check("…but a phone can't claim to be across the room to open one", w.house.g[dy][dx] === coreMod.DOOR &&
+      A.got.filter((q) => q.ev === "manor:used").pop().p.why === "far");
+  }
+
   // ── hiding spots ───────────────────────────────────────────────────────────
   {
     // A table in the first room, with clear floor to its west: you stand at
@@ -456,13 +491,13 @@ let coreMod;
     check("…and that phone is told it gave up", lastEv("gaveup").some((e) => e.id === 141));
   }
 
-  // ── a restart keeps who was caught and who got out ─────────────────────────
+  // ── a restart keeps the score so far, and who left ───────────────────────
   {
-    const saved = JSON.stringify({ manor: { alive: false, escaped: false, place: null, cause: "ghost" } });
-    const saved2 = JSON.stringify({ manor: { alive: true, escaped: true, place: 1, cause: null } });
+    const saved = JSON.stringify({ manor: { left: true, caught: 2, escapes: 1, total: 4 } });
+    const saved2 = JSON.stringify({ manor: { left: false, caught: 0, escapes: 2, total: 6 } });
     const w = room("free", [{ id: 91, state: saved }, { id: 92, state: saved2 }, { id: 93 }]);
-    check("rebuilt after a restart: the caught stay caught, the escaped stay out",
-      !w.players.get(91).alive && w.players.get(92).escaped && w.players.get(92).place === 1 && w.places === 1);
+    check("rebuilt after a restart: escapes and relics kept, who left stays left",
+      w.players.get(91).left && !w.players.get(91).alive && w.sides[0].escapes === 1 && w.sides[1].escapes === 2 && w.sides[1].total === 6 && w.players.get(92).alive);
   }
 
   // ── the phone's half, fed by the server's messages ─────────────────────────
@@ -504,7 +539,7 @@ let coreMod;
     const i = w.house.relics.indexOf(bos);
     check("the phone sees the relic go", ca.relics[i].got);
     check("…and sees Bo taken", !ca.players.get(102).alive);
-    check("…and says so", /Bo was taken/.test(ca.msg), ca.msg);
+    check("…and says so", /Bo was caught/.test(ca.msg), ca.msg);
     check("…while it is still alive itself", ca.alive && mc.playing(ca));
     const v = mc.viewState(ca, Date.now() + 60000);
     check("its view: its own eyes, a ghost, nobody else still inside", v.P === ca.body && v.ghosts.length === 1 && v.others.length === 0);
@@ -517,7 +552,14 @@ let coreMod;
     const scared = mc.viewState(cb, Date.now() + 200);
     check("…first the face", scared.mode === "dead");
     const later = mc.viewState(cb, Date.now() + 5000);
-    check("…then it watches whoever is still inside", later.mode === "play" && later.camId === 101);
+    check("…then it waits, on its own spot, to be back in — no watching someone else", later.mode === "play" && later.camId === 102);
+    // back in: the server says so, and the phone puts you at the entrance and lets you play
+    w.players.get(102).respawnAt = Date.now() - 1;
+    sent.length = 0;
+    world._tick(w);
+    for (const t of sent.filter((x) => x.ev === "manor:tick")) mc.applyTick(cb, t.payload, Date.now() + 3000);
+    check("back in after the scare: the phone is playing again, at the entrance",
+      cb.alive && mc.playing(cb) && Math.hypot(cb.body.x - w.house.spawn.x, cb.body.y - w.house.spawn.y) < 1e-6 && /Back in/.test(cb.msg), cb.msg);
 
     // Use on the phone: at once, then the server agrees — or doesn't
     {

@@ -60,20 +60,22 @@ export function createClient(init, now = Date.now()) {
     ghosts: [], pulses: [], puffs: [],
     hint: {}, msg: "", msgT: 0, tm: 0, ambT: 20, hb: 0, gStep: 0,
     bodies: [], flick: 0, scareT: 25 + Math.random() * 15,
-    alive: me ? me.alive : false, escaped: me ? me.escaped : false, place: me ? me.place : null,
+    alive: me ? me.alive : false, left: me ? !!me.left : false, spawn: init.house.spawn,
     decoys: me ? me.decoys : 0,
     startLocal: now - init.elapsed, durMs: init.duration, introMs: init.intro,
     skipIntro: init.elapsed > SHOW_MAP_MS, deadAt: null, watch: null,
     over: init.over || null,
   };
-  if (me && !me.alive) c.deadAt = now - SCARE_MS;             // came back after being caught
-  if (c.role === "player" && c.alive && !c.escaped) say(c, "Find your relics. Then the far gate.", 4000);
+  if (me && !me.alive && !me.left) c.deadAt = now - SCARE_MS;  // came back while caught
+  if (c.role === "player" && c.alive) say(c, "Find your relics, then the far gate. Get out as often as you can before the clock runs out!", 5000);
   return c;
 }
 
 export const timeLeft = (c, now = Date.now()) => Math.max(0, c.durMs - (now - c.startLocal));
 export const inIntro = (c, now = Date.now()) => !c.skipIntro && now - c.startLocal < SHOW_MAP_MS;
-export const playing = (c) => c.role === "player" && c.alive && !c.escaped && !c.over;
+export const playing = (c) => c.role === "player" && c.alive && !c.left && !c.over;
+// caught, and about to be back in at the entrance
+export const respawning = (c) => c.role === "player" && !c.alive && !c.left && !c.over;
 export const sideOfMe = (c) => (c.mySide ? c.sides.get(c.mySide) : null);
 const nameOf = (c, id) => (c.players.get(id) || {}).name || "Someone";
 
@@ -87,15 +89,16 @@ export function applyTick(c, m, now = Date.now()) {
     const G = c.ghosts[i] || (c.ghosts[i] = { x, y, tx: x, ty: y });
     G.tx = x; G.ty = y; G.st = hunt ? "hunt" : "patrol"; G.stun = stun ? 1 : 0;
   });
-  for (const [id, x, y, fa, jz, cr, lit, state, place, hiding] of m.p) {
+  for (const [id, x, y, fa, jz, cr, lit, state, caught, hiding] of m.p) {
     const p = c.players.get(id);
     if (!p) continue;
     p.tx = x; p.ty = y; p.tfa = fa; p.jz = jz; p.cr = cr; p.lit = !!lit;
-    p.alive = state !== 0; p.escaped = state === 2; p.place = place || null; p.hiding = !!hiding;
+    p.alive = state === 1; p.left = state === 3; p.caught = caught || 0; p.hiding = !!hiding;
     if (id !== c.you || c.role !== "player") continue;
-    // The server is the one who says you were caught or got out.
+    // The server is the one who says you were caught, and when you're back.
     if (!p.alive && c.alive) { c.alive = false; c.deadAt = now; }
-    if (p.escaped && !c.escaped) { c.escaped = true; c.place = p.place; }
+    if (p.alive && !c.alive) { c.alive = true; c.deadAt = null; }
+    if (p.left) c.left = true;
     // it never took you into that locker (someone beat you to it, or the ask was lost)
     if (!hiding && c.body.hiding && now - (c.body.hideAt || 0) > HIDE_TRUST_MS) leaveLocker(c.body);
   }
@@ -110,9 +113,9 @@ export function applyTick(c, m, now = Date.now()) {
   }
   [...m.r].forEach((ch, i) => { if (c.relics[i]) c.relics[i].got = ch === "1"; });
   [...m.b].forEach((ch, i) => { if (c.cells[i]) c.cells[i].got = ch === "1"; });
-  for (const [key, got, open, place] of m.s) {
+  for (const [key, got, open, escapes, total, score] of m.s) {
     const s = c.sides.get(key);
-    if (s) { s.got = got; s.open = !!open; s.place = place || null; }
+    if (s) { s.got = got; s.open = !!open; s.escapes = escapes; s.total = total; s.score = score; }
   }
   c.pulses = m.m.map(([x, y, t]) => ({ x, y, t }));
 
@@ -125,9 +128,13 @@ export function applyTick(c, m, now = Date.now()) {
       if (mine && c.mode !== "free") say(c, "Every relic taken. The far gate is open!", 4000);
       else if (!mine && c.mode !== "coop") say(c, `${c.sides.get(e.side)?.name || "Someone"} has every relic. Their gate is open.`, 3500);
     } else if (e.type === "dead") {
-      if (e.id === c.you) { snd("caught"); if (e.cause === "locker") say(c, "The locker door creaks open...", 2000); }
-      else say(c, e.cause === "left" ? `${nameOf(c, e.id)} ran out of the house.`
-        : e.cause === "locker" ? `${nameOf(c, e.id)} was dragged out of a locker.` : `${nameOf(c, e.id)} was taken.`, 3500);
+      if (e.id === c.you) { if (e.cause !== "left") snd("caught"); }       // the banner says the rest
+      else say(c, e.cause === "left" ? `${nameOf(c, e.id)} left the house.` : `${nameOf(c, e.id)} was caught!`, 3000);
+    } else if (e.type === "respawn" && e.id === c.you) {
+      // back at the entrance: after being caught, or for another round
+      const P = c.body;
+      P.x = e.x; P.y = e.y; P.fa = 0; P.pitch = 0; P.hiding = null; P.lastTile = -1; P.jz = 0; P.vz = 0;
+      if (e.why === "caught") say(c, "Back in. Your relics are still yours.", 2600);
     } else if (e.type === "gaveup" && e.id === c.you) {
       say(c, "It gives up and drifts away...", 3000);
     } else if (e.type === "door" && e.id !== c.you) {
@@ -135,10 +142,9 @@ export function applyTick(c, m, now = Date.now()) {
       const at = c.body, d = Math.hypot(at.x - e.x - 0.5, at.y - e.y - 0.5);
       if (d < 14) snd("creak", Math.max(0.03, (e.open ? 0.3 : 0.18) * (1 - d / 14)));
     } else if (e.type === "escaped") {
-      if (e.id === c.you) { snd("win"); say(c, c.mode === "free" ? `You got out — ${placeName(e.place)}!` : "You got out!", 4000); }
-      else say(c, e.place ? `${nameOf(c, e.id)} got out — ${placeName(e.place)}.` : `${nameOf(c, e.id)} got out.`, 3500);
-    } else if (e.type === "placed" && c.mode === "teams") {
-      say(c, `${c.sides.get(e.side)?.name || "A team"} team is out — ${placeName(e.place)}.`, 4000);
+      if (e.id === c.you) { snd("win"); say(c, `You got out! +1000 — back in for round ${e.escapes + 1}. Find the relics again!`, 4500); }
+      else if (mine) { snd("win"); say(c, `${nameOf(c, e.id)} got out! +1000 for your side. Find the relics again!`, 4000); }
+      else say(c, `${nameOf(c, e.id)} got out (${e.escapes}).`, 3000);
     } else if (e.type === "battery" && e.id === c.you) {
       c.body.bat = Math.min(1, c.body.bat + 0.6);
       snd("battery");
@@ -234,7 +240,7 @@ export function jump(c) { return playing(c) && jumpBody(c.body); }
 // and out in the open.
 const blockersOf = (c) => [
   ...c.ghosts,
-  ...[...c.players.values()].filter((p) => p.id !== c.you && p.alive && !p.escaped && !p.hiding),
+  ...[...c.players.values()].filter((p) => p.id !== c.you && p.alive && !p.hiding),
 ];
 
 export function actionLabel(c, now = Date.now()) {
@@ -268,7 +274,9 @@ export function doAction(c, now = Date.now()) {
     leaveLocker(P);
     sounds.push({ name: "locker" });
   }
-  return { ask: { code: c.code, act: u.t, x: u.x, y: u.y }, sounds };
+  // where you are, too: the server's last report of you can lag a step
+  // behind, and judging reach from that refused doors you were touching
+  return { ask: { code: c.code, act: u.t, x: u.x, y: u.y, px: P.x, py: P.y }, sounds };
 }
 
 const WHERE = { table: "under the table", bed: "under the bed", wardrobe: "in the wardrobe" };
@@ -282,15 +290,20 @@ export function actionDone(c, r) {
     if (!r.ok) { leaveLocker(c.body); say(c, r.why === "taken" ? "Someone is already hiding in there." : "You could not get in.", 2500); }
     else if (r.seen) say(c, "It saw you hide. Stay still — it will give up.", 3500);
   } else if ((r.act === "open" || r.act === "close") && !r.ok && r.x != null) {
-    c.pend.delete(Math.floor(r.y) * c.N + Math.floor(r.x));   // the next tick puts it right
+    // refused: put it back now, and say so, rather than have it swing shut later
+    const k = Math.floor(r.y) * c.N + Math.floor(r.x);
+    c.pend.delete(k);
+    if (c.g[Math.floor(r.y)]) c.g[Math.floor(r.y)][Math.floor(r.x)] = r.act === "open" ? DOOR : FLOOR;
+    unstick(c.g, c.body);
+    say(c, r.why === "far" ? "Step closer to the door." : r.act === "close" ? "Something is in the way." : "It won't open.", 1800);
   }
 }
 
 // ── watching ─────────────────────────────────────────────────────────────────
-// Once you are out of it — caught, escaped, or only here to watch — you look
-// through somebody else's eyes. Whoever you picked, else the first still inside.
+// Once you've left, or are only here to watch, you look through somebody
+// else's eyes. Whoever you picked, else the first still inside.
 export function watchable(c) {
-  return [...c.players.values()].filter((p) => p.alive && !p.escaped && p.id !== (c.role === "player" ? c.you : null));
+  return [...c.players.values()].filter((p) => p.alive && !p.left && p.id !== (c.role === "player" ? c.you : null));
 }
 export function watchedPlayer(c) {
   const list = watchable(c);
@@ -305,8 +318,9 @@ export function cycleWatch(c, dir) {
 
 // What manorRender draws this frame.
 export function viewState(c, now = Date.now()) {
-  // your own eyes while you are alive and inside, someone else's after
-  const own = c.role === "player" && c.alive && !c.escaped;
+  // your own eyes while you're playing (and, caught, while you wait to be back
+  // in); someone else's once you've left or if you're only watching
+  const own = c.role === "player" && !c.left;
   let P, camId = null, exitOpen = false;
   if (own) {
     P = c.body;
@@ -326,7 +340,7 @@ export function viewState(c, now = Date.now()) {
   }
   const mine = c.relics.map((r) => (c.role === "player" || !camId ? r : { ...r, mine: c.mode === "coop" || r.side === c.players.get(camId)?.side }));
   const others = [...c.players.values()]
-    .filter((p) => p.id !== camId && p.alive && !p.escaped && !p.hiding)
+    .filter((p) => p.id !== camId && p.alive && !p.left && !p.hiding)
     .map((p) => ({ x: p.x, y: p.y, color: p.color, name: p.name, lit: p.lit, cr: p.cr, jz: p.jz }));
   const scared = c.deadAt !== null && now - c.deadAt < SCARE_MS;
   return {

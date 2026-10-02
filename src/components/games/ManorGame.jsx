@@ -14,8 +14,8 @@ import { useSocket } from "../../utils/SocketContext";
 import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R } from "../horror/manorRender";
 import { createManorAudio } from "../horror/manorAudio";
 import {
-  createClient, applyTick, stepLocal, report, jump, doAction, actionDone, actionLabel, playing, inIntro, timeLeft, sideOfMe,
-  watchedPlayer, cycleWatch, placeName, viewState, roomNameAt,
+  createClient, applyTick, stepLocal, report, jump, doAction, actionDone, actionLabel, playing, respawning, inIntro, timeLeft, sideOfMe,
+  watchedPlayer, cycleWatch, viewState, roomNameAt,
 } from "../horror/manorClient";
 import { say } from "../horror/manorSim";
 import { useSideways, toGame } from "../horror/LandscapeGate";
@@ -55,12 +55,13 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     const side = sideOfMe(c);
     const w = watchedPlayer(c);
     setHud({
-      role: c.role, mode: c.mode, alive: c.alive, escaped: c.escaped, place: c.place, intro: inIntro(c, now),
-      left: timeLeft(c, now), msg: c.msg, side: side && { name: side.name, color: side.color, got: side.got, need: side.need, open: side.open },
+      role: c.role, mode: c.mode, alive: c.alive, left: c.left, respawning: respawning(c), intro: inIntro(c, now),
+      timeLeft: timeLeft(c, now), msg: c.msg,
+      side: side && { name: side.name, color: side.color, got: side.got, need: side.need, open: side.open, escapes: side.escapes || 0, score: side.score || 0 },
       stam: c.body.stam, bat: c.body.bat, light: c.body.light, runOn: c.body.runOn, tired: c.body.stamCool > 0,
       crouch: c.body.crouch, decoys: c.decoys, watching: w && { name: w.name, color: w.color }, use: actionLabel(c, now),
       room: roomNameAt(c, playing(c) ? c.body : w || c.body),
-      players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, escaped: p.escaped, place: p.place })),
+      players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left })),
       playing: playing(c),
     });
   }, []);
@@ -285,9 +286,10 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
   // ── the screen ─────────────────────────────────────────────────────────────
   const h = hud;
-  const clock = h ? `${Math.floor(h.left / 60000)}:${String(Math.floor(h.left / 1000) % 60).padStart(2, "0")}` : "";
-  const out = h && h.role === "player" && (!h.alive || h.escaped);
-  const watchingNow = h && !h.playing && !over;
+  const clock = h ? `${Math.floor(h.timeLeft / 60000)}:${String(Math.floor(h.timeLeft / 1000) % 60).padStart(2, "0")}` : "";
+  // watching: only once you've left, or if you came to watch — being caught
+  // is a moment's wait, not the end
+  const watchingNow = h && !h.playing && !h.respawning && !over;
 
   return (
     <div className={`hm hmx${rotated ? " hm-rot" : ""}`} ref={rootRef} data-no-fun>
@@ -315,6 +317,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
                 <b>{h.side.got}/{h.side.need}</b>
               </span>
             )}
+            {h.side && <span className="hmx-score" title="Times out · score">🚪 {h.side.escapes} · {h.side.score}</span>}
           </div>
           {h.playing && (
             <>
@@ -325,9 +328,9 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
           {h.room && <div className="hm-room">📍 {h.room}</div>}
           <div className="hmx-who">
             {h.players.map((p) => (
-              <span key={p.id} className={`hmx-p${p.alive ? "" : " dead"}${p.escaped ? " out" : ""}`} style={{ "--c": p.color }}
+              <span key={p.id} className={`hmx-p${p.alive ? "" : " dead"}`} style={{ "--c": p.color }}
                 title={p.name}>
-                <i />{p.name}{p.escaped ? ` · ${p.place ? placeName(p.place) : "out"}` : !p.alive ? " ✕" : ""}
+                <i />{p.name}{p.left ? " · left" : !p.alive ? " · caught" : ""}
               </span>
             ))}
           </div>
@@ -357,15 +360,17 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
         </>
       )}
 
-      {/* Out of it — caught, escaped, or only watching: look through someone
-          else's eyes, and leave whenever you like. */}
+      {/* Caught: a moment, then back in at the entrance. */}
+      {h && h.respawning && !over && (
+        <div className="hmx-spec"><div className="hmx-banner">Caught! Back at the entrance in a moment…</div></div>
+      )}
+
+      {/* Left, or only watching: look through someone else's eyes until the
+          clock runs out, and go whenever you like. */}
       {watchingNow && h && (
         <div className="hmx-spec">
-          {out && (
-            <div className="hmx-banner">
-              {h.escaped ? `You got out${h.mode === "free" && h.place ? ` — ${placeName(h.place)}` : ""}.` : "It took you."}
-              <span> {h.mode === "coop" ? "" : "Watch the others, or leave."}</span>
-            </div>
+          {h.role === "player" && h.left && (
+            <div className="hmx-banner">You left the house. <span>Watch the others, or go back to the lobby.</span></div>
           )}
           <div className="hmx-specbar">
             <button onPointerDown={watch(-1)} aria-label="Watch the previous player">◀</button>
@@ -383,8 +388,8 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
           <h1>Leave the house?</h1>
           <p>
             {h?.mode === "coop"
-              ? "You're all in this together — if you leave now, everyone loses."
-              : "You'll count as caught. Your friends play on."}
+              ? "Your friends play on to the end of the clock. What you've scored together still counts."
+              : "Your score so far counts. Anyone else plays on to the end of the clock."}
           </p>
           <button className="hm-go" onClick={leave} disabled={leaving}>{leaving ? "Leaving…" : "Leave"}</button>
           <button className="hm-go" onClick={() => setConfirmLeave(false)}>Stay</button>
@@ -410,29 +415,32 @@ function Results({ over, me, onExit, leaving }) {
   }
   const mine = over.sides.find((s) => s.members.some((m) => m.id === myId));
   const coop = over.mode === "coop";
+  // Only a side that got out can win; the most points among those does.
+  const top = over.sides.filter((s) => s.escapes > 0).sort((a, b) => b.score - a.score);
+  const winners = top.length ? top.filter((s) => s.score === top[0].score) : [];
+  const iWon = !!mine && winners.some((s) => s.key === mine.key);
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const headline = coop
-    ? (over.reason === "won" ? "You all got out" : "The house kept you")
-    : mine && mine.place === 1 ? (over.mode === "teams" ? `${mine.name} got out first` : "You got out first")
-    : mine && mine.place ? `Out — ${placeName(mine.place)}`
-    : over.reason === "time" ? "The night ran out" : "Caught";
+    ? (mine && mine.escapes ? `You got out ${plural(mine.escapes, "time", "times")}!` : "Nobody got out")
+    : iWon ? (winners.length > 1 ? "A draw at the top!" : over.mode === "teams" ? `${mine.name} wins!` : "You win!")
+    : winners.length ? (over.mode === "teams" ? `${winners[0].name} wins` : `${winners[0].members[0]?.name || "Someone"} wins`)
+    : "Nobody got out";
   const sub = coop
-    ? (over.reason === "won" ? "Every relic, every one of you, through the far gate." : "One of you was taken, and that was the end of it.")
-    : over.mode === "teams" ? "The first team with everyone out wins." : "First one out wins.";
+    ? (mine && mine.escapes ? `${mine.score} points together — ${plural(mine.total, "relic", "relics")} found.` : "Get out at least once before the clock runs out to win.")
+    : "1000 for every time out, 100 a relic. You have to get out at least once to win.";
   return (
     <div className="hm-ov hmx-results">
       <h1>{headline}</h1>
       <p>{sub}</p>
       <div className="hmx-standings">
-        {over.sides.map((s) => (
+        {over.sides.map((s, i) => (
           <div key={s.key} className={`hmx-row${mine && s.key === mine.key ? " mine" : ""}`} style={{ "--c": s.color }}>
-            <span className="hmx-place">{s.place ? (MEDAL[s.place] || placeName(s.place)) : "✕"}</span>
+            <span className="hmx-place">{s.escapes ? (MEDAL[i + 1] || i + 1) : "✕"}</span>
             <span className="hmx-name">
               <b>{over.mode === "free" ? s.members[0]?.name : s.name}</b>
-              {over.mode !== "free" && (
-                <small>{s.members.map((m) => `${m.name}${m.escaped ? "" : " ✕"}`).join(", ")}</small>
-              )}
+              <small>🚪 {plural(s.escapes, "time out", "times out")} · {plural(s.total, "relic", "relics")}{over.mode !== "free" ? ` · ${s.members.map((m) => m.name).join(", ")}` : ""}</small>
             </span>
-            <span className="hmx-got">{s.got}/{s.need}</span>
+            <span className="hmx-got">{s.score}</span>
           </div>
         ))}
       </div>

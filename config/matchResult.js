@@ -41,23 +41,19 @@ function decideResult({ seated, myUserId, myScore, gameSlug }) {
 }
 
 // ── Hollow Manor ─────────────────────────────────────────────────────────────
-// The server keeps this game's scores itself (config/manorWorld.js), and
-// they encode the result: 100 a relic, and getting out adds ESCAPE_BONUS plus
-// PLACE_STEP for every place you beat. So "got out" is score >= ESCAPE_BONUS,
-// and a higher escaped score got out earlier.
+// The server keeps this game's scores itself (config/manorWorld.js). A match
+// runs the whole clock: getting out scores ESCAPE_POINTS and you go round
+// again; every relic is RELIC 100. One round's relics (at most 9, a four-
+// player co-op: MAX_RELIC_POINTS) never reach ESCAPE_POINTS, so a score of
+// ESCAPE_POINTS or more means the side got out at least once.
 //
-// Both steps must be bigger than the most relic points a side can hold (13
-// relics in a four-player co-op: 1300). With smaller ones a side that got out
-// second with more relics tied the side that got out first, and a co-op that
-// took every relic and was then caught read as escaped.
-//
-// Nobody wins without getting out — a free-for-all where everyone is caught
-// has no winner, however many relics they held. Sides are compared on their
-// own score, not a sum over members: every member of a side carries the
-// side's score, so summing would hand the win to the bigger team.
-const ESCAPE_BONUS = 5000;
-const PLACE_STEP = 2000;
-const MAX_RELIC_POINTS = 1300;
+// When the clock stops the highest score wins, a tie at the top is a draw —
+// but nobody wins without getting out: a match where nobody escaped has no
+// winner, however many relics were found. Sides are compared on their own
+// score, not a sum over members: every member of a side carries the side's
+// score, so summing would hand the win to the bigger team.
+const ESCAPE_POINTS = 1000;
+const MAX_RELIC_POINTS = 900;
 
 function manorResults(room, seated) {
   const out = new Map();
@@ -65,11 +61,12 @@ function manorResults(room, seated) {
     : room.mode === "teams" && p.team != null ? `t${p.team}` : `p${p.user_id}`);
   const side = new Map();
   for (const p of seated) side.set(sideOf(p), Math.max(side.get(sideOf(p)) || 0, cap(p.score)));
-  const escaped = [...side.values()].filter((v) => v >= ESCAPE_BONUS);
+  const escaped = [...side.values()].filter((v) => v >= ESCAPE_POINTS);
   const best = escaped.length ? Math.max(...escaped) : null;
+  const tied = best === null ? 0 : escaped.filter((v) => v === best).length;
   for (const p of seated) {
     const mine = side.get(sideOf(p));
-    out.set(Number(p.user_id), best !== null && mine === best ? "win" : "loss");
+    out.set(Number(p.user_id), best === null || mine !== best ? "loss" : tied > 1 ? "draw" : "win");
   }
   return out;
 }
@@ -109,4 +106,4 @@ function resultsFor(room, seated) {
   return out;
 }
 
-module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, ESCAPE_BONUS, PLACE_STEP, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults };
+module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, ESCAPE_POINTS, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults };

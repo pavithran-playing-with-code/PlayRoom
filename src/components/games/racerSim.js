@@ -17,8 +17,13 @@ export const CAR_W = 34;
 export const CAR_H = 56;
 export const CAR_Y = VIEW_H - 92;             // the player sits near the bottom
 
-export const BASE_SPEED = 3.4;
-export const SPEED_GAIN = 0.00035;            // creeps up every frame, no cap
+// Pixels a frame. The road speeds up gently — about 4 after a minute, 5.5
+// after two — and tops out at two and a half times where it started, about
+// 2½ minutes in. (It used to add SPEED_GAIN × 60 every frame with no cap:
+// twenty times the starting speed after one minute.)
+export const BASE_SPEED = 2.6;
+export const SPEED_GAIN = 0.0004;             // added every frame
+export const MAX_SPEED = 6.5;
 export const SPAWN_START = 60;                // frames between spawns
 export const SPAWN_FLOOR = 26;
 export const COIN_CHANCE = 0.15;
@@ -72,7 +77,7 @@ export function step(s, dtFrames = 1) {
   if (s.crashed) return { crashed: false, coins: 0, passed: 0 };
   const d = Math.max(0, Math.min(3, dtFrames));
   s.frame += d;
-  s.speed += SPEED_GAIN * d * 60;
+  s.speed = Math.min(MAX_SPEED, s.speed + SPEED_GAIN * d);
   s.distance += s.speed * d;
 
   // the car slides toward its lane rather than snapping to it

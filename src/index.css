@@ -786,6 +786,12 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .bb-cell.nope{background:rgba(255,107,107,.55);box-shadow:inset 0 0 0 2px rgba(46,33,64,.35)}
 
 .bb-tray{display:flex;align-items:center;justify-content:center;gap:10px}
+/* dragging a piece: the tray and board never scroll under the finger */
+.bb-tray,.bb-slot,.bb-grid{touch-action:none;user-select:none;-webkit-user-select:none}
+.bb-slot.dragging{opacity:.25}
+.bb-float{position:fixed;z-index:60;display:grid;pointer-events:none;filter:drop-shadow(0 6px 0 rgba(46,33,64,.35))}
+.bb-float span{border-radius:5px}
+.bb-float span.on{box-shadow:inset 0 -3px 0 rgba(46,33,64,.22)}
 .bb-slot{width:84px;height:72px;display:grid;place-items:center;padding:6px;
   border:3px solid var(--ink);border-radius:16px;background:#fff;
   box-shadow:0 4px 0 var(--ink);transition:transform .08s ease, box-shadow .08s ease}
@@ -992,6 +998,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .hmx-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .hmx-clock{font-size:17px;letter-spacing:.04em;color:#ffdca0}
 .hmx-mine{display:inline-flex;align-items:center;gap:4px}
+.hmx-score{margin-left:10px;font-size:.9em;color:#ffdca0}
 .hmx-mine i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--c);display:inline-block}
 .hmx-mine i.got{background:var(--c);box-shadow:0 0 6px var(--c)}
 .hmx-mine b{font-weight:400;margin-left:4px;color:var(--c)}

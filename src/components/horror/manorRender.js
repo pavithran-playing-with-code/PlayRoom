@@ -160,6 +160,32 @@ export function mapRect(view) {
 
 const roomOf = (s, k) => ROOM_KINDS[(s.rooms && s.rooms[k]) || 0];
 
+// Each relic is a thing, not a dot: drawn as its own object in a badge of its
+// owner's colour, on the map and on its distance marker. Shapes that can't be
+// mistaken for each other at a glance. Which is which follows the relic's
+// place in the house's list, so every phone in a room agrees.
+export const RELIC_ICONS = ["🗝️", "💍", "🕯️", "💀", "🔔", "👑", "🧸", "📿", "🪞"];
+export const relicIcon = (i) => RELIC_ICONS[((i % RELIC_ICONS.length) + RELIC_ICONS.length) % RELIC_ICONS.length];
+
+function relicBadge(ctx, x, y, rad, icon, color, alpha = 1, glow = 0) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if (glow) { ctx.shadowColor = color; ctx.shadowBlur = glow; }
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, rad, 0, TAU);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(20,12,8,.85)";
+  ctx.lineWidth = Math.max(1, rad * 0.18);
+  ctx.stroke();
+  ctx.font = `${Math.round(rad * 1.35)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(icon, x, y + rad * 0.06);
+  ctx.restore();
+}
+
 // The map: rooms (each faintly its own colour, with its name), doors, the
 // relics, the way out, you, your friends and the demons. Nothing else — no
 // furniture, no barricades, no batteries.
@@ -208,14 +234,16 @@ function mini(ctx, s, x0, y0, size, intro, t, big = false) {
   }
   ctx.textBaseline = "alphabetic";
 
-  const bl = 0.6 + 0.4 * Math.sin(t * 5);
-  for (const r of relics) {
-    if (r.got) continue;
-    ctx.fillStyle = `rgba(${r.color ? rgbOf(r.color) : GOLD},${r.mine === false ? 0.45 : bl})`;
-    ctx.beginPath();
-    ctx.arc(x0 + r.x * c, y0 + r.y * c, Math.max(2.5, c * (r.mine === false ? 0.6 : 0.9)), 0, TAU);
-    ctx.fill();
-  }
+  // the relics: each its own object in a badge; yours bob gently, others'
+  // sit smaller and faded
+  const rad = Math.max(big ? 11 : 6.5, c * (big ? 1.3 : 1.15));
+  relics.forEach((r, i) => {
+    if (r.got) return;
+    const theirs = r.mine === false;
+    const bob = theirs ? 0 : Math.sin(t * 3 + i) * rad * 0.15;
+    relicBadge(ctx, x0 + r.x * c, y0 + r.y * c + bob, theirs ? rad * 0.75 : rad, relicIcon(i),
+      r.color || "#ffdca0", theirs ? 0.5 : 1, theirs ? 0 : 6 + 4 * Math.sin(t * 4 + i));
+  });
   // the way out
   ctx.fillStyle = exitOpen(s) ? "#5fd68a" : "#a33";
   ctx.fillRect(x0 + exitT.x * c - c * 0.3, y0 + exitT.y * c - c * 0.3, c * 1.6, c * 1.6);
@@ -834,9 +862,10 @@ function markers(ctx, s, W, H, t) {
   const left = s.relics.filter((r) => !r.got && r.mine !== false);
   let nearest = null;
   for (const r of left) if (!nearest || Math.hypot(r.x - P.x, r.y - P.y) < Math.hypot(nearest.x - P.x, nearest.y - P.y)) nearest = r;
-  for (const r of left) {
-    list.push({ x: r.x, y: r.y, kind: "relic", color: r.color || "#ffdca0", label: "", main: r === nearest });
-  }
+  s.relics.forEach((r, i) => {
+    if (r.got || r.mine === false) return;
+    list.push({ x: r.x, y: r.y, kind: "relic", icon: relicIcon(i), color: r.color || "#ffdca0", label: "", main: r === nearest });
+  });
   if (exitOpen(s)) list.push({ x: s.exitT.x + 0.5, y: s.exitT.y + 0.5, kind: "exit", color: "#5fd68a", label: "Way out", main: !left.length });
   for (const o of s.others || []) list.push({ x: o.x, y: o.y, kind: "friend", color: o.color, label: o.name || "", main: true });
 
@@ -851,6 +880,12 @@ function markers(ctx, s, W, H, t) {
     m.tx = inv * (dy * rx - dx * ry);
     m.ty = inv * (-ply * rx + plx * ry);
     m.ahead = m.ty > 0.3 && Math.abs(m.tx / m.ty) < 0.92;
+    // in view but out past where the edge stacks sit: join the stack instead,
+    // so the two never sit on top of each other
+    if (m.ahead) {
+      const sx = W / 2 * (1 + m.tx / m.ty);
+      if (sx < edgeL + 20 || sx > edgeR - 20) m.ahead = false;
+    }
     const a = Math.atan2(ry, rx) - P.fa;
     m.side = m.ahead ? 0 : Math.atan2(Math.sin(a), Math.cos(a)) < 0 ? -1 : 1;
   }
@@ -885,15 +920,13 @@ function markers(ctx, s, W, H, t) {
     ctx.fillStyle = m.color;
     ctx.beginPath();
     if (m.kind === "relic") {
-      ctx.moveTo(x, y - r * 1.3); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r * 1.3); ctx.lineTo(x - r, y); ctx.closePath();
-      if (m.main) { ctx.save(); ctx.shadowColor = m.color; ctx.shadowBlur = 12 + 4 * Math.sin(t * 5); ctx.fill(); ctx.restore(); }
+      relicBadge(ctx, x, y, r * 1.35, m.icon, m.color, alpha, m.main ? 12 + 4 * Math.sin(t * 5) : 0);
     } else if (m.kind === "exit") {
       ctx.rect(x - r * 0.8, y - r * 1.2, r * 1.6, r * 2.4);
     } else {
       ctx.arc(x, y, r, 0, TAU);
     }
-    ctx.fill();
-    ctx.stroke();
+    if (m.kind !== "relic") { ctx.fill(); ctx.stroke(); }
     if (m.kind === "friend") {                        // a dot in the middle: it's a person
       ctx.fillStyle = "rgba(0,0,0,.6)";
       ctx.beginPath(); ctx.arc(x, y, r * 0.35, 0, TAU); ctx.fill();

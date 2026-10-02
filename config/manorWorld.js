@@ -19,22 +19,27 @@
 //     ghosts, which stop to open it. Someone hiding is safe from the ghosts;
 //     one that watched them hide searches the spot a while, then gives up.
 //
-// Modes (rooms.mode):
-//   free   every player for themselves, own-colour relics; first out wins
-//   teams  a colour per team; the team's door opens when its relics are all
-//          taken; a team is placed when every surviving member is out
-//   coop   all together, gold relics; everyone out wins, anyone caught and
-//          it is lost for all
+// A match lasts the room's whole clock (or until everyone has left):
+//   - caught: a scare, then back in at the entrance RESPAWN_MS later, keeping
+//     the relics you'd found;
+//   - got out (every relic of your side, then the far gate): +ESCAPE_POINTS
+//     for your side, and you go back in for another round — your side's
+//     relics are put back and its gate shuts again.
+// Score = escapes × ESCAPE_POINTS + every relic ever taken × 100.
 //
-// A player is placed when they (or their side) get out. Places, relics and
-// escape become a score — see scoreOf — and config/matchResult.js turns the
-// scores into wins and losses without trusting anything a client sent.
+// Modes (rooms.mode):
+//   free   every player for themselves, own-colour relics
+//   teams  a colour per team; the team's relics and escapes are shared — any
+//          member walking out once the gate is open scores for the team
+//   coop   all together, gold relics, one score
+// When the clock stops, the highest score wins — but only a side that got out
+// at least once can win (config/matchResult.js decides, from stored scores).
 const path = require("path");
 const { pathToFileURL } = require("url");
 const db = require("./db");
 const { recordResults } = require("./recordResults");
 const { tellFriends, roomChannel } = require("./socket");
-const { ESCAPE_BONUS, PLACE_STEP } = require("./matchResult");
+const { ESCAPE_POINTS } = require("./matchResult");
 
 const GAME = "manor";
 const TICK_MS = 100;
@@ -42,6 +47,8 @@ const DT = TICK_MS / 1000;
 const INTRO_MS = 8000;                 // ghosts asleep while everyone memorises the map
 const DECOYS = 2;
 const KEEP_AFTER_MS = 120000;          // a finished house lingers for late hellos
+const RESPAWN_MS = 2400;               // caught: the scare, then back in at the entrance
+const RELIC_POINTS = 100;
 const USE_REACH = 2.2;                 // a door or locker this near (tile centre) is in reach: a step, plus lag
 
 // Colours for players in a free-for-all — no reds, which belong to the demon
@@ -92,7 +99,7 @@ function sidesFor(mode, seats) {
 function buildWorld(room, seats, elapsedMs) {
   const mode = room.mode === "teams" || room.mode === "coop" ? room.mode : "free";
   const sides = sidesFor(mode, seats).map((s) => ({
-    ...s, need: needFor(mode, s.members.length, seats.length), got: 0, open: false, place: null, done: false,
+    ...s, need: needFor(mode, s.members.length, seats.length), got: 0, open: false, escapes: 0, total: 0,
   }));
   const house = core.buildHouse(room.seed, { players: seats.length, sides: sides.map((s) => ({ key: s.key, need: s.need })) });
   const sideOf = new Map();
@@ -103,22 +110,24 @@ function buildWorld(room, seats, elapsedMs) {
     const side = sideOf.get(id);
     const saved = parseSaved(p.game_state);
     players.set(id, {
-      id, name: p.username, avatar: p.avatar, side: side.key,
-      color: mode === "free" ? side.color : side.color,
+      id, name: p.username, avatar: p.avatar, side: side.key, color: side.color,
       x: house.spawn.x, y: house.spawn.y, fa: 0, jz: 0, cr: 0, lit: true, noiseR: 0, hiding: null,
-      at: 0, alive: saved ? saved.alive : true, escaped: saved ? saved.escaped : false,
-      place: saved ? saved.place : null, cause: saved ? saved.cause : null, decoys: DECOYS,
+      at: 0, alive: !(saved && saved.left), left: !!(saved && saved.left), respawnAt: 0,
+      caught: (saved && saved.caught) || 0, decoys: DECOYS,
     });
+    // a house rebuilt after a restart keeps each side's escapes and relics
+    if (saved) {
+      side.escapes = Math.max(side.escapes, saved.escapes || 0);
+      side.total = Math.max(side.total, saved.total || 0);
+    }
   });
   const w = {
     code: room.room_code, roomId: room.id, mode, seed: room.seed,
     startMs: Date.now() - elapsedMs, durMs: room.duration_seconds * 1000,
     house, env: { g: house.g, N: house.N, obst: house.obst, doors: new Set(house.doors) },
-    sides, players, pulses: [], places: 0, over: false, reason: null,
+    sides, players, pulses: [], over: false, reason: null,
     events: [], timer: null, lastScores: new Map(),
   };
-  // A house rebuilt after a restart keeps who was caught and who got out.
-  for (const p of players.values()) if (p.place) w.places = Math.max(w.places, p.place);
   return w;
 }
 
@@ -167,11 +176,11 @@ async function worldFor(code) {
 }
 
 // ── scoring ──────────────────────────────────────────────────────────────────
-// 100 a relic, and getting out is worth more than any number of relics:
-// ESCAPE_BONUS, plus PLACE_STEP for every place you beat. So the order you got
-// out in is the order the scores come in, which is all matchResult needs.
+// ESCAPE_POINTS a time out, RELIC_POINTS a relic, summed over the match. One
+// round's relics never reach ESCAPE_POINTS, so "got out at least once" is
+// score >= ESCAPE_POINTS — which is what matchResult checks.
 function scoreOf(side) {
-  return side.got * 100 + (side.place ? ESCAPE_BONUS + (9 - side.place) * PLACE_STEP : 0);
+  return side.escapes * ESCAPE_POINTS + side.total * RELIC_POINTS;
 }
 
 async function saveScores(w, force = false) {
@@ -179,14 +188,14 @@ async function saveScores(w, force = false) {
   for (const p of w.players.values()) {
     const side = w.sides.find((s) => s.key === p.side);
     const score = scoreOf(side);
-    const state = JSON.stringify({ manor: { alive: p.alive, escaped: p.escaped, place: p.place, cause: p.cause } });
-    const key = `${score}|${state}|${side.got}`;
+    const state = JSON.stringify({ manor: { left: p.left, caught: p.caught, escapes: side.escapes, total: side.total } });
+    const key = `${score}|${state}`;
     if (!force && w.lastScores.get(p.id) === key) continue;
     w.lastScores.set(p.id, key);
     jobs.push(db.execute(
       `UPDATE room_players SET score = ?, pairs_matched = ?, game_state = ?
         WHERE room_id = ? AND user_id = ? AND is_spectator = 0`,
-      [score, side.got, state, w.roomId, p.id]
+      [score, side.total, state, w.roomId, p.id]
     ).catch((e) => console.error("manor score write:", e.message)));
   }
   await Promise.all(jobs);
@@ -196,42 +205,41 @@ async function saveScores(w, force = false) {
 
 const ev = (w, e) => w.events.push(e);
 const sideOf = (w, p) => w.sides.find((s) => s.key === p.side);
-const living = (w) => [...w.players.values()].filter((p) => p.alive && !p.escaped);
+const living = (w) => [...w.players.values()].filter((p) => p.alive && !p.left);
+const toSpawn = (w, p) => { p.x = w.house.spawn.x; p.y = w.house.spawn.y; p.fa = 0; p.at = 0; p.hiding = null; };
 
+// Out of it for now. Caught by a ghost: back in at the entrance shortly.
+// Left (the Leave button, or the room's leave): out for good — and once
+// everyone has left, the match is over.
 function kill(w, id, cause) {
   const p = w.players.get(Number(id));
-  if (!p || !p.alive || p.escaped) return;
+  if (!p || p.left || (!p.alive && cause !== "left")) return;
   p.alive = false;
-  p.cause = cause;
-  ev(w, { type: "dead", id: p.id, cause });
-  if (w.mode === "coop") return finish(w, "lost");
-  settleSides(w);
-}
-
-function escape(w, p) {
-  p.escaped = true;
-  const side = sideOf(w, p);
-  if (w.mode === "free") { side.place = p.place = ++w.places; side.done = true; }
-  ev(w, { type: "escaped", id: p.id, place: w.mode === "free" ? p.place : null });
-  settleSides(w);
-}
-
-// A side is settled once none of its members is still inside. It is placed if
-// any of them got out (a free-for-all side is placed the moment its one
-// member escapes, in escape()).
-function settleSides(w) {
-  for (const s of w.sides) {
-    if (s.done) continue;
-    const members = s.members.map((id) => w.players.get(Number(id))).filter(Boolean);
-    if (members.some((p) => p.alive && !p.escaped)) continue;
-    s.done = true;
-    if (members.some((p) => p.escaped)) {
-      s.place = ++w.places;
-      for (const p of members) if (p.escaped) p.place = s.place;
-      ev(w, { type: "placed", side: s.key, place: s.place });
-    }
+  p.hiding = null;
+  if (cause === "left") {
+    p.left = true;
+    p.respawnAt = 0;
+    ev(w, { type: "dead", id: p.id, cause });
+    if ([...w.players.values()].every((q) => q.left)) finish(w, "done");
+    return;
   }
-  if (w.sides.every((s) => s.done)) finish(w, w.mode === "coop" ? (w.sides[0].place ? "won" : "lost") : "done");
+  p.caught++;
+  p.respawnAt = Date.now() + RESPAWN_MS;
+  ev(w, { type: "dead", id: p.id, cause });
+}
+
+// Through the far gate with the gate open: the side scores, and goes again —
+// its relics back where they were, its gate shut, and this player back at
+// the entrance.
+function escape(w, p) {
+  const side = sideOf(w, p);
+  side.escapes++;
+  side.got = 0;
+  side.open = false;
+  for (const r of w.house.relics) if (r.side === side.key) r.got = false;
+  toSpawn(w, p);
+  ev(w, { type: "escaped", id: p.id, side: side.key, escapes: side.escapes });
+  ev(w, { type: "respawn", id: p.id, x: p.x, y: p.y, why: "escaped" });
 }
 
 function hustle(w) {
@@ -254,9 +262,22 @@ function tick(w) {
         if (name === "door") ev(w, { type: "door", x: extra.x, y: extra.y, open: 1, id: 0 });
         if (name === "gaveup") ev(w, { type: "gaveup", id: extra.id });
       });
-      if (caught != null && !w.over) kill(w, caught, "ghost");
+      if (caught != null && !w.over) {
+        kill(w, caught, "ghost");
+        // it has had its prey: off it goes, and the entrance isn't camped
+        G.st = "patrol"; G.prey = null; G.stun = 2;
+        core.ghostPatrol(G, w.env, w.house.rand);
+      }
     });
     if (w.over) return;
+  }
+  // the caught come back in
+  for (const p of w.players.values()) {
+    if (p.alive || p.left || !p.respawnAt || now < p.respawnAt) continue;
+    p.alive = true;
+    p.respawnAt = 0;
+    toSpawn(w, p);
+    ev(w, { type: "respawn", id: p.id, x: p.x, y: p.y, why: "caught" });
   }
 
   let scored = false;
@@ -267,6 +288,7 @@ function tick(w) {
       if (r.got || r.side !== side.key || Math.hypot(r.x - p.x, r.y - p.y) >= core.PICK_R) continue;
       r.got = true;
       side.got++;
+      side.total++;
       scored = true;
       ev(w, { type: "relic", i, id: p.id, side: side.key, got: side.got, need: side.need });
       // taking one is heard: every ghost not already hunting comes to look
@@ -282,7 +304,7 @@ function tick(w) {
       ev(w, { type: "battery", i, id: p.id });
     }
     const ex = w.house.exitT.x + 0.5, ey = w.house.exitT.y + 0.5;
-    if (side.open && Math.hypot(ex - p.x, ey - p.y) < core.EXIT_R) { escape(w, p); scored = true; if (w.over) return; }
+    if (side.open && Math.hypot(ex - p.x, ey - p.y) < core.EXIT_R) { escape(w, p); scored = true; }
   }
   w.pulses.forEach((q) => { q.t -= DT; });
   w.pulses = w.pulses.filter((q) => q.t > 0);
@@ -297,12 +319,13 @@ function broadcast(w, now) {
     c: w.code,
     t: now - w.startMs,
     g: w.house.ghosts.map((G) => [r2(G.x), r2(G.y), G.st === "hunt" ? 1 : 0, G.stun > 0 ? 1 : 0]),
+    // state: 1 in the house, 0 caught (back shortly), 3 left for good
     p: [...w.players.values()].map((p) => [p.id, r2(p.x), r2(p.y), r2(p.fa), r2(p.jz), r2(p.cr), p.lit ? 1 : 0,
-      p.escaped ? 2 : p.alive ? 1 : 0, p.place || 0, p.hiding ? 1 : 0]),
+      p.left ? 3 : p.alive ? 1 : 0, p.caught, p.hiding ? 1 : 0]),
     d: w.house.doors.map((k) => (w.house.g[(k / w.house.N) | 0][k % w.house.N] === core.DOOR ? 1 : 0)).join(""),
     r: w.house.relics.map((r) => (r.got ? 1 : 0)).join(""),
     b: w.house.batts.map((b) => (b.got ? 1 : 0)).join(""),
-    s: w.sides.map((s) => [s.key, s.got, s.open ? 1 : 0, s.place || 0]),
+    s: w.sides.map((s) => [s.key, s.got, s.open ? 1 : 0, s.escapes, s.total, scoreOf(s)]),
     m: w.pulses.map((q) => [r2(q.x), r2(q.y), r2(q.t)]),
     e: w.events,
   });
@@ -340,13 +363,13 @@ async function announceStopped(w) {
 
 function standings(w) {
   const sides = w.sides.map((s) => ({
-    key: s.key, name: s.name, color: s.color, place: s.place, got: s.got, need: s.need, score: scoreOf(s),
+    key: s.key, name: s.name, color: s.color, escapes: s.escapes, total: s.total, need: s.need, score: scoreOf(s),
     members: s.members.map((id) => {
       const p = w.players.get(Number(id));
-      return p && { id: p.id, name: p.name, avatar: p.avatar, alive: p.alive, escaped: p.escaped, place: p.place, cause: p.cause };
+      return p && { id: p.id, name: p.name, avatar: p.avatar, caught: p.caught, left: p.left };
     }).filter(Boolean),
   }));
-  sides.sort((a, b) => (a.place || 99) - (b.place || 99) || b.got - a.got);
+  sides.sort((a, b) => b.score - a.score);
   return { code: w.code, mode: w.mode, reason: w.reason, sides };
 }
 
@@ -363,11 +386,13 @@ function initFor(w, uid, role) {
       batts: w.house.batts.map((b) => [b.x, b.y, b.got ? 1 : 0]),
       spawn: w.house.spawn,
     },
-    sides: w.sides.map((s) => ({ key: s.key, name: s.name, color: s.color, need: s.need, got: s.got, open: s.open, place: s.place, members: s.members.map(Number) })),
+    sides: w.sides.map((s) => ({ key: s.key, name: s.name, color: s.color, need: s.need, got: s.got, open: s.open,
+      escapes: s.escapes, total: s.total, score: scoreOf(s), members: s.members.map(Number) })),
     players: [...w.players.values()].map((p) => ({
       id: p.id, name: p.name, avatar: p.avatar, side: p.side, color: p.color,
-      x: p.x, y: p.y, fa: p.fa, alive: p.alive, escaped: p.escaped, place: p.place, decoys: p.decoys,
+      x: p.x, y: p.y, fa: p.fa, alive: p.alive, left: p.left, caught: p.caught, decoys: p.decoys,
     })),
+    respawnMs: RESPAWN_MS,
     over: w.over ? standings(w) : null,
   };
 }
@@ -413,7 +438,7 @@ function attach(server) {
       const w = worlds.get(m.code.toUpperCase());
       if (!w || w.over) return;
       const p = w.players.get(uid);
-      if (!p || !p.alive || p.escaped) return;
+      if (!p || !p.alive) return;
       const now = Date.now();
       if (p.hiding) { p.at = now; return; }            // in a locker: going nowhere
       const x = num(m.x, 0, w.house.N), y = num(m.y, 0, w.house.N);
@@ -438,7 +463,7 @@ function attach(server) {
       const w = worlds.get(m.code.toUpperCase());
       if (!w || w.over) return;
       const p = w.players.get(uid);
-      if (!p || !p.alive || p.escaped) return;
+      if (!p || !p.alive) return;
       const reply = (ok, extra) => socket.emit("manor:used", { code: w.code, act: m.act, x: m.x, y: m.y, ok, ...extra });
       if (m.act === "out") {
         if (p.hiding) { core.leaveLocker(p); p.at = Date.now(); ev(w, { type: "locker", id: uid, in: 0 }); }
@@ -447,7 +472,15 @@ function attach(server) {
       const x = num(m.x, 0, w.house.N - 1), y = num(m.y, 0, w.house.N - 1);
       if (x == null || y == null || p.hiding) return reply(false);
       const tx = Math.floor(x), ty = Math.floor(y), g = w.house.g;
-      if (Math.hypot(tx + 0.5 - p.x, ty + 0.5 - p.y) > USE_REACH) return reply(false, { why: "far" });
+      // Reach is judged from where the phone says it is — the last report can
+      // lag a step behind — as long as that's somewhere it could have got to.
+      let fx = p.x, fy = p.y;
+      const px = num(m.px, 0, w.house.N), py = num(m.py, 0, w.house.N);
+      if (px != null && py != null) {
+        const since = p.at ? Math.min(1, (Date.now() - p.at) / 1000) : 1;
+        if (Math.hypot(px - p.x, py - p.y) <= core.MAX_SPEED * since + 0.6) { fx = px; fy = py; }
+      }
+      if (Math.hypot(tx + 0.5 - fx, ty + 0.5 - fy) > USE_REACH) return reply(false, { why: "far" });
       if (m.act === "open") {
         if (g[ty][tx] !== core.DOOR) return reply(false);
         g[ty][tx] = core.FLOOR;
@@ -477,7 +510,7 @@ function attach(server) {
       const w = worlds.get(code);
       if (!w || w.over) return;
       const p = w.players.get(uid);
-      if (!p || !p.alive || p.escaped) return;
+      if (!p || !p.alive) return;
       const reply = (ok, why) => socket.emit("manor:decoyed", { ok, why, left: p.decoys });
       if (!p.decoys) return reply(false, "empty");
       let G = null, gd = Infinity;
@@ -492,14 +525,15 @@ function attach(server) {
   });
 }
 
-// Leaving mid-match. The seat is kept so the result still counts: you are
-// out, as if caught. In co-op that ends it for everyone.
+// Leaving mid-match. The seat is kept so the result still counts — your
+// side's score so far — and everyone else plays on to the end of the clock.
+// When the last player has left, the match is over.
 function forfeit(code, userId) {
   const w = worlds.get(code);
   if (!w || w.over) return false;
   const p = w.players.get(Number(userId));
   if (!p) return false;
-  if (p.alive && !p.escaped) kill(w, p.id, "left");
+  kill(w, p.id, "left");
   return true;
 }
 

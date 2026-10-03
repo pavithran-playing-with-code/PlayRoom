@@ -71,6 +71,37 @@ function manorResults(room, seated) {
   return out;
 }
 
+// ── The games you play together ──────────────────────────────────────────────
+// Kitchen Rush, Bomb Squad and Tower Guard (config/togetherWorld.js) keep
+// their own scores, one per side, carried by every member of the side; and
+// pairs_matched is 1 once a side has reached its goal. With several sides the
+// best score wins (a tie at the top is a draw). With one side — a solo run, or
+// everybody together — there's nobody to beat: reaching the goal is the win.
+const TOGETHER_GAMES = new Set(["kitchen", "bomb", "tower"]);
+
+function togetherResults(room, seated) {
+  const out = new Map();
+  const sideOf = (p) => (room.mode === "coop" ? "all"
+    : room.mode === "teams" && p.team != null ? `t${p.team}` : `p${p.user_id}`);
+  const score = new Map(), goal = new Map();
+  for (const p of seated) {
+    const k = sideOf(p);
+    score.set(k, Math.max(score.get(k) || 0, cap(p.score)));
+    goal.set(k, goal.get(k) || (Number(p.pairs_matched) || 0) >= 1);
+  }
+  if (score.size === 1) {
+    for (const p of seated) out.set(Number(p.user_id), goal.get(sideOf(p)) ? "win" : "loss");
+    return out;
+  }
+  const best = Math.max(...score.values());
+  const tied = [...score.values()].filter((v) => v === best).length;
+  for (const p of seated) {
+    const mine = score.get(sideOf(p));
+    out.set(Number(p.user_id), mine < best ? "loss" : tied > 1 ? "draw" : "win");
+  }
+  return out;
+}
+
 // Everyone's outcome, decided together.
 //
 // In a team room the sides are ranked on the straight total of their members'
@@ -83,6 +114,7 @@ function manorResults(room, seated) {
 // one-person team rather than being dropped from the reckoning.
 function resultsFor(room, seated) {
   if (room.game_slug === "manor") return manorResults(room, seated);
+  if (TOGETHER_GAMES.has(room.game_slug)) return togetherResults(room, seated);
   const out = new Map();
 
   if (room.mode === "teams" && seated.some(p => p.team != null)) {
@@ -106,4 +138,4 @@ function resultsFor(room, seated) {
   return out;
 }
 
-module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, ESCAPE_POINTS, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults };
+module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, ESCAPE_POINTS, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults, togetherResults, TOGETHER_GAMES };

@@ -254,14 +254,15 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('typing', 'Typing Race', 'Type the words as fast as you can. Same words for everyone, streaks score big.', 1, 8, CONVERT(UNHEX('E28CA8EFB88F') USING utf8mb4), 1, 200),
   ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 210),
   ('piano', 'Piano Tiles', 'Tap the black tiles, never the white. Every tile is the next note of the song.', 1, 8, CONVERT(UNHEX('F09F8EB9') USING utf8mb4), 1, 220),
-  ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1, 230)
+  ('kitchen', 'Kitchen Rush', 'Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.', 1, 8, CONVERT(UNHEX('F09F8DB3') USING utf8mb4), 1, 230),
+  ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1, 240)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
   min_players = VALUES(min_players), max_players = VALUES(max_players),
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 10 tables and 22 playable games.
+-- Expect 10 tables and 23 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
 SELECT slug, name, icon, max_players, sort_order FROM game_types WHERE is_active = 1 ORDER BY sort_order, id;
 

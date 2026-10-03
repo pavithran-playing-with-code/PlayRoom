@@ -6,6 +6,7 @@ const { recordResults } = require("../config/recordResults");
 const { verifyToken } = require("../middleware/auth");
 const { emitRoom, emitUser, tellFriends, isOnline } = require("../config/socket");
 const manor = require("../config/manorWorld");
+const together = require("../config/togetherWorld");
 
 // The match clock is server-authoritative and lives in config/matchClock.js:
 // the countdown a player sees is client-side, so it can be paused, slowed or
@@ -81,9 +82,12 @@ const MAX_TEAMS = 4;
 const MIN_PER_TEAM = 2;
 const MIN_TEAM_PLAYERS = MIN_PER_TEAM * 2;
 
-// Co-op: everyone on one side against the game itself. Only Hollow Manor has
-// a side to be on, and a house for more than four gets crowded.
-const COOP_GAMES = new Set([manor.GAME]);
+// Co-op: everyone on one side against the game itself. Only the games with a
+// side to be on — Hollow Manor and the together games (config/togetherWorld.js)
+// — and a world for more than four gets crowded.
+const COOP_GAMES = new Set([manor.GAME, ...together.GAMES]);
+// Games whose scores the server keeps itself, from what happened in its world.
+const serverScored = (slug) => slug === manor.GAME || together.isTogether(slug);
 const COOP_MAX = 4;
 
 const ROOM_CODE_RE = /^[A-Z0-9]{4,8}$/;
@@ -416,6 +420,7 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
     // Hollow Manor's house is run by the server: build it now, so its clock
     // and its ghosts start with the match rather than with the first phone.
     manor.worldFor(req.params.code).catch((e) => console.error("manor start:", e.message));
+    together.worldFor(req.params.code).catch((e) => console.error("together start:", e.message));
     res.json({ success: true, message: "Game started!" });
   } catch (err) { next(err); }
 });
@@ -500,7 +505,7 @@ router.patch("/:code/score", verifyToken, async (req, res, next) => {
     const roomId = rooms[0].id;
     // Hollow Manor's scores are kept by the server, from what happened in the
     // house. A phone posting one would be a phone deciding its own result.
-    if (rooms[0].game_slug === manor.GAME)
+    if (serverScored(rooms[0].game_slug))
       return res.status(409).json({ success: false, message: "This game's scores are kept by the server." });
 
     // End the match first if its clock has run out, so the write below is
@@ -743,9 +748,11 @@ router.post("/:code/leave", verifyToken, async (req, res, next) => {
     // Walking out of Hollow Manor mid-match. The house is the server's, not
     // the host's, so nobody else's match ends with you. Your seat stays, so
     // the result is still written down: you count as caught (and in co-op,
-    // that loses it for everyone — the page warns before you go).
-    if (room.game_slug === manor.GAME && room.status === "in_progress" && !mine[0].is_spectator) {
-      manor.forfeit(req.params.code, req.user.id);
+    // that loses it for everyone — the page warns before you go). The same
+    // for the together games: your side cooks / defuses / defends on without you.
+    if (serverScored(room.game_slug) && room.status === "in_progress" && !mine[0].is_spectator) {
+      if (room.game_slug === manor.GAME) manor.forfeit(req.params.code, req.user.id);
+      else together.forfeit(req.params.code, req.user.id);
       push(req, req.params.code, "room:players", { code: req.params.code, left: req.user.id });
       return res.json({ success: true, forfeited: true });
     }

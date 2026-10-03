@@ -724,7 +724,7 @@ function Room() {
           )}
           {room?.mode === "coop" && status === "waiting" && (
             <div className="note" style={{ background: "var(--berry)", marginTop: 20 }}>
-              🤝 You're all on one side: take every relic, and every one of you gets out — or none of you does.
+              🤝 {GAME_MAP[room?.game_slug]?.coopNote || "You're all on one side, against the game."}
             </div>
           )}
           {!isHost && !isSpectator && status === "waiting" && (

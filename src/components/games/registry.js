@@ -23,6 +23,7 @@ import MazeRunner from "./MazeRunner";
 import ManorGame from "./ManorGame";
 import TypingRace from "./TypingRace";
 import PianoTiles from "./PianoTiles";
+import KitchenRush from "./KitchenRush";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -33,6 +34,8 @@ import PianoTiles from "./PianoTiles";
 //   defaultDuration  the clock the lobby picks when you choose this game
 //   ownsSpectating   the game draws its own "who to watch" picker, so the
 //                    room's is not laid over the top of it
+//   coopLabel        the lobby's "Play together — …" line for this game
+//   coopNote         what the waiting room says to a together room
 export const GAMES = [
   {
     slug: "mahjong", name: "Mahjong Solitaire", icon: "🀄",
@@ -161,10 +164,21 @@ export const GAMES = [
     Component: PianoTiles,
   },
   {
+    slug: "kitchen", name: "Kitchen Rush", icon: "🍳",
+    blurb: "Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.",
+    minPlayers: 1, maxPlayers: 8, tag: "Together", col: "var(--peach)",
+    coopMax: 4, defaultDuration: 180, ownsSpectating: true,
+    coopLabel: "one kitchen, every cook in it",
+    coopNote: "One kitchen for all of you: split the work — chop, cook, plate up and serve.",
+    Component: KitchenRush,
+  },
+  {
     slug: "manor", name: "Hollow Manor", icon: "🏚️",
     blurb: "Take your relics and get out before the house finds you. Race, team up, or survive it together.",
     minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--grape)",
     coopMax: 4, defaultDuration: 300, ownsSpectating: true,
+    coopLabel: "everyone gets out, or nobody does",
+    coopNote: "You're all on one side: take every relic, and every one of you gets out — or none of you does.",
     Component: ManorGame,
   },
 ];

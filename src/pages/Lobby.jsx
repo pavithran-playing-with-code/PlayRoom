@@ -246,7 +246,7 @@ export default function Lobby() {
                       onChange={(e) => { setCoopMode(e.target.checked); if (e.target.checked) setTeamMode(false); }}
                       style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
                     <span>
-                      🤝 Play together — everyone gets out, or nobody does
+                      🤝 Play together — {selected.coopLabel || "one side, against the game"}
                       {!canCoop && <span className="muted"> · 2 to {coopMax} players</span>}
                     </span>
                   </label>

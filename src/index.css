@@ -828,6 +828,19 @@ input::-ms-reveal,input::-ms-clear{display:none}
   touch-action:none;-webkit-tap-highlight-color:transparent}
 .pt-help{font-size:.78rem;text-align:center}
 .press.pt-btn{padding:10px 18px;font-size:1rem;--lift:4px}
+
+/* ── Kitchen Rush (.kr-) ── */
+.kr-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.kr-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);touch-action:none;
+  -webkit-tap-highlight-color:transparent}
+.kr-controls{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;max-width:420px;padding:0 6px}
+.kr-stick{position:relative;width:112px;height:112px;border-radius:50%;border:3px solid var(--ink);background:var(--paper2);
+  box-shadow:inset 0 4px 0 rgba(46,33,64,.12);touch-action:none;flex:none}
+.kr-knob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;
+  background:var(--peach);border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink);pointer-events:none}
+.press.kr-use{min-width:130px;min-height:76px;font-size:1.3rem;--lift:5px;touch-action:none}
+.kr-watch{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 .press.sw-btn{padding:12px 22px;font-size:1.15rem;--lift:4px;min-width:64px;touch-action:none}
 .sw-stage{position:relative}
 .sw-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font:900 4.5rem/1 Fredoka,Nunito,sans-serif;

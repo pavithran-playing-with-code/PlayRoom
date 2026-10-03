@@ -139,6 +139,13 @@ There is no test runner. What works:
   `flappySim.js`…) and `config/matchResult.js` are plain JS with no React or
   database, so they can be exercised from a Node script directly
   (`scripts/check-runner.mjs`, `scripts/check-speedway.mjs`, `scripts/check-piano.mjs`, `check-manor*`).
+- **The together games run on the server** — Kitchen Rush, Bomb Squad,
+  Tower Guard: `config/togetherWorld.js` keeps a world per side (one each,
+  per team, or one for a co-op room) on the rules in
+  `src/components/together/<game>Core.mjs`, which the phones share. Phones
+  send `tg:act` / `tg:me`, draw `tg:tick`, and never post a score.
+  `scripts/check-together-world.js` tests the server side with a fake
+  database; `check-kitchen.mjs` and friends test the rules.
 - **Speedway is live-shared**: each phone sends its car over the socket
   (`race:pos`, relayed by `config/socket.js`); everyone else's car is drawn
   from that. The score sync still decides the result.

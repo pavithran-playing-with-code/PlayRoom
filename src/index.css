@@ -866,94 +866,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .mz-down{grid-area:down}
 .mz-right{grid-area:right}
 
-/* ── WICK ────────────────────────────────────────────────────────────────────
-   The one dark screen in the app. It ignores the page theme on purpose:
-   nothing here should feel like the rest of the building. */
-
-.wk{position:fixed;inset:0;z-index:200;background:#040308;color:#CFC6D8;height:100svh;
-  display:flex;flex-direction:column;align-items:center;gap:6px;
-  padding:max(8px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom));
-  font-family:Nunito,system-ui,sans-serif;overflow:hidden;overscroll-behavior:none;
-  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
-.wk-bar{width:100%;max-width:520px;display:flex;align-items:center;gap:14px;min-height:40px}
-.wk-out{color:#8A8098;font-size:.86rem;font-weight:800;padding:10px 4px;background:none;border:0;cursor:pointer}
-.wk-out:hover{color:#E6DDF0}
-.wk-title{font-family:Fredoka,sans-serif;letter-spacing:.3em;font-size:.9rem;color:#5A5268;margin-right:auto}
-.wk-stat{display:flex;flex-direction:column;align-items:center;line-height:1;min-width:34px}
-.wk-stat b{font-family:Fredoka,sans-serif;font-size:1.15rem;color:#EDE4F4}
-.wk-stat span{font-size:.56rem;letter-spacing:.12em;color:#6A6078;margin-top:3px}
-.wk-key b{color:#5A5268}
-.wk-key.got b{color:#FFD36B;text-shadow:0 0 10px rgba(255,200,80,.7)}
-
-.wk-stage{position:relative;flex:1;width:100%;max-width:520px;min-height:0}
-.wk-canvas{position:absolute;inset:0;display:block;cursor:pointer}
-
-/* the words under the board: the most urgent thing, in its colour. A fixed
-   height, so a longer message never resizes the board under your thumb. */
-.wk-msg{height:3.9em;flex:none;overflow:hidden;width:100%;max-width:520px;display:grid;place-items:center;text-align:center;
-  font-weight:800;font-size:.9rem;line-height:1.25;padding:0 6px}
-.wk-msg.lvl0{color:#8F869E}
-.wk-msg.lvl2{color:#FFB648}
-.wk-msg.lvl3{color:#FF5A64;animation:wkFlicker .5s steps(2) infinite}
-
-.wk-foot{width:100%;max-width:520px;display:flex;align-items:stretch;gap:10px}
-.wk-btn{flex:none;width:86px;min-height:58px;border-radius:14px;border:2px solid #3A3348;background:#16121E;
-  color:#E6DDF0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;
-  transition:transform .08s ease, border-color .15s ease}
-.wk-btn b{font-family:Fredoka,sans-serif;letter-spacing:.14em;font-size:.95rem}
-.wk-btn span{font-size:.66rem;color:#8A8098}
-.wk-btn:active:not(:disabled){transform:translateY(2px)}
-.wk-btn:disabled{opacity:.35;cursor:default}
-.wk-btn.flare{border-color:#7A5220;background:#1E150C}
-.wk-btn.flare b{color:#FFC46B}
-.wk-btn.deadly{border-color:#A0222C}
-.wk-btn.armed{border-color:#FFFFFF;animation:wkFlicker .4s steps(2) infinite}
-
-.wk-oil{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:6px}
-.wk-oil-bar{position:relative;height:14px;border-radius:999px;background:#140F1C;border:2px solid #2C2438;overflow:hidden}
-.wk-oil-fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#8A4A12,#FFB547);
-  transition:width .2s ease}
-.wk-oil.r0 .wk-oil-fill,.wk-oil.r-1 .wk-oil-fill{background:#B8323C}
-.wk-oil-bar i{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.45)}
-.wk-oil-label{font-size:.72rem;color:#8A8098;text-align:center;letter-spacing:.06em}
-.wk-oil-label b{font-family:Fredoka,sans-serif;font-size:1rem;color:#FFD08A}
-.wk-oil.r0 .wk-oil-label b,.wk-oil.r-1 .wk-oil-label b{color:#FF6A72}
-
-/* cards over the board */
-.wk-card{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:12px;padding:18px 16px;text-align:center;overflow-y:auto}
-.wk-intro{background:radial-gradient(ellipse at 50% 30%,rgba(40,26,14,.55),rgba(4,3,8,.94) 70%)}
-.wk-logo{font-family:Fredoka,sans-serif;font-size:3.4rem;letter-spacing:.34em;margin:0 0 0 .34em;color:#F2E2C6;
-  text-shadow:0 0 24px rgba(255,170,70,.55);animation:wkWick 3.2s ease-in-out infinite}
-.wk-sub{margin:-6px 0 4px;color:#9A8FA8;font-weight:700;letter-spacing:.06em}
-.wk-rules{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;max-width:340px;text-align:left}
-.wk-rules li{display:flex;gap:10px;align-items:flex-start;font-size:.88rem;line-height:1.35;color:#C9BFD4}
-.wk-ico{flex:none;width:26px;text-align:center;font-size:1.05rem}
-.wk-red{color:#FF4050}
-.wk-go{margin-top:6px;min-height:52px;padding:0 28px;border-radius:999px;border:2px solid #FFB547;background:#2A1A0A;
-  color:#FFE2B0;font-family:Fredoka,sans-serif;font-size:1.15rem;letter-spacing:.1em;cursor:pointer;
-  box-shadow:0 0 22px rgba(255,160,50,.3)}
-.wk-go:active{transform:translateY(2px)}
-.wk-quiet{background:none;border:0;color:#7A7088;font-weight:800;padding:10px;cursor:pointer}
-.wk-hint{font-size:.74rem;color:#6A6078;margin:0}
-
-.wk-over{background:rgba(10,0,4,.82);animation:wkIn .45s ease 1.45s both}
-.wk-shout{font-family:Fredoka,sans-serif;font-size:1.45rem;letter-spacing:.12em;color:#FF5A64;
-  text-shadow:0 0 18px rgba(255,40,60,.6)}
-.wk-why{margin:0;max-width:320px;color:#D8CEE2;font-size:.92rem;line-height:1.4}
-.wk-final{display:flex;gap:26px;margin:4px 0}
-.wk-final span{display:flex;flex-direction:column;align-items:center;font-size:.6rem;letter-spacing:.12em;color:#7A7088}
-.wk-final b{font-family:Fredoka,sans-serif;font-size:1.7rem;color:#F2E8F8;letter-spacing:0}
-
-/* meeting something new: in the message line until your first step */
-.wk-meet{display:block;color:#CFC6D8;font-weight:700;font-size:.86rem;animation:wkIn .5s ease 1s both}
-.wk-meet b{color:#FFFFFF;font-weight:900}
-.wk-scare{position:fixed;inset:0;width:100%;height:100%;z-index:10;display:none;pointer-events:none}
-
-@keyframes wkIn{from{opacity:0}}
-@keyframes wkFlicker{0%,100%{opacity:1}50%{opacity:.55}}
-@keyframes wkWick{0%,100%{opacity:1}47%{opacity:.92}50%{opacity:.6}53%{opacity:.95}}
-
 /* ── HOLLOW MANOR ────────────────────────────────────────────────────────────
    First-person, full screen, its own serif and its own dark. Played from a
    room (components/games/ManorGame.jsx) or solo at /manor. */
@@ -1055,16 +967,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .hmx-name b{font-weight:400;color:#e9e3d3;font-size:16px}
 .hmx-name small{color:#a39a88;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hmx-got{color:var(--c);font-size:14px}
-
-/* WICK in a room: the dark board sits in the ordinary game frame, and the
-   oil, WAIT and FLARE sit in the frame's control strip. */
-.wkg-board{display:flex;flex-direction:column;margin:0 auto;background:#040308;border-radius:18px;overflow:hidden;
-  border:3px solid var(--ink);box-shadow:0 5px 0 var(--ink);touch-action:none;user-select:none;-webkit-user-select:none}
-.wkg-canvas{display:block;cursor:pointer;touch-action:none}
-.wk-msg.wkg-msg{height:58px;max-width:none;font-family:Nunito,system-ui,sans-serif;font-size:.84rem;background:#040308}
-.wk-foot.wkg-foot{max-width:520px;margin:0 auto;padding:8px 10px;border-radius:16px;background:#0a0810;
-  border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink)}
-.wkg-foot .wk-btn{min-height:52px;width:80px}
 
 /* The screen stayed upright (installed app locked to portrait, rotation
    lock on, an iPhone): draw the whole game turned a quarter clockwise, so the

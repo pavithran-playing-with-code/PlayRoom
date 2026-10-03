@@ -21,7 +21,6 @@ import Speedway from "./Speedway";
 import DodgeStorm from "./DodgeStorm";
 import MazeRunner from "./MazeRunner";
 import ManorGame from "./ManorGame";
-import WickGame from "./WickGame";
 import TypingRace from "./TypingRace";
 
 // `col` is the game's colour across the whole product — Home tile header,
@@ -149,10 +148,10 @@ export const GAMES = [
     Component: MazeRunner,
   },
   {
-    slug: "wick", name: "Wick", icon: "🕯️",
-    blurb: "Go down with a lantern. Every step burns oil, and the dark is full of things that move when you do.",
-    minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--peach)",
-    Component: WickGame,
+    slug: "typing", name: "Typing Race", icon: "⌨️",
+    blurb: "Type the words as fast as you can. Same words for everyone, streaks score big.",
+    minPlayers: 1, maxPlayers: 8, tag: "Speed", col: "var(--ice)",
+    Component: TypingRace,
   },
   {
     slug: "manor", name: "Hollow Manor", icon: "🏚️",
@@ -160,12 +159,6 @@ export const GAMES = [
     minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--grape)",
     coopMax: 4, defaultDuration: 300, ownsSpectating: true,
     Component: ManorGame,
-  },
-  {
-    slug: "typing", name: "Typing Race", icon: "⌨️",
-    blurb: "Type the words as fast as you can. Same words for everyone, streaks score big.",
-    minPlayers: 1, maxPlayers: 8, tag: "Speed", col: "var(--ice)",
-    Component: TypingRace,
   },
 ];
 

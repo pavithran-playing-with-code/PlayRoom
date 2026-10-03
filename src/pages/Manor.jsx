@@ -1,5 +1,5 @@
 // src/pages/Manor.jsx
-// HOLLOW MANOR — a first-person horror page. Like WICK: no room, no login,
+// HOLLOW MANOR — a first-person horror page. No room, no login,
 // no navbar; the second dark door in the header leads here.
 //
 // The rules are components/horror/manorSim.js, the pictures manorRender.js,

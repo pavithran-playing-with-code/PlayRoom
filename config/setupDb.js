@@ -252,10 +252,9 @@ const GAME_SEED = [
   { slug: "speedway",  name: "Speedway",          description: "Three laps, one road, everyone on it at once. First across the line wins.", min: 1, max: 8, icon: "🏁", active: 1 },
   { slug: "storm",     name: "Dodge Storm",       description: "Stay alive while the shards close in from every side.",            min: 1, max: 8, icon: "⚡", active: 1 },
   { slug: "maze",      name: "Maze Runner",       description: "One way out, and it gets bigger every time you find it.",           min: 1, max: 8, icon: "🧭", active: 1 },
-  { slug: "wick",      name: "Wick",              description: "Go down with a lantern. Every step burns oil, and the dark moves when you do.", min: 1, max: 8, icon: "🕯️", active: 1 },
-  { slug: "manor",     name: "Hollow Manor",      description: "Take your relics and get out of the house before it finds you.",   min: 1, max: 8, icon: "🏚️", active: 1 },
   { slug: "typing",    name: "Typing Race",       description: "Type the words as fast as you can. Same words for everyone, streaks score big.", min: 1, max: 8, icon: "⌨️", active: 1 },
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
+  { slug: "manor",     name: "Hollow Manor",      description: "Take your relics and get out of the house before it finds you.",   min: 1, max: 8, icon: "🏚️", active: 1 },
 ];
 
 // Columns added after the first release. A table created before one of these

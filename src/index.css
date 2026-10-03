@@ -940,6 +940,28 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .press.tw-act{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 4px;--lift:4px;font-size:.9rem}
 .tw-max{flex:1;display:grid;place-items:center;font-weight:800}
 .tw-hint{font-size:.85rem;text-align:center;width:100%}
+
+/* ── Carrom (.cr-) ── */
+.cr-pad{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.cr-canvas{border-radius:16px;box-shadow:0 6px 0 var(--ink);border:3px solid var(--ink);touch-action:none;-webkit-tap-highlight-color:transparent}
+.cr-help{font-size:.78rem;text-align:center}
+.cr-controls{display:flex;align-items:center;gap:12px;width:100%;max-width:440px;padding:0 6px}
+.cr-slide{flex:1;display:flex;align-items:center;gap:10px;font-weight:800;font-size:.9rem}
+.cr-slide input{flex:1;height:34px;accent-color:var(--brick);touch-action:pan-x}
+.cr-wait{flex:1;text-align:center;font-size:.92rem}
+.press.cr-snd{padding:8px 14px;--lift:3px}
+.cr-level{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%,380px);padding:18px 16px;text-align:center;
+  background:var(--card);animation:drop .2s cubic-bezier(.34,1.7,.64,1)}
+.cr-level h3{font-size:1.25rem;margin-bottom:12px}
+.cr-levels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.press.cr-lvl{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;--lift:4px}
+.cr-lvl b{font-size:1rem}
+.cr-lvl small{font-size:.68rem;opacity:.8;line-height:1.2}
+.cr-face{font-size:1.8rem}
+.press.lvl-easy{background:var(--lime)}
+.press.lvl-medium{background:var(--sun)}
+.press.lvl-hard{background:var(--coral)}
 .press.sw-btn{padding:12px 22px;font-size:1.15rem;--lift:4px;min-width:64px;touch-action:none}
 .sw-stage{position:relative}
 .sw-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font:900 4.5rem/1 Fredoka,Nunito,sans-serif;

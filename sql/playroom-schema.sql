@@ -257,14 +257,15 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('kitchen', 'Kitchen Rush', 'Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.', 1, 8, CONVERT(UNHEX('F09F8DB3') USING utf8mb4), 1, 230),
   ('bomb', 'Bomb Squad', 'One of you sees the bomb, the rest have the manual. Talk it through before the timer runs out.', 1, 8, CONVERT(UNHEX('F09F92A3') USING utf8mb4), 1, 240),
   ('tower', 'Tower Guard', 'Build towers along the road and keep the monsters off your castle. Together, defend one castle.', 1, 8, CONVERT(UNHEX('F09F8FB0') USING utf8mb4), 1, 250),
-  ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1, 260)
+  ('carrom', 'Carrom', 'Flick the striker, pocket your colour, cover the queen. Against the computer, 1 v 1, or 2 v 2.', 1, 4, CONVERT(UNHEX('F09F8EAF') USING utf8mb4), 1, 260),
+  ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1, 270)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
   min_players = VALUES(min_players), max_players = VALUES(max_players),
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 10 tables and 25 playable games.
+-- Expect 10 tables and 26 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
 SELECT slug, name, icon, max_players, sort_order FROM game_types WHERE is_active = 1 ORDER BY sort_order, id;
 

@@ -19,6 +19,10 @@
 //
 // A match ends when the clock runs out, when every side's world is over (a
 // castle fallen), or once everybody has left.
+//
+// A rules module that says SHARED (Carrom) is one world for the whole room,
+// the sides playing against each other in it: every side gets the same
+// world, it steps once, and it's asked for each side's score by key.
 const path = require("path");
 const { pathToFileURL } = require("url");
 const db = require("./db");
@@ -26,7 +30,9 @@ const { recordResults } = require("./recordResults");
 const { tellFriends, roomChannel, userChannel } = require("./socket");
 
 // slug -> the rules module
-const GAMES = { kitchen: "kitchenCore.mjs", bomb: "bombCore.mjs", tower: "towerCore.mjs" };
+const GAMES = { kitchen: "kitchenCore.mjs", bomb: "bombCore.mjs", tower: "towerCore.mjs", carrom: "carromCore.mjs" };
+// …and the ones a co-op room can be made for (Carrom is sides against each other only)
+const COOP = ["kitchen", "bomb", "tower"];
 const KEEP_AFTER_MS = 120000;          // a finished world lingers for late hellos
 const SAVE_MS = 1500;                  // scores reach the database at most this often
 
@@ -82,8 +88,12 @@ function buildWorld(room, seats, elapsedMs) {
   seats.forEach((p) => players.set(Number(p.user_id), {
     id: Number(p.user_id), name: p.username, avatar: p.avatar, left: !!(parseSaved(p.game_state) || {}).left,
   }));
-  const sides = sidesFor(mode, seats).map((s) => {
-    const inst = core.createSide(room.seed, { players: s.members, durMs, mode });
+  const plan = sidesFor(mode, seats);
+  const shared = core.SHARED
+    ? core.createSide(room.seed, { players: seats.map((p) => Number(p.user_id)), sides: plan.map((x) => ({ key: x.key, members: x.members })), durMs, mode })
+    : null;
+  const sides = plan.map((s) => {
+    const inst = shared || core.createSide(room.seed, { players: s.members, durMs, mode });
     for (const id of s.members) { if (players.get(id).left) core.removePlayer(inst, id); }
     return { ...s, inst, best: 0 };
   });
@@ -146,13 +156,15 @@ function start(w) {
 }
 
 // ── scores ───────────────────────────────────────────────────────────────────
-const sideScore = (w, s) => Math.max(s.best, Math.round(w.core.score(s.inst)));
+const sideScore = (w, s) => Math.max(s.best, Math.round(w.core.score(s.inst, s.key)));
+const sideGoal = (w, s) => !!w.core.goal(s.inst, s.key);
+const worldsOf = (w) => [...new Set(w.sides.map((s) => s.inst))];
 
 async function saveScores(w, force = false) {
   const jobs = [];
   for (const s of w.sides) {
     const score = sideScore(w, s);
-    const goal = w.core.goal(s.inst) ? 1 : 0;
+    const goal = sideGoal(w, s) ? 1 : 0;
     for (const id of s.members) {
       const p = w.players.get(id);
       const state = JSON.stringify({ tg: { left: p.left, score } });
@@ -176,7 +188,7 @@ function tick(w) {
   const dt = Math.min(0.5, (now - w.lastTick) / 1000);
   w.lastTick = now;
   if (now - w.startMs >= w.durMs) { finish(w, "time"); return; }
-  for (const s of w.sides) if (!w.core.done(s.inst)) w.core.step(s.inst, dt, now - w.startMs);
+  for (const inst of worldsOf(w)) if (!w.core.done(inst)) w.core.step(inst, dt, now - w.startMs);
   if (w.sides.every((s) => w.core.done(s.inst))) { finish(w, "done"); return; }
   broadcast(w, now);
   if (now - w.lastSave >= SAVE_MS) { w.lastSave = now; saveScores(w); }
@@ -189,8 +201,10 @@ function scoreboard(w) {
 function broadcast(w, now) {
   const sc = scoreboard(w);
   const t = now - w.startMs;
+  const views = new Map();               // a shared world is looked at once, for everyone
   for (const s of w.sides) {
-    io.to(sideChannel(w.code, s.key)).emit("tg:tick", { c: w.code, side: s.key, t, v: w.core.view(s.inst), sc });
+    if (!views.has(s.inst)) views.set(s.inst, w.core.view(s.inst));
+    io.to(sideChannel(w.code, s.key)).emit("tg:tick", { c: w.code, side: s.key, t, v: views.get(s.inst), sc });
     // what only one player may see (the bomb, to its defuser), when it changes
     if (w.core.secret) {
       const sec = w.core.secret(s.inst);
@@ -227,8 +241,8 @@ async function finish(w, reason) {
 
 function standings(w) {
   const sides = w.sides.map((s) => ({
-    key: s.key, name: s.name, color: s.color, score: sideScore(w, s), goal: !!w.core.goal(s.inst),
-    out: !!w.core.done(s.inst), sum: w.core.summary ? w.core.summary(s.inst) : null,
+    key: s.key, name: s.name, color: s.color, score: sideScore(w, s), goal: sideGoal(w, s),
+    out: !w.core.SHARED && !!w.core.done(s.inst), sum: w.core.summary ? w.core.summary(s.inst, s.key) : null,
     members: s.members.map((id) => { const p = w.players.get(id); return { id, name: p.name, avatar: p.avatar, left: p.left }; }),
   }));
   sides.sort((a, b) => b.score - a.score);
@@ -350,6 +364,6 @@ function forfeit(code, userId) {
 }
 
 module.exports = {
-  attach, forfeit, worldFor, isTogether, ready, GAMES: Object.keys(GAMES),
+  attach, forfeit, worldFor, isTogether, ready, GAMES: Object.keys(GAMES), COOP,
   _worlds: worlds, _buildWorld: buildWorld, _start: start, _tick: tick, _finish: finish, _setIo: (x) => { io = x; },
 };

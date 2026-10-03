@@ -77,7 +77,7 @@ function manorResults(room, seated) {
 // pairs_matched is 1 once a side has reached its goal. With several sides the
 // best score wins (a tie at the top is a draw). With one side — a solo run, or
 // everybody together — there's nobody to beat: reaching the goal is the win.
-const TOGETHER_GAMES = new Set(["kitchen", "bomb", "tower"]);
+const TOGETHER_GAMES = new Set(["kitchen", "bomb", "tower", "carrom"]);
 
 function togetherResults(room, seated) {
   const out = new Map();

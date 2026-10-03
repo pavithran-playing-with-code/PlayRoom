@@ -26,6 +26,7 @@ import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
 import BombSquad from "./BombSquad";
 import TowerGuard from "./TowerGuard";
+import CarromGame from "./CarromGame";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -37,6 +38,8 @@ import TowerGuard from "./TowerGuard";
 //   ownsSpectating   the game draws its own "who to watch" picker, so the
 //                    room's is not laid over the top of it
 //   coopLabel        the lobby's "Play together — …" line for this game
+//   seatChoices      the only seat counts this game can be played with, each
+//                    with its button and its line; four seats means teams
 //   coopNote         what the waiting room says to a together room
 export const GAMES = [
   {
@@ -191,6 +194,18 @@ export const GAMES = [
     coopLabel: "one castle, a purse each",
     coopNote: "One map, one castle: build together and keep it standing to the end. Every kill pays all of you.",
     Component: TowerGuard,
+  },
+  {
+    slug: "carrom", name: "Carrom", icon: "🎯",
+    blurb: "Flick the striker, pocket your colour, cover the queen. Against the computer, 1 v 1, or 2 v 2.",
+    minPlayers: 1, maxPlayers: 4, tag: "Classic", col: "var(--brick)",
+    defaultDuration: 300, ownsSpectating: true,
+    seatChoices: [
+      { n: 1, label: "🤖 vs Computer", hint: "🤖 You against the computer — pick Easy, Medium or Hard when it starts." },
+      { n: 2, label: "👥 1 v 1", hint: "👥 You and a friend, head to head. No computer." },
+      { n: 4, label: "👥👥 2 v 2", hint: "👥👥 Two teams of two, partners opposite. Pick teams in the waiting room." },
+    ],
+    Component: CarromGame,
   },
   {
     slug: "manor", name: "Hollow Manor", icon: "🏚️",

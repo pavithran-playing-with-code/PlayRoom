@@ -119,6 +119,15 @@ function room(game, mode, seats, { elapsed = 0, duration = 120 } = {}) {
     check("each side's tick goes to its own channel", chans.has(`tg:${w.code}:p11`) && chans.has(`tg:${w.code}:p12`) && chans.size === 2);
     const tk = sent.find((m) => m.ev === "tg:tick").payload;
     check("…with everyone's score alongside", Array.isArray(tk.sc) && tk.sc.length === 2);
+    // a phone arriving mid-match mustn't swallow what the others are about to be told
+    const inst11 = w.sides.find((x) => x.key === "p11").inst;
+    inst11.ev.push({ type: "served", id: 11, r: "salad", pts: 50 });
+    const late = phone(11);
+    await late.h["tg:hello"]({ code: w.code });
+    sent.length = 0;
+    world._tick(w);
+    const told = sent.filter((m) => m.ev === "tg:tick" && m.ch === `tg:${w.code}:p11`).pop();
+    check("a phone arriving doesn't swallow the side's news", told && told.payload.v.e.some((e) => e.type === "served"));
     // a teleport report is refused and answered with a snap
     a.h["tg:me"]({ code: w.code, x: 0.5, y: 0.5 });
     check("a chef reported inside a counter is put back", !!a.last("tg:snap"));

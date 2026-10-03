@@ -264,9 +264,10 @@ export const done = (s) => s.fallen;
 
 // ── what travels ─────────────────────────────────────────────────────────────
 const r2 = (n) => Math.round(n * 100) / 100;
-export function view(s) {
-  const ev = s.ev;
-  s.ev = [];
+// `peek`: a look for a phone just arriving — the events stay for the next tick.
+export function view(s, peek = false) {
+  const ev = peek ? [] : s.ev;
+  if (!peek) s.ev = [];
   return {
     m: s.monsters.map((m) => [m.id, m.kind, r2(m.d), Math.round((100 * Math.max(0, m.hp)) / m.max), m.slow > 0 ? 1 : 0]),
     tw: s.towers.map((T) => [T.x, T.y, T.kind, T.level, T.owner, r2(T.aim)]),

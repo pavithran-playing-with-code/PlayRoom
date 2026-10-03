@@ -322,9 +322,10 @@ export const done = () => false;
 
 // ── what travels ─────────────────────────────────────────────────────────────
 // Everyone on the side: the timer, the strikes, what's done — never the bomb.
-export function view(s) {
-  const ev = s.ev;
-  s.ev = [];
+// `peek`: a look for a phone just arriving — the events stay for the next tick.
+export function view(s, peek = false) {
+  const ev = peek ? [] : s.ev;
+  if (!peek) s.ev = [];
   const b = s.bomb;
   return {
     b: b ? { i: b.index, left: Math.round(b.left * 10) / 10, limit: b.limit, k: b.strikes, m: b.modules.map((m) => [m.kind, m.done ? 1 : 0]) } : null,

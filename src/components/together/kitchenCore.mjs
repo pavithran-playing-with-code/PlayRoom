@@ -323,9 +323,10 @@ const r2 = (n) => Math.round(n * 100) / 100;
 export const packItem = (it) => (it ? [it.k, it.s, r2(it.p), it.on ? it.on.join("+") : ""] : 0);
 export const unpackItem = (a) => (a ? { k: a[0], s: a[1], p: a[2], on: a[3] ? a[3].split("+") : [] } : null);
 
-export function view(s) {
-  const ev = s.ev;
-  s.ev = [];
+// `peek`: a look for a phone just arriving — the events stay for the next tick.
+export function view(s, peek = false) {
+  const ev = peek ? [] : s.ev;
+  if (!peek) s.ev = [];
   return {
     p: [...s.players.values()].map((p) => [p.id, r2(p.x), r2(p.y), r2(p.fx), r2(p.fy), packItem(p.hold), p.chop !== null ? 1 : 0, p.left ? 1 : 0]),
     i: s.tiles.filter((t) => t.item).map((t) => [t.i, packItem(t.item)]),

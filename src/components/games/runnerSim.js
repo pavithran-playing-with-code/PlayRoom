@@ -14,9 +14,9 @@ import { seededRand, shuffleInPlace } from "./seededRand.js";
 
 export const LANES = [-1, 0, 1];
 export const LANE_W = 2.2;                    // metres between lane centres
-export const BASE_SPEED = 10;                 // m/s at the start, and after a crash
-export const MAX_SPEED = 22;
-export const ACCEL = 0.12;                    // m/s gained every second
+export const BASE_SPEED = 12;                 // m/s at the start, and after a crash
+export const MAX_SPEED = 26;
+export const ACCEL = 0.15;                    // m/s gained every second
 export const JUMP_V = 7.5;                    // up, m/s
 export const GRAVITY = 22;
 export const SLIDE_S = 0.75;
@@ -109,10 +109,16 @@ export const sliding = (s) => s.slideT > 0 && s.y < 0.3;
 export const score = (s) => Math.floor(s.z) + s.coins * COIN_POINTS;
 
 // ── one frame ────────────────────────────────────────────────────────────────
-// dt: seconds. Returns what happened: { coins, crashed, jumped }.
+// dt: seconds. Returns what happened: { coins, crashed, got } — `got`: the
+// coins taken this frame, [{ lane, y, z }], for the page to animate.
+//
+// A coin is taken a little before you reach it (COIN_REACH ahead), not as it
+// passes under you: at that point it's drawn behind the runner, and taking
+// it there looked like the first few coins of a line slipping past you.
+export const COIN_REACH = 1.6;
 export function step(s, dt) {
   const d = Math.max(0, Math.min(0.1, dt));
-  const out = { coins: 0, crashed: false };
+  const out = { coins: 0, crashed: false, got: [] };
   s.t += d;
   if (s.stunT > 0) {
     s.stunT -= d;
@@ -133,9 +139,13 @@ export function step(s, dt) {
   for (const row of s.rows) {
     if (row.z > s.z + 3 || row.z + 20 < s.z - 3) continue;
     for (const o of row.items) {
-      if (Math.abs(o.lane - s.x) > (o.kind === "coin" ? 0.45 : 0.55)) continue;
+      if (Math.abs(o.lane - s.x) > (o.kind === "coin" ? 0.6 : 0.55)) continue;
       if (o.kind === "coin") {
-        if (!o.got && Math.abs(o.z - s.z) < 0.8 && Math.abs(o.y - (s.y + 0.6)) < 0.9) { o.got = true; s.coins++; out.coins++; }
+        const ahead = o.z - s.z;
+        if (!o.got && ahead > -0.8 && ahead < COIN_REACH && Math.abs(o.y - (s.y + 0.6)) < 1.0) {
+          o.got = true; s.coins++; out.coins++;
+          out.got.push({ lane: o.lane, y: o.y, z: o.z });
+        }
         continue;
       }
       if (o.hit || s.z < o.z - 0.3 || s.z > o.z + o.len) continue;

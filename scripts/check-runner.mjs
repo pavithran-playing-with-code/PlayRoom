@@ -75,6 +75,19 @@ const runTo = (s, z, act) => { let crashed = false; while (s.z < z) { if (act) a
   c.nextZ = 1e9; c.z = 5;
   runTo(c, 12);
   check("run over a coin: it's yours, +10", c.coins === 1 && m.score(c) === Math.floor(c.z) + 10);
+  // the coin bug: a coin is taken a step before you reach it, not as it passes under you
+  const k = m.newRun(3);
+  k.rows = [{ z: 10, items: [{ kind: "coin", lane: 0, z: 10, y: 0.6, got: false }] }];
+  k.nextZ = 1e9; k.z = 5;
+  let takenAt = null;
+  while (k.z < 12 && takenAt === null) { const o = m.step(k, DT); if (o.got.length) takenAt = k.z; }
+  check("a coin is taken just before you reach it — so you see it go", takenAt !== null && takenAt < 10 && takenAt > 10 - m.COIN_REACH - 0.5, `at ${takenAt && takenAt.toFixed(2)} m, the coin at 10 m`);
+  const line = m.newRun(3);
+  line.rows = [{ z: 10, items: Array.from({ length: 10 }, (_, i) => ({ kind: "coin", lane: 0, z: 10 + i * 2, y: 0.6, got: false })) }];
+  line.nextZ = 1e9; line.z = 5;
+  let firstFour = 0;
+  while (line.z < 40) { const o = m.step(line, DT); if (line.coins <= 4) firstFour += o.got.length; }
+  check("a line of ten coins: all ten taken, the first four included", line.coins === 10 && firstFour === 4);
   const sp = m.newRun(1); sp.rows = []; sp.nextZ = 1e9;
   for (let t = 0; t < 200; t += DT) m.step(sp, DT);
   check("the run speeds up, to a limit", sp.speed === m.MAX_SPEED);

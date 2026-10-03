@@ -21,6 +21,13 @@ export const OFF_ROAD_LIMIT = MAX_SPEED / 4;
 export const CENTRIFUGAL = 0.3;
 export const START_S = 3;                     // the countdown at the start of a match
 export const KMH = 260;                       // what MAX_SPEED reads as
+// Turbo: hold it for a burst past top speed. It runs on a tank that empties
+// in TURBO_S of use and fills back up on its own over TURBO_REFILL_S. No use
+// on the grass.
+export const TURBO_TOP = 1.35;                // top speed on turbo, × MAX_SPEED
+export const TURBO_S = 2.5;
+export const TURBO_REFILL_S = 7;
+export const TURBO_READY = 0.3;
 
 // ── the road ─────────────────────────────────────────────────────────────────
 // Built from pieces: ease into a bend (or a hill), hold it, ease out.
@@ -65,10 +72,10 @@ export const segAt = (track, d) => track.segs[Math.floor((((d % track.LAP) + tra
 export function newCar(gridSlot = 0) {
   // two abreast, rows a few segments apart, behind the line
   const row = Math.floor(gridSlot / 2), col = gridSlot % 2;
-  return { d: -row * SEG * 4, x: col ? 0.45 : -0.45, speed: 0, finishedAt: null, bump: 0 };
+  return { d: -row * SEG * 4, x: col ? 0.45 : -0.45, speed: 0, finishedAt: null, bump: 0, turbo: 1, boosting: false };
 }
 
-// One frame of your car. inp: { steer: -1..1, brake: bool }, go: past the
+// One frame of your car. inp: { steer: -1..1, turbo: bool, brake: bool }, go: past the
 // countdown. others: [{ d, x }] — cars to bump into. elapsed: the match clock.
 export function drive(track, car, inp, dt, go, others = [], elapsed = 0) {
   const raceLen = LAPS * track.LAP;
@@ -83,11 +90,21 @@ export function drive(track, car, inp, dt, go, others = [], elapsed = 0) {
   const dx = dt * 2 * pct;
   car.x += (inp.steer || 0) * dx;
   car.x -= dx * pct * seg.curve * CENTRIFUGAL;
+  const onGrass = Math.abs(car.x) > 1;
+  // run it dry and it has to refill to TURBO_READY before it works again —
+  // otherwise a held button boosted forever on the trickle coming back in
+  if (car.turbo <= 0) car.dry = true;
+  if (car.dry && car.turbo >= TURBO_READY) car.dry = false;
+  car.boosting = !!inp.turbo && car.turbo > 0 && !car.dry && !onGrass && !inp.brake;
+  if (car.boosting) car.turbo = Math.max(0, car.turbo - dt / TURBO_S);
+  else car.turbo = Math.min(1, car.turbo + dt / TURBO_REFILL_S);
+  const top = car.boosting ? MAX_SPEED * TURBO_TOP : MAX_SPEED;
   if (inp.brake) car.speed += BRAKE * dt;
-  else car.speed += ACCEL * dt;                         // the pedal is always down
-  if (Math.abs(car.x) > 1 && car.speed > OFF_ROAD_LIMIT) car.speed += OFF_ROAD_DECEL * dt;
+  else if (car.speed > top) car.speed = Math.max(top, car.speed - MAX_SPEED * 0.5 * dt);   // off turbo: ease back down
+  else car.speed = Math.min(top, car.speed + (car.boosting ? ACCEL * 2.2 : ACCEL) * dt);   // the pedal is always down
+  if (onGrass && car.speed > OFF_ROAD_LIMIT) car.speed += OFF_ROAD_DECEL * dt;
   car.x = Math.max(-2.5, Math.min(2.5, car.x));
-  car.speed = Math.max(0, Math.min(MAX_SPEED, car.speed));
+  car.speed = Math.max(0, Math.min(MAX_SPEED * TURBO_TOP, car.speed));
 
   let bumped = false;
   car.bump = Math.max(0, car.bump - dt);

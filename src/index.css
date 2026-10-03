@@ -826,6 +826,12 @@ input::-ms-reveal,input::-ms-clear{display:none}
   color:#fff;-webkit-text-stroke:3px var(--ink);text-shadow:0 5px 0 var(--ink);pointer-events:none;
   animation:swPop .9s ease-out infinite}
 .sw-count.go{color:var(--lime);animation:none}
+/* the start lights: red one by one, then all green */
+.sw-lights{position:absolute;left:50%;top:12px;transform:translateX(-50%);display:flex;gap:8px;padding:7px 10px;
+  background:#1c1826;border:3px solid var(--ink);border-radius:999px;pointer-events:none}
+.sw-lights i{width:18px;height:18px;border-radius:50%;background:#3a2e36;display:block}
+.sw-lights i.on{background:#ff3b3b;box-shadow:0 0 12px #ff3b3b}
+.sw-lights.go i.on{background:#3ddc6b;box-shadow:0 0 12px #3ddc6b}
 @keyframes swPop{0%{transform:translate(-50%,-50%) scale(1.25)}100%{transform:translate(-50%,-50%) scale(1)}}
 
 /* ── Maze Runner ──────────────────────────────────────────────────────────────

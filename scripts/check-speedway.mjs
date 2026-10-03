@@ -77,6 +77,25 @@ const steerFor = (t, car) => Math.max(-1, Math.min(1, -car.x * 3 + m.segAt(t, ca
   check("…but you can pass beside it", !m.drive(t, e, { steer: 0 }, DT, true, [other]).bumped);
 }
 
+// ── turbo ──────────────────────────────────────────────────────────────────
+{
+  const t = m.buildTrack(3);
+  const car = m.newCar(0); car.d = 2000; car.x = 0; car.speed = m.MAX_SPEED;
+  const straight = () => { car.x = 0; };
+  for (let i = 0; i < 60; i++) { m.drive(t, car, { steer: 0, turbo: true }, DT, true); straight(); }
+  check("turbo: past top speed", car.speed > m.MAX_SPEED * 1.1, `${(car.speed / m.MAX_SPEED).toFixed(2)}× top`);
+  check("…and the tank empties as you use it", car.turbo < 0.7 && car.boosting);
+  let ranDry = false;
+  for (let i = 0; i < 160; i++) { m.drive(t, car, { steer: 0, turbo: true }, DT, true); straight(); if (car.turbo === 0) ranDry = true; }
+  for (let i = 0; i < 90; i++) { m.drive(t, car, { steer: 0 }, DT, true); straight(); }   // let go, and ease back
+  check("…until it's empty: then back to normal top speed (eased, not slammed)", ranDry && !car.boosting && car.speed <= m.MAX_SPEED * 1.02, `${(car.speed / m.MAX_SPEED).toFixed(2)}×`);
+  for (let i = 0; i < 60 * 8; i++) { m.drive(t, car, { steer: 0 }, DT, true); straight(); }
+  check("…and it fills back up by itself", car.turbo === 1);
+  const g = m.newCar(0); g.d = 2000; g.x = 1.6; g.speed = m.MAX_SPEED * 0.5;
+  m.drive(t, g, { steer: 0, turbo: true }, DT, true);
+  check("no turbo on the grass", !g.boosting);
+}
+
 // ── score and places ─────────────────────────────────────────────────────────
 {
   const t = m.buildTrack(9);

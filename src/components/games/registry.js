@@ -22,6 +22,7 @@ import DodgeStorm from "./DodgeStorm";
 import MazeRunner from "./MazeRunner";
 import ManorGame from "./ManorGame";
 import TypingRace from "./TypingRace";
+import PianoTiles from "./PianoTiles";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -152,6 +153,12 @@ export const GAMES = [
     blurb: "Type the words as fast as you can. Same words for everyone, streaks score big.",
     minPlayers: 1, maxPlayers: 8, tag: "Speed", col: "var(--ice)",
     Component: TypingRace,
+  },
+  {
+    slug: "piano", name: "Piano Tiles", icon: "🎹",
+    blurb: "Tap the black tiles, never the white. Every tile is the next note of the song.",
+    minPlayers: 1, maxPlayers: 8, tag: "Speed", col: "var(--bubble)",
+    Component: PianoTiles,
   },
   {
     slug: "manor", name: "Hollow Manor", icon: "🏚️",

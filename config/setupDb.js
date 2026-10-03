@@ -254,6 +254,7 @@ const GAME_SEED = [
   { slug: "maze",      name: "Maze Runner",       description: "One way out, and it gets bigger every time you find it.",           min: 1, max: 8, icon: "🧭", active: 1 },
   { slug: "typing",    name: "Typing Race",       description: "Type the words as fast as you can. Same words for everyone, streaks score big.", min: 1, max: 8, icon: "⌨️", active: 1 },
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
+  { slug: "piano",     name: "Piano Tiles",       description: "Tap the black tiles, never the white. Every tile is the next note of the song.", min: 1, max: 8, icon: "🎹", active: 1 },
   { slug: "manor",     name: "Hollow Manor",      description: "Take your relics and get out of the house before it finds you.",   min: 1, max: 8, icon: "🏚️", active: 1 },
 ];
 

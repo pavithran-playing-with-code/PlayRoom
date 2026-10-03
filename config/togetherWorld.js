@@ -23,7 +23,7 @@ const path = require("path");
 const { pathToFileURL } = require("url");
 const db = require("./db");
 const { recordResults } = require("./recordResults");
-const { tellFriends, roomChannel } = require("./socket");
+const { tellFriends, roomChannel, userChannel } = require("./socket");
 
 // slug -> the rules module
 const GAMES = { kitchen: "kitchenCore.mjs", bomb: "bombCore.mjs", tower: "towerCore.mjs" };
@@ -191,6 +191,15 @@ function broadcast(w, now) {
   const t = now - w.startMs;
   for (const s of w.sides) {
     io.to(sideChannel(w.code, s.key)).emit("tg:tick", { c: w.code, side: s.key, t, v: w.core.view(s.inst), sc });
+    // what only one player may see (the bomb, to its defuser), when it changes
+    if (w.core.secret) {
+      const sec = w.core.secret(s.inst);
+      const key = sec ? `${sec.to}|${JSON.stringify(sec.data)}` : "";
+      if (key !== s.lastSecret) {
+        s.lastSecret = key;
+        if (sec) io.to(userChannel(sec.to)).emit("tg:secret", { c: w.code, side: s.key, data: sec.data });
+      }
+    }
   }
 }
 
@@ -235,6 +244,7 @@ function initFor(w, uid, role, sideKey) {
     sides: w.sides.map((x) => ({ key: x.key, name: x.name, color: x.color, members: x.members })),
     players: [...w.players.values()].map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, side: p.side, color: p.color, left: p.left })),
     world: w.core.init(s.inst, uid),
+    secret: (() => { const sec = w.core.secret && w.core.secret(s.inst); return sec && sec.to === uid ? sec.data : null; })(),
     view: w.core.view(s.inst, true),
     sc: scoreboard(w),
     over: w.over ? standings(w) : null,

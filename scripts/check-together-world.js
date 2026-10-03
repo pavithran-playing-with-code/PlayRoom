@@ -30,7 +30,7 @@ const stub = (rel, exports) => {
 };
 stub("config/db.js", fakeDb);
 stub("config/recordResults.js", { recordResults: async (id) => { recorded.push(id); return []; } });
-stub("config/socket.js", { tellFriends: () => {}, roomChannel: (c) => `room:${c}` });
+stub("config/socket.js", { tellFriends: () => {}, roomChannel: (c) => `room:${c}`, userChannel: (u) => `user:${u}` });
 
 const sent = [];
 const fakeIo = {

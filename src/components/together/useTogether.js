@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "../../utils/SocketContext";
 
-export default function useTogether({ roomCode, watchId = null, onInit, onTick, onReply, onSnap }) {
+export default function useTogether({ roomCode, watchId = null, onInit, onTick, onReply, onSnap, onSecret }) {
   const { socket } = useSocket() || {};
   const live = useRef(null);
   const [ready, setReady] = useState(false);
@@ -18,7 +18,7 @@ export default function useTogether({ roomCode, watchId = null, onInit, onTick, 
   const n = useRef(0);
   // the latest handlers, without re-subscribing the socket every render
   const cb = useRef({});
-  cb.current = { onInit, onTick, onReply, onSnap };
+  cb.current = { onInit, onTick, onReply, onSnap, onSecret };
 
   useEffect(() => {
     if (!socket || !roomCode) return undefined;
@@ -26,7 +26,7 @@ export default function useTogether({ roomCode, watchId = null, onInit, onTick, 
     const onInitMsg = (init) => {
       if (init.code !== roomCode) return;
       const now = Date.now();
-      live.current = { ...init, view: init.view, prev: init.view, viewAt: now, prevAt: now, sc: init.sc, startLocal: now - init.elapsed };
+      live.current = { ...init, view: init.view, prev: init.view, viewAt: now, prevAt: now, sc: init.sc, startLocal: now - init.elapsed, secret: init.secret || null };
       if (init.over) setOver(init.over);
       cb.current.onInit?.(init);
       setReady(true);
@@ -47,6 +47,14 @@ export default function useTogether({ roomCode, watchId = null, onInit, onTick, 
     const onReplyMsg = (r) => { if (r.code === roomCode) cb.current.onReply?.(r); };
     const onSnapMsg = (r) => { if (r.code === roomCode) cb.current.onSnap?.(r); };
     const onGoneMsg = (g) => { if (g.code === roomCode && !live.current) setGone(true); };
+    // only for this phone: e.g. the bomb, to whoever is defusing it
+    const onSecretMsg = (m) => {
+      const L = live.current;
+      if (!L || m.c !== roomCode || m.side !== L.side) return;
+      L.secret = m.data;
+      cb.current.onSecret?.(m.data);
+    };
+    socket.on("tg:secret", onSecretMsg);
     socket.on("tg:init", onInitMsg);
     socket.on("tg:tick", onTickMsg);
     socket.on("tg:over", onOverMsg);
@@ -64,6 +72,7 @@ export default function useTogether({ roomCode, watchId = null, onInit, onTick, 
       socket.off("tg:reply", onReplyMsg);
       socket.off("tg:snap", onSnapMsg);
       socket.off("tg:gone", onGoneMsg);
+      socket.off("tg:secret", onSecretMsg);
       socket.off("connect", hello);
     };
   }, [socket, roomCode, watchId]);

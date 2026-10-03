@@ -24,6 +24,7 @@ import ManorGame from "./ManorGame";
 import TypingRace from "./TypingRace";
 import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
+import BombSquad from "./BombSquad";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -171,6 +172,15 @@ export const GAMES = [
     coopLabel: "one kitchen, every cook in it",
     coopNote: "One kitchen for all of you: split the work — chop, cook, plate up and serve.",
     Component: KitchenRush,
+  },
+  {
+    slug: "bomb", name: "Bomb Squad", icon: "💣",
+    blurb: "One of you sees the bomb, the rest have the manual. Talk it through before the timer runs out.",
+    minPlayers: 1, maxPlayers: 8, tag: "Together", col: "var(--coral)",
+    coopMax: 4, defaultDuration: 300, ownsSpectating: true,
+    coopLabel: "one bomb, one defuser, everyone else reads the manual",
+    coopNote: "One of you sees the bomb, the rest of you read the manual — talk! Each new bomb goes to the next player.",
+    Component: BombSquad,
   },
   {
     slug: "manor", name: "Hollow Manor", icon: "🏚️",

@@ -924,6 +924,22 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .bs-next{margin-top:12px;font-size:.95rem}
 .bs-controls{display:flex;gap:10px;justify-content:center}
 .press.bs-ctl{padding:10px 18px;font-size:1rem;--lift:4px}
+
+/* ── Tower Guard (.tw-) ── */
+.tw-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.tw-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);touch-action:none;-webkit-tap-highlight-color:transparent}
+.tw-sheet{display:flex;align-items:stretch;gap:8px;width:100%;max-width:440px;padding:0 4px}
+.press.tw-buy{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 4px;--lift:4px;background:var(--card);min-width:0}
+.tw-buy b{font-size:.85rem}
+.tw-buy small,.tw-act small,.tw-info small{font-size:.72rem;opacity:.8;display:block}
+.tw-ic{font-size:1.5rem;line-height:1.2}
+.press.poor{opacity:.45}
+.press.tw-x{padding:6px 12px;--lift:3px;align-self:center}
+.tw-info{flex:1.2;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--paper2);border:3px solid var(--ink);border-radius:14px;padding:4px}
+.press.tw-act{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 4px;--lift:4px;font-size:.9rem}
+.tw-max{flex:1;display:grid;place-items:center;font-weight:800}
+.tw-hint{font-size:.85rem;text-align:center;width:100%}
 .press.sw-btn{padding:12px 22px;font-size:1.15rem;--lift:4px;min-width:64px;touch-action:none}
 .sw-stage{position:relative}
 .sw-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font:900 4.5rem/1 Fredoka,Nunito,sans-serif;

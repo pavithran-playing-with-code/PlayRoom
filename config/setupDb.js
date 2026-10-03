@@ -257,6 +257,7 @@ const GAME_SEED = [
   { slug: "piano",     name: "Piano Tiles",       description: "Tap the black tiles, never the white. Every tile is the next note of the song.", min: 1, max: 8, icon: "🎹", active: 1 },
   { slug: "kitchen",   name: "Kitchen Rush",      description: "Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.", min: 1, max: 8, icon: "🍳", active: 1 },
   { slug: "bomb",      name: "Bomb Squad",        description: "One of you sees the bomb, the rest have the manual. Talk it through before the timer runs out.", min: 1, max: 8, icon: "💣", active: 1 },
+  { slug: "tower",     name: "Tower Guard",       description: "Build towers along the road and keep the monsters off your castle. Together, defend one castle.", min: 1, max: 8, icon: "🏰", active: 1 },
   { slug: "manor",     name: "Hollow Manor",      description: "Take your relics and get out of the house before it finds you.",   min: 1, max: 8, icon: "🏚️", active: 1 },
 ];
 

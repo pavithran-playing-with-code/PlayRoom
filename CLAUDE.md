@@ -145,7 +145,8 @@ There is no test runner. What works:
   `src/components/together/<game>Core.mjs`, which the phones share. Phones
   send `tg:act` / `tg:me`, draw `tg:tick`, and never post a score.
   `scripts/check-together-world.js` tests the server side with a fake
-  database; `check-kitchen.mjs` and friends test the rules.
+  database; `check-kitchen.mjs`, `check-bomb.mjs` and `check-tower.mjs` test
+  the rules.
 - **Speedway is live-shared**: each phone sends its car over the socket
   (`race:pos`, relayed by `config/socket.js`); everyone else's car is drawn
   from that. The score sync still decides the result.

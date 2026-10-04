@@ -11,6 +11,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import TogetherResults from "../together/TogetherResults";
+import GameIcon from "./GameIcon";
 import useTogether, { secondsLeft } from "../together/useTogether";
 import {
   R_COIN, R_STRIKER, POCKETS, U_MIN, U_MAX, TURN_S, FORWARD, LEVELS, strikerAt,
@@ -408,7 +409,7 @@ export default function CarromGame(props) {
   return (
     <>
       <GameFrame
-        gameName="Carrom" badge="🎯 CARROM"
+        gameName="Carrom" badge={<><GameIcon slug="carrom" /> CARROM</>}
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
         timer={{ value: hud.left, max: durationSeconds }}

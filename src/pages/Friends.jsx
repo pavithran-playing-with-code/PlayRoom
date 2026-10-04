@@ -5,6 +5,7 @@ import { api } from "../utils/api";
 import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
 import { Avatar, Tabs, useToast } from "../components/ui";
+import GameIcon from "../components/games/GameIcon";
 
 export default function Friends() {
   const navigate = useNavigate();
@@ -132,7 +133,7 @@ export default function Friends() {
                   <Row key={f.id}>
                     <Avatar emoji={f.avatar} size={48} seed={f.id} online={online(f.id)} />
                     <Who name={f.username}
-                      sub={f.playing ? `${f.playing.game_icon || "🎮"} playing ${f.playing.game_name}`
+                      sub={f.playing ? <><GameIcon icon={f.playing.game_icon} /> playing {f.playing.game_name}</>
                         : online(f.id) ? "🟢 online now · ready to play"
                         : presenceOf(f.id)?.last_seen ? presenceLabel(presenceOf(f.id))
                         : `friends since ${new Date(f.friends_since).toLocaleDateString()}`} />
@@ -198,7 +199,7 @@ export default function Friends() {
                   <Row key={inv.id} tone="var(--paper2)">
                     <Avatar emoji={inv.from_avatar} size={48} seed={inv.from_id} online={online(inv.from_id)} />
                     <Who name={inv.from_username}
-                      sub={`invited you to ${inv.game_icon} ${inv.game_name} · ${inv.room_code}`} />
+                      sub={<>invited you to <GameIcon icon={inv.game_icon} /> {inv.game_name} · {inv.room_code}</>} />
                     <button className="press p-white sm" disabled={!!busy[`dec-${inv.id}`]}
                       onClick={() => call("post", `/api/friends/invites/${inv.id}/decline`, `dec-${inv.id}`)}>Decline</button>
                     <button className="press p-lime sm" disabled={!!busy[`inv-${inv.id}`]}

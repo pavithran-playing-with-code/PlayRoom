@@ -196,7 +196,7 @@ export const GAMES = [
     Component: TowerGuard,
   },
   {
-    slug: "carrom", name: "Carrom", icon: "🎯",
+    slug: "carrom", name: "Carrom", icon: "⚫⚪",          // drawn as a little board by GameIcon
     blurb: "Flick the striker, pocket your colour, cover the queen. Against the computer, 1 v 1, or 2 v 2.",
     minPlayers: 1, maxPlayers: 4, tag: "Classic", col: "var(--brick)",
     defaultDuration: 300, ownsSpectating: true,

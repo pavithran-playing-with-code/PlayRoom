@@ -9,6 +9,7 @@ import { useToast, Avatar } from "../components/ui";
 import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
 import PeekBuddy from "../components/characters/PeekBuddy";
+import GameIcon from "../components/games/GameIcon";
 
 // The little crew that fills up as you add seats.
 const CREW = ["🐯", "🐼", "🦊", "🐸", "🌸", "🚀", "🐙", "🦁"];
@@ -170,7 +171,7 @@ export default function Lobby() {
                 <button key={g.slug} className="press pick" data-game={g.slug}
                   aria-pressed={g.slug === game} onClick={() => setGame(g.slug)}
                   style={{ flexDirection: "column", gap: 6, padding: "14px 8px", background: g.col, borderRadius: 20 }}>
-                  <span style={{ fontSize: "1.9rem", lineHeight: 1 }}>{g.icon}</span>
+                  <span style={{ fontSize: "1.9rem", lineHeight: 1 }}><GameIcon slug={g.slug} icon={g.icon} /></span>
                   <span style={{ fontSize: ".82rem", textAlign: "center", lineHeight: 1.15 }}>{g.name}</span>
                 </button>
               ))}
@@ -276,7 +277,7 @@ export default function Lobby() {
 
             {/* What you're about to create, spelled out: game, clock, seats. */}
             <div className="lobby-sum" aria-live="polite">
-              <span className="chip" style={{ background: selected.col }}>{selected.icon} {selected.name}</span>
+              <span className="chip" style={{ background: selected.col }}><GameIcon slug={selected.slug} icon={selected.icon} /> {selected.name}</span>
               <span className="chip c-sky">⏱️ {mins} min match</span>
               <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
               {teams && <span className="chip c-grape">⚔️ Teams</span>}
@@ -345,8 +346,8 @@ export default function Lobby() {
                   <button key={room.id} className="tile" onClick={() => quickJoin(room.room_code)}>
                     <PeekBuddy colour={col} size={54} />
                     <span className="top" style={{ background: col, height: 96 }}>
-                      <span className="ghost">{icon}</span>
-                      <span className="big" style={{ fontSize: "2.8rem" }}>{icon}</span>
+                      <span className="ghost"><GameIcon slug={room.game_slug} icon={icon} /></span>
+                      <span className="big" style={{ fontSize: "2.8rem" }}><GameIcon slug={room.game_slug} icon={icon} /></span>
                     </span>
                     <span className="bot" style={{ display: "block" }}>
                       <h3 style={{ fontSize: "1.1rem" }}>{room.game_name}</h3>

@@ -9,6 +9,7 @@ import { PlayAgainContext } from "../components/games/PlayAgain";
 import { Avatar, Modal } from "../components/ui";
 import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
+import GameIcon from "../components/games/GameIcon";
 
 // Team play. Four sides at most, two players each at least — the server
 // enforces the same numbers on start.
@@ -530,7 +531,7 @@ function Room() {
         <div className="row" style={{ justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
           <button className="press p-white sm" onClick={exitToLobby}>← Leave</button>
           <span className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <span className="chip c-sun">{room?.game_icon || "🎮"} {room?.game_name || "Loading…"}</span>
+            <span className="chip c-sun"><GameIcon slug={room?.game_slug} icon={room?.game_icon} /> {room?.game_name || "Loading…"}</span>
             {mins && <span className="chip c-sky">⏱️ {mins} min match</span>}
             {isSolo && <span className="chip c-coral">🧍 Solo run</span>}
             {room?.mode === "coop" && <span className="chip c-grape">🤝 Together</span>}

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../utils/AuthContext";
 import useGames from "../components/games/useGames";
 import PeekBuddy from "../components/characters/PeekBuddy";
+import GameIcon from "../components/games/GameIcon";
 
 // Emoji that bob around the hero. Positioned by percentage so they stay put
 // as the hero grows; hidden below 600px where they'd collide with the text.
@@ -73,8 +74,8 @@ export default function Home() {
               <Link key={g.slug} to={isLoggedIn ? `/lobby?game=${g.slug}` : "/register"} className="tile">
                 <PeekBuddy colour={g.col} size={60} />
                 <span className="top" style={{ background: g.col }}>
-                  <span className="ghost">{g.icon}</span>
-                  <span className="big">{g.icon}</span>
+                  <span className="ghost"><GameIcon slug={g.slug} icon={g.icon} /></span>
+                  <span className="big"><GameIcon slug={g.slug} icon={g.icon} /></span>
                 </span>
                 <span className="bot" style={{ display: "block" }}>
                   <h3>{g.name}</h3>

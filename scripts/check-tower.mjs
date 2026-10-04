@@ -149,5 +149,17 @@ function play(seed, players, secs, smart = true) {
   check("what travels stays small", v.length < 4000, `${v.length} bytes`);
 }
 
+// ── calling the next wave early ─────────────────────────────────────────────
+{
+  const s = t.createSide(1, { players: [1, 2], durMs: 300000 });
+  const before = s.purse.get(2), waitLeft = s.nextWave;
+  const r = t.act(s, 1, { a: "next" });
+  check("calling the wave early pays everyone for the time saved", r.ok && r.bonus === Math.round(waitLeft * t.EARLY_PER_S) && s.purse.get(2) === before + r.bonus);
+  t.step(s, DT);
+  check("…and the wave comes at once", s.waveLive && s.wave === 1);
+  check("…but not again while it's on", t.act(s, 1, { a: "next" }).why === "busy");
+  check("shots carry the tower's level (for drawing)", (() => { const q = t.createSide(2, { players: [1], durMs: 300000 }); q.wave = 1; q.monsters.push({ id: 1, kind: "slime", d: 3, hp: 50, max: 50, speed: 0, slowT: 0, slow: 0 }); const [mx, my] = t.at(q.map, 3); let sp = null; for (let y = 0; y < t.H && !sp; y++) for (let x = 0; x < t.W && !sp; x++) if (t.buildable(q.map, x, y) && Math.hypot(x + 0.5 - mx, y + 0.5 - my) < 2) sp = [x, y]; q.towers.push({ x: sp[0], y: sp[1], kind: "archer", level: 2, owner: 1, spent: 90, cool: 0, aim: 0 }); t.step(q, DT); return q.shots.length === 1 && q.shots[0][5] === 2; })());
+}
+
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

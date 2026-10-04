@@ -25,6 +25,7 @@ export const BREATHER_S = 6;         // between waves
 export const WAVE_PTS = 40;          // for every wave seen off
 export const SELL_BACK = 0.6;
 export const MAX_LEVEL = 3;
+export const EARLY_PER_S = 2;        // coins for each second you call the next wave early
 
 // The paths, as corners (tile coordinates): in at the top, the castle at the end.
 export const MAPS = [
@@ -200,7 +201,7 @@ export function step(s, dt) {
     T.cool = 1 / st.rate;
     const [tx, ty] = at(s.map, target.d);
     T.aim = Math.atan2(ty - (T.y + 0.5), tx - (T.x + 0.5));
-    s.shots.push([T.x, T.y, Math.round(tx * 100) / 100, Math.round(ty * 100) / 100, T.kind]);
+    s.shots.push([T.x, T.y, Math.round(tx * 100) / 100, Math.round(ty * 100) / 100, T.kind, T.level]);
     if (T.kind === "cannon") {
       for (const m of s.monsters) {
         if (m.hp <= 0) continue;
@@ -217,10 +218,19 @@ export function step(s, dt) {
 }
 
 // ── what a player does ───────────────────────────────────────────────────────
-// { a: "build", x, y, kind } | { a: "up", x, y } | { a: "sell", x, y }
+// { a: "build", x, y, kind } | { a: "up", x, y } | { a: "sell", x, y } | { a: "next" }
 export function act(s, pid, m) {
   pid = Number(pid);
   if (s.fallen || !s.purse.has(pid) || s.gone.has(pid)) return { ok: false, why: "out" };
+  if (m.a === "next") {
+    // ready early: the next wave now, and a coin for every half-second saved, for everyone
+    if (s.waveLive || s.nextWave <= 0.5) return { ok: false, why: "busy" };
+    const bonus = Math.round(s.nextWave * EARLY_PER_S);
+    pay(s, bonus);
+    s.nextWave = 0;
+    s.ev.push({ type: "early", bonus, id: pid });
+    return { ok: true, bonus };
+  }
   const x = Math.floor(Number(m.x)), y = Math.floor(Number(m.y));
   const here = s.towers.find((T) => T.x === x && T.y === y);
   const coins = s.purse.get(pid);

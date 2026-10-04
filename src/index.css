@@ -862,17 +862,36 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .tw-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .tw-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);touch-action:none;-webkit-tap-highlight-color:transparent}
-.tw-sheet{display:flex;align-items:stretch;gap:8px;width:100%;max-width:440px;padding:0 4px}
-.press.tw-buy{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 4px;--lift:4px;background:var(--card);min-width:0}
-.tw-buy b{font-size:.85rem}
-.tw-buy small,.tw-act small,.tw-info small{font-size:.72rem;opacity:.8;display:block}
-.tw-ic{font-size:1.5rem;line-height:1.2}
+.tw-sheet{display:flex;align-items:stretch;gap:6px;width:100%;max-width:460px;padding:0 4px}
+.press.tw-buy{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 3px 6px;--lift:4px;background:var(--card);min-width:0}
+.tw-buy b{font-size:.82rem;line-height:1.1}
+.tw-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:2px 3px}
+.tw-chips i{font-style:normal;font-size:.62rem;font-weight:700;background:var(--paper2);border-radius:999px;padding:0 5px;white-space:nowrap;line-height:1.5}
+.tw-cost{font-weight:800;font-size:.8rem;background:var(--sun);border:2px solid var(--ink);border-radius:999px;padding:0 7px;margin-top:2px;white-space:nowrap}
 .press.poor{opacity:.45}
-.press.tw-x{padding:6px 12px;--lift:3px;align-self:center}
-.tw-info{flex:1.2;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--paper2);border:3px solid var(--ink);border-radius:14px;padding:4px}
-.press.tw-act{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 4px;--lift:4px;font-size:.9rem}
-.tw-max{flex:1;display:grid;place-items:center;font-weight:800}
-.tw-hint{font-size:.85rem;text-align:center;width:100%}
+.press.tw-x{padding:6px 11px;--lift:3px;align-self:center;flex:none}
+.tw-upsheet{flex-direction:column;gap:6px}
+.tw-info{display:flex;align-items:center;gap:6px;background:var(--paper2);border:3px solid var(--ink);border-radius:14px;padding:3px 6px}
+.tw-who{display:flex;flex-direction:column;flex:none}
+.tw-who b{font-size:.85rem;line-height:1.1}
+.tw-who small{font-size:.68rem;opacity:.8}
+.tw-info .tw-chips{flex:1;justify-content:flex-start}
+.tw-info .tw-chips i{background:#fff}
+.tw-row{display:flex;gap:6px}
+.press.tw-up{flex:1;display:flex;align-items:center;gap:6px;padding:4px 8px;--lift:4px;text-align:left;min-width:0}
+.tw-up span:not(.tw-cost){display:flex;flex-direction:column;min-width:0;flex:1}
+.tw-up b{font-size:.82rem;line-height:1.15}
+.tw-up small{font-size:.66rem;opacity:.85}
+.press.tw-sell{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 12px;--lift:4px;font-size:.85rem}
+.tw-sell small{font-size:.7rem}
+.tw-max{flex:1;display:grid;place-items:center;font-weight:800;font-size:.85rem;background:var(--sun);border:3px solid var(--ink);border-radius:14px}
+/* one height for the hint, the shop and the upgrade sheet, so the map
+   doesn't shrink and grow (and move under your thumb) as they come and go */
+.tw-dock{height:132px;width:100%;display:flex;align-items:center;justify-content:center}
+.tw-bar{display:flex;align-items:center;gap:8px;width:100%;max-width:460px;padding:0 6px}
+.tw-hint{font-size:.82rem;text-align:center;flex:1}
+.press.tw-early{padding:8px 12px;--lift:4px;font-size:.9rem;white-space:nowrap}
+.tw-early small{font-size:.72rem;opacity:.9}
 
 /* ── Carrom (.cr-) ── */
 .cr-pad{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;

@@ -108,6 +108,10 @@ export default function Lobby() {
       });
       const data = await res.json();
       if (!data.success) { toast.error(data.message || "Failed to create room."); return; }
+      // Solo: you've already pressed Start, so start it — straight into the
+      // game, no waiting room on the way. (If that fails, the room's own
+      // Start button is still there.)
+      if (isSolo) { try { await api.patch(`/api/rooms/${data.room.room_code}/start`, {}); } catch { /* the room page can start it */ } }
       navigate(`/room/${data.room.room_code}`);
     } catch { toast.error("Failed to create room."); }
     finally { setCreating(false); }

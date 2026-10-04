@@ -505,6 +505,18 @@ function Room() {
   }
 
 
+  // ── Still loading ─────────────────────────────────────────────────────────
+  // Until the room arrives we don't know what it is — a solo run, a team
+  // match, already started — so draw nothing of the waiting room yet. It used
+  // to flash its invite list and chat before turning into a solo run.
+  if (!room) {
+    return (
+      <div className="wrap" style={{ display: "grid", placeItems: "center", minHeight: "60svh" }}>
+        <div className="muted" style={{ fontWeight: 700 }}>🎮 Getting the room ready…</div>
+      </div>
+    );
+  }
+
   // ── Waiting lobby ─────────────────────────────────────────────────────────
   const mins = duration ? Math.round(duration / 60) : null;
   const seats = room?.max_players || 2;

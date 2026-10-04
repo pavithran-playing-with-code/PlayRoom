@@ -1152,3 +1152,15 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .ty-streak{font-size:.85rem}
 @keyframes tyBlink{50%{opacity:0}}
 @keyframes tyPop{from{transform:scale(1.4);opacity:.3}}
+
+/* the moment between pressing Start and the game: the game's own icon, bouncing */
+.room-loading{display:grid;place-items:center;min-height:70svh}
+.room-loading-card{display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 34px;background:var(--c);animation:drop .2s cubic-bezier(.34,1.7,.64,1)}
+.room-loading-icon{font-size:3.4rem;line-height:1;animation:roomBounce .7s cubic-bezier(.3,1.6,.6,1) infinite alternate}
+.room-loading-card b{font-family:Fredoka,sans-serif;font-size:1.25rem}
+.room-loading-dots{display:flex;gap:7px}
+.room-loading-dots i{width:10px;height:10px;border-radius:50%;background:var(--ink);animation:roomDot .9s ease-in-out infinite}
+.room-loading-dots i:nth-child(2){animation-delay:.15s}
+.room-loading-dots i:nth-child(3){animation-delay:.3s}
+@keyframes roomBounce{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-14px) rotate(6deg)}}
+@keyframes roomDot{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}}

@@ -41,6 +41,9 @@ function Room() {
   const [watching, setWatching] = useState(null);
   const [status,    setStatus]    = useState("waiting");
   const [seed,      setSeed]      = useState(null);
+  // Has the room's status come back yet? Until it has, we don't know whether
+  // the match has started, and must not guess "waiting".
+  const [polled,    setPolled]    = useState(false);
   const [duration,  setDuration]  = useState(null);
   const [startedAt, setStartedAt] = useState(null);
   const [serverNow, setServerNow] = useState(null);
@@ -103,6 +106,7 @@ function Room() {
       const data = await res.json();
       if (!data.success) {
         if (res.status === 404) setNotFound(true);
+        setPolled(true);
         return;
       }
       setStatus(data.status);
@@ -113,7 +117,8 @@ function Room() {
       setServerNow(data.server_now || null);
       setPlayers(data.players || []);
       setChat(data.chat || []);
-    } catch { /* silent */ }
+      setPolled(true);
+    } catch { setPolled(true); /* silent: show what we have */ }
   }, [code]);
 
   // Single leave helper — idempotent, used on tab close + explicit Quit/Back.
@@ -507,13 +512,20 @@ function Room() {
 
 
   // ── Still loading ─────────────────────────────────────────────────────────
-  // Until the room arrives we don't know what it is — a solo run, a team
-  // match, already started — so draw nothing of the waiting room yet. It used
-  // to flash its invite list and chat before turning into a solo run.
-  if (!room) {
+  // Until the room AND its status have both come back we don't know what it
+  // is — a solo run already started, a team match, a room to wait in — so
+  // draw none of the waiting room yet. The room's details and its status are
+  // two requests; when the details came first, a started solo run flashed
+  // its waiting screen (Start button, "Ready to go") until the status caught up.
+  if (!room || !polled) {
+    const g = room ? GAME_MAP[room.game_slug] : null;
     return (
-      <div className="wrap" style={{ display: "grid", placeItems: "center", minHeight: "60svh" }}>
-        <div className="muted" style={{ fontWeight: 700 }}>🎮 Getting the room ready…</div>
+      <div className="wrap room-loading" style={{ "--c": g?.col || "var(--sun)" }}>
+        <div className="room-loading-card pop">
+          <span className="room-loading-icon">{room ? <GameIcon slug={room.game_slug} icon={room.game_icon} /> : "🎮"}</span>
+          <b>{room ? `Starting ${room.game_name || g?.name || "the game"}` : "Getting the room ready"}</b>
+          <span className="room-loading-dots" aria-hidden="true"><i /><i /><i /></span>
+        </div>
       </div>
     );
   }

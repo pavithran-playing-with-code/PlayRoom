@@ -1,5 +1,5 @@
 // src/pages/Manor.jsx
-// HOLLOW MANOR — a first-person horror page. No room, no login,
+// NANA'S LULLABY — a first-person horror page. No room, no login,
 // no navbar; the second dark door in the header leads here.
 //
 // The rules are components/horror/manorSim.js, the pictures manorRender.js,
@@ -11,7 +11,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  newNight, tick, begin, jump, decoy, doAction, actionLabel, toggleLight, toggleRun, lit, timeText, roomName,
+  newNight, tick, begin, decoy, doAction, actionLabel, toggleRun, timeText, roomName, listening,
 } from "../components/horror/manorSim";
 import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R } from "../components/horror/manorRender";
 import { createManorAudio } from "../components/horror/manorAudio";
@@ -21,9 +21,10 @@ const HUD_MS = 80;
 const SHOW_CAUGHT_AFTER = 1.4;     // seconds of its face before the card
 
 const hudOf = (s) => s && ({
-  mode: s.mode, night: s.night, count: s.count, need: s.need, stam: s.P.stam, bat: s.P.bat,
-  light: s.P.light, lit: lit(s), runOn: s.P.runOn, tired: s.P.stamCool > 0, crouch: s.P.crouch,
+  mode: s.mode, night: s.night, count: s.count, need: s.need, stam: s.P.stam,
+  runOn: s.P.runOn, tired: s.P.stamCool > 0,
   decoys: s.decoys, msg: s.msg, use: actionLabel(s), hiding: !!s.P.hiding, room: roomName(s),
+  listening: s.mode === "play" && !s.P.entering && listening(s),
 });
 
 export default function Manor() {
@@ -118,6 +119,9 @@ export default function Manor() {
 
       for (const ev of s.events) audio.current.play(ev);
       s.events.length = 0;
+      // her lullaby: louder the nearer she is; nothing at all while she listens
+      const near = Math.max(0, 1 - Math.hypot(s.P.x - s.G.x, s.P.y - s.G.y) / 18);
+      audio.current.humming(s.mode === "play" && !s.P.entering && !listening(s), near);
 
       if (!shown.current && (s.mode === "won" || (s.mode === "dead" && s.deadT > SHOW_CAUGHT_AFTER))) {
         shown.current = true;
@@ -125,13 +129,13 @@ export default function Manor() {
         if (s.mode === "won") {
           night.current++;
           setOver({
-            win: true, title: "You escaped", again: `Enter night ${night.current}`,
-            text: `You slip out through the far gate. Time in the manor: ${t}. The next night has a bigger manor, more keys and a faster ghost.`,
+            win: true, title: "You got out", again: `Night ${night.current}`,
+            text: `The front door clicks shut behind you, and the humming fades. Time in Nana's house: ${t}. Next night the house is bigger, and she is quicker.`,
           });
         } else {
           setOver({
-            win: false, title: "Caught", again: "Try again",
-            text: `It found you in the dark. Keys taken: ${s.count} of ${s.need}. Time: ${t}.`,
+            win: false, title: "Nana found you", again: "Try again",
+            text: `"There you are, dear." Keys found: ${s.count} of ${s.need}. Time: ${t}.`,
           });
         }
         setScreen("over");
@@ -154,8 +158,6 @@ export default function Manor() {
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(k)) e.preventDefault();
       if (s.mode === "intro") { begin(s); return; }
       keys.current[k] = true;
-      if (k === "f") toggleLight(s);
-      if (k === " ") jump(s);
       if (k === "r") toggleRun(s);
       if (k === "e") doAction(s);
       if (k === "q") decoy(s);
@@ -221,44 +223,41 @@ export default function Manor() {
       {rotated && screen === "game" && <div className="hm-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
 
       <div className={`hm-hud${playing ? "" : " off"}`}>
-        <div>Night {hud?.night} &nbsp;·&nbsp; Keys {hud?.count} / {hud?.need}</div>
+        <div>Night {hud?.night} &nbsp;·&nbsp; 🗝️ {hud?.count} / {hud?.need}</div>
         <div className="hm-room">📍 {hud?.room}</div>
         <div className="hm-bar stam"><i style={{ width: `${(hud?.stam ?? 1) * 100}%` }} /></div>
-        <div className="hm-bar bat"><i style={{ width: `${(hud?.bat ?? 1) * 100}%` }} /></div>
+      </div>
+
+      {/* while she hums you may move; when it stops, she listens */}
+      <div className={`hm-humming${playing && !hud.listening ? "" : " off"}`} aria-hidden="true">♪ Nana is humming…</div>
+      <div className={`hm-listen${playing && hud.listening ? "" : " off"}`} role="alert">
+        <b>SHE'S LISTENING</b>
+        <span>The humming stopped. Freeze. Do not move.</span>
       </div>
 
       <div className="hm-msg" style={{ opacity: playing && hud.msg ? 1 : 0 }} aria-live="polite">{playing ? hud.msg : ""}</div>
 
-      {/* Under the right thumb: jump, Use beside it (doors, hiding spots — lit
-          when there is something in front of you to use), and the light
-          below. Running is the stick pushed out. */}
+      {/* The buttons, on the right: Use (doors, hiding — lit when there is
+          something in front of you), Run, and a marble to throw. Running is
+          also the stick pushed out. */}
       <div className={`hm-pad${playing ? "" : " off"}`}>
         <button className={`hm-use${hud?.use ? " on" : ""}`} onPointerDown={press(doAction)}>{hud?.use || "Use"}</button>
-        <button className="hm-jump" onPointerDown={press(jump)}>Jump</button>
-        <button className={`hm-light${hud?.light && hud?.bat > 0 ? " on" : ""}`} onPointerDown={press(toggleLight)}>
-          {hud?.bat <= 0 ? "No power" : hud?.light ? "Light on" : "Light off"}
-        </button>
+        <button className={`hm-jump hm-run${hud?.runOn ? " on" : ""}`} onPointerDown={press(toggleRun)}>{hud?.tired ? "Tired" : "Run"}</button>
+        <button className="hm-light hm-marble" style={{ opacity: hud?.decoys ? 1 : 0.45 }} onPointerDown={press(decoy)}
+          title="Throw a marble: she goes to the sound">Marble<br />{hud?.decoys}</button>
       </div>
-      {/* The music box lures the ghost to where you stand: used now and then,
-          so it lives small, under the map. */}
-      <button className={`hm-music${playing ? "" : " off"}`} style={{ opacity: hud?.decoys ? 1 : 0.45 }}
-        onPointerDown={press(decoy)} title="Music box: lures the ghost to where you stand">♪ Music box · {hud?.decoys}</button>
 
       {screen === "menu" && (
-        <div className="hm-ov">
+        <div className="hm-ov hm-nana">
           <button className="hm-leave" onClick={() => navigate("/")}>← Leave</button>
-          <h1>Hollow Manor 3D</h1>
-          <p>Keys are scattered through the rooms of the manor. Something old lives here, and it listens.</p>
-          <p>Every room has a name on the map — tap the map to see it big. Hide under a table or a bed, or in a
-            wardrobe, and it cannot catch you.</p>
-          <p>First person now: look around, listen for its footsteps. You enter through one gate, which slams shut behind you. Take all the keys, grab batteries so your light does not die, then leave through the far gate. A red arrow shows where the ghost is when it is near.</p>
-          <button className="hm-go" onClick={newGame}>Enter the manor</button>
+          <h1>Nana's Lullaby</h1>
+          <p>Sweet old Nana Elowen never left her house. She hums a lullaby as she walks the halls, and she does not like visitors.</p>
+          <p>Find the three keys to unlock the front door. While you hear her humming, you are safe to move. <b>When the humming stops, she is listening. Freeze.</b></p>
+          <button className="hm-go" onClick={newGame}>Enter the house</button>
           <p className="hm-small">
-            Move: WASD. Turn: drag the mouse or use the left and right arrows. Each night gets bigger and harder.
-            On a phone, left thumb moves (push it out to run) and right thumb looks. Run: Shift. Use (doors,
-            hiding spots): E. Music box: Q. Light: F. Jump: Space.<br />
-            Doors creak when you open them; shut one behind you and it has to stop to open it. Music box lures
-            the ghost to a spot: two uses. Light on lets you see far but the ghost spots you from farther.
+            Move: WASD. Look: drag the mouse or use the left and right arrows. Run: Shift or R. Use (open doors,
+            hide in beds, wardrobes and under tables): E. Throw a marble (Q) to lure her to the sound.<br />
+            On a phone: left thumb moves, right thumb looks, and the buttons are on the right.
           </p>
         </div>
       )}

@@ -2,14 +2,18 @@
 //
 //   node scripts/check-manor.mjs
 //
-// The house must always be finishable (every relic and the far gate reachable,
-// every barricade and beam passable), the thing must behave as the page tells
+// The house must always be finishable (every key and the front door
+// reachable), Nana must behave as the page tells
 // you it does — doors, hiding spots and all — and a bot that walks the rooms,
 // opening doors as it goes, must be able to get out.
 import {
   HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, INTRO_S, DECOYS, nightSize, dmap, floors, los, newNight, tick, begin,
   jump, decoy, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, mvOK, lit, seesYou, ghostSpeed,
 } from "../src/components/horror/manorSim.js";
+import {
+  rng, newGhost, ghostTarget, stepGhost, buildHouse,
+  newHum, stepHum, HUM_S, LISTEN_S, LISTEN_GRACE, HEAR_R, marbleLanding, MARBLE_D,
+} from "../src/components/horror/manorCore.mjs";
 
 let fails = 0;
 const check = (name, ok, extra = "") => {
@@ -106,30 +110,10 @@ const park = (s) => { s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9; };
   run(s, 1, { ...still, iy: -1 });
   check("walls stop you", s.P.x >= 1 + 0.28 - 1e-9 && s.P.x <= x0, `x ${s.P.x.toFixed(2)}`);
 
-  // find a barricade and a beam, stand before each, and try both ways
-  const tryObstacle = (kind) => {
-    const k = Object.keys(s.obst).find((k) => s.obst[k] === kind);
-    if (!k) return null;
-    const N = s.N, x = +k % N, y = (+k / N) | 0;
-    const horiz = !s.g[y][x - 1];
-    const from = horiz ? { x: x - 1 + 0.5, y: y + 0.5 } : { x: x + 0.5, y: y - 1 + 0.5 };
-    const setup = () => {
-      const c = newNight(5, 1); begin(c); run(c, 1); park(c);
-      Object.assign(c.P, { ...from }); c.P.lastTile = -1; c.P.fa = horiz ? 0 : Math.PI / 2; c.P.crouch = false; c.P.cr = 0; c.P.jz = 0; c.P.vz = 0;
-      return c;
-    };
-    const plain = setup();
-    run(plain, 1.2, { ...still, iy: -1 });
-    const blocked = horiz ? plain.P.x < x : plain.P.y < y;
-    const skilled = setup();
-    if (kind === HURDLE) { jump(skilled); run(skilled, 1.2, { ...still, iy: -1 }); }
-    else { toggleCrouch(skilled); run(skilled, 0.3); run(skilled, 2, { ...still, iy: -1 }); }
-    const through = horiz ? skilled.P.x > x + 1 : skilled.P.y > y + 1;
-    return { blocked, through };
-  };
-  const h = tryObstacle(HURDLE);
-  check("a barricade stops you walking", h && h.blocked);
-  check("…and you can jump it", h && h.through);
+  // nothing to jump in Nana's house: every doorway is clear
+  let clear = true;
+  for (let night = 1; night <= 6; night++) for (let seed = 1; seed <= 20; seed++) if (Object.keys(newNight(seed, night).obst).length) clear = false;
+  check("no barricades: every doorway in Nana's house is clear", clear);
 
   const j = inside(5); park(j);
   toggleCrouch(j);
@@ -159,22 +143,10 @@ const park = (s) => { s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9; };
   toggleCrouch(n); run(n, 0.3);
   check("standing still is silent", n.P.noiseR === 0);
 
+  // no batteries any more: the light never dies
   const b = inside(8); park(b);
-  const b0 = b.P.bat;
-  run(b, 10);
-  check("the torch burns its battery", b.P.bat < b0 && Math.abs((b0 - b.P.bat) - 0.11) < 0.01, (b0 - b.P.bat).toFixed(3));
-  toggleLight(b);
-  const b1 = b.P.bat;
-  run(b, 10);
-  check("off, it does not", b.P.bat === b1);
-  toggleLight(b);
-  b.P.bat = 0.001;
-  run(b, 0.5);
-  check("run it flat and the light dies", b.P.bat === 0 && !lit(b) && /light died/.test(b.msg));
-  const cell = b.cells.find((c) => !c.got);
-  Object.assign(b.P, { x: cell.x, y: cell.y });
-  run(b, DT);
-  check("a battery brings it back", b.P.bat > 0.59 && lit(b) && cell.got);
+  run(b, 60);
+  check("your light never dies, and there are no batteries to hunt for", b.P.bat === 1 && lit(b) && b.cells.length === 0);
 }
 
 // ── the thing ────────────────────────────────────────────────────────────────
@@ -234,22 +206,23 @@ function hall(seed = 11) {
   check("run within earshot and it comes looking", h3.G.st === "search");
 }
 
-// ── music box ────────────────────────────────────────────────────────────────
+// ── marbles ──────────────────────────────────────────────────────────────────
 {
   const s = inside(21); park(s);
   s.G.stun = 0; s.G.x = 0.5;
+  s.P.fa = 0;
   decoy(s);
-  check("the music box calls it to where you stand", s.decoys === DECOYS - 1 && s.G.st === "search" &&
-    s.G.tx === (s.P.x | 0) && s.G.ty === (s.P.y | 0) && s.pulses.length === 1);
-  decoy(s);
-  decoy(s);
-  check("two uses, then it is empty", s.decoys === 0 && /empty/.test(s.msg));
+  const m = s.pulses[0];
+  check("a marble rattles ahead of you, and Nana goes to where it stopped", s.decoys === DECOYS - 1 && s.G.st === "search" &&
+    m && s.G.tx === (m.x | 0) && s.G.ty === (m.y | 0) && Math.hypot(m.x - s.P.x, m.y - s.P.y) > 0.5);
+  for (let i = 0; i < DECOYS; i++) decoy(s);
+  check(`${DECOYS} marbles, then none`, s.decoys === 0 && /No marbles/.test(s.msg));
   const { s: h } = hall(80);
   h.G.x -= 4;
   run(h, DT);
   const before = h.decoys;
   decoy(h);
-  check("it will not work while the thing is staring at you", h.decoys === before && /watching you/.test(h.msg));
+  check("it won't work while she's looking right at you", h.decoys === before && /looking right at you/.test(h.msg));
 }
 
 // ── doors ────────────────────────────────────────────────────────────────────
@@ -400,7 +373,7 @@ function atSpot(seed = 51) {
   const e = s.exitT, stand = e.x === s.N - 1 ? { x: e.x - 0.5, y: e.y + 0.5 } : { x: e.x + 0.5, y: e.y - 0.5 };
   Object.assign(s.P, { ...stand }); s.msgT = 0;
   run(s, DT);
-  check("the far gate is sealed until you have them all", s.mode === "play" && /sealed/.test(s.msg));
+  check("the front door stays locked until you have all three keys", s.mode === "play" && /locked/.test(s.msg));
   for (const r of s.relics) r.got = true;
   s.count = s.need;
   run(s, DT);
@@ -468,6 +441,62 @@ function walkOut(seed, night) {
   times.sort((a, b) => a - b);
   check("200 nights: a bot gets every relic and out of the far gate, opening doors as it goes", ok, why);
   console.log(`      a perfect route takes ${times[0].toFixed(0)}–${times[times.length - 1].toFixed(0)}s (median ${times[times.length >> 1].toFixed(0)}s), before any detours to hide`);
+}
+
+// ── Nana's lullaby ───────────────────────────────────────────────────────────
+// She hums, then stops and listens; in the silence any step near her is heard.
+{
+  const r = rng(5);
+  const H = newHum(r);
+  const runs = { on: [], off: [] };
+  let len = 0, prev = H.on;
+  for (let t = 0; t < 600; t += 0.05) {
+    stepHum(H, 0.05, r);
+    len += 0.05;
+    if (H.on !== prev) { runs[prev ? "on" : "off"].push(len); len = 0; prev = H.on; }
+  }
+  const within = (xs, [lo, hi]) => xs.slice(1).every((x) => x >= lo - 0.06 && x <= hi + 0.06);
+  check("the lullaby: she hums a while, then stops and listens, over and over",
+    runs.on.length > 20 && runs.off.length > 20 && within(runs.on, HUM_S) && within(runs.off, LISTEN_S),
+    `${runs.on.length} hums, ${runs.off.length} silences`);
+
+  // a long corridor of floor to try her in
+  const N = 30, g = Array.from({ length: N }, (_, y) => Array.from({ length: N }, (_, x) => (y === 5 && x > 0 && x < N - 1 ? FLOOR : WALL)));
+  const env = { g, N, obst: {}, doors: new Set() };
+  const nana = () => { const G = newGhost(3.5, 5.5); ghostTarget(G, env, 25, 5); return G; };
+  const hum = (on, since) => ({ on, t: 2, since });
+  const you = (x, moving, hid = null) => ({ id: 7, x, y: 5.5, lit: true, cr: 0, noiseR: moving ? 3 : 0, hid });
+  const quiet = () => {};
+  let G = nana();
+  stepGhost(G, env, [you(12.5, false)], 0.5, r, 0, quiet, hum(true, 1));
+  check("while she hums, she walks", G.x > 3.5);
+  G = nana();
+  stepGhost(G, env, [you(12.5, false)], 0.5, r, 0, quiet, hum(false, 1.2));
+  check("when the humming stops, she stands quite still", G.x === 3.5);
+  const heard = [];
+  G = nana();
+  stepGhost(G, env, [you(12.5, true)], 0.1, r, 0, (n, e) => heard.push(n), hum(false, LISTEN_GRACE + 0.1));
+  check("move in the silence and she hears you, and comes for you", G.st === "hunt" && G.prey === 7 && heard.includes("heard") && G.tx === 12);
+  G = nana();
+  stepGhost(G, env, [you(12.5, false)], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE + 1));
+  check("freeze, and she doesn't", G.st !== "hunt");
+  G = nana();
+  stepGhost(G, env, [you(12.5, true)], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE * 0.5));
+  check("the first moment of silence is grace: time to stop", G.st !== "hunt");
+  G = nana();
+  stepGhost(G, env, [you(12.5, true, { x: 12, y: 5, ghost: null })], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE + 0.1));
+  check("hidden, she can't hear you", G.st !== "hunt");
+  G = nana();
+  stepGhost(G, env, [you(3.5 + HEAR_R + 2, true)], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE + 0.1));
+  check("…nor from the far end of the house", G.st !== "hunt");
+  G = nana();
+  check("listening, she still has you if you're right beside her", stepGhost(G, env, [you(3.7, false)], 0.1, r, 0, quiet, hum(false, 1)) === 7);
+  // the marble
+  const m = marbleLanding(g, 2.5, 5.5, 0);
+  const w2 = marbleLanding(g, 26.5, 5.5, 0);
+  check("a marble rolls on ahead, then stops at the wall", Math.abs(m.x - (2.5 + MARBLE_D)) < 0.01 && w2.x < N - 1 && w2.x > 27.5);
+  const H2 = buildHouse(9, { players: 1, sides: [{ key: "a", need: 3 }] });
+  check("Nana's house: no barricades to jump, no batteries to find", Object.keys(H2.obst).length === 0 && H2.batts.length === 0 && H2.hum && H2.hum.on);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");

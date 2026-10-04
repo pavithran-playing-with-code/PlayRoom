@@ -1,5 +1,5 @@
 // src/components/horror/manorClient.js
-// HOLLOW MANOR online, the phone's half. The server runs the house
+// NANA'S LULLABY online, the phone's half. The server runs the house
 // (config/manorWorld.js); this keeps a phone's picture of it:
 //
 //   - your own body, moved here every frame so walking feels instant, and
@@ -27,9 +27,9 @@ const DOOR_TRUST_MS = 1500;            // a door you just used: your word over t
 const HIDE_TRUST_MS = 1500;            // likewise a locker you just got into
 
 const RELIC_LINES = [
-  "An iron key, cold as the grave. Something stirs.",
-  "A brass key on a rotten ribbon. It whispers your name.",
-  "A tiny key, still warm. The walls lean closer.",
+  "An iron key, tied with a faded pink ribbon.",
+  "A brass key, wrapped in a lace handkerchief. It smells of lavender.",
+  "A tiny key from a sewing tin. Somewhere, the humming falters.",
   "A black key. Footsteps overhead.",
 ];
 const PLACE = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"];
@@ -65,9 +65,11 @@ export function createClient(init, now = Date.now()) {
     startLocal: now - init.elapsed, durMs: init.duration, introMs: init.intro,
     skipIntro: init.elapsed > SHOW_MAP_MS, deadAt: null, watch: null,
     over: init.over || null,
+    // her lullaby, as the server last said: humming, or listening
+    hum: init.hum ? { on: !!init.hum[0], t: init.hum[1], since: init.hum[2] } : { on: true, t: 99, since: 0 },
   };
   if (me && !me.alive && !me.left) c.deadAt = now - SCARE_MS;  // came back while caught
-  if (c.role === "player" && c.alive) say(c, "Find your keys, then the far gate. First one out wins — get out before the clock runs out!", 5000);
+  if (c.role === "player" && c.alive) say(c, "Find your keys, then the front door. While she hums, move. When the humming stops — freeze.", 5500);
   return c;
 }
 
@@ -77,6 +79,8 @@ export const playing = (c) => c.role === "player" && c.alive && !c.left && !c.ov
 // caught, and about to be back in at the entrance
 export const respawning = (c) => c.role === "player" && !c.alive && !c.left && !c.over;
 export const sideOfMe = (c) => (c.mySide ? c.sides.get(c.mySide) : null);
+// Has the humming stopped? Then she is listening, and you should be still.
+export const isListening = (c) => !!c.hum && !c.hum.on;
 const nameOf = (c, id) => (c.players.get(id) || {}).name || "Someone";
 
 // ── what the server says ─────────────────────────────────────────────────────
@@ -118,15 +122,16 @@ export function applyTick(c, m, now = Date.now()) {
     if (s) { s.got = got; s.open = !!open; s.escapes = escapes; s.total = total; s.score = score; }
   }
   c.pulses = m.m.map(([x, y, t]) => ({ x, y, t }));
+  if (m.h) c.hum = { on: !!m.h[0], t: m.h[1], since: m.h[2] };
 
   for (const e of m.e || []) {
     const mine = e.side && e.side === c.mySide;
     if (e.type === "relic") {
-      if (e.id === c.you) { snd("relic"); say(c, e.got >= e.need ? "The last key. The gate is open. Run." : RELIC_LINES[(e.got - 1) % 4], 4000); }
+      if (e.id === c.you) { snd("relic"); say(c, e.got >= e.need ? "The last key. The front door is unlocked. Go — quietly." : RELIC_LINES[(e.got - 1) % 4], 4000); }
       else if (mine) { snd("relic"); say(c, `${nameOf(c, e.id)} found one. ${e.got} of ${e.need}.`, 3000); }
     } else if (e.type === "open") {
-      if (mine && c.mode !== "free") say(c, "Every key taken. The far gate is open!", 4000);
-      else if (!mine && c.mode !== "coop") say(c, `${c.sides.get(e.side)?.name || "Someone"} has every key. Their gate is open.`, 3500);
+      if (mine && c.mode !== "free") say(c, "Every key found. The front door is unlocked!", 4000);
+      else if (!mine && c.mode !== "coop") say(c, `${c.sides.get(e.side)?.name || "Someone"} has every key. Their door is unlocked.`, 3500);
     } else if (e.type === "dead") {
       if (e.id === c.you) { if (e.cause !== "left") snd("caught"); }       // the banner says the rest
       else say(c, e.cause === "left" ? `${nameOf(c, e.id)} left the house.` : `${nameOf(c, e.id)} was caught!`, 3000);
@@ -136,7 +141,7 @@ export function applyTick(c, m, now = Date.now()) {
       P.x = e.x; P.y = e.y; P.fa = 0; P.pitch = 0; P.hiding = null; P.lastTile = -1; P.jz = 0; P.vz = 0;
       if (e.why === "caught") say(c, "Back in. Your keys are still yours.", 2600);
     } else if (e.type === "gaveup" && e.id === c.you) {
-      say(c, "It gives up and drifts away...", 3000);
+      say(c, "She gives up and shuffles away, humming...", 3000);
     } else if (e.type === "door" && e.id !== c.you) {
       // someone else's door, or a ghost's: louder the nearer it is
       const at = c.body, d = Math.hypot(at.x - e.x - 0.5, at.y - e.y - 0.5);
@@ -152,7 +157,14 @@ export function applyTick(c, m, now = Date.now()) {
     } else if (e.type === "spotted" && e.id === c.you) {
       snd("spotted");
     } else if (e.type === "decoy") {
-      snd("musicBox");
+      snd("marble");
+    } else if (e.type === "hum") {
+      snd("hum");
+    } else if (e.type === "listen") {
+      snd("listen");
+    } else if (e.type === "heard") {
+      if (e.id === c.you) { snd("heard"); say(c, "She heard you. She's coming.", 2500); }
+      else say(c, `She heard ${nameOf(c, e.id)}!`, 2500);
     }
   }
   return sounds;
@@ -186,17 +198,12 @@ export function stepLocal(c, inp, dt, now = Date.now()) {
   }
   c.puffs.forEach((q) => { q.t -= dt; });
   c.puffs = c.puffs.filter((q) => q.t > 0);
-  if (P.light) {
-    const b0 = P.bat;
-    P.bat = Math.max(0, P.bat - dt * 0.011);
-    if (b0 > 0 && P.bat === 0) say(c, "Your light died. Find a battery.", 3500);
-  }
-  P.lightOut -= dt;
+  P.lightOut -= dt;                     // (no batteries in Nana's house: the light never dies)
 
   const side = sideOfMe(c);
   const ex = c.exitT.x + 0.5, ey = c.exitT.y + 0.5;
   if (side && !side.open && Math.hypot(ex - P.x, ey - P.y) < 1.2 && c.msgT <= 0) {
-    say(c, `The far gate is sealed. ${side.need - side.got} of your keys still out there.`, 2500);
+    say(c, `The front door is locked. ${side.need - side.got} of your keys still out there.`, 2500);
   }
   hintsFor(c, P);
   scareStep(c, P, dt, Math.random, c.ghosts.some((G) => G.st === "hunt"), snd);
@@ -210,7 +217,7 @@ export function stepLocal(c, inp, dt, now = Date.now()) {
     const danger = Math.max(0, 1 - d / 10) * (G.st === "hunt" ? 1 : 0.55);
     if (danger > 0.55 && P.lightOut <= 0 && P.light && Math.random() < dt * 0.4) { P.lightOut = 0.5 + Math.random() * 0.6; snd("flicker"); }
     c.gStep -= dt;
-    if (c.gStep <= 0 && !G.stun) {
+    if (c.gStep <= 0 && !G.stun && !isListening(c)) {     // listening, she makes no sound at all
       c.gStep = G.st === "hunt" ? 0.4 : 0.7;
       const v = Math.max(0, 1 - d / 12) * 0.35;
       if (v > 0.03) snd("ghostStep", v);
@@ -264,12 +271,12 @@ export function doAction(c, now = Date.now()) {
     c.pend.set(u.y * c.N + u.x, now + DOOR_TRUST_MS);
     P.noiseT = open ? 0.6 : 0.3;
     sounds.push({ name: "creak", v: open ? 0.28 : 0.15 });
-    if (!open) say(c, "Door shut. It will have to open it.", 2000);
+    if (!open) say(c, "Door shut. She will have to open it.", 2000);
   } else if (u.t === "hide") {
     hideIn(P, u, null);
     P.hideAt = now;
     sounds.push({ name: "locker" });
-    say(c, `You hide ${WHERE[u.kind]}. It cannot find you here.`, 3500);
+    say(c, `You hide ${WHERE[u.kind]}. She cannot find you here.`, 3500);
   } else {
     leaveLocker(P);
     sounds.push({ name: "locker" });
@@ -288,7 +295,7 @@ export const roomNameAt = (c, at) => (at && c.rooms.length ? ROOM_KINDS[c.rooms[
 export function actionDone(c, r) {
   if (r.act === "hide") {
     if (!r.ok) { leaveLocker(c.body); say(c, r.why === "taken" ? "Someone is already hiding in there." : "You could not get in.", 2500); }
-    else if (r.seen) say(c, "It saw you hide. Stay still — it will give up.", 3500);
+    else if (r.seen) say(c, "She saw you hide. Stay still — she will give up.", 3500);
   } else if ((r.act === "open" || r.act === "close") && !r.ok && r.x != null) {
     // refused: put it back now, and say so, rather than have it swing shut later
     const k = Math.floor(r.y) * c.N + Math.floor(r.x);

@@ -992,6 +992,21 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .hm .hm-pad .hm-use{grid-area:use}
 .hm .hm-pad .hm-light{grid-area:light}
 .hm-room{margin-top:6px;color:#ffdca0;font-style:italic;text-shadow:0 0 6px #000}
+/* Nana's lullaby: a soft line while she hums; when it stops, the warning */
+.hm-humming{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:3;
+  pointer-events:none;color:#f3d9b0;font-style:italic;font-size:14px;letter-spacing:.04em;text-shadow:0 0 8px #000;
+  animation:hmHum 2.4s ease-in-out infinite}
+@keyframes hmHum{0%,100%{opacity:.45;transform:translateX(-50%) translateY(0)}50%{opacity:.9;transform:translateX(-50%) translateY(-2px)}}
+.hm-listen{position:fixed;inset:0;z-index:5;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:10px;text-align:center;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 30%,rgba(60,0,8,.55) 100%);
+  animation:hmListen .35s ease-out}
+.hm-listen b{font-size:clamp(30px,8vw,58px);font-weight:400;font-style:italic;letter-spacing:.12em;color:#ffe9e0;
+  text-shadow:0 0 18px #c81e3a,0 0 4px #000}
+.hm-listen span{font-size:clamp(14px,3.6vw,20px);color:#e9e3d3;font-style:italic;text-shadow:0 0 6px #000}
+@keyframes hmListen{from{opacity:0;transform:scale(1.06)}to{opacity:1;transform:scale(1)}}
+.hm .hm-pad .hm-marble{font-size:12px;line-height:1.25}
+.hm-nana h1{color:#f3d9b0}
+.hm-nana b{color:#ffe9e0}
 .hm .hm-pad button.on{background:#ffdca0;color:#1a1208;border-color:#ffdca0;box-shadow:0 0 18px rgba(255,220,160,.6)}
 .hm .hm-pad .hm-use.on{background:#4fb3b3;color:#061414;border-color:#4fb3b3;box-shadow:0 0 18px rgba(79,179,179,.6)}
 /* the music box: small, just under the map (which is min(170px, 42% of the short side) square,

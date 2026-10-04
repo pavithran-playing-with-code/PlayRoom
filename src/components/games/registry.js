@@ -208,12 +208,12 @@ export const GAMES = [
     Component: CarromGame,
   },
   {
-    slug: "manor", name: "Hollow Manor", icon: "🏚️",
-    blurb: "Take your relics and get out before the house finds you. Race, team up, or survive it together.",
+    slug: "manor", name: "Nana's Lullaby", icon: "👵",
+    blurb: "Nana hums as she walks the halls. Find the three keys — and when the humming stops, freeze.",
     minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--grape)",
     coopMax: 4, defaultDuration: 300, ownsSpectating: true,
     coopLabel: "everyone gets out, or nobody does",
-    coopNote: "You're all on one side: take every relic, and every one of you gets out — or none of you does.",
+    coopNote: "You're all on one side: find every key and get out the front door together. When the humming stops — freeze.",
     Component: ManorGame,
   },
 ];

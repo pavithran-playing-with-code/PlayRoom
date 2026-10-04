@@ -1,5 +1,5 @@
 // src/components/horror/manorCore.mjs
-// HOLLOW MANOR — the rules everything else is built on, shared three ways:
+// NANA'S LULLABY (once Hollow Manor) — the rules everything else is built on, shared three ways:
 // the solo page (manorSim.js), the multiplayer client, and the server, which
 // runs the ghosts for a room (config/manorWorld.js).
 //
@@ -398,12 +398,54 @@ export function hideIn(p, u, seenBy) {
   p.stam = Math.min(1, p.stam + 0.3);
 }
 
+// A marble, thrown the way you face: it rolls until a wall or a shut door
+// (or MARBLE_D tiles) and rattles there. Where it stops, Nana goes to look.
+export const MARBLES = 3;
+export const MARBLE_D = 5;
+export function marbleLanding(g, x, y, fa) {
+  let lx = x, ly = y;
+  for (let d = 0.25; d <= MARBLE_D; d += 0.25) {
+    const nx = x + Math.cos(fa) * d, ny = y + Math.sin(fa) * d;
+    const row = g[ny | 0];
+    if (!row || row[nx | 0] !== FLOOR) break;
+    lx = nx; ly = ny;
+  }
+  return { x: lx, y: ly };
+}
+
 export function leaveLocker(p) {
   const h = p.hiding;
   if (!h) return;
   p.x = h.bx; p.y = h.by; p.fa = h.bfa;
   p.hiding = null;
 }
+
+// ── her lullaby ──────────────────────────────────────────────────────────────
+// Nana Elowen hums as she walks the halls. While you hear her humming you
+// are safe to move. Then the humming stops: she stands still and LISTENS,
+// and anyone who moves — not hidden, within earshot — she hears, and comes
+// for. The first moment of each silence is grace, time to freeze. The clock
+// is the house's, one for every Nana in it, so everybody hears the same.
+export const HUM_S = [7, 12];          // she hums this long…
+export const LISTEN_S = [2.6, 3.8];    // …then stops, and listens this long
+export const LISTEN_GRACE = 0.7;       // the start of a silence: time to stop moving
+export const HEAR_R = 24;              // in the silence she hears a step almost anywhere in the house
+export const FIRST_HUM_S = 10;
+
+export function newHum(rand) { return { on: true, t: FIRST_HUM_S + rand() * 3, since: 0 }; }
+// Advance the lullaby. Returns "hum" or "listen" when it changes, else null.
+export function stepHum(H, dt, rand) {
+  H.since += dt;
+  H.t -= dt;
+  if (H.t > 0) return null;
+  H.on = !H.on;
+  H.since = 0;
+  const [lo, hi] = H.on ? HUM_S : LISTEN_S;
+  H.t = lo + rand() * (hi - lo);
+  return H.on ? "hum" : "listen";
+}
+export const listeningNow = (H) => !!H && !H.on;
+export const hearingNow = (H) => !!H && !H.on && H.since >= LISTEN_GRACE;
 
 // ── the thing ────────────────────────────────────────────────────────────────
 // A ghost patrols, hears noise, and hunts anyone it can see. On first sight it
@@ -441,12 +483,29 @@ export function ghostSpeed(G, hustle = 0) {
 }
 
 // One step of one ghost. `targets`: the living, [{ id, x, y, lit, cr, noiseR,
-// hid }] — `hid` is the body's `hiding` while it is in a locker.
+// hid }] — `hid` is the body's `hiding` while it is in a locker. `hum`: the
+// house's lullaby (newHum); while she listens she stands still, and whoever
+// moves in the silence she hears ("heard").
 // `emit(name, extra)` hears "spotted", "lost", "door" ({ x, y }: it opened
 // one) and "gaveup" ({ id }: it searched a hiding spot and found nothing).
 // Returns the id of whoever it caught this step, or null.
-export function stepGhost(G, env, targets, dt, rand, hustle, emit) {
+export function stepGhost(G, env, targets, dt, rand, hustle, emit, hum = null) {
   if (G.stun > 0) G.stun -= dt;
+
+  // the silence: a step anywhere near and she knows where you are
+  if (hearingNow(hum)) {
+    let heard = null, hd = Infinity;
+    for (const t of targets) {
+      if (t.hid || !(t.noiseR > 0)) continue;
+      const d = Math.hypot(t.x - G.x, t.y - G.y);
+      if (d < HEAR_R && d < hd) { heard = t; hd = d; }
+    }
+    if (heard) {
+      if (G.st !== "hunt" || G.prey !== heard.id) emit("heard", { id: heard.id });
+      G.st = "hunt"; G.prey = heard.id; G.lose = 0; G.rt = 0.25;
+      ghostTarget(G, env, heard.x | 0, heard.y | 0);
+    }
+  }
 
   // it watched someone hide: it goes to the spot, searches, and gives up
   for (const t of targets) {
@@ -490,6 +549,12 @@ export function stepGhost(G, env, targets, dt, rand, hustle, emit) {
       if (d < t.noiseR && d < hd) { heard = t; hd = d; }
     }
     if (heard) { G.st = "search"; G.wait = 0; ghostTarget(G, env, heard.x | 0, heard.y | 0); }
+  }
+
+  // listening, she stands quite still
+  if (listeningNow(hum)) {
+    for (const t of targets) if (!t.hid && Math.hypot(t.x - G.x, t.y - G.y) < CATCH_R) return t.id;
+    return null;
   }
 
   const spd = ghostSpeed(G, hustle), N = env.N;
@@ -583,8 +648,8 @@ export function buildHouse(seed, { players, sides }) {
     taken.add(key(c));
   });
 
-  // Batteries, shared: first to reach one takes it.
-  const want = 2 + Math.ceil(players * 0.75);
+  // No batteries any more: your light never dies in Nana's house.
+  const want = 0;
   const batts = [];
   for (const c of cells) {
     if (batts.length >= want) break;
@@ -595,7 +660,9 @@ export function buildHouse(seed, { players, sides }) {
     }
   }
 
-  const obst = gapObstacles(gaps, N, rand);
+  // No barricades: there's nothing to jump in Nana's house.
+  const obst = {};
+  void gapObstacles;
 
   // Ghosts start deep in, apart from each other.
   const ghosts = [];
@@ -614,6 +681,7 @@ export function buildHouse(seed, { players, sides }) {
     N, g, exitT, relics, batts, obst, ghosts, doors,
     spots: hideSpots, rooms,
     spawn: { x: 1.5, y: 1.5 }, rand,
+    hum: newHum(rand),
   };
 }
 

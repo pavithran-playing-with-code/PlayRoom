@@ -274,13 +274,13 @@ let coreMod;
     stranger.me(w.code, 5, 5);
     check("someone not in the house moves nobody", ![...w.players.values()].some((q) => q.x === 5));
 
-    // music box
-    ph.h["manor:decoy"](w.code);
-    ph.h["manor:decoy"](w.code);
-    ph.h["manor:decoy"](w.code);
+    // marbles: thrown ahead, they rattle where they stop, and she goes there
+    const land = coreMod.marbleLanding(w.house.g, p.x, p.y, p.fa);
+    for (let i = 0; i < 4; i++) ph.h["manor:decoy"](w.code);
     const replies = ph.got.filter((g) => g.ev === "manor:decoyed").map((g) => g.p);
-    check("the music box: two uses, then empty", replies.length === 3 && replies[0].ok && replies[1].ok && !replies[2].ok && replies[2].why === "empty");
-    check("…and it draws a ghost to where you stood", w.house.ghosts.some((G) => G.st === "search" && G.tx === (p.x | 0)));
+    check("marbles: three to throw, then none", replies.length === 4 && replies.slice(0, 3).every((r) => r.ok) && !replies[3].ok && replies[3].why === "empty");
+    check("…one lands ahead of you, and Nana goes to where it stopped, not to you", w.house.ghosts.some((G) => G.st === "search" && G.tx === (land.x | 0) && G.ty === (land.y | 0)) && Math.hypot(land.x - p.x, land.y - p.y) > 0.5,
+      `landed ${land.x.toFixed(1)},${land.y.toFixed(1)} from ${p.x.toFixed(1)},${p.y.toFixed(1)}`);
 
     const w2 = room("free", [{ id: 61 }, { id: 62 }]);
     const ph2 = phone(61);

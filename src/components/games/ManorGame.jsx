@@ -1,5 +1,5 @@
 // src/components/games/ManorGame.jsx
-// HOLLOW MANOR in a room: versus, teams or co-op, in one shared house.
+// NANA'S LULLABY in a room: versus, teams or co-op, in one shared house.
 //
 // Unlike every other game here this one does not use useGameEngine. Its
 // scores are not a phone's to post: the server runs the house (config/
@@ -14,8 +14,8 @@ import { useSocket } from "../../utils/SocketContext";
 import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R } from "../horror/manorRender";
 import { createManorAudio } from "../horror/manorAudio";
 import {
-  createClient, applyTick, stepLocal, report, jump, doAction, actionDone, actionLabel, playing, respawning, inIntro, timeLeft, sideOfMe,
-  watchedPlayer, cycleWatch, viewState, roomNameAt,
+  createClient, applyTick, stepLocal, report, doAction, actionDone, actionLabel, playing, respawning, inIntro, timeLeft, sideOfMe,
+  watchedPlayer, cycleWatch, viewState, roomNameAt, isListening, nearestGhost,
 } from "../horror/manorClient";
 import { say } from "../horror/manorSim";
 import { useSideways, toGame } from "../horror/LandscapeGate";
@@ -61,7 +61,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       crouch: c.body.crouch, decoys: c.decoys, watching: w && { name: w.name, color: w.color }, use: actionLabel(c, now),
       room: roomNameAt(c, playing(c) ? c.body : w || c.body),
       players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left })),
-      playing: playing(c),
+      playing: playing(c), listening: isListening(c),
     });
   }, []);
 
@@ -100,8 +100,8 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       const c = client.current;
       if (!c) return;
       c.decoys = r.left;
-      if (r.ok) say(c, "The music box plays. It turns toward the sound. Slip away!", 3500);
-      else say(c, r.why === "empty" ? "The music box is empty." : "It is watching you. Break line of sight first!", 2200);
+      if (r.ok) say(c, "The marble rattles away down the hall. She goes to see what it was.", 3500);
+      else say(c, r.why === "empty" ? "No marbles left." : "She is looking right at you. Get out of sight first!", 2200);
       syncHud();
     };
     const onUsed = (r) => {
@@ -194,6 +194,9 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
         socket.emit("manor:me", report(c));
       }
 
+      // her lullaby: louder the nearer she is; nothing at all while she listens
+      const G = nearestGhost(c, c.body);
+      audio.current.humming(!inIntro(c, now) && !c.over && !isListening(c), G ? Math.max(0, 1 - Math.hypot(c.body.x - G.x, c.body.y - G.y) / 18) : 0);
       drawManor(cv.getContext("2d"), viewState(c, now), view.current, ts / 1000, playing(c) ? stick.current : null);
       if (ts - lastHud > HUD_MS) { lastHud = ts; syncHud(); }
     };
@@ -223,8 +226,6 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
         return;
       }
       keys.current[k] = true;
-      if (k === "f") c.body.light = !c.body.light;
-      if (k === " " && jump(c)) audio.current.play({ name: "jump" });
       if (k === "r") c.body.runOn = !c.body.runOn;
       if (k === "e") doUse(c);
       if (k === "q" && socket) socket.emit("manor:decoy", roomCode);
@@ -326,12 +327,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
             )}
             {h.side && <span className="hmx-score" title="Times out · score">🚪 {h.side.escapes} · {h.side.score}</span>}
           </div>
-          {h.playing && (
-            <>
-              <div className="hm-bar stam"><i style={{ width: `${h.stam * 100}%` }} /></div>
-              <div className="hm-bar bat"><i style={{ width: `${h.bat * 100}%` }} /></div>
-            </>
-          )}
+          {h.playing && <div className="hm-bar stam"><i style={{ width: `${h.stam * 100}%` }} /></div>}
           {h.room && <div className="hm-room">📍 {h.room}</div>}
           <div className="hmx-who">
             {h.players.map((p) => (
@@ -349,22 +345,25 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
       <div className="hm-msg" style={{ opacity: h && !h.intro && h.msg && !over ? 1 : 0 }} aria-live="polite">{h && !over ? h.msg : ""}</div>
 
-      {h && h.playing && !h.intro && (
+      {h && !h.intro && !over && (
         <>
-          {/* Jump, Use beside it (doors, hiding spots — lit when there is
-              something to use), the light below. Running is the stick
-              pushed past its ring. */}
-          <div className="hm-pad">
-            <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
-            <button className="hm-jump" onPointerDown={press((c) => { if (jump(c)) audio.current.play({ name: "jump" }); })}>Jump</button>
-            <button className={`hm-light${h.light && h.bat > 0 ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}>
-              {h.bat <= 0 ? "No power" : h.light ? "Light on" : "Light off"}
-            </button>
+          {/* while she hums you may move; when it stops, she listens */}
+          <div className={`hm-humming${h.listening ? " off" : ""}`} aria-hidden="true">♪ Nana is humming…</div>
+          <div className={`hm-listen${h.listening ? "" : " off"}`} role="alert">
+            <b>SHE'S LISTENING</b>
+            <span>The humming stopped. Freeze. Do not move.</span>
           </div>
-          {/* The music box lures a ghost to where you stand; small, under the map. */}
-          <button className="hm-music" style={{ opacity: h.decoys ? 1 : 0.45 }} onPointerDown={press(decoy)}
-            title="Music box: lures the ghost to where you stand">♪ Music box · {h.decoys}</button>
         </>
+      )}
+
+      {h && h.playing && !h.intro && (
+        <div className="hm-pad">
+          {/* Use (doors, hiding — lit when there's something to use), Run, a marble to throw */}
+          <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
+          <button className={`hm-jump hm-run${h.runOn ? " on" : ""}`} onPointerDown={press((c) => { c.body.runOn = !c.body.runOn; })}>{h.tired ? "Tired" : "Run"}</button>
+          <button className="hm-light hm-marble" style={{ opacity: h.decoys ? 1 : 0.45 }} onPointerDown={press(decoy)}
+            title="Throw a marble: she goes to the sound">Marble<br />{h.decoys}</button>
+        </div>
       )}
 
       {/* Caught: a moment, then back in at the entrance. */}
@@ -430,12 +429,12 @@ function Results({ over, me, onExit, leaving }) {
   const timeUp = over.reason === "time";
   const winnerName = (w) => (over.mode === "teams" ? `${w.name} team` : w.members[0]?.name || "Someone");
   const headline = coop
-    ? (mine && mine.escapes ? "You got out!" : "The house kept you")
+    ? (mine && mine.escapes ? "You got out!" : "Nana kept you")
     : iWon ? (over.mode === "teams" ? `${mine.name} team wins!` : "You got out — you win!")
     : winners.length ? `${winnerName(winners[0])} got out first`
     : timeUp ? "The night ran out" : "Nobody got out";
   const sub = coop
-    ? (mine && mine.escapes ? `Through the far gate together — ${mine.score} points.` : timeUp ? "The clock ran out before you found the way out." : "Nobody made it out.")
+    ? (mine && mine.escapes ? `Out through the front door together — ${mine.score} points.` : timeUp ? "The clock ran out before you found the way out." : "Nobody made it out.")
     : winners.length ? "First one out wins." : "Nobody got out before the clock ran out — nobody wins.";
   return (
     <div className="hm-ov hmx-results">

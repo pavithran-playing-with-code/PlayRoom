@@ -1,5 +1,7 @@
 // src/components/horror/manorAudio.js
-// The sounds of HOLLOW MANOR, all synthesised — no files. A low drone runs
+// The sounds of NANA'S LULLABY, all synthesised — no files. Over everything,
+// when she is humming, her lullaby (Brahms', in a thin old voice that wavers
+// off the note), louder the nearer she is; it stops dead when she listens. A low drone runs
 // underneath; everything else is a short tone or a burst of noise, played for
 // the events manorSim pushes. The tones are the original page's, unchanged.
 //
@@ -61,6 +63,49 @@ export function createManorAudio() {
 
   const later = (fn, ms) => { const id = setTimeout(() => { timers.delete(id); fn(); }, ms); timers.add(id); };
 
+  // ── her lullaby ──
+  const LULLABY = [64, 64, 67, 64, 64, 67, 64, 67, 72, 71, 69, 69, 67, 62, 64, 65, 62, 62, 64, 65, 62, 65, 71, 69, 67, 71, 72];
+  const BEATS = [1, 1, 2, 1, 1, 2, 1, 1, 1.5, 0.5, 1, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 1, 0.5, 0.5, 1, 1, 3];
+  const BEAT_S = 0.46;
+  let humOn = false, humI = 0, humGain = null, humTimer = null;
+  function humNote() {
+    humTimer = null;
+    if (!humOn || !AC) return;
+    const i = humI++ % LULLABY.length, dur = BEATS[i] * BEAT_S, t = AC.currentTime;
+    // an old voice: a little flat, a little wobbly, hummed through the nose
+    const f = 440 * Math.pow(2, (LULLABY[i] - 12 - 69) / 12) * (0.985 + Math.random() * 0.02);
+    const env = AC.createGain(), lp = AC.createBiquadFilter(), vib = AC.createOscillator(), vibG = AC.createGain();
+    lp.type = "lowpass"; lp.frequency.value = 900;
+    vib.frequency.value = 5.2; vibG.gain.value = f * 0.012;
+    vib.connect(vibG);
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.5, t + 0.09);
+    env.gain.setValueAtTime(0.5, t + dur * 0.7);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur * 1.05);
+    for (const [type, mul, amp] of [["sine", 1, 0.8], ["triangle", 1.003, 0.35], ["sine", 2, 0.12]]) {
+      const o = AC.createOscillator(), a = AC.createGain();
+      o.type = type; o.frequency.value = f * mul; a.gain.value = amp;
+      vibG.connect(o.frequency);
+      o.connect(a); a.connect(lp);
+      o.start(t); o.stop(t + dur * 1.1);
+    }
+    vib.start(t); vib.stop(t + dur * 1.1);
+    lp.connect(env); env.connect(humGain);
+    humTimer = setTimeout(humNote, dur * 1000);
+  }
+  // Called every frame: is she humming, and how loud (0..1, by how near she is)?
+  function humming(on, level = 0.3) {
+    if (!AC) return;
+    if (!humGain) { humGain = AC.createGain(); humGain.gain.value = 0; humGain.connect(mg); }
+    humGain.gain.setTargetAtTime(on ? 0.05 + level * 0.45 : 0, AC.currentTime, on ? 0.25 : 0.02);
+    if (on && !humOn) { humOn = true; if (!humTimer) humNote(); }
+    else if (!on && humOn) {
+      humOn = false;
+      if (humTimer) { clearTimeout(humTimer); humTimer = null; }
+      tone(1800, 0.03, 0.05, "square");                 // the needle lifting: then nothing
+    }
+  }
+
   const SOUNDS = {
     step: () => tone(75, 0.09, 0.07, "triangle", 45),
     stepRun: () => tone(95, 0.09, 0.12, "triangle", 45),
@@ -77,6 +122,10 @@ export function createManorAudio() {
     ghostStep: (v) => tone(52, 0.14, v, "sine", 34),
     heartbeat: (v) => { tone(60, 0.2, 0.55 * v, "sine", 32); later(() => tone(55, 0.2, 0.4 * v, "sine", 30), 190); },
     musicBox: () => [523, 392, 466, 349, 523, 392].forEach((f, i) => later(() => tone(f, 0.5, 0.14, "triangle"), i * 230)),
+    // a glass marble: bouncing, then rolling, quieter each time
+    marble: () => [0, 260, 450, 590, 690, 760, 810].forEach((ms, i) => later(() => tone(2600 - i * 120, 0.05, 0.16 * Math.pow(0.78, i), "sine", 1900), ms)),
+    // she heard you
+    heard: () => { tone(330, 0.5, 0.25, "sawtooth", 160); noise(0.35, 0.35); },
     creak: (v = 0.28) => tone(170, 0.5, v, "sawtooth", 85),           // a door; v falls off with distance
     locker: () => { tone(240, 0.12, 0.08, "square", 120); noise(0.08, 0.1); },
     buzz: (v = 0.5) => tone(90 + v * 60, 0.08, 0.08, "square"),        // a stuttering light
@@ -107,8 +156,11 @@ export function createManorAudio() {
 
   return {
     start,
+    humming,
     play(ev) { const fn = SOUNDS[ev.name]; if (fn) fn(ev.v); },
     close() {
+      humOn = false;
+      if (humTimer) { clearTimeout(humTimer); humTimer = null; }
       timers.forEach(clearTimeout);
       timers.clear();
       if (AC) { try { AC.close(); } catch (e) { /* already closed */ } }

@@ -1,5 +1,5 @@
 // src/components/horror/manorRender.js
-// Drawing HOLLOW MANOR: a column raycaster for the halls, billboard sprites
+// Drawing NANA'S LULLABY: a column raycaster for the halls, billboard sprites
 // for everything in them, a minimap, and the full-screen moments (the map you
 // memorise at the start, the thing's face when it gets you).
 //
@@ -46,151 +46,140 @@ export function lookBy(body, dx, dy) {
 }
 const PLANE = 0.65;                    // camera plane: ~66° field of view
 
-// The thing. Tall and starved under a torn grey shroud, stained dark at the
-// hem; long black hair hanging in ropes over a cracked white face; black
-// eyes with a red pinprick deep in each; a mouth stretched far too wide, full
-// of teeth; long arms with clawed fingers that reach for you when it hunts.
-// Now and then it twitches — a jolt sideways, there and back. `s` is its
-// height on screen.
+// Nana Elowen. Small and bent, in a faded rose nightgown and a knitted
+// shawl; grey hair pinned in a bun, wisps loose; round spectacles that
+// catch the light. Walking and humming, her hands are folded and her eyes
+// are shut in a sweet, terrible smile. When she comes for you (`angry`) her
+// eyes open wide behind the glass, her mouth falls open, and her thin arms
+// reach out. Now and then her head ticks to one side. `s` is her height on
+// screen; (x, y) her middle.
 export function drawGhost(ctx, x, y, s, angry, t = 0) {
   ctx.save();
-  // the twitch: a hard jolt every second and a half or so
-  const ph = (t * 0.68) % 1, jolt = ph < 0.05 ? Math.sin(ph * 120) * s * 0.035 : 0;
-  ctx.translate(x + jolt, y);
-  const aura = ctx.createRadialGradient(0, -s * 0.15, s * 0.05, 0, -s * 0.15, s * 0.8);
-  aura.addColorStop(0, angry ? "rgba(160,0,20,.38)" : "rgba(90,100,130,.22)");
+  const ph = (t * 0.5) % 1, tick = ph < 0.06 ? Math.sin(ph * 90) * 0.12 : 0;
+  const sway = Math.sin(t * 1.6) * s * 0.012;
+  ctx.translate(x + sway, y + s * 0.04);
+  const aura = ctx.createRadialGradient(0, -s * 0.1, s * 0.05, 0, -s * 0.1, s * 0.75);
+  aura.addColorStop(0, angry ? "rgba(170,10,30,.35)" : "rgba(150,140,170,.18)");
   aura.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = aura;
   ctx.fillRect(-s, -s, s * 2, s * 1.8);
 
-  const reach = angry ? 1 : 0, sway = Math.sin(t * 2.1) * s * 0.015;
-  // arms: thin, too long, grey skin, black claws
+  // the nightgown: faded rose, a little ragged at the hem, tiny flowers
+  const gg = ctx.createLinearGradient(0, -s * 0.25, 0, s * 0.52);
+  gg.addColorStop(0, "#b8939a");
+  gg.addColorStop(1, "#6f555c");
+  ctx.fillStyle = gg;
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.12, -s * 0.22);
+  ctx.lineTo(s * 0.12, -s * 0.22);
+  ctx.lineTo(s * 0.21, s * 0.48);
+  for (let k = 0; k <= 8; k++) ctx.lineTo(s * 0.21 - (k * s * 0.42) / 8, s * (0.48 + (k % 2 ? 0.035 : 0)) + Math.sin(t * 2 + k) * s * 0.008);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "rgba(240,215,220,.35)";
+  for (const [fx, fy] of [[-0.08, 0.05], [0.06, 0.12], [-0.03, 0.25], [0.11, 0.33], [-0.13, 0.38], [0.02, 0.42]]) {
+    ctx.beginPath(); ctx.arc(s * fx, s * fy, s * 0.012, 0, TAU); ctx.fill();
+  }
+  // slippers
+  ctx.fillStyle = "#5a4a4e";
+  ctx.beginPath(); ctx.ellipse(-s * 0.07, s * 0.53, s * 0.05, s * 0.018, 0, 0, TAU); ctx.ellipse(s * 0.07, s * 0.53, s * 0.05, s * 0.018, 0, 0, TAU); ctx.fill();
+
+  // arms: folded at her waist while she hums; reaching for you when she hunts
+  ctx.strokeStyle = "#cfc6b8";
+  ctx.lineCap = "round";
+  ctx.lineWidth = Math.max(2, s * 0.028);
   for (const side of [-1, 1]) {
-    const sx = side * s * 0.15, sy = -s * 0.28;
-    const ex = side * s * (0.27 + 0.13 * reach), ey = s * (0.18 - 0.36 * reach) + sway * side;
-    ctx.strokeStyle = "#9c9488";
-    ctx.lineCap = "round";
-    ctx.lineWidth = Math.max(2, s * 0.032);
     ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.quadraticCurveTo(side * s * (0.3 + 0.05 * reach), sy + s * 0.12, ex, ey);
+    ctx.moveTo(side * s * 0.14, -s * 0.18);
+    if (angry) ctx.quadraticCurveTo(side * s * 0.26, -s * 0.05, side * s * 0.2, -s * 0.2 + Math.sin(t * 6 + side) * s * 0.02);
+    else ctx.quadraticCurveTo(side * s * 0.2, s * 0.02, side * s * 0.03, s * 0.06);
     ctx.stroke();
-    ctx.strokeStyle = "#1a0d0d";                         // claws
-    ctx.lineWidth = Math.max(1, s * 0.011);
-    for (let f = -2; f <= 2; f++) {
-      ctx.beginPath();
-      ctx.moveTo(ex, ey);
-      ctx.quadraticCurveTo(ex + side * s * 0.05, ey + f * s * 0.012, ex + side * s * (0.09 - Math.abs(f) * 0.012), ey + f * s * 0.03 + (reach ? -0.03 : 0.05) * s);
-      ctx.stroke();
+  }
+  if (angry) {
+    ctx.strokeStyle = "#2a1a1a"; ctx.lineWidth = Math.max(1, s * 0.008);
+    for (const side of [-1, 1]) for (let f = -1; f <= 1; f++) {
+      const hx = side * s * 0.2, hy = -s * 0.2;
+      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(hx + side * s * 0.035, hy - s * 0.035 + f * s * 0.02); ctx.stroke();
     }
   }
 
-  // the shroud: grey, torn into strips at the hem, rust-dark stains
-  const cg = ctx.createLinearGradient(0, -s * 0.5, 0, s * 0.55);
-  cg.addColorStop(0, "#b9b3a8");
-  cg.addColorStop(0.5, "#7f786f");
-  cg.addColorStop(1, "rgba(60,40,38,0)");
-  ctx.fillStyle = cg;
+  // the shawl: knitted, grey-green, fringed
+  ctx.fillStyle = "#6f7766";
   ctx.beginPath();
-  ctx.moveTo(-s * 0.14, -s * 0.42);
-  ctx.quadraticCurveTo(0, -s * 0.47, s * 0.14, -s * 0.42);
-  ctx.lineTo(s * 0.2, -s * 0.2);
-  ctx.lineTo(s * 0.26, s * 0.4);
-  const strips = 9;
-  for (let i = 0; i <= strips; i++) {
-    const fx = s * 0.26 - (i * s * 0.52) / strips, wave = Math.sin(t * 3.2 + i * 1.9) * s * 0.035;
-    ctx.lineTo(fx, s * (i % 2 ? 0.32 : 0.56) + wave);
-  }
-  ctx.lineTo(-s * 0.2, -s * 0.2);
+  ctx.moveTo(-s * 0.17, -s * 0.24);
+  ctx.quadraticCurveTo(0, -s * 0.31, s * 0.17, -s * 0.24);
+  ctx.lineTo(s * 0.06, -s * 0.02);
+  ctx.lineTo(-s * 0.06, -s * 0.02);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = "rgba(90,14,14,.45)";                  // stains
-  for (const [fx, fy, r] of [[-0.08, 0.2, 0.06], [0.1, 0.32, 0.05], [-0.02, 0.4, 0.07], [0.12, 0.05, 0.035]]) {
-    ctx.beginPath();
-    ctx.ellipse(s * fx, s * fy, s * r, s * r * 1.6, 0.2, 0, TAU);
-    ctx.fill();
-  }
+  ctx.strokeStyle = "rgba(40,45,35,.45)"; ctx.lineWidth = Math.max(0.8, s * 0.004);
+  for (let k = -3; k <= 3; k++) { ctx.beginPath(); ctx.moveTo(k * s * 0.025, -s * 0.27); ctx.lineTo(k * s * 0.012, -s * 0.03); ctx.stroke(); }
+  ctx.strokeStyle = "#6f7766";
+  for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(k * s * 0.02, -s * 0.02); ctx.lineTo(k * s * 0.022, s * 0.03); ctx.stroke(); }
 
-  // the head: hair in long black ropes first, then the face through it
-  ctx.fillStyle = "#070507";
-  ctx.beginPath();
-  ctx.ellipse(0, -s * 0.47, s * 0.12, s * 0.1, 0, Math.PI, 0);
-  ctx.fill();
-  ctx.strokeStyle = "#0a0709";
-  ctx.lineCap = "round";
-  for (let i = 0; i < 9; i++) {
-    const hx = -s * 0.12 + (i * s * 0.24) / 8;
-    const len = s * (0.26 + 0.1 * Math.sin(i * 2.3)), swing = Math.sin(t * 1.7 + i) * s * 0.012;
-    ctx.lineWidth = Math.max(1.5, s * 0.03);
-    ctx.beginPath();
-    ctx.moveTo(hx, -s * 0.5);
-    ctx.quadraticCurveTo(hx * 1.4 + swing, -s * 0.3, hx * 1.2 + swing * 2, -s * 0.5 + len);
-    ctx.stroke();
+  // the head, bowed forward, ticking now and then
+  ctx.save();
+  ctx.translate(0, -s * 0.33);
+  ctx.rotate(tick + (angry ? 0.05 : 0.12));
+  // hair: grey, a bun on top, loose wisps
+  ctx.fillStyle = "#a9a39b";
+  ctx.beginPath(); ctx.ellipse(0, -s * 0.03, s * 0.085, s * 0.08, 0, Math.PI, 0); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, -s * 0.105, s * 0.04, 0, TAU); ctx.fill();
+  ctx.strokeStyle = "rgba(200,195,186,.8)"; ctx.lineWidth = Math.max(0.8, s * 0.004);
+  for (const [wx, wl] of [[-0.08, 0.09], [0.075, 0.08], [-0.06, 0.06], [0.05, 0.1]]) {
+    ctx.beginPath(); ctx.moveTo(s * wx, -s * 0.03); ctx.quadraticCurveTo(s * wx * 1.3 + Math.sin(t * 2 + wx * 20) * s * 0.01, s * 0.02, s * wx * 1.1, -s * 0.03 + s * wl); ctx.stroke();
   }
-  // the face: long, cracked, dead white
-  const fg = ctx.createRadialGradient(0, -s * 0.36, s * 0.01, 0, -s * 0.36, s * 0.12);
-  fg.addColorStop(0, "#efe9df");
-  fg.addColorStop(1, "#a59e95");
+  // the face: pale, lined
+  const fg = ctx.createRadialGradient(0, s * 0.01, s * 0.01, 0, s * 0.01, s * 0.09);
+  fg.addColorStop(0, "#e8dccb");
+  fg.addColorStop(1, "#a99a88");
   ctx.fillStyle = fg;
-  ctx.beginPath();
-  ctx.ellipse(0, -s * 0.355, s * 0.075, s * 0.115, 0, 0, TAU);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(40,20,20,.55)";                // cracks
-  ctx.lineWidth = Math.max(0.8, s * 0.004);
-  ctx.beginPath();
-  ctx.moveTo(-s * 0.05, -s * 0.44); ctx.lineTo(-s * 0.025, -s * 0.4); ctx.lineTo(-s * 0.04, -s * 0.37);
-  ctx.moveTo(s * 0.045, -s * 0.3); ctx.lineTo(s * 0.03, -s * 0.27); ctx.lineTo(s * 0.05, -s * 0.25);
-  ctx.stroke();
-  // eye sockets: black, sunken, too big
-  ctx.fillStyle = "#050204";
+  ctx.beginPath(); ctx.ellipse(0, s * 0.015, s * 0.068, s * 0.085, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = "rgba(90,70,60,.45)"; ctx.lineWidth = Math.max(0.7, s * 0.003);
+  for (const ly of [-0.035, -0.025]) { ctx.beginPath(); ctx.moveTo(-s * 0.035, s * ly); ctx.quadraticCurveTo(0, s * (ly - 0.006), s * 0.035, s * ly); ctx.stroke(); }
+  // eyes: shut and smiling while she hums; wide open when she hunts
   for (const side of [-1, 1]) {
-    ctx.beginPath();
-    ctx.ellipse(side * s * 0.033, -s * 0.385, s * 0.026, s * 0.022, side * 0.3, 0, TAU);
-    ctx.fill();
+    const ex = side * s * 0.027, ey = s * 0.0;
+    if (angry) {
+      ctx.fillStyle = "#f4efe6"; ctx.beginPath(); ctx.ellipse(ex, ey, s * 0.017, s * 0.014, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#120808"; ctx.beginPath(); ctx.arc(ex, ey, s * 0.004, 0, TAU); ctx.fill();
+    } else {
+      ctx.strokeStyle = "#3a2a24"; ctx.lineWidth = Math.max(0.8, s * 0.004);
+      ctx.beginPath(); ctx.arc(ex, ey - s * 0.004, s * 0.012, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+    }
   }
-  // the mouth: stretched open, too wide, teeth
-  const gape = angry ? 0.075 : 0.05;
-  ctx.fillStyle = "#080204";
-  ctx.beginPath();
-  ctx.ellipse(0, -s * 0.29, s * 0.03, s * gape * 0.75, 0, 0, TAU);
-  ctx.fill();
-  ctx.fillStyle = "#d8cfbf";
-  for (let i = -2; i <= 2; i++) {
-    ctx.beginPath();                                     // top teeth
-    ctx.moveTo(i * s * 0.011 - s * 0.005, -s * (0.29 + gape * 0.7));
-    ctx.lineTo(i * s * 0.011 + s * 0.005, -s * (0.29 + gape * 0.7));
-    ctx.lineTo(i * s * 0.011, -s * (0.29 + gape * 0.4));
-    ctx.fill();
-    ctx.beginPath();                                     // bottom teeth
-    ctx.moveTo(i * s * 0.011 - s * 0.005, -s * (0.29 - gape * 0.7));
-    ctx.lineTo(i * s * 0.011 + s * 0.005, -s * (0.29 - gape * 0.7));
-    ctx.lineTo(i * s * 0.011, -s * (0.29 - gape * 0.4));
-    ctx.fill();
-  }
-  // hair falling across the face, over everything
-  ctx.strokeStyle = "rgba(8,5,7,.92)";
-  for (const [hx, len] of [[-0.06, 0.24], [0.045, 0.2], [-0.015, 0.12]]) {
-    ctx.lineWidth = Math.max(1, s * 0.016);
-    ctx.beginPath();
-    ctx.moveTo(s * hx, -s * 0.47);
-    ctx.quadraticCurveTo(s * hx * 0.6 + Math.sin(t + hx * 9) * s * 0.01, -s * 0.38, s * hx * 0.9, -s * 0.47 + s * len);
-    ctx.stroke();
+  // spectacles
+  ctx.strokeStyle = "#8a7a55"; ctx.lineWidth = Math.max(0.8, s * 0.005);
+  for (const side of [-1, 1]) { ctx.beginPath(); ctx.arc(side * s * 0.027, 0, s * 0.022, 0, TAU); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(-s * 0.006, -s * 0.002); ctx.lineTo(s * 0.006, -s * 0.002); ctx.stroke();
+  // the mouth: a thin, sweet smile — or open, dark, a few teeth
+  if (angry) {
+    ctx.fillStyle = "#140608";
+    ctx.beginPath(); ctx.ellipse(0, s * 0.052, s * 0.022, s * 0.03, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = "#d9cdb4";
+    for (const tx of [-0.01, 0.004, 0.013]) { ctx.beginPath(); ctx.moveTo(s * tx, s * 0.025); ctx.lineTo(s * (tx + 0.005), s * 0.025); ctx.lineTo(s * (tx + 0.0025), s * 0.037); ctx.fill(); }
+  } else {
+    ctx.strokeStyle = "#5a3a34"; ctx.lineWidth = Math.max(0.8, s * 0.004);
+    ctx.beginPath(); ctx.arc(0, s * 0.03, s * 0.022, 0.2 * Math.PI, 0.8 * Math.PI); ctx.stroke();
   }
   ctx.restore();
-  ghostEyes(ctx, x + jolt, y, s, angry, t);
+  ctx.restore();
+  ghostEyes(ctx, x + sway, y + s * 0.04, s, angry, t, tick + (angry ? 0.05 : 0.12));
 }
 
-// Its eyes alone — drawn at full strength even when the rest of it is lost
-// in the dark, so you always see them first.
-export function ghostEyes(ctx, x, y, s, angry, t = 0) {
-  const glow = 0.7 + 0.3 * Math.sin(t * 9);
+// The light on her spectacles: the first thing you see of her in the dark,
+// and red when she is coming for you.
+export function ghostEyes(ctx, x, y, s, angry, t = 0, tilt = 0.12) {
+  const glow = 0.65 + 0.35 * Math.sin(t * 3);
   ctx.save();
-  ctx.shadowColor = "#ff1030";
-  ctx.shadowBlur = s * (angry ? 0.07 : 0.04);
-  ctx.fillStyle = `rgba(255,${angry ? 30 : 70},${angry ? 50 : 60},${glow})`;
+  ctx.translate(x, y - s * 0.33);
+  ctx.rotate(tilt);
+  ctx.shadowColor = angry ? "#ff1030" : "#fff2cc";
+  ctx.shadowBlur = s * (angry ? 0.06 : 0.035);
+  ctx.fillStyle = angry ? `rgba(255,40,50,${glow})` : `rgba(255,245,215,${glow * 0.8})`;
   for (const side of [-1, 1]) {
-    ctx.beginPath();                                     // a pinprick deep in each socket
-    ctx.arc(x + side * s * 0.033, y - s * 0.385, s * (angry ? 0.009 : 0.006), 0, TAU);
+    ctx.beginPath();
+    ctx.ellipse(side * s * 0.027 + s * 0.008, -s * 0.008, s * 0.007, s * 0.004, -0.6, 0, TAU);
     ctx.fill();
   }
   ctx.restore();
@@ -391,10 +380,11 @@ function scene(ctx, s, W, H, t) {
     // each room its own colour: the room on our side of the wall we hit
     let col = s.rooms ? roomOf(s, roomAt(s.N, P.x + (dx + plx * cam) * (pd - 0.02), P.y + (dy + ply * cam) * (pd - 0.02)))[2] : [96, 74, 56];
     const isEx = h.mx === exitT.x && h.my === exitT.y, isEn = h.mx === 0 && h.my === 1;
-    const sealed = isEn || (isEx && !exitOpen(s));
+    const sealed = isEn;
     const tv = h.my >= 0 && h.my < s.N && h.mx >= 0 && h.mx < s.N ? s.g[h.my][h.mx] : 1;
     const plain = !isEx && !isEn && tv !== DOOR;
-    if (isEx) { col = exitOpen(s) ? [70, 230, 130] : [200, 40, 50]; b += 0.35 * Math.max(0, 1 - pd / 14); }
+    // the front door: dark and locked, or warm light round it once unlocked
+    if (isEx) { col = exitOpen(s) ? [240, 196, 120] : [104, 48, 38]; b += 0.35 * Math.max(0, 1 - pd / 14); }
     else if (isEn) col = [220, 190, 120];
     else if (tv === DOOR) col = [130, 84, 44];
     else if (((h.mx * 7 + h.my * 13) & 3) === 0) col = col.map((v) => v * 0.88);
@@ -405,7 +395,7 @@ function scene(ctx, s, W, H, t) {
     const lh = H / pd, ds = hz - lh * (1 - eye);
     ctx.fillStyle = `rgb(${(col[0] * b) | 0},${(col[1] * b) | 0},${(col[2] * b) | 0})`;
     ctx.fillRect(i * cw, ds, cw + 1, lh);
-    if (tv === DOOR && !isEx && !isEn) {
+    if ((tv === DOOR || isEx) && !isEn) {
       // a door: dark jambs at the edges, two sunk panels, a brass handle
       ctx.fillStyle = "rgba(0,0,0,.45)";
       if (h.u < 0.07 || h.u > 0.93) ctx.fillRect(i * cw, ds, cw + 1, lh);
@@ -527,10 +517,18 @@ function scene(ctx, s, W, H, t) {
     } else if (ob) {
       drawObstacle(ctx, s, o, scr, u, hz, eye, L, t);
     } else {
-      ctx.fillStyle = "#ffdca0";
-      ctx.font = `${size * 1.6}px Georgia`;
+      // a glass marble on the floor, catching the light, still rattling
+      const fy = hz + eye * u - u * 0.04, r = Math.max(2, u * 0.05);
+      const mg = ctx.createRadialGradient(scr - r * 0.4, fy - r * 0.4, r * 0.1, scr, fy, r);
+      mg.addColorStop(0, "#ffffff");
+      mg.addColorStop(0.4, "#8fc7ff");
+      mg.addColorStop(1, "#2a5b8f");
+      ctx.fillStyle = mg;
+      ctx.beginPath(); ctx.arc(scr + Math.sin(t * 30) * r * 0.15, fy, r, 0, TAU); ctx.fill();
+      ctx.fillStyle = "rgba(255,240,200,.6)";
+      ctx.font = `${Math.max(9, u * 0.12)}px Georgia`;
       ctx.textAlign = "center";
-      ctx.fillText("♪", scr, cy);
+      ctx.fillText("· · ·", scr, fy - r * 2.2);
     }
     ctx.restore();
   }
@@ -991,7 +989,7 @@ function markers(ctx, s, W, H, t) {
     if (r.got || r.mine === false) return;
     list.push({ x: r.x, y: r.y, kind: "relic", icon: relicIcon(i), color: r.color || "#ffdca0", label: "", main: r === nearest });
   });
-  if (exitOpen(s)) list.push({ x: s.exitT.x + 0.5, y: s.exitT.y + 0.5, kind: "exit", color: "#5fd68a", label: "Way out", main: !left.length });
+  if (exitOpen(s)) list.push({ x: s.exitT.x + 0.5, y: s.exitT.y + 0.5, kind: "exit", color: "#f0c478", label: "Front door", main: !left.length });
   // a friend in plain sight wears their distance on their name tag instead
   for (const o of s.others || []) {
     const inSight = Math.hypot(o.x - P.x, o.y - P.y) < 9 && los(s.g, P.x, P.y, o.x, o.y);
@@ -1121,7 +1119,7 @@ export function drawManor(ctx, s, view, t, stick) {
     ctx.fillStyle = "#a39a88";
     ctx.font = "14px Georgia";
     ctx.fillText(`The dark falls in ${Math.ceil(s.introT)}s. Tap or press any key to start now.`, W / 2, y0 + size + 24);
-    ctx.fillText("Gold: keys · Brown bars: doors · Red: the way out (it opens when you have them all)", W / 2, y0 + size + 44);
+    ctx.fillText("Gold: keys · Brown bars: doors · Red: the front door (it unlocks when you have all three)", W / 2, y0 + size + 44);
     return;
   }
   if (s.mode === "dead") {

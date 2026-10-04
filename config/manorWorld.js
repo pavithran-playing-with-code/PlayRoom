@@ -1,4 +1,4 @@
-// config/manorWorld.js — HOLLOW MANOR online: the house, run by the server.
+// config/manorWorld.js — NANA'S LULLABY (slug "manor") online: the house, run by the server.
 //
 // Every other PlayRoom game is a race on identical boards, so each phone can
 // play its own copy and only scores travel. This one is a shared house with
@@ -44,7 +44,7 @@ const GAME = "manor";
 const TICK_MS = 100;
 const DT = TICK_MS / 1000;
 const INTRO_MS = 8000;                 // ghosts asleep while everyone memorises the map
-const DECOYS = 2;
+const DECOYS = 3;                      // marbles: thrown to lure Nana away
 const KEEP_AFTER_MS = 120000;          // a finished house lingers for late hellos
 const RESPAWN_MS = 2400;               // caught: the scare, then back in at the entrance
 const RELIC_POINTS = 100;
@@ -248,15 +248,21 @@ function tick(w) {
   const now = Date.now();
   if (now - w.startMs >= w.durMs) { finish(w, "time"); return; }
   const awake = now - w.startMs >= INTRO_MS;
+  // her lullaby: humming, then the silence where she listens
+  if (awake) {
+    const hum = core.stepHum(w.house.hum, DT, w.house.rand);
+    if (hum) ev(w, { type: hum });
+  }
 
   const targets = living(w).map((p) => ({ id: p.id, x: p.x, y: p.y, lit: p.lit, cr: p.cr, noiseR: p.noiseR, hid: p.hiding }));
   if (awake) {
     w.house.ghosts.forEach((G, gi) => {
       const caught = core.stepGhost(G, w.env, targets, DT, w.house.rand, hustle(w), (name, extra) => {
+        if (name === "heard") ev(w, { type: "heard", g: gi, id: extra.id });
         if (name === "spotted") ev(w, { type: "spotted", g: gi, id: extra.id });
         if (name === "door") ev(w, { type: "door", x: extra.x, y: extra.y, open: 1, id: 0 });
         if (name === "gaveup") ev(w, { type: "gaveup", id: extra.id });
-      });
+      }, w.house.hum);
       if (caught != null && !w.over) {
         kill(w, caught, "ghost");
         // it has had its prey: off it goes, and the entrance isn't camped
@@ -322,6 +328,8 @@ function broadcast(w, now) {
     b: w.house.batts.map((b) => (b.got ? 1 : 0)).join(""),
     s: w.sides.map((s) => [s.key, s.got, s.open ? 1 : 0, s.escapes, s.total, scoreOf(s)]),
     m: w.pulses.map((q) => [r2(q.x), r2(q.y), r2(q.t)]),
+    // the lullaby: [humming?, seconds till it changes, seconds since it did]
+    h: [w.house.hum.on ? 1 : 0, r2(w.house.hum.t), r2(w.house.hum.since)],
     e: w.events,
   });
   w.events = [];
@@ -388,12 +396,14 @@ function initFor(w, uid, role) {
       x: p.x, y: p.y, fa: p.fa, alive: p.alive, left: p.left, caught: p.caught, decoys: p.decoys,
     })),
     respawnMs: RESPAWN_MS,
+    hum: [w.house.hum.on ? 1 : 0, w.house.hum.t, w.house.hum.since],
     over: w.over ? standings(w) : null,
   };
 }
 
 // ── sockets ──────────────────────────────────────────────────────────────────
 
+const round2 = (n) => Math.round(n * 100) / 100;
 const CODE_RE = /^[A-Z0-9]{4,8}$/;
 const num = (v, lo, hi) => { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : null; };
 
@@ -532,9 +542,14 @@ function attach(server) {
       for (const g of w.house.ghosts) { const d = Math.hypot(g.x - p.x, g.y - p.y); if (d < gd) { G = g; gd = d; } }
       if (w.house.ghosts.some((g) => g.st === "hunt" && g.prey === uid && g.lose < 1)) return reply(false, "watched");
       p.decoys--;
-      w.pulses.push({ x: p.x, y: p.y, t: 8 });
-      if (G) { G.st = "search"; G.wait = -4; G.stun = 0; G.prey = null; core.ghostTarget(G, w.env, p.x | 0, p.y | 0); }
-      ev(w, { type: "decoy", id: uid });
+      // the marble rolls ahead and rattles where it stops; the nearest Nana goes there
+      const at = core.marbleLanding(w.house.g, p.x, p.y, p.fa);
+      w.pulses.push({ x: at.x, y: at.y, t: 8 });
+      let near = G;
+      gd = Infinity;
+      for (const g of w.house.ghosts) { const d = Math.hypot(g.x - at.x, g.y - at.y); if (d < gd) { near = g; gd = d; } }
+      if (near) { near.st = "search"; near.wait = -4; near.stun = 0; near.prey = null; core.ghostTarget(near, w.env, at.x | 0, at.y | 0); }
+      ev(w, { type: "decoy", id: uid, x: round2(at.x), y: round2(at.y) });
       reply(true);
     });
   });

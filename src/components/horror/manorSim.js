@@ -1,7 +1,9 @@
 // src/components/horror/manorSim.js
-// HOLLOW MANOR, solo — a first-person walk through a house of rooms at night:
-// take every relic, keep the torch fed with batteries, leave by the far gate.
-// Something patrols the rooms. It hears running, sees torchlight, and hunts.
+// NANA'S LULLABY, solo — a first-person walk through Nana Elowen's house at
+// night: find the three keys, unlock the front door, get out. Nana walks the
+// halls humming a lullaby. While she hums you're safe to move; when the
+// humming stops she is listening — move then and she hears you. She also
+// hears running and sees your light, and hunts.
 // Doors creak open and can be shut behind you; tables, beds and wardrobes
 // hide you — it can't catch you there, and if it watched you go in it only
 // searches a while and gives up. Now and then the house tries to frighten you (scareStep)
@@ -22,30 +24,31 @@ import {
   newBody, litBody, mvOK as bodyMvOK, jumpBody, stepBody,
   newGhost, ghostTarget, ghostPatrol, ghostSees, ghostSpeed as speedOf, stepGhost,
   actionAt, ACTION_LABEL, watcher, hideIn, leaveLocker,
+  newHum, stepHum, listeningNow, marbleLanding, MARBLES,
 } from "./manorCore.mjs";
 
 export { D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, dmap, floors, los, canAt, ROOM_KINDS, roomAt };
 export const INTRO_S = 9;              // seconds to memorise the map
-export const DECOYS = 2;
+export const DECOYS = MARBLES;          // marbles, to throw
 
 const RELIC_LINES = [
-  "An iron key, cold as the grave. Something stirs.",
-  "A brass key on a rotten ribbon. It whispers your name.",
-  "A tiny key, still warm. The walls lean closer.",
+  "An iron key, tied with a faded pink ribbon.",
+  "A brass key, wrapped in a lace handkerchief. It smells of lavender.",
+  "A tiny key from a sewing tin. Somewhere, the humming falters.",
   "A black key. Footsteps overhead.",
 ];
-const LAST_RELIC = "The last key. The gate is open. Run.";
+const LAST_RELIC = "The third key. The front door is unlocked. Go — quietly.";
 export const AMBIENT = [
-  "Something is breathing behind you...",
-  "The floorboards creak. Not from you.",
-  "A whisper: stay.",
-  "Cold air brushes your neck.",
+  "Somewhere, a rocking chair creaks.",
+  "Knitting needles click in the dark.",
+  "A whisper: stay for tea, dear.",
+  "Lavender and dust. She was here a moment ago.",
 ];
 
 // A little bigger and fuller with the nights, but never a hard map: 3×3
 // rooms for the first two nights, 4×4 after that.
 export function nightSize(night) {
-  return { N: houseSize(night <= 2 ? 3 : 4), need: Math.min(6, 3 + night) };
+  return { N: houseSize(night <= 2 ? 3 : 4), need: 3 };   // always the three keys
 }
 
 // ── a night ──────────────────────────────────────────────────────────────────
@@ -68,14 +71,11 @@ export function newNight(seed, night = 1) {
   }
   need = relics.length;
 
-  const cells = [];
-  for (const c of f) {
-    if (cells.length >= 4) break;
-    if (d0[c[0] + c[1] * N] > 6 && cells.every((o) => Math.hypot(o.x - c[0] - 0.5, o.y - c[1] - 0.5) > 6)) cells.push({ x: c[0] + 0.5, y: c[1] + 0.5, got: false });
-  }
+  const cells = [];                      // no batteries in Nana's house: your light never dies
 
   const gs = f.find((c) => d0[c[0] + c[1] * N] > 24 && relics.every((r) => Math.hypot(r.x - c[0], r.y - c[1]) > 4)) || far;
-  const obst = gapObstacles(gaps, N, rand);
+  const obst = {};                      // and nothing to jump
+  void gapObstacles;
 
   const P = newBody(0.5, 1.5, 0);
   const s = {
@@ -85,7 +85,7 @@ export function newNight(seed, night = 1) {
     G: newGhost(gs[0] + 0.5, gs[1] + 0.5),
     P,
     count: 0,
-    decoys: DECOYS, pulses: [], puffs: [], hint: {},
+    decoys: DECOYS, pulses: [], puffs: [], hint: {}, hum: newHum(rand),
     tm: 0, gStep: 0, hb: 0, ambT: 20,
     bodies: [], flick: 0, scareT: 25 + rand() * 15,
     msg: "", msgT: 0,
@@ -105,7 +105,7 @@ export function begin(s) {
   if (s.mode !== "intro") return;
   s.mode = "play";
   s.P.entering = true;
-  say(s, "You step through the entrance gate...", 3000);
+  say(s, "You step in through the front door...", 3000);
 }
 
 // ── things you do ────────────────────────────────────────────────────────────
@@ -122,13 +122,13 @@ export function doAction(s) {
   if (u.t === "open") { s.g[u.y][u.x] = FLOOR; P.noiseT = 0.6; emit(s, "creak", 0.28); }
   else if (u.t === "close") {
     s.g[u.y][u.x] = DOOR; P.noiseT = 0.3; emit(s, "creak", 0.15);
-    say(s, "Door shut. It will have to open it.", 2000);
+    say(s, "Door shut. She will have to open it.", 2000);
   } else if (u.t === "hide") {
     const seenBy = watcher([s.G], s.env, P, 1);
     hideIn(P, u, seenBy);
     emit(s, "locker");
     const where = { table: "under the table", bed: "under the bed", wardrobe: "in the wardrobe" }[u.kind];
-    say(s, seenBy ? `It saw you get ${where}. Stay still — it will give up.` : `You hide ${where}. It cannot find you here.`, 3500);
+    say(s, seenBy ? `She saw you get ${where}. Stay still — she will give up.` : `You hide ${where}. She cannot find you here.`, 3500);
   } else { leaveLocker(P); emit(s, "locker"); }
 }
 export const actionLabel = (s) => {
@@ -145,17 +145,19 @@ export function toggleCrouch(s) { s.P.crouch = !s.P.crouch; }
 export function toggleLight(s) { s.P.light = !s.P.light; }
 export function toggleRun(s) { s.P.runOn = !s.P.runOn; }
 
-// The music box: the thing goes to where you are now. Leave.
+// A marble, thrown the way you face: it rattles where it stops, and Nana
+// goes to see what it was.
 export function decoy(s) {
   if (s.mode !== "play") return;
-  if (!s.decoys) { say(s, "The music box is empty.", 2000); return; }
-  if (s.G.st === "hunt" && s.G.lose < 1) { say(s, "It is watching you. Break line of sight first!", 2200); return; }
+  if (!s.decoys) { say(s, "No marbles left.", 2000); return; }
+  if (s.G.st === "hunt" && s.G.lose < 1) { say(s, "She is looking right at you. Get out of sight first!", 2200); return; }
   s.decoys--;
-  s.pulses.push({ x: s.P.x, y: s.P.y, t: 8 });
-  emit(s, "musicBox");
+  const at = marbleLanding(s.g, s.P.x, s.P.y, s.P.fa);
+  s.pulses.push({ x: at.x, y: at.y, t: 8 });
+  emit(s, "marble");
   s.G.st = "search"; s.G.wait = -4; s.G.stun = 0; s.G.prey = null;
-  ghostTarget(s.G, s.env, s.P.x | 0, s.P.y | 0);
-  say(s, "The music box plays. It turns toward the sound. Slip away!", 3500);
+  ghostTarget(s.G, s.env, at.x | 0, at.y | 0);
+  say(s, "The marble rattles away down the hall. She goes to see what it was.", 3500);
 }
 
 // ── the thing ────────────────────────────────────────────────────────────────
@@ -193,7 +195,7 @@ function update(s, inp, dt) {
     s.g[1][0] = WALL;
     emit(s, "gateSlam");
     s.G.stun = 3;
-    say(s, "The gate slams shut behind you. Find the keys, then the far gate.", 5000);
+    say(s, "The front door locks behind you. Find the three keys.", 5000);
   }
 
   const ct = (P.y | 0) * N + (P.x | 0);
@@ -202,10 +204,10 @@ function update(s, inp, dt) {
     P.lastTile = ct;
   }
 
-  if (P.light && !P.entering) {
-    const b0 = P.bat;
-    P.bat = Math.max(0, P.bat - dt * 0.011);
-    if (b0 > 0 && P.bat === 0) say(s, "Your light died. Find a battery.", 3500);
+  // her lullaby: humming, then the silence where she listens
+  if (!P.entering) {
+    const hv = stepHum(s.hum, dt, s.rand);
+    if (hv) emit(s, hv);
   }
   for (const c of s.cells) {
     if (!c.got && Math.hypot(c.x - P.x, c.y - P.y) < 0.6) {
@@ -231,16 +233,17 @@ function update(s, inp, dt) {
   const ex = s.exitT.x + 0.5, ey = s.exitT.y + 0.5;
   if (Math.hypot(ex - P.x, ey - P.y) < 1.2) {
     if (s.count >= s.need) { s.mode = "won"; emit(s, "win"); return; }
-    else if (s.msgT <= 0) say(s, "The far gate is sealed. Find all the keys.", 2500);
+    else if (s.msgT <= 0) say(s, "The front door is locked. Find all three keys.", 2500);
   }
 
   if (!P.entering) {
     const got = stepGhost(s.G, s.env, [asTarget(s)], dt, s.rand, hustleOf(s), (name, e) => {
       if (name === "spotted") emit(s, "spotted");
-      if (name === "lost") say(s, "It lost you...", 2500);
+      if (name === "heard") { emit(s, "heard"); say(s, "She heard you. She's coming.", 2500); }
+      if (name === "lost") say(s, "She lost you...", 2500);
       if (name === "door") emit(s, "creak", Math.max(0.03, 0.3 * (1 - Math.hypot(P.x - e.x, P.y - e.y) / 14)));
-      if (name === "gaveup") say(s, "It gives up and drifts away...", 3000);
-    });
+      if (name === "gaveup") say(s, "She gives up and shuffles away, humming...", 3000);
+    }, s.hum);
     if (got != null) caught(s);
   }
   if (s.mode !== "play") return;
@@ -317,7 +320,7 @@ export function hints(s, P) {
       s.hint[u.t] = 1;
       say(s, u.t === "open"
         ? "A shut door. Use opens it, but it creaks. Shut it behind you to slow it down."
-        : `${u.kind === "wardrobe" ? "A wardrobe" : u.kind === "bed" ? "A bed" : "A table"}. Use to hide — it cannot catch you there.`, 4000);
+        : `${u.kind === "wardrobe" ? "A wardrobe" : u.kind === "bed" ? "A bed" : "A table"}. Use to hide — she cannot find you there.`, 4000);
       return;
     }
   }
@@ -349,3 +352,7 @@ export const timeText = (sec) => {
 
 // The room you're in, by name.
 export const roomName = (s, x = s.P.x, y = s.P.y) => ROOM_KINDS[s.rooms[roomAt(s.N, x, y)]][0];
+
+// Is she listening right now (the humming has stopped)? And how long until
+// that changes — for the page's "she's listening" and its sounds.
+export const listening = (s) => listeningNow(s.hum);

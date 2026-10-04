@@ -362,9 +362,8 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
       {h && h.playing && !h.intro && (
         <div className="hm-pad">
-          {/* Use (doors, hiding — lit when there's something to use), Run, your light */}
+          {/* Use (doors, hiding — lit when there's something to use) and your light */}
           <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
-          <button className={`hm-jump hm-run${h.runOn ? " on" : ""}`} onPointerDown={press((c) => { c.body.runOn = !c.body.runOn; })}>{h.runOn ? (h.tired ? "Tired" : "Run on") : "Run off"}</button>
           <button className={`hm-light${h.light ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}
             title="Your light: off, she has to be right beside you to see you">{h.light ? "Light on" : "Light off"}</button>
         </div>

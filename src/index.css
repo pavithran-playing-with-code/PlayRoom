@@ -1001,13 +1001,12 @@ input::-ms-reveal,input::-ms-clear{display:none}
    underneath it ran straight through the Crouch button. Lift it clear. */
 @media (max-width:600px){ .hm-msg{bottom:calc(env(safe-area-inset-bottom,0px) + 262px)} }
 
-/* Under the right thumb: jump, Use (doors, hiding spots) beside it, the
-   light below Use. */
-.hm-pad{position:fixed;right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
-  z-index:4;display:grid;grid-template-columns:68px 68px;grid-template-rows:68px 68px;gap:8px 10px;
-  grid-template-areas:"use jump" "light ."}
+/* Under the right thumb: Use (doors, hiding spots) and the light, side by
+   side, lifted well off the bottom edge where a phone's thumb can't reach. */
+.hm-pad{position:fixed;right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 96px);
+  z-index:4;display:grid;grid-template-columns:68px 68px;grid-template-rows:68px;gap:8px 12px;
+  grid-template-areas:"use light"}
 .hm .hm-pad button{width:68px;height:68px;border-radius:50%;padding:0;font-size:12px;background:rgba(21,18,26,.75);touch-action:none}
-.hm .hm-pad .hm-jump{grid-area:jump}
 .hm .hm-pad .hm-use{grid-area:use}
 .hm .hm-pad .hm-light{grid-area:light}
 .hm-room{margin-top:6px;color:#ffdca0;font-style:italic;text-shadow:0 0 6px #000}
@@ -1036,7 +1035,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .hm-nanad.near{color:#ff6a7e}
 .hm-hidetext{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);z-index:4;text-align:center;pointer-events:none;
   color:#ebe4d6;font-style:italic;font-size:16px;text-shadow:0 0 8px #000}
-.hm .hm-pad .hm-marble{font-size:12px;line-height:1.25}
 .hm-nana h1{color:#c81e3a;text-shadow:0 0 28px rgba(200,30,58,.45)}
 .hm-nana b{color:#ff6a7e}
 .hm-nana p{color:#a39a8c}
@@ -1105,9 +1103,9 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* Sideways on a phone: a short screen. Buttons in two rows of three so they
    clear the map, words kept left of the buttons, lighter headings. */
 @media (orientation: landscape) and (max-height: 520px){
-  .hm-pad{grid-template-columns:60px 60px;grid-template-rows:60px 60px;gap:6px 8px;
-    right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
-  .hm .hm-pad button{width:60px;height:60px;font-size:11px}
+  .hm-pad{grid-template-columns:64px 64px;grid-template-rows:64px;gap:6px 10px;
+    right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 64px)}
+  .hm .hm-pad button{width:64px;height:64px;font-size:12px}
   .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
     font-size:15px;text-align:left;padding:0}
   .hm-hud{top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(16px + env(safe-area-inset-left,0px));font-size:14px}
@@ -1121,9 +1119,9 @@ input::-ms-reveal,input::-ms-clear{display:none}
 }
 /* The same short-landscape layout for the drawn-sideways game: its viewport
    is still portrait, so the media query above never matches it. */
-.hm.hm-rot .hm-pad{grid-template-columns:60px 60px;grid-template-rows:60px 60px;gap:6px 8px;
-    right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 12px)}
-.hm.hm-rot .hm-pad button{width:60px;height:60px;font-size:11px}
+.hm.hm-rot .hm-pad{grid-template-columns:64px 64px;grid-template-rows:64px;gap:6px 10px;
+    right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 64px)}
+.hm.hm-rot .hm-pad button{width:64px;height:64px;font-size:12px}
 .hm.hm-rot .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
     font-size:15px;text-align:left;padding:0}
 .hm.hm-rot .hm-hud{top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(16px + env(safe-area-inset-left,0px));font-size:14px}

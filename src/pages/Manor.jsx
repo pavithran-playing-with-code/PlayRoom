@@ -258,11 +258,10 @@ export default function Manor() {
       <div className="hm-msg" style={{ opacity: playing && hud.msg ? 1 : 0 }} aria-live="polite">{playing ? hud.msg : ""}</div>
 
       {/* The buttons, on the right: Use (doors, hiding — lit when there is
-          something in front of you), Run, and your light. Running is
-          also the stick pushed out. */}
+          something in front of you) and your light. Running is the stick
+          pushed out past its ring. */}
       <div className={`hm-pad${playing ? "" : " off"}`}>
         <button className={`hm-use${hud?.use ? " on" : ""}`} onPointerDown={press(doAction)}>{hud?.use || "Use"}</button>
-        <button className={`hm-jump hm-run${hud?.runOn ? " on" : ""}`} onPointerDown={press(toggleRun)}>{hud?.runOn ? (hud?.tired ? "Tired" : "Run on") : "Run off"}</button>
         <button className={`hm-light${hud?.light ? " on" : ""}`} onPointerDown={press(toggleLight)}
           title="Your light: off, she has to be right beside you to see you">{hud?.light ? "Light on" : "Light off"}</button>
       </div>
@@ -277,7 +276,7 @@ export default function Manor() {
           <p className="hm-small">
             Move: WASD. Look: drag the mouse or use the left and right arrows. Run: Shift or R. Use (open doors,
             hide in beds, wardrobes and under tables): E. Light on and off: F — in the dark she has to be right beside you to see you.<br />
-            On a phone: left thumb moves, right thumb looks, and the buttons are on the right.
+            On a phone: left thumb moves (push it out past the ring to run), right thumb looks, and the buttons are on the right.
           </p>
         </div>
       )}

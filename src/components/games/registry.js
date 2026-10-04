@@ -24,7 +24,7 @@ import ManorGame from "./ManorGame";
 import TypingRace from "./TypingRace";
 import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
-import BombSquad from "./BombSquad";
+import BombBlast from "./BombBlast";
 import TowerGuard from "./TowerGuard";
 import CarromGame from "./CarromGame";
 
@@ -178,13 +178,13 @@ export const GAMES = [
     Component: KitchenRush,
   },
   {
-    slug: "bomb", name: "Bomb Squad", icon: "💣",
-    blurb: "One of you sees the bomb, the rest have the manual. Talk it through before the timer runs out.",
-    minPlayers: 1, maxPlayers: 8, tag: "Together", col: "var(--coral)",
-    coopMax: 4, defaultDuration: 300, ownsSpectating: true,
-    coopLabel: "one bomb, one defuser, everyone else reads the manual",
-    coopNote: "One of you sees the bomb, the rest of you read the manual — talk! Each new bomb goes to the next player.",
-    Component: BombSquad,
+    slug: "bomb", name: "Bomb Blast", icon: "💣",
+    blurb: "Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.",
+    minPlayers: 1, maxPlayers: 4, tag: "Arcade", col: "var(--coral)",
+    coopMax: 4, defaultDuration: 180, ownsSpectating: true,
+    coopLabel: "all of you against two computer bombers",
+    coopNote: "You're all on one side, against two computer bombers. Your flames won't hurt each other.",
+    Component: BombBlast,
   },
   {
     slug: "tower", name: "Tower Guard", icon: "🏰",

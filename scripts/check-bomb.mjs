@@ -1,200 +1,227 @@
-// scripts/check-bomb.mjs — Bomb Squad's rules, with no browser.
+// scripts/check-bomb.mjs — Bomb Blast's rules, with no browser.
 //
 //   node scripts/check-bomb.mjs
 //
-// Every bomb can be solved from the manual (each keypad has exactly one
-// column); the answers follow the manual line by line; right answers defuse
-// it and score, wrong ones strike, three strikes or the clock set it off;
-// the next bomb comes either way and the next player defuses it; only the
-// defuser touches the bomb, and only the defuser is told what's on it.
+// The arena is a grid of pillars with bricks between, every start has room
+// to move; bombers walk the lanes and turn corners, can step off their own
+// bomb but not back on; a bomb burns a + that stops at pillars and the first
+// brick, breaks it (power-ups under some), sets off other bombs, and knocks
+// out whoever's in it — the bomber too, but not a partner; last side standing
+// wins the round, then a fresh arena; the arena closes in late on; solo is
+// against three computer bombers once a level is picked, a friends match is
+// only the people in the room; and the computer bombers play a decent game.
 import { pathToFileURL, fileURLToPath } from "node:url";
 import path from "node:path";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const b = await import(pathToFileURL(path.join(here, "..", "src", "components", "together", "bombCore.mjs")).href);
+const B = await import(pathToFileURL(path.join(here, "..", "src", "components", "together", "bombCore.mjs")).href);
 
 let fails = 0;
 const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`); };
 const DT = 0.1;
+const { W, H, idx, FLOOR, SOLID, BRICK } = B;
+const solo = (seed = 1) => B.createSide(seed, { players: [1], sides: [{ key: "p1", members: [1] }], durMs: 300000, mode: "free" });
+const duel = (seed = 1) => B.createSide(seed, { players: [1, 2], sides: [{ key: "p1", members: [1] }, { key: "p2", members: [2] }], durMs: 300000, mode: "free" });
+const teams = (seed = 1) => B.createSide(seed, { players: [1, 2, 3, 4], sides: [{ key: "t1", members: [1, 3] }, { key: "t2", members: [2, 4] }], durMs: 300000, mode: "teams" });
+const coop = (seed = 1) => B.createSide(seed, { players: [1, 2], sides: [{ key: "all", members: [1, 2] }], durMs: 300000, mode: "coop" });
+const body = (s, id) => s.bodies.find((b) => b.id === id);
+// Clear the arena to floor (pillars kept), for a rule to be tried on its own.
+function empty(s) { for (let k = 0; k < W * H; k++) if (s.g[k] === BRICK) s.g[k] = FLOOR; s.hidden = new Map(); s.pow = new Map(); }
+const put = (b, x, y) => { b.x = x + 0.5; b.y = y + 0.5; };
+const run = (s, secs) => { for (let t = 0; t < secs; t += DT) B.step(s, DT); };
 
-// ── the bombs ────────────────────────────────────────────────────────────────
+// ── the arena ────────────────────────────────────────────────────────────────
 {
-  let keypadsOk = true, wiresOk = true, firstHasWires = true, kinds = new Set(), same = true, counts = new Set();
-  for (let seed = 1; seed <= 300; seed++) {
-    for (let i = 0; i < 9; i++) {
-      const bomb = b.makeBomb(seed, i);
-      if (JSON.stringify(bomb) !== JSON.stringify(b.makeBomb(seed, i))) same = false;
-      counts.add(bomb.modules.length);
-      if (i === 0 && !bomb.modules.some((m) => m.kind === "wires")) firstHasWires = false;
-      for (const m of bomb.modules) {
-        kinds.add(m.kind);
-        if (m.kind === "keypad" && (!m.symbols || !b.keypadAnswer(m.symbols))) keypadsOk = false;
-        if (m.kind === "wires" && (m.colours.length < 3 || m.colours.length > 6)) wiresOk = false;
+  const s = duel(5);
+  let pillars = true;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const edge = x === 0 || y === 0 || x === W - 1 || y === H - 1, post = x % 2 === 0 && y % 2 === 0;
+    if ((edge || post) !== (s.g[idx(x, y)] === SOLID)) pillars = false;
+  }
+  check("walls round the edge, a pillar on every other crossing", pillars);
+  const bricks = [...s.g].filter((c) => c === BRICK).length;
+  check("…bricks fill most of the rest", bricks > 40, `${bricks} bricks`);
+  let roomy = true;
+  for (let seed = 1; seed <= 50; seed++) {
+    const a = B.buildArena(seed, 1, B.SPAWNS);
+    for (const [x, y] of B.SPAWNS) {
+      const open = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => a.g[idx(x + dx, y + dy)] === FLOOR).length;
+      if (a.g[idx(x, y)] !== FLOOR || open < 2) roomy = false;
+    }
+  }
+  check("every start has room to move and hide", roomy);
+  check("the same seed and round, the same arena; a new round, a new one", B.buildArena(9, 2, B.SPAWNS).g.join() === B.buildArena(9, 2, B.SPAWNS).g.join() && B.buildArena(9, 2, B.SPAWNS).g.join() !== B.buildArena(9, 3, B.SPAWNS).g.join());
+  check("some bricks hide power-ups", B.buildArena(3, 1, B.SPAWNS).hidden.size > 5);
+}
+
+// ── walking ──────────────────────────────────────────────────────────────────
+{
+  const s = duel(); empty(s);
+  const b = body(s, 1);
+  const open = (tx, ty) => B.inside(tx, ty) && s.g[idx(tx, ty)] === FLOOR;
+  put(b, 1, 1);
+  for (let i = 0; i < 20; i++) B.moveBody(open, b, 1, 0, 0.1);
+  check("walks along a lane", Math.abs(b.x - 3.5) < 1e-6 && b.y === 1.5);
+  put(b, 1, 1);
+  for (let i = 0; i < 20; i++) B.moveBody(open, b, 0, 1, 0.1);
+  check("down the edge lane too", Math.abs(b.y - 3.5) < 1e-6);
+  put(b, 2.95, 1); b.x = 2.9;                   // a little before the crossing at x=3
+  for (let i = 0; i < 10; i++) B.moveBody(open, b, 0, 1, 0.1);
+  check("turns a corner: slides into the lane, then goes down it", Math.abs(b.x - 3.5) < 1e-6 && b.y > 1.6, `${b.x.toFixed(2)},${b.y.toFixed(2)}`);
+  put(b, 1, 2);
+  B.moveBody(open, b, 1, 0, 0.6);
+  check("can't walk into a pillar (2,2)", Math.abs(b.x - 1.5) < 1e-6, `${b.x.toFixed(2)}`);
+  s.g[idx(2, 1)] = BRICK;
+  put(b, 1, 1);
+  for (let i = 0; i < 10; i++) B.moveBody(open, b, 1, 0, 0.1);
+  check("nor through a brick", Math.abs(b.x - 1.5) < 1e-6);
+}
+
+// ── bombs ────────────────────────────────────────────────────────────────────
+{
+  const s = duel(); empty(s);
+  const a = body(s, 1), o = body(s, 2);
+  put(a, 1, 1); put(o, 9, 11);
+  check("drop a bomb where you stand", B.act(s, 1, { a: "bomb" }).ok && s.bombs.length === 1);
+  check("…only one at a time to start with", !B.act(s, 1, { a: "bomb" }).ok);
+  // step off it, then try to walk back on
+  B.report(s, 1, { x: 1.5, y: 2.2 }, 1000); B.step(s, 0.05);
+  B.report(s, 1, { x: 1.5, y: 2.5 }, 1200); B.step(s, 0.05);
+  const snap = B.report(s, 1, { x: 1.5, y: 1.5 }, 1500);
+  check("you can step off your bomb, but not back on", !!snap && a.y > 2);
+  run(s, B.FUSE);
+  check("it goes off: a + of fire", s.bombs.length === 0 && s.fire.size > 0);
+  check("…and you, two tiles down in the flames, are out", !a.alive && s.lastWin === 1, `${a.alive}`);
+}
+{
+  const s = duel(); empty(s);
+  const a = body(s, 1), o = body(s, 2);
+  // a blast of three from (4,5): up and down are pillars, (4,4) and (4,6);
+  // left runs open to the wall; right meets a brick at (5,5)
+  put(a, 4, 5); put(o, 9, 11);
+  a.range = 3;
+  s.g[idx(5, 5)] = BRICK;
+  s.hidden.set(idx(5, 5), "fire");
+  B.act(s, 1, { a: "bomb" });
+  put(a, 1, 11);
+  run(s, B.FUSE + 0.05);
+  const burnt = [...s.fire.keys()];
+  check("the flames stop at a pillar, and run their full length where it's open", !burnt.includes(idx(4, 4)) && !burnt.includes(idx(4, 6)) && burnt.includes(idx(3, 5)) && burnt.includes(idx(1, 5)));
+  check("…break the first brick, and stop there", s.g[idx(5, 5)] === FLOOR && burnt.includes(idx(5, 5)) && !burnt.includes(idx(6, 5)));
+  check("…showing the power-up under it", s.pow.get(idx(5, 5)) === "fire");
+  run(s, 1);
+  const before = a.range;
+  put(a, 5, 5); B.step(s, DT);
+  check("walk over it and it's yours: a longer blast", a.range === before + 1 && !s.pow.has(idx(5, 5)));
+  // a chain
+  const c = duel(); empty(c);
+  const p1 = body(c, 1), p2 = body(c, 2);
+  put(p1, 1, 1); put(p2, 9, 11);
+  B.act(c, 1, { a: "bomb" });
+  run(c, 0.5);
+  put(p1, 9, 1);
+  put(p2, 2, 1); B.act(c, 2, { a: "bomb" });
+  put(p2, 9, 11);
+  run(c, B.FUSE - 0.5 + 0.05);
+  check("one bomb sets off another in its flames", c.bombs.length === 0 && c.fire.has(idx(3, 1)));
+}
+{
+  // partners
+  const s = teams(); empty(s);
+  const [a, b, c, d] = [1, 2, 3, 4].map((id) => body(s, id));
+  put(a, 1, 1); put(c, 2, 1); put(b, 9, 11); put(d, 9, 1);
+  B.act(s, 1, { a: "bomb" });
+  put(a, 1, 5);                                 // out of reach of your own
+  run(s, B.FUSE + 0.05);
+  check("teams: a partner's flames don't hurt you", c.alive && a.alive);
+  put(c, 3, 3);
+  B.act(s, 3, { a: "bomb" });
+  put(c, 3, 5);
+  put(b, 3, 2);
+  run(s, B.FUSE + 0.05);
+  check("…but they do the other side, for 25 points", !b.alive && s.scores[0] === B.KO_PTS);
+}
+
+// ── rounds ───────────────────────────────────────────────────────────────────
+{
+  const s = duel(); empty(s);
+  const a = body(s, 1), o = body(s, 2);
+  put(a, 1, 1); put(o, 2, 1);
+  B.act(s, 1, { a: "bomb" });
+  put(a, 1, 5);
+  run(s, B.FUSE + 0.05);
+  check("last one standing wins the round: 100 + 25", s.phase === "pause" && s.wins[0] === 1 && s.scores[0] === B.WIN_PTS + B.KO_PTS && s.scores[1] === 0);
+  run(s, B.PAUSE_S + 0.1);
+  check("…then a fresh arena, everyone back in", s.round === 2 && s.phase === "play" && a.alive && o.alive && [...s.g].some((c) => c === BRICK));
+  // both caught: nobody wins it
+  empty(s);
+  put(a, 1, 1); put(o, 2.5 - 0.5, 1); o.x = 2.5;
+  B.act(s, 1, { a: "bomb" });
+  run(s, B.FUSE + 0.05);
+  check("both caught in it: a draw, nobody scores", s.phase === "pause" && s.lastWin === null && s.wins.join() === "1,0");
+  // the arena closes in on a camper
+  const t = duel(); empty(t);
+  put(body(t, 1), 1, 1); put(body(t, 2), 5, 6);
+  run(t, B.SHRINK_AT + 2);
+  check("late on the arena closes in from the edge, and catches whoever's there", !body(t, 1).alive && body(t, 2).alive && t.wins[1] === 1, `${body(t, 1).alive} ${body(t, 2).alive} ${t.wins}`);
+}
+
+// ── who plays ────────────────────────────────────────────────────────────────
+{
+  const d = duel();
+  check("a friends match is only the people in it — no computer", d.bodies.length === 2 && !d.bodies.some((b) => b.cpu) && d.phase === "play");
+  const s = solo();
+  check("solo: you and three computer bombers", s.bodies.filter((b) => b.cpu).length === 3 && s.bodies.length === 4);
+  check("…nothing moves until you pick a level", s.phase === "level" && (() => { run(s, 3); return s.bombs.length === 0; })());
+  check("…which only you can pick", !B.act(s, -1, { a: "level", lvl: "hard" }).ok && B.act(s, 1, { a: "level", lvl: "hard" }).ok && s.phase === "play");
+  const c = coop();
+  check("together: both of you on one side against two computer bombers", c.bodies.filter((b) => b.cpu).length === 2 && body(c, 1).side === body(c, 2).side && c.phase === "play");
+  const t = teams();
+  check("teams: two sides of two, no computer", t.bodies.length === 4 && !t.bodies.some((b) => b.cpu) && body(t, 1).side === body(t, 3).side && body(t, 1).side !== body(t, 2).side);
+  const gone = duel();
+  B.removePlayer(gone, 2);
+  check("a friends match with one player left is over", B.done(gone) || (() => { B.step(gone, DT); return B.done(gone); })());
+  const v = JSON.stringify(B.view(duel()));
+  check("what travels each tick is small", v.length < 900, `${v.length} bytes`);
+}
+
+// ── the computer ─────────────────────────────────────────────────────────────
+function botMatch(level, seeds, secs = 60) {
+  let selfKills = 0, kills = 0, rounds = 0, humanOut = 0;
+  for (let seed = 1; seed <= seeds; seed++) {
+    const s = solo(seed);
+    B.act(s, 1, { a: "level", lvl: level });
+    // you stand still in your corner; the bots get on with it
+    for (let t = 0; t < secs; t += DT) {
+      B.step(s, DT);
+      for (const e of s.ev) {
+        if (e.type === "ko") { const victim = s.bodies.find((b) => b.id === e.id); const by = s.bodies.find((b) => b.id === e.by); if (victim?.cpu && e.by === victim.id) selfKills++; if (by?.cpu && victim && !victim.cpu) { kills++; humanOut++; } }
+        if (e.type === "won") rounds++;
       }
-      if (!/^[A-Z0-9]{5}[0-9]$/.test(bomb.serial)) wiresOk = false;
+      s.ev = [];
     }
   }
-  check("the same seed builds the same bombs", same);
-  check("every keypad has exactly one column in the manual", keypadsOk);
-  check("wires 3 to 6, a serial ending in a digit", wiresOk);
-  check("the first bomb always has wires", firstHasWires);
-  check("all four kinds of module turn up, two to four a bomb", kinds.size === 4 && counts.has(2) && counts.has(4), [...counts].join(","));
-  const t0 = b.makeBomb(1, 0).limit, t6 = b.makeBomb(1, 6).limit;
-  check("later bombs give less time per module", t6 / b.makeBomb(1, 6).modules.length < t0 / b.makeBomb(1, 0).modules.length);
+  return { selfKills, kills, rounds, humanOut };
 }
-
-// ── the manual, line by line ─────────────────────────────────────────────────
 {
-  const odd = { serial: "AB12C3" }, even = { serial: "AB12C4" };
-  const W = (c, s = even) => b.wireAnswer(c, s);
-  const cases = [
-    [["blue", "white", "yellow"], even, 1, "3: no red → second"],
-    [["red", "blue", "white"], even, 2, "3: last white → last"],
-    [["blue", "red", "blue"], even, 2, "3: two blues → last blue"],
-    [["blue", "blue", "red"], even, 1, "3: two blues, last red → last blue"],
-    [["red", "yellow", "black"], even, 2, "3: otherwise → last"],
-    [["red", "red", "blue", "white"], odd, 1, "4: two reds, odd → last red"],
-    [["blue", "white", "black", "yellow"], even, 0, "4: last yellow, no red → first"],
-    [["red", "blue", "black", "white"], even, 0, "4: one blue → first"],
-    [["red", "yellow", "black", "yellow"], even, 3, "4: two yellows → last"],
-    [["red", "white", "black", "white"], even, 1, "4: otherwise → second"],
-    [["red", "blue", "white", "yellow", "black"], odd, 3, "5: last black, odd → fourth"],
-    [["red", "yellow", "yellow", "white", "black"], even, 0, "5: one red, two yellows → first"],
-    [["blue", "blue", "white", "white", "yellow"], even, 1, "5: no black → second"],
-    [["blue", "black", "white", "white", "red"], even, 0, "5: otherwise → first"],
-    [["red", "blue", "white", "black", "blue", "red"], odd, 2, "6: no yellow, odd → third"],
-    [["red", "yellow", "white", "white", "blue", "red"], even, 3, "6: one yellow, two whites → fourth"],
-    [["blue", "yellow", "yellow", "white", "black", "blue"], even, 5, "6: no red → last"],
-    [["red", "yellow", "yellow", "white", "black", "blue"], even, 3, "6: otherwise → fourth"],
-  ];
-  const bad = cases.filter(([c, s, want]) => W(c, s) !== want).map((x) => x[3]);
-  check("wires: every line of the manual", bad.length === 0, bad.join("; "));
-  const B = (colour, label, batteries, serial = "BC12D4") => b.buttonAnswer({ colour, label }, { batteries, serial });
-  const bcases = [
-    [B("blue", "ABORT", 3), "hold"], [B("red", "DETONATE", 2), "press"], [B("white", "PRESS", 0, "AB12C4"), "hold"],
-    [B("white", "PRESS", 3), "press"], [B("yellow", "PRESS", 1), "hold"], [B("red", "HOLD", 0), "press"], [B("blue", "PRESS", 0), "hold"],
-  ];
-  check("the button: every line of the manual", bcases.every(([got, want]) => got === want), JSON.stringify(bcases.map((x) => x[0])));
-  check("the keypad: in the order down its column", b.keypadAnswer(["⚓", "⭐", "🎈", "🌙"]).join("") === "⭐🌙⚓🎈");
-  check("Simon: the table, by vowel and strikes", b.simonWant({ serial: "AB1234" }, 0, "red") === "blue" && b.simonWant({ serial: "BC1234" }, 1, "green") === "yellow" && b.simonWant({ serial: "BC1234" }, 2, "red") === "yellow");
-}
-
-// ── playing a bomb ───────────────────────────────────────────────────────────
-// The right move for module i of the side's bomb, as a player reading the manual would make it.
-function rightMoves(s, i) {
-  const bomb = s.bomb, m = bomb.modules[i];
-  if (m.kind === "wires") return [{ a: "cut", m: i, i: b.wireAnswer(m.colours, bomb) }];
-  if (m.kind === "keypad") return b.keypadAnswer(m.symbols).map((sym) => ({ a: "key", m: i, i: m.symbols.indexOf(sym) }));
-  if (m.kind === "simon") {
-    const out = [];
-    for (let st = 1; st <= m.seq.length; st++) for (let k = 0; k < st; k++) out.push({ a: "simon", m: i, c: b.simonWant(bomb, bomb.strikes, m.seq[k]) });
-    return out;
-  }
-  return [{ a: "button", m: i }];
-}
-function pressButton(s, pid, i) {
-  const bomb = s.bomb, m = bomb.modules[i];
-  b.act(s, pid, { a: "bdown", m: i });
-  if (b.buttonAnswer(m, bomb) === "press") { b.step(s, 0.2); return b.act(s, pid, { a: "bup", m: i, shown: b.fmt(bomb.left) }); }
-  const digit = b.STRIP_DIGIT[m.strip];
-  b.step(s, b.TAP_S + 0.05);
-  for (let g = 0; g < 400 && !b.fmt(bomb.left).includes(digit); g++) b.step(s, 0.1);
-  return b.act(s, pid, { a: "bup", m: i, shown: b.fmt(bomb.left) });
-}
-function solveAll(s, pid) {
-  const bomb = s.bomb;
-  bomb.modules.forEach((m, i) => {
-    if (m.done) return;
-    for (const mv of rightMoves(s, i)) {
-      if (mv.a === "button") pressButton(s, pid, i);
-      else b.act(s, pid, mv);
-      b.step(s, 0.5);
+  const hard = botMatch("hard", 6), easy = botMatch("easy", 6);
+  check("computer bombers find you and get you", hard.humanOut >= 4, `hard got you ${hard.humanOut}× in 6 minutes`);
+  check("Hard rarely blows itself up", hard.selfKills <= 3, `${hard.selfKills} self-knockouts`);
+  // how long someone standing still lasts against each level
+  const lasts = (lvl) => {
+    let tot = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const g = solo(seed);
+      B.act(g, 1, { a: "level", lvl });
+      let t = 0;
+      for (; t < 70 && body(g, 1).alive; t += DT) B.step(g, DT);
+      tot += t;
     }
-  });
-}
-function untilBomb(s) { for (let g = 0; g < 200 && !s.bomb; g++) b.step(s, DT); }
-
-{
-  const s = b.createSide(42, { players: [1, 2, 3], durMs: 300000 });
-  untilBomb(s);
-  check("a bomb arrives, the first player defusing", !!s.bomb && s.defuser === 1);
-  const v = JSON.stringify(b.view(s));
-  check("what the side sees has no serial, wires or symbols", !v.includes(s.bomb.serial) && !/colours|symbols|serial/.test(v));
-  const sec = b.secret(s);
-  check("the bomb itself goes to the defuser only", sec.to === 1 && sec.data.serial === s.bomb.serial && sec.data.m.length === s.bomb.modules.length);
-  check("someone else can't touch it", b.act(s, 2, { a: "cut", m: 0, i: 0 }).why === "notyou");
-  solveAll(s, 1);
-  check("solving every module from the manual defuses it", s.defused === 1 && !s.bomb && s.exploded === 0, `${s.score} points`);
-  check("…and scores", s.score > 100);
-  untilBomb(s);
-  check("the next bomb comes, and the next player defuses it", s.bomb && s.bomb.index === 1 && s.defuser === 2);
-  // three wrong moves
-  const before = s.score;
-  const wires = s.bomb.modules.findIndex((m) => m.kind === "wires");
-  const mi = wires >= 0 ? wires : 0;
-  let strikes = 0;
-  for (let k = 0; k < 6 && s.bomb && s.bomb.index === 1; k++) {
-    const m = s.bomb.modules[mi];
-    const r = m.kind === "wires"
-      ? b.act(s, 2, { a: "cut", m: mi, i: [0, 1, 2, 3, 4, 5].find((x) => x < m.colours.length && x !== b.wireAnswer(m.colours, s.bomb) && !m.cut.includes(x)) })
-      : m.kind === "keypad" ? b.act(s, 2, { a: "key", m: mi, i: m.symbols.indexOf(b.keypadAnswer(m.symbols)[3]) })
-      : b.act(s, 2, { a: "simon", m: mi, c: ["red", "blue", "green", "yellow"].find((c) => c !== b.simonWant(s.bomb, s.bomb.strikes, m.seq[0])) });
-    if (!r.ok) strikes++;
-  }
-  check("three mistakes set it off", s.exploded === 1 && !s.bomb && strikes === 3);
-  check("…and cost nothing already scored", s.score === before);
-  untilBomb(s);
-  check("then the next bomb, the next player", s.bomb && s.defuser === 3);
-  for (let g = 0; g < 4000 && s.bomb && s.bomb.index === 2; g++) b.step(s, DT);
-  check("the clock running out sets it off too", s.exploded === 2 && s.last.why === "time");
-  // a hold with the wrong timing, and a forged timer
-  const s2 = b.createSide(7, { players: [1], durMs: 300000 });
-  let found = null;
-  for (let tries = 0; tries < 40 && !found; tries++) {
-    untilBomb(s2);
-    const i = s2.bomb.modules.findIndex((m) => m.kind === "button" && b.buttonAnswer(m, s2.bomb) === "hold");
-    if (i >= 0) found = i; else { s2.bomb.left = 0; b.step(s2, DT); }
-  }
-  check("there is a hold-the-button bomb to try", found !== null);
-  if (found !== null) {
-    const m = s2.bomb.modules[found], digit = b.STRIP_DIGIT[m.strip];
-    b.act(s2, 1, { a: "bdown", m: found });
-    b.step(s2, 0.1);
-    const tapped = b.act(s2, 1, { a: "bup", m: found, shown: b.fmt(s2.bomb.left) });
-    check("a button to hold, only tapped: a strike", !tapped.ok && tapped.why === "tapped");
-    b.act(s2, 1, { a: "bdown", m: found });
-    b.step(s2, 1);
-    for (let g = 0; g < 400 && b.fmt(s2.bomb.left).includes(digit); g++) b.step(s2, 0.1);
-    const fake = `9:${digit}${digit}`;
-    const forged = b.act(s2, 1, { a: "bup", m: found, shown: fake });
-    check("let go on the wrong digit, claiming a far-off timer: still a strike", !forged.ok && forged.why === "timing");
-  }
-}
-
-// ── a whole match ────────────────────────────────────────────────────────────
-{
-  let defused = 0, goals = 0;
-  for (let seed = 1; seed <= 20; seed++) {
-    const s = b.createSide(seed, { players: [1], durMs: 180000 });
-    // a careful solo player: a few seconds to read each module, then right
-    for (let t = 0; t < 180; t += DT) {
-      b.step(s, DT);
-      if (s.bomb && s.t % 6 < DT) {
-        const i = s.bomb.modules.findIndex((m) => !m.done);
-        if (i >= 0) {
-          for (const mv of rightMoves(s, i)) { if (!s.bomb) break; if (mv.a === "button") pressButton(s, 1, i); else b.act(s, 1, mv); }
-        }
-      }
-    }
-    defused += s.defused;
-    if (b.goal(s)) goals++;
-  }
-  check("a careful solo player defuses bombs and reaches the goal", goals === 20, `${(defused / 20).toFixed(1)} bombs in 3 minutes`);
-  const s = b.createSide(5, { players: [1, 2], durMs: 120000 });
-  untilBomb(s);
-  b.removePlayer(s, 1);
-  check("the defuser leaves: the bomb is handed on", s.defuser === 2);
-  check("the goal grows with the match", b.goalFor(120) === 1 && b.goalFor(300) === 2);
+    return tot / 12;
+  };
+  const le = lasts("easy"), lh = lasts("hard");
+  check("Easy takes clearly longer to get you than Hard", le > lh * 1.15, `easy ${le.toFixed(1)}s · hard ${lh.toFixed(1)}s`);
+  check("rounds keep coming", hard.rounds >= 6);
 }
 
 console.log(fails ? `\n${fails} failed` : "\nall passed");

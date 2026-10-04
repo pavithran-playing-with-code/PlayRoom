@@ -255,7 +255,7 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 210),
   ('piano', 'Piano Tiles', 'Tap the black tiles, never the white. Every tile is the next note of the song.', 1, 8, CONVERT(UNHEX('F09F8EB9') USING utf8mb4), 1, 220),
   ('kitchen', 'Kitchen Rush', 'Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.', 1, 8, CONVERT(UNHEX('F09F8DB3') USING utf8mb4), 1, 230),
-  ('bomb', 'Bomb Squad', 'One of you sees the bomb, the rest have the manual. Talk it through before the timer runs out.', 1, 8, CONVERT(UNHEX('F09F92A3') USING utf8mb4), 1, 240),
+  ('bomb', 'Bomb Blast', 'Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.', 1, 4, CONVERT(UNHEX('F09F92A3') USING utf8mb4), 1, 240),
   ('tower', 'Tower Guard', 'Build towers along the road and keep the monsters off your castle. Together, defend one castle.', 1, 8, CONVERT(UNHEX('F09F8FB0') USING utf8mb4), 1, 250),
   ('carrom', 'Carrom', 'Flick the striker, pocket your colour, cover the queen. Against the computer, 1 v 1, or 2 v 2.', 1, 4, CONVERT(UNHEX('E29AABE29AAA') USING utf8mb4), 1, 260),
   ('manor', 'Hollow Manor', 'Take your relics and get out of the house before it finds you.', 1, 8, CONVERT(UNHEX('F09F8F9AEFB88F') USING utf8mb4), 1, 270)

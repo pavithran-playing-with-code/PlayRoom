@@ -1,9 +1,9 @@
 // config/togetherWorld.js — the games you can play TOGETHER, run by the server.
 //
-// Kitchen Rush, Bomb Squad and Tower Guard are played in one shared world per
-// side: a kitchen two friends cook in, a bomb one defuses while the others
-// read the manual, a castle everyone defends. A world shared by several
-// phones can't live on any one of them, so — like Hollow Manor
+// Kitchen Rush, Tower Guard, Bomb Blast and Carrom are played in worlds the
+// server keeps: a kitchen two friends cook in, a castle everyone defends, an
+// arena or a board everyone is in at once. A world shared by several phones
+// can't live on any one of them, so — like Hollow Manor
 // (config/manorWorld.js) — the server keeps it in memory and runs it.
 //
 // Sides (rooms.mode):

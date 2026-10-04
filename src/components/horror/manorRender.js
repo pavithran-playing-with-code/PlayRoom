@@ -64,10 +64,10 @@ export function drawGhost(ctx, x, y, s, angry, t = 0) {
   ctx.fillStyle = aura;
   ctx.fillRect(-s, -s, s * 2, s * 1.8);
 
-  // the nightgown: faded rose, a little ragged at the hem, tiny flowers
+  // the nightgown: faded lavender, a little ragged at the hem, tiny flowers
   const gg = ctx.createLinearGradient(0, -s * 0.25, 0, s * 0.52);
-  gg.addColorStop(0, "#b8939a");
-  gg.addColorStop(1, "#6f555c");
+  gg.addColorStop(0, "#d4c4e2");
+  gg.addColorStop(1, "#7a688f");
   ctx.fillStyle = gg;
   ctx.beginPath();
   ctx.moveTo(-s * 0.12, -s * 0.22);
@@ -103,8 +103,8 @@ export function drawGhost(ctx, x, y, s, angry, t = 0) {
     }
   }
 
-  // the shawl: knitted, grey-green, fringed
-  ctx.fillStyle = "#6f7766";
+  // the shawl: knitted, plum, fringed
+  ctx.fillStyle = "#5d4872";
   ctx.beginPath();
   ctx.moveTo(-s * 0.17, -s * 0.24);
   ctx.quadraticCurveTo(0, -s * 0.31, s * 0.17, -s * 0.24);
@@ -114,8 +114,19 @@ export function drawGhost(ctx, x, y, s, angry, t = 0) {
   ctx.fill();
   ctx.strokeStyle = "rgba(40,45,35,.45)"; ctx.lineWidth = Math.max(0.8, s * 0.004);
   for (let k = -3; k <= 3; k++) { ctx.beginPath(); ctx.moveTo(k * s * 0.025, -s * 0.27); ctx.lineTo(k * s * 0.012, -s * 0.03); ctx.stroke(); }
-  ctx.strokeStyle = "#6f7766";
+  ctx.strokeStyle = "#5d4872";
   for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(k * s * 0.02, -s * 0.02); ctx.lineTo(k * s * 0.022, s * 0.03); ctx.stroke(); }
+  // a knitting needle in one hand; in the other, her lantern, swinging, and its warm light
+  ctx.strokeStyle = "#b9b4c0"; ctx.lineWidth = Math.max(1, s * 0.008);
+  ctx.beginPath(); ctx.moveTo(s * 0.17, -s * 0.14); ctx.lineTo(s * 0.27, -s * 0.36); ctx.stroke();
+  const swing = Math.sin(t * 2.2) * 0.12, lx = -s * 0.2 + Math.sin(swing) * s * 0.04, ly = s * 0.02;
+  ctx.strokeStyle = "#3a2a18"; ctx.lineWidth = Math.max(1, s * 0.006);
+  ctx.beginPath(); ctx.moveTo(-s * 0.19, -s * 0.06); ctx.lineTo(lx, ly - s * 0.05); ctx.stroke();
+  ctx.fillStyle = "#3a2a18"; ctx.fillRect(lx - s * 0.035, ly - s * 0.05, s * 0.07, s * 0.09);
+  ctx.fillStyle = `rgba(255,179,71,${0.85 + 0.15 * Math.sin(t * 11)})`; ctx.fillRect(lx - s * 0.025, ly - s * 0.035, s * 0.05, s * 0.06);
+  const lg = ctx.createRadialGradient(lx, ly, 1, lx, ly, s * 0.7);
+  lg.addColorStop(0, angry ? "rgba(255,90,60,.55)" : "rgba(255,170,70,.55)"); lg.addColorStop(1, "rgba(255,150,40,0)");
+  ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = lg; ctx.fillRect(lx - s * 0.8, ly - s * 0.8, s * 1.6, s * 1.6); ctx.globalCompositeOperation = "source-over";
 
   // the head, bowed forward, ticking now and then
   ctx.save();
@@ -165,6 +176,46 @@ export function drawGhost(ctx, x, y, s, angry, t = 0) {
   ctx.restore();
   ctx.restore();
   ghostEyes(ctx, x + sway, y + s * 0.04, s, angry, t, tick + (angry ? 0.05 : 0.12));
+}
+
+// Nana's face, filling the screen when she has you: her bun and grey hair,
+// lined skin, the spectacles, the eyes red behind them, the mouth wide open.
+export function nanaFace(ctx, cx, cy, s, t, W, H) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  const bg = ctx.createRadialGradient(0, 0, s * 0.1, 0, 0, s * 1.1);
+  bg.addColorStop(0, "#401018"); bg.addColorStop(1, "#000");
+  ctx.fillStyle = bg; ctx.fillRect(-W, -H, W * 2, H * 2);
+  ctx.fillStyle = "#bcb7c2";
+  ctx.beginPath(); ctx.ellipse(0, -s * 0.1, s * 0.42, s * 0.5, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, -s * 0.6, s * 0.15, 0, TAU); ctx.fill();
+  const fg = ctx.createRadialGradient(0, 0, s * 0.05, 0, 0, s * 0.45);
+  fg.addColorStop(0, "#ece4ea"); fg.addColorStop(1, "#a79dac");
+  ctx.fillStyle = fg; ctx.beginPath(); ctx.ellipse(0, 0, s * 0.3, s * 0.4, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = "rgba(60,45,70,.45)"; ctx.lineWidth = s * 0.008;
+  for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(0, -s * 0.2 - i * s * 0.03, s * 0.18, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke(); }
+  for (const k of [-1, 1]) { ctx.beginPath(); ctx.moveTo(k * s * 0.2, s * 0.05); ctx.quadraticCurveTo(k * s * 0.17, s * 0.18, k * s * 0.1, s * 0.28); ctx.stroke(); }
+  ctx.fillStyle = "#fff";
+  for (const k of [-1, 1]) { ctx.beginPath(); ctx.ellipse(k * s * 0.13, -s * 0.08, s * 0.08, s * 0.06, 0, 0, TAU); ctx.fill(); }
+  ctx.shadowColor = "#f02040"; ctx.shadowBlur = s * 0.08; ctx.fillStyle = "#ff2a44";
+  for (const k of [-1, 1]) { ctx.beginPath(); ctx.arc(k * s * 0.13, -s * 0.08, s * 0.03, 0, TAU); ctx.fill(); }
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#2a2430"; ctx.lineWidth = s * 0.02;
+  for (const k of [-1, 1]) { ctx.beginPath(); ctx.arc(k * s * 0.13, -s * 0.08, s * 0.095, 0, TAU); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(-s * 0.035, -s * 0.08); ctx.lineTo(s * 0.035, -s * 0.08); ctx.stroke();
+  const mo = 1 + 0.18 * Math.sin(t * 35);
+  ctx.fillStyle = "#050203"; ctx.beginPath(); ctx.ellipse(0, s * 0.2, s * 0.13, s * 0.13 * mo, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = "#e8e0cc";
+  for (let i = -2; i <= 2; i++) ctx.fillRect(i * s * 0.04 - s * 0.015, s * 0.2 - s * 0.13 * mo, s * 0.03, s * 0.04);
+  ctx.restore();
+}
+// Film grain over everything.
+function grain(ctx, W, H, n, a) {
+  for (let i = 0; i < n; i++) {
+    const v = (Math.random() * 255) | 0;
+    ctx.fillStyle = `rgba(${v},${v},${v},${a})`;
+    ctx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 3, 1 + Math.random() * 2);
+  }
 }
 
 // The light on her spectacles: the first thing you see of her in the dark,
@@ -384,7 +435,7 @@ function scene(ctx, s, W, H, t) {
     const tv = h.my >= 0 && h.my < s.N && h.mx >= 0 && h.mx < s.N ? s.g[h.my][h.mx] : 1;
     const plain = !isEx && !isEn && tv !== DOOR;
     // the front door: dark and locked, or warm light round it once unlocked
-    if (isEx) { col = exitOpen(s) ? [240, 196, 120] : [104, 48, 38]; b += 0.35 * Math.max(0, 1 - pd / 14); }
+    if (isEx) { col = exitOpen(s) ? [30, 100, 52] : [70, 46, 34]; b = Math.max(b, 0.35) + 0.25 * Math.max(0, 1 - pd / 14); }
     else if (isEn) col = [220, 190, 120];
     else if (tv === DOOR) col = [130, 84, 44];
     else if (((h.mx * 7 + h.my * 13) & 3) === 0) col = col.map((v) => v * 0.88);
@@ -395,7 +446,26 @@ function scene(ctx, s, W, H, t) {
     const lh = H / pd, ds = hz - lh * (1 - eye);
     ctx.fillStyle = `rgb(${(col[0] * b) | 0},${(col[1] * b) | 0},${(col[2] * b) | 0})`;
     ctx.fillRect(i * cw, ds, cw + 1, lh);
-    if ((tv === DOOR || isEx) && !isEn) {
+    if (isEx) {
+      // the front door: planks, and down the middle a light for every lock — red, then green
+      const open = exitOpen(s), kn = Math.min(5, s.keysNeed ?? s.need ?? 3), kg = s.keysGot ?? s.count ?? 0;
+      ctx.fillStyle = "rgba(0,0,0,.35)";
+      for (let k = 0; k < 5; k++) ctx.fillRect(i * cw, ds + lh * (0.08 + k * 0.19), cw + 1, lh * 0.03);
+      if (h.u < 0.07 || h.u > 0.93) { ctx.fillStyle = "rgba(0,0,0,.45)"; ctx.fillRect(i * cw, ds, cw + 1, lh); }
+      if (h.u > 0.4 && h.u < 0.6) {
+        for (let k = 0; k < kn; k++) {
+          const got = kg > k, mb = Math.max(b, 0.55);
+          ctx.fillStyle = got ? `rgb(${(90 * mb) | 0},${(255 * mb) | 0},${(140 * mb) | 0})` : `rgb(${(170 * Math.max(b, 0.35)) | 0},25,30)`;
+          ctx.fillRect(i * cw, ds + lh * (0.25 + (k * 0.5) / kn), cw + 1, lh * (0.3 / kn));
+        }
+      }
+      if (open) {
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = `rgba(60,255,130,${0.22 * (0.75 + 0.25 * Math.sin(t * 4))})`;
+        ctx.fillRect(i * cw, ds, cw + 1, lh);
+        ctx.globalCompositeOperation = "source-over";
+      }
+    } else if (tv === DOOR && !isEn) {
       // a door: dark jambs at the edges, two sunk panels, a brass handle
       ctx.fillStyle = "rgba(0,0,0,.45)";
       if (h.u < 0.07 || h.u > 0.93) ctx.fillRect(i * cw, ds, cw + 1, lh);
@@ -412,8 +482,28 @@ function scene(ctx, s, W, H, t) {
         }
       }
     } else if (plain) {
-      ctx.fillStyle = "rgba(0,0,0,.35)";
-      for (let k = 1; k < 4; k++) ctx.fillRect(i * cw, ds + lh * k / 4, cw + 1, Math.max(1, lh * 0.015));
+      // wallpaper above, darker panelling below, a rail between
+      ctx.fillStyle = "rgba(0,0,0,.24)";
+      ctx.fillRect(i * cw, ds + lh * 0.62, cw + 1, lh * 0.38);
+      if ((h.u * 7 % 1) < 0.14) { ctx.fillStyle = "rgba(0,0,0,.08)"; ctx.fillRect(i * cw, ds, cw + 1, lh * 0.6); }
+      ctx.fillStyle = "rgba(0,0,0,.4)";
+      ctx.fillRect(i * cw, ds + lh * 0.6, cw + 1, Math.max(1, lh * 0.025));
+      ctx.fillRect(i * cw, ds + lh * 0.97, cw + 1, Math.max(1, lh * 0.03));
+      const wallId = h.mx * 31 + h.my * 17;
+      if (wallId % 5 === 0 && h.u > 0.3 && h.u < 0.7) {
+        // a painting in a dark frame
+        ctx.fillStyle = `rgb(${(40 * b) | 0},${(26 * b) | 0},${(12 * b) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.14, cw + 1, lh * 0.34);
+        if (h.u > 0.34 && h.u < 0.66) { ctx.fillStyle = `rgb(${(80 * b) | 0},${(90 * b) | 0},${(70 * b) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.18, cw + 1, lh * 0.26); }
+        if (h.u > 0.45 && h.u < 0.55) { ctx.fillStyle = `rgb(${(200 * b) | 0},${(190 * b) | 0},${(170 * b) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.24, cw + 1, lh * 0.08); }
+      } else if ((h.mx * 13 + h.my * 7) % 9 === 0 && h.u > 0.47 && h.u < 0.53) {
+        // a candle sconce: brass, a flame, a warm pool of light round it
+        const mb = Math.max(b, 0.5);
+        ctx.fillStyle = `rgb(${(180 * mb) | 0},${(140 * mb) | 0},${(60 * mb) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.3, cw + 1, lh * 0.05);
+        ctx.fillStyle = "rgba(255,210,100,.95)"; ctx.fillRect(i * cw, ds + lh * (0.22 + Math.sin(t * 13 + h.mx) * 0.01), cw + 1, lh * 0.08);
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = "rgba(255,170,60,.12)"; ctx.fillRect(i * cw - cw * 6, ds + lh * 0.1, cw * 13, lh * 0.4);
+        ctx.globalCompositeOperation = "source-over";
+      }
     }
   }
 
@@ -547,80 +637,58 @@ function spotsOf(s) {
 function drawFurniture(ctx, o, scr, u, hz, eye, L, t) {
   const cm = o.tx / o.ty / PLANE;
   const br = Math.min(1, (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cm) * 0.45) : 0) * 1.25 + Math.max(0, 1 - o.ty / 2.2) * 0.3 + 0.07);
-  const rgb = (r, g, b, a = 1) => `rgba(${(r * br) | 0},${(g * br) | 0},${(b * br) | 0},${a})`;
-  const foot = hz + eye * u, Y = (h) => foot - h * u;            // h: height above the floor
-  const w = u * 0.88, x = scr - w / 2;
-  if (o.kind === "table") {
-    // a long cloth to the floor, and the dark gap under it
-    ctx.fillStyle = "rgba(0,0,0,.55)";
-    ctx.fillRect(x + w * 0.04, Y(0.06), w * 0.92, u * 0.06);
-    ctx.fillStyle = rgb(60, 40, 26);                               // the legs in the gap
-    ctx.fillRect(x + w * 0.08, Y(0.07), w * 0.04, u * 0.07);
-    ctx.fillRect(x + w * 0.88, Y(0.07), w * 0.04, u * 0.07);
-    const cloth = ctx.createLinearGradient(0, Y(0.42), 0, Y(0.06));
-    cloth.addColorStop(0, rgb(214, 196, 176));
-    cloth.addColorStop(1, rgb(150, 126, 112));
-    ctx.fillStyle = cloth;
-    ctx.beginPath();
-    ctx.moveTo(x, Y(0.42));
-    ctx.lineTo(x + w, Y(0.42));
-    ctx.lineTo(x + w * 1.02, Y(0.08));
-    for (let i = 8; i >= 0; i--) ctx.lineTo(x + (w * i) / 8, Y(i % 2 ? 0.05 : 0.08));   // a scalloped hem
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = rgb(110, 90, 78, 0.7);                       // folds
-    ctx.lineWidth = Math.max(1, u * 0.006);
-    for (const f of [0.2, 0.45, 0.7]) { ctx.beginPath(); ctx.moveTo(x + w * f, Y(0.4)); ctx.lineTo(x + w * (f + 0.03), Y(0.09)); ctx.stroke(); }
-    ctx.fillStyle = rgb(92, 60, 36);                               // the tabletop's edge
-    ctx.fillRect(x - w * 0.02, Y(0.45), w * 1.04, u * 0.035);
-    ctx.fillStyle = rgb(230, 210, 120);                            // a candle, unlit
-    ctx.fillRect(scr - u * 0.015, Y(0.55), u * 0.03, u * 0.1);
-  } else if (o.kind === "bed") {
-    ctx.fillStyle = "rgba(0,0,0,.6)";                              // the dark under the bed
-    ctx.fillRect(x, Y(0.12), w, u * 0.12);
-    ctx.fillStyle = rgb(70, 46, 30);
-    ctx.fillRect(x, Y(0.12), w * 0.04, u * 0.12);
-    ctx.fillRect(x + w * 0.96, Y(0.12), w * 0.04, u * 0.12);
-    ctx.fillStyle = rgb(88, 58, 38);                               // frame
-    ctx.fillRect(x, Y(0.2), w, u * 0.08);
-    ctx.fillStyle = rgb(200, 196, 188);                            // mattress
-    ctx.fillRect(x, Y(0.3), w, u * 0.1);
-    ctx.fillStyle = rgb(120, 40, 52);                              // a heavy blanket, half off
-    ctx.beginPath();
-    ctx.moveTo(x + w * 0.35, Y(0.31));
-    ctx.lineTo(x + w, Y(0.31));
-    ctx.lineTo(x + w, Y(0.14));
-    ctx.quadraticCurveTo(x + w * 0.6, Y(0.1), x + w * 0.35, Y(0.16));
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = rgb(226, 222, 212);                            // pillow
-    ctx.beginPath();
-    ctx.ellipse(x + w * 0.17, Y(0.33), w * 0.12, u * 0.04, 0, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = rgb(78, 50, 32);                               // headboard
-    ctx.fillRect(x - w * 0.02, Y(0.62), w * 0.06, u * 0.62);
-    ctx.beginPath();
-    ctx.ellipse(x + w * 0.01, Y(0.62), w * 0.05, u * 0.03, 0, 0, TAU);
-    ctx.fill();
-  } else {
-    // a tall wardrobe: two doors, brass handles, slatted vents
-    const ww = u * 0.7, wx = scr - ww / 2;
-    ctx.fillStyle = rgb(84, 54, 34);
-    ctx.fillRect(wx, Y(0.95), ww, u * 0.95);
-    ctx.fillStyle = rgb(104, 70, 44);
-    ctx.fillRect(wx - ww * 0.04, Y(0.99), ww * 1.08, u * 0.05);    // crown
-    ctx.fillStyle = rgb(40, 26, 16);
-    ctx.fillRect(scr - u * 0.004, Y(0.92), Math.max(1, u * 0.008), u * 0.86);   // the seam between the doors
-    ctx.fillStyle = "rgba(0,0,0,.45)";
-    for (const side of [-1, 1]) {
-      for (let k = 0; k < 5; k++) ctx.fillRect(scr + side * ww * 0.27 - ww * 0.16, Y(0.85 - k * 0.04), ww * 0.32, Math.max(1, u * 0.012));
+  const C = (r, g, b, a = 1) => `rgba(${(r * br) | 0},${(g * br) | 0},${(b * br) | 0},${a})`;
+  const foot = hz + eye * u, F = (h) => foot - h * u;              // h: height above the floor
+  ctx.fillStyle = `rgba(0,0,0,${0.35 * Math.min(1, br + 0.3)})`;  // its shadow on the floor
+  ctx.beginPath(); ctx.ellipse(scr, F(0), 0.46 * u, 0.06 * u, 0, 0, TAU); ctx.fill();
+  if (o.kind === "bed") {
+    // legs, the dark under it (where you hide), the frame, sheet, a striped quilt, pillow, posts
+    ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(scr - 0.44 * u, F(0.3), 0.88 * u, 0.16 * u);
+    ctx.fillStyle = C(60, 38, 20); ctx.fillRect(scr - 0.44 * u, F(0.14), 0.06 * u, 0.14 * u); ctx.fillRect(scr + 0.38 * u, F(0.14), 0.06 * u, 0.14 * u);
+    ctx.fillStyle = C(78, 50, 28); ctx.fillRect(scr - 0.46 * u, F(0.3), 0.92 * u, 0.17 * u);
+    ctx.fillStyle = C(226, 220, 206); ctx.fillRect(scr - 0.44 * u, F(0.4), 0.88 * u, 0.1 * u);
+    ctx.fillStyle = C(72, 96, 168); ctx.fillRect(scr - 0.44 * u, F(0.5), 0.66 * u, 0.18 * u);
+    ctx.fillStyle = C(102, 128, 200); for (let q = 0; q < 6; q++) ctx.fillRect(scr - 0.44 * u + q * 0.11 * u, F(0.5), 0.05 * u, 0.18 * u);
+    ctx.fillStyle = C(150, 60, 70); ctx.fillRect(scr - 0.44 * u, F(0.5), 0.66 * u, 0.02 * u);   // a ribbon of trim
+    ctx.fillStyle = C(236, 232, 240); ctx.beginPath(); ctx.ellipse(scr + 0.3 * u, F(0.5), 0.13 * u, 0.06 * u, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = C(70, 44, 24); ctx.fillRect(scr + 0.36 * u, F(0.7), 0.1 * u, 0.7 * u); ctx.beginPath(); ctx.arc(scr + 0.41 * u, F(0.7), 0.05 * u, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = C(98, 62, 34); ctx.fillRect(scr + 0.38 * u, F(0.62), 0.06 * u, 0.4 * u);
+    ctx.fillStyle = C(70, 44, 24); ctx.fillRect(scr - 0.46 * u, F(0.46), 0.05 * u, 0.34 * u);
+  } else if (o.kind === "wardrobe") {
+    // feet, the body, a crown and a skirting, two panelled doors, an oval mirror, brass knobs
+    ctx.fillStyle = C(52, 32, 18); ctx.fillRect(scr - 0.32 * u, F(0.06), 0.08 * u, 0.06 * u); ctx.fillRect(scr + 0.24 * u, F(0.06), 0.08 * u, 0.06 * u);
+    ctx.fillStyle = C(98, 64, 38); ctx.fillRect(scr - 0.34 * u, F(1), 0.68 * u, 0.94 * u);
+    ctx.fillStyle = C(66, 42, 24); ctx.fillRect(scr - 0.38 * u, F(1.06), 0.76 * u, 0.07 * u); ctx.fillRect(scr - 0.37 * u, F(0.1), 0.74 * u, 0.04 * u);
+    for (const k of [-1, 1]) {
+      const d0 = k < 0 ? scr - 0.31 * u : scr + 0.02 * u;
+      ctx.fillStyle = C(112, 74, 44); ctx.fillRect(d0, F(0.92), 0.29 * u, 0.78 * u);
+      ctx.strokeStyle = C(60, 38, 20); ctx.lineWidth = Math.max(1, u * 0.012); ctx.strokeRect(d0 + 0.025 * u, F(0.89), 0.24 * u, 0.72 * u);
     }
-    ctx.fillStyle = rgb(220, 180, 90);
-    ctx.fillRect(scr - u * 0.04, Y(0.5), u * 0.018, u * 0.06);
-    ctx.fillRect(scr + u * 0.022, Y(0.5), u * 0.018, u * 0.06);
-    ctx.fillStyle = rgb(60, 40, 26);
-    ctx.fillRect(wx + ww * 0.05, Y(0.02), ww * 0.08, u * 0.04);    // feet
-    ctx.fillRect(wx + ww * 0.87, Y(0.02), ww * 0.08, u * 0.04);
+    ctx.fillStyle = C(120, 150, 170); ctx.beginPath(); ctx.ellipse(scr - 0.165 * u, F(0.55), 0.09 * u, 0.2 * u, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = C(200, 170, 90); ctx.lineWidth = Math.max(1, u * 0.015); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,255,255,${0.35 * br})`; ctx.beginPath(); ctx.moveTo(scr - 0.2 * u, F(0.65)); ctx.lineTo(scr - 0.15 * u, F(0.45)); ctx.stroke();
+    ctx.fillStyle = C(235, 195, 95); ctx.beginPath(); ctx.arc(scr - 0.03 * u, F(0.5), 0.016 * u, 0, TAU); ctx.arc(scr + 0.05 * u, F(0.5), 0.016 * u, 0, TAU); ctx.fill();
+  } else {
+    // a table under a fringed cloth with a red band; a lit candle, a teapot, two cups
+    ctx.fillStyle = C(208, 200, 178);
+    ctx.beginPath(); ctx.moveTo(scr - 0.4 * u, F(0.46)); ctx.lineTo(scr + 0.4 * u, F(0.46)); ctx.lineTo(scr + 0.47 * u, F(0.04));
+    for (let q = 0; q <= 7; q++) ctx.lineTo(scr + 0.47 * u - q * 0.1343 * u, F(0.04) + (q % 2 ? 0.03 * u : 0));
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = C(150, 40, 48); ctx.fillRect(scr - 0.44 * u, F(0.2), 0.88 * u, 0.045 * u);
+    ctx.fillStyle = C(180, 150, 90); ctx.fillRect(scr - 0.44 * u, F(0.14), 0.88 * u, 0.015 * u);
+    ctx.fillStyle = C(236, 230, 212); ctx.beginPath(); ctx.ellipse(scr, F(0.46), 0.4 * u, 0.05 * u, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = C(190, 150, 70); ctx.fillRect(scr - 0.13 * u, F(0.5), 0.07 * u, 0.03 * u);
+    ctx.fillStyle = C(240, 232, 210); ctx.fillRect(scr - 0.115 * u, F(0.62), 0.04 * u, 0.11 * u);
+    // the teapot and its cups
+    ctx.fillStyle = C(60, 110, 120); ctx.beginPath(); ctx.ellipse(scr + 0.16 * u, F(0.52), 0.045 * u, 0.06 * u, 0, 0, TAU); ctx.fill(); ctx.fillRect(scr + 0.145 * u, F(0.6), 0.03 * u, 0.05 * u);
+    ctx.strokeStyle = C(60, 110, 120); ctx.lineWidth = Math.max(1, u * 0.01); ctx.beginPath(); ctx.moveTo(scr + 0.2 * u, F(0.53)); ctx.lineTo(scr + 0.25 * u, F(0.57)); ctx.stroke();
+    ctx.fillStyle = C(236, 230, 220); for (const cx of [0.3, -0.28]) { ctx.fillRect(scr + cx * u, F(0.5), 0.05 * u, 0.04 * u); }
+    // the candle's flame, and its warm light — lit even when your own light is off
+    const fk = 1 + 0.2 * Math.sin(t * 14 + o.x * 3), fx = scr - 0.095 * u, fyy = F(0.74);
+    ctx.fillStyle = "rgba(255,205,90,.95)"; ctx.beginPath(); ctx.ellipse(fx, fyy, 0.011 * u, 0.026 * u * fk, 0, 0, TAU); ctx.fill();
+    const gl = ctx.createRadialGradient(fx, fyy, 1, fx, fyy, 0.35 * u);
+    gl.addColorStop(0, "rgba(255,180,70,.5)"); gl.addColorStop(1, "rgba(255,150,40,0)");
+    ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = gl; ctx.fillRect(fx - 0.4 * u, fyy - 0.4 * u, 0.8 * u, 0.8 * u); ctx.globalCompositeOperation = "source-over";
   }
 }
 
@@ -1025,7 +1093,8 @@ function markers(ctx, s, W, H, t) {
     } else {
       // at the edge on the side to turn to
       x = side < 0 ? edgeL : edgeR;
-      y = H * 0.3 + m.slot * 38;
+      // the left stack starts under the readout (keys, room, next key, Nana)
+      y = (side < 0 ? Math.max(H * 0.3, 150) : H * 0.3) + m.slot * 38;
     }
     ctx.globalAlpha = alpha;
     // the pin: a diamond for a relic, a door for the way out, a ring for a friend
@@ -1110,13 +1179,15 @@ export function drawManor(ctx, s, view, t, stick) {
     return;
   }
   if (s.mode === "dead") {
-    const k = Math.min(1, s.deadT / 0.5), size = Math.min(W, H) * (0.7 + k * 0.9), sh = (1 - Math.min(1, s.deadT)) * 18;
+    // her face, right up against yours
+    const k = Math.min(1, s.deadT / 0.4), size = Math.min(W, H) * (0.9 + k * 0.8), sh = (1 - Math.min(1, s.deadT)) * 20;
     ctx.save();
     ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh);
-    drawGhost(ctx, W / 2, H / 2 + size * 0.15, size, true, t);
+    nanaFace(ctx, W / 2, H / 2, size, t, W, H);
     ctx.restore();
-    ctx.fillStyle = `rgba(200,30,58,${Math.max(0, 0.8 - s.deadT * 1.2)})`;
+    ctx.fillStyle = `rgba(200,30,58,${Math.max(0, 0.7 - s.deadT)})`;
     ctx.fillRect(0, 0, W, H);
+    grain(ctx, W, H, 400, 0.4);
     return;
   }
 
@@ -1129,7 +1200,10 @@ export function drawManor(ctx, s, view, t, stick) {
 
   // where it is, when it is near: redder and bigger the closer it gets
   const d = G ? Math.hypot(P.x - G.x, P.y - G.y) : Infinity;
-  if (d < 14) {
+  // (not when she's plainly in front of you: the arrow would sit on her face)
+  const rel = G ? Math.atan2(G.y - P.y, G.x - P.x) - P.fa : 0;
+  const inView = G && Math.abs(Math.atan2(Math.sin(rel), Math.cos(rel))) < 0.55 && los(s.g, P.x, P.y, G.x, G.y);
+  if (d < 14 && !inView) {
     const k = 1 - d / 14;
     arrow(ctx, W, H, s, Math.atan2(G.y - P.y, G.x - P.x), Math.min(W, H) * 0.36, 8 + k * 16, `rgba(224,32,63,${0.35 + k * 0.6})`);
   }

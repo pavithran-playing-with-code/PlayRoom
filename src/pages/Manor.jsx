@@ -13,14 +13,27 @@ import { useNavigate } from "react-router-dom";
 import {
   newNight, tick, begin, doAction, actionLabel, toggleRun, toggleLight, timeText, roomName, listening,
 } from "../components/horror/manorSim";
-import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R } from "../components/horror/manorRender";
+import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R, METRES_PER_TILE } from "../components/horror/manorRender";
 import { createManorAudio } from "../components/horror/manorAudio";
 import { useSideways, goLandscape, toGame } from "../components/horror/LandscapeGate";
 
 const HUD_MS = 80;
 const SHOW_CAUGHT_AFTER = 1.4;     // seconds of its face before the card
 
+// The nearest key you haven't found: which room, how far. And Nana: how far.
+const toward = (s) => {
+  const P = s.P, m = (d) => Math.round(d * METRES_PER_TILE);
+  const left = s.relics.filter((r) => !r.got).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y));
+  const k = left[0];
+  const door = { x: s.exitT.x + 0.5, y: s.exitT.y + 0.5 };
+  const nana = Math.hypot(s.G.x - P.x, s.G.y - P.y);
+  return {
+    goal: k ? `Next key: ${roomName(s, k.x, k.y)} · ${m(Math.hypot(k.x - P.x, k.y - P.y))} m` : `The front door is open · ${m(Math.hypot(door.x - P.x, door.y - P.y))} m`,
+    open: !k, nana: m(nana), near: nana < 4, close: nana < 3,
+  };
+};
 const hudOf = (s) => s && ({
+  ...toward(s),
   mode: s.mode, night: s.night, count: s.count, need: s.need, stam: s.P.stam,
   runOn: s.P.runOn, tired: s.P.stamCool > 0,
   light: s.P.light, msg: s.msg, use: actionLabel(s), hiding: !!s.P.hiding, room: roomName(s),
@@ -223,9 +236,16 @@ export default function Manor() {
       {rotated && screen === "game" && <div className="hm-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
 
       <div className={`hm-hud${playing ? "" : " off"}`}>
-        <div>Night {hud?.night} &nbsp;·&nbsp; 🗝️ {hud?.count} / {hud?.need}</div>
-        <div className="hm-room">📍 {hud?.room}</div>
+        <div className="hm-keys">{"●".repeat(hud?.count || 0)}{"○".repeat(Math.max(0, (hud?.need || 3) - (hud?.count || 0)))} <span>keys · night {hud?.night}</span></div>
         <div className="hm-bar stam"><i style={{ width: `${(hud?.stam ?? 1) * 100}%` }} /></div>
+        <div className="hm-room">{hud?.room}</div>
+        <div className={`hm-goal${hud?.open ? " open" : ""}`}>{hud?.goal}</div>
+        <div className={`hm-nanad${hud?.near ? " near" : ""}`}>Nana: {hud?.nana} m away</div>
+      </div>
+
+      {/* hidden: how it's going */}
+      <div className={`hm-hidetext${playing && hud.hiding ? "" : " off"}`}>
+        {hud?.close ? "Hold still… she's right outside." : "Hidden and safe. Press Use to come out."}
       </div>
 
       {/* while she hums you may move; when it stops, she listens */}
@@ -242,7 +262,7 @@ export default function Manor() {
           also the stick pushed out. */}
       <div className={`hm-pad${playing ? "" : " off"}`}>
         <button className={`hm-use${hud?.use ? " on" : ""}`} onPointerDown={press(doAction)}>{hud?.use || "Use"}</button>
-        <button className={`hm-jump hm-run${hud?.runOn ? " on" : ""}`} onPointerDown={press(toggleRun)}>{hud?.tired ? "Tired" : "Run"}</button>
+        <button className={`hm-jump hm-run${hud?.runOn ? " on" : ""}`} onPointerDown={press(toggleRun)}>{hud?.runOn ? (hud?.tired ? "Tired" : "Run on") : "Run off"}</button>
         <button className={`hm-light${hud?.light ? " on" : ""}`} onPointerDown={press(toggleLight)}
           title="Your light: off, she has to be right beside you to see you">{hud?.light ? "Light on" : "Light off"}</button>
       </div>

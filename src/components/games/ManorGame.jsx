@@ -11,7 +11,7 @@
 // rules; the two-thumb controls here are the same as there.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "../../utils/SocketContext";
-import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R } from "../horror/manorRender";
+import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R, METRES_PER_TILE } from "../horror/manorRender";
 import { createManorAudio } from "../horror/manorAudio";
 import {
   createClient, applyTick, stepLocal, report, doAction, actionDone, actionLabel, playing, respawning, inIntro, timeLeft, sideOfMe,
@@ -61,6 +61,17 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       room: roomNameAt(c, playing(c) ? c.body : w || c.body),
       players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left })),
       playing: playing(c), listening: isListening(c),
+      ...(() => {
+        // the nearest key of yours not found yet, and Nana: how far
+        const P = c.body, m = (d) => Math.round(d * METRES_PER_TILE);
+        const left = c.relics.filter((r) => !r.got && r.mine !== false).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y));
+        const k = left[0], G = nearestGhost(c, P), nd = G ? Math.hypot(G.x - P.x, G.y - P.y) : 99;
+        const door = { x: c.exitT.x + 0.5, y: c.exitT.y + 0.5 };
+        return {
+          goal: k ? `Next key: ${roomNameAt(c, k)} · ${m(Math.hypot(k.x - P.x, k.y - P.y))} m` : `The front door is open · ${m(Math.hypot(door.x - P.x, door.y - P.y))} m`,
+          open: !k, nana: m(nd), near: nd < 4, close: nd < 3, hiding: !!P.hiding,
+        };
+      })(),
     });
   }, []);
 
@@ -316,7 +327,9 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
             {h.side && <span className="hmx-score" title="Times out · score">🚪 {h.side.escapes} · {h.side.score}</span>}
           </div>
           {h.playing && <div className="hm-bar stam"><i style={{ width: `${h.stam * 100}%` }} /></div>}
-          {h.room && <div className="hm-room">📍 {h.room}</div>}
+          {h.room && <div className="hm-room">{h.room}</div>}
+          {h.playing && <div className={`hm-goal${h.open ? " open" : ""}`}>{h.goal}</div>}
+          {h.playing && <div className={`hm-nanad${h.near ? " near" : ""}`}>Nana: {h.nana} m away</div>}
           <div className="hmx-who">
             {h.players.map((p) => (
               <span key={p.id} className={`hmx-p${p.alive ? "" : " dead"}`} style={{ "--c": p.color }}
@@ -333,6 +346,9 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
       <div className="hm-msg" style={{ opacity: h && !h.intro && h.msg && !over ? 1 : 0 }} aria-live="polite">{h && !over ? h.msg : ""}</div>
 
+      {h && h.playing && h.hiding && !over && (
+        <div className="hm-hidetext">{h.close ? "Hold still… she's right outside." : "Hidden and safe. Press Use to come out."}</div>
+      )}
       {h && !h.intro && !over && (
         <>
           {/* while she hums you may move; when it stops, she listens */}
@@ -348,7 +364,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
         <div className="hm-pad">
           {/* Use (doors, hiding — lit when there's something to use), Run, your light */}
           <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
-          <button className={`hm-jump hm-run${h.runOn ? " on" : ""}`} onPointerDown={press((c) => { c.body.runOn = !c.body.runOn; })}>{h.tired ? "Tired" : "Run"}</button>
+          <button className={`hm-jump hm-run${h.runOn ? " on" : ""}`} onPointerDown={press((c) => { c.body.runOn = !c.body.runOn; })}>{h.runOn ? (h.tired ? "Tired" : "Run on") : "Run off"}</button>
           <button className={`hm-light${h.light ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}
             title="Your light: off, she has to be right beside you to see you">{h.light ? "Light on" : "Light off"}</button>
         </div>

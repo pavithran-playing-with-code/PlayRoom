@@ -358,6 +358,9 @@ export function viewState(c, now = Date.now()) {
     // stand-in far away keeps the danger glow and arrows quiet
     P, G: nearestGhost(c, P) || FAR_GHOST, ghosts: c.ghosts.length ? c.ghosts : [FAR_GHOST],
     others, exitOpen, count: 0, need: 1, camId,
+    // the front door's lock lights: the keys of whoever we're looking through
+    keysGot: (() => { const sd = c.sides.get((own ? c.players.get(c.you) : c.players.get(camId))?.side); return sd ? sd.got : 0; })(),
+    keysNeed: (() => { const sd = c.sides.get((own ? c.players.get(c.you) : c.players.get(camId))?.side); return sd ? sd.need : 3; })(),
   };
 }
 

@@ -11,7 +11,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  newNight, tick, begin, decoy, doAction, actionLabel, toggleRun, timeText, roomName, listening,
+  newNight, tick, begin, doAction, actionLabel, toggleRun, toggleLight, timeText, roomName, listening,
 } from "../components/horror/manorSim";
 import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R } from "../components/horror/manorRender";
 import { createManorAudio } from "../components/horror/manorAudio";
@@ -23,7 +23,7 @@ const SHOW_CAUGHT_AFTER = 1.4;     // seconds of its face before the card
 const hudOf = (s) => s && ({
   mode: s.mode, night: s.night, count: s.count, need: s.need, stam: s.P.stam,
   runOn: s.P.runOn, tired: s.P.stamCool > 0,
-  decoys: s.decoys, msg: s.msg, use: actionLabel(s), hiding: !!s.P.hiding, room: roomName(s),
+  light: s.P.light, msg: s.msg, use: actionLabel(s), hiding: !!s.P.hiding, room: roomName(s),
   listening: s.mode === "play" && !s.P.entering && listening(s),
 });
 
@@ -160,7 +160,7 @@ export default function Manor() {
       keys.current[k] = true;
       if (k === "r") toggleRun(s);
       if (k === "e") doAction(s);
-      if (k === "q") decoy(s);
+      if (k === "f") toggleLight(s);
       syncHud();
     };
     const up = (e) => { keys.current[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; };
@@ -238,13 +238,13 @@ export default function Manor() {
       <div className="hm-msg" style={{ opacity: playing && hud.msg ? 1 : 0 }} aria-live="polite">{playing ? hud.msg : ""}</div>
 
       {/* The buttons, on the right: Use (doors, hiding — lit when there is
-          something in front of you), Run, and a marble to throw. Running is
+          something in front of you), Run, and your light. Running is
           also the stick pushed out. */}
       <div className={`hm-pad${playing ? "" : " off"}`}>
         <button className={`hm-use${hud?.use ? " on" : ""}`} onPointerDown={press(doAction)}>{hud?.use || "Use"}</button>
         <button className={`hm-jump hm-run${hud?.runOn ? " on" : ""}`} onPointerDown={press(toggleRun)}>{hud?.tired ? "Tired" : "Run"}</button>
-        <button className="hm-light hm-marble" style={{ opacity: hud?.decoys ? 1 : 0.45 }} onPointerDown={press(decoy)}
-          title="Throw a marble: she goes to the sound">Marble<br />{hud?.decoys}</button>
+        <button className={`hm-light${hud?.light ? " on" : ""}`} onPointerDown={press(toggleLight)}
+          title="Your light: off, she has to be right beside you to see you">{hud?.light ? "Light on" : "Light off"}</button>
       </div>
 
       {screen === "menu" && (
@@ -256,7 +256,7 @@ export default function Manor() {
           <button className="hm-go" onClick={newGame}>Enter the house</button>
           <p className="hm-small">
             Move: WASD. Look: drag the mouse or use the left and right arrows. Run: Shift or R. Use (open doors,
-            hide in beds, wardrobes and under tables): E. Throw a marble (Q) to lure her to the sound.<br />
+            hide in beds, wardrobes and under tables): E. Light on and off: F — in the dark she has to be right beside you to see you.<br />
             On a phone: left thumb moves, right thumb looks, and the buttons are on the right.
           </p>
         </div>

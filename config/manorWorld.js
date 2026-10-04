@@ -44,7 +44,6 @@ const GAME = "manor";
 const TICK_MS = 100;
 const DT = TICK_MS / 1000;
 const INTRO_MS = 8000;                 // ghosts asleep while everyone memorises the map
-const DECOYS = 3;                      // marbles: thrown to lure Nana away
 const KEEP_AFTER_MS = 120000;          // a finished house lingers for late hellos
 const RESPAWN_MS = 2400;               // caught: the scare, then back in at the entrance
 const RELIC_POINTS = 100;
@@ -113,7 +112,7 @@ function buildWorld(room, seats, elapsedMs) {
       id, name: p.username, avatar: p.avatar, side: side.key, color: side.color,
       x: house.spawn.x, y: house.spawn.y, fa: 0, jz: 0, cr: 0, lit: true, noiseR: 0, hiding: null,
       at: 0, alive: !(saved && saved.left), left: !!(saved && saved.left), respawnAt: 0,
-      caught: (saved && saved.caught) || 0, decoys: DECOYS,
+      caught: (saved && saved.caught) || 0,
     });
     // a house rebuilt after a restart keeps each side's escapes and relics
     if (saved) {
@@ -393,7 +392,7 @@ function initFor(w, uid, role) {
       escapes: s.escapes, total: s.total, score: scoreOf(s), members: s.members.map(Number) })),
     players: [...w.players.values()].map((p) => ({
       id: p.id, name: p.name, avatar: p.avatar, side: p.side, color: p.color,
-      x: p.x, y: p.y, fa: p.fa, alive: p.alive, left: p.left, caught: p.caught, decoys: p.decoys,
+      x: p.x, y: p.y, fa: p.fa, alive: p.alive, left: p.left, caught: p.caught,
     })),
     respawnMs: RESPAWN_MS,
     hum: [w.house.hum.on ? 1 : 0, w.house.hum.t, w.house.hum.since],
@@ -530,28 +529,6 @@ function attach(server) {
       return reply(false);
     });
 
-    socket.on("manor:decoy", (raw) => {
-      const code = typeof raw === "string" ? raw.toUpperCase() : "";
-      const w = worlds.get(code);
-      if (!w || w.over) return;
-      const p = w.players.get(uid);
-      if (!p || !p.alive) return;
-      const reply = (ok, why) => socket.emit("manor:decoyed", { ok, why, left: p.decoys });
-      if (!p.decoys) return reply(false, "empty");
-      let G = null, gd = Infinity;
-      for (const g of w.house.ghosts) { const d = Math.hypot(g.x - p.x, g.y - p.y); if (d < gd) { G = g; gd = d; } }
-      if (w.house.ghosts.some((g) => g.st === "hunt" && g.prey === uid && g.lose < 1)) return reply(false, "watched");
-      p.decoys--;
-      // the marble rolls ahead and rattles where it stops; the nearest Nana goes there
-      const at = core.marbleLanding(w.house.g, p.x, p.y, p.fa);
-      w.pulses.push({ x: at.x, y: at.y, t: 8 });
-      let near = G;
-      gd = Infinity;
-      for (const g of w.house.ghosts) { const d = Math.hypot(g.x - at.x, g.y - at.y); if (d < gd) { near = g; gd = d; } }
-      if (near) { near.st = "search"; near.wait = -4; near.stun = 0; near.prey = null; core.ghostTarget(near, w.env, at.x | 0, at.y | 0); }
-      ev(w, { type: "decoy", id: uid, x: round2(at.x), y: round2(at.y) });
-      reply(true);
-    });
   });
 }
 

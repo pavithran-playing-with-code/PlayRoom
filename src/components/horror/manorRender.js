@@ -516,19 +516,6 @@ function scene(ctx, s, W, H, t) {
       }
     } else if (ob) {
       drawObstacle(ctx, s, o, scr, u, hz, eye, L, t);
-    } else {
-      // a glass marble on the floor, catching the light, still rattling
-      const fy = hz + eye * u - u * 0.04, r = Math.max(2, u * 0.05);
-      const mg = ctx.createRadialGradient(scr - r * 0.4, fy - r * 0.4, r * 0.1, scr, fy, r);
-      mg.addColorStop(0, "#ffffff");
-      mg.addColorStop(0.4, "#8fc7ff");
-      mg.addColorStop(1, "#2a5b8f");
-      ctx.fillStyle = mg;
-      ctx.beginPath(); ctx.arc(scr + Math.sin(t * 30) * r * 0.15, fy, r, 0, TAU); ctx.fill();
-      ctx.fillStyle = "rgba(255,240,200,.6)";
-      ctx.font = `${Math.max(9, u * 0.12)}px Georgia`;
-      ctx.textAlign = "center";
-      ctx.fillText("· · ·", scr, fy - r * 2.2);
     }
     ctx.restore();
   }

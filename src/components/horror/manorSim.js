@@ -24,12 +24,11 @@ import {
   newBody, litBody, mvOK as bodyMvOK, jumpBody, stepBody,
   newGhost, ghostTarget, ghostPatrol, ghostSees, ghostSpeed as speedOf, stepGhost,
   actionAt, ACTION_LABEL, watcher, hideIn, leaveLocker,
-  newHum, stepHum, listeningNow, marbleLanding, MARBLES,
+  newHum, stepHum, listeningNow,
 } from "./manorCore.mjs";
 
 export { D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, dmap, floors, los, canAt, ROOM_KINDS, roomAt };
 export const INTRO_S = 9;              // seconds to memorise the map
-export const DECOYS = MARBLES;          // marbles, to throw
 
 const RELIC_LINES = [
   "An iron key, tied with a faded pink ribbon.",
@@ -85,7 +84,7 @@ export function newNight(seed, night = 1) {
     G: newGhost(gs[0] + 0.5, gs[1] + 0.5),
     P,
     count: 0,
-    decoys: DECOYS, pulses: [], puffs: [], hint: {}, hum: newHum(rand),
+    pulses: [], puffs: [], hint: {}, hum: newHum(rand),
     tm: 0, gStep: 0, hb: 0, ambT: 20,
     bodies: [], flick: 0, scareT: 25 + rand() * 15,
     msg: "", msgT: 0,
@@ -142,23 +141,13 @@ export function jump(s) {
 }
 
 export function toggleCrouch(s) { s.P.crouch = !s.P.crouch; }
-export function toggleLight(s) { s.P.light = !s.P.light; }
-export function toggleRun(s) { s.P.runOn = !s.P.runOn; }
-
-// A marble, thrown the way you face: it rattles where it stops, and Nana
-// goes to see what it was.
-export function decoy(s) {
-  if (s.mode !== "play") return;
-  if (!s.decoys) { say(s, "No marbles left.", 2000); return; }
-  if (s.G.st === "hunt" && s.G.lose < 1) { say(s, "She is looking right at you. Get out of sight first!", 2200); return; }
-  s.decoys--;
-  const at = marbleLanding(s.g, s.P.x, s.P.y, s.P.fa);
-  s.pulses.push({ x: at.x, y: at.y, t: 8 });
-  emit(s, "marble");
-  s.G.st = "search"; s.G.wait = -4; s.G.stun = 0; s.G.prey = null;
-  ghostTarget(s.G, s.env, at.x | 0, at.y | 0);
-  say(s, "The marble rattles away down the hall. She goes to see what it was.", 3500);
+// Your light: on, you see the halls — and she sees you from five tiles off;
+// off, it's dark, and she has to be right beside you to see you.
+export function toggleLight(s) {
+  s.P.light = !s.P.light;
+  say(s, s.P.light ? "Light on." : "Light off. Dark — but she has to be right beside you to see you now.", 2200);
 }
+export function toggleRun(s) { s.P.runOn = !s.P.runOn; }
 
 // ── the thing ────────────────────────────────────────────────────────────────
 

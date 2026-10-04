@@ -17,7 +17,6 @@ import {
   createClient, applyTick, stepLocal, report, doAction, actionDone, actionLabel, playing, respawning, inIntro, timeLeft, sideOfMe,
   watchedPlayer, cycleWatch, viewState, roomNameAt, isListening, nearestGhost,
 } from "../horror/manorClient";
-import { say } from "../horror/manorSim";
 import { useSideways, toGame } from "../horror/LandscapeGate";
 import { usePlayAgain } from "./PlayAgain";
 
@@ -58,7 +57,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       timeLeft: timeLeft(c, now), msg: c.msg,
       side: side && { name: side.name, color: side.color, got: side.got, need: side.need, open: side.open, escapes: side.escapes || 0, score: side.score || 0 },
       stam: c.body.stam, bat: c.body.bat, light: c.body.light, runOn: c.body.runOn, tired: c.body.stamCool > 0,
-      crouch: c.body.crouch, decoys: c.decoys, watching: w && { name: w.name, color: w.color }, use: actionLabel(c, now),
+      crouch: c.body.crouch, watching: w && { name: w.name, color: w.color }, use: actionLabel(c, now),
       room: roomNameAt(c, playing(c) ? c.body : w || c.body),
       players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left })),
       playing: playing(c), listening: isListening(c),
@@ -96,14 +95,6 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       if (client.current) client.current.over = o;
       setOver(o);
     };
-    const onDecoyed = (r) => {
-      const c = client.current;
-      if (!c) return;
-      c.decoys = r.left;
-      if (r.ok) say(c, "The marble rattles away down the hall. She goes to see what it was.", 3500);
-      else say(c, r.why === "empty" ? "No marbles left." : "She is looking right at you. Get out of sight first!", 2200);
-      syncHud();
-    };
     const onUsed = (r) => {
       const c = client.current;
       if (!c || r.code !== roomCode) return;
@@ -120,7 +111,6 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     socket.on("manor:init", onInit);
     socket.on("manor:tick", onTick);
     socket.on("manor:over", onOver);
-    socket.on("manor:decoyed", onDecoyed);
     socket.on("manor:used", onUsed);
     socket.on("manor:snap", onSnap);
     socket.on("manor:gone", onGone);
@@ -133,7 +123,6 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       socket.off("manor:init", onInit);
       socket.off("manor:tick", onTick);
       socket.off("manor:over", onOver);
-      socket.off("manor:decoyed", onDecoyed);
       socket.off("manor:used", onUsed);
       socket.off("manor:snap", onSnap);
       socket.off("manor:gone", onGone);
@@ -228,7 +217,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       keys.current[k] = true;
       if (k === "r") c.body.runOn = !c.body.runOn;
       if (k === "e") doUse(c);
-      if (k === "q" && socket) socket.emit("manor:decoy", roomCode);
+      if (k === "f") c.body.light = !c.body.light;
       syncHud();
     };
     const up = (e) => { keys.current[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; };
@@ -283,7 +272,6 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     const c = client.current;
     if (c && playing(c)) { fn(c); syncHud(); }
   };
-  const decoy = () => socket && socket.emit("manor:decoy", roomCode);
   const watch = (dir) => (e) => { e.preventDefault(); e.stopPropagation(); const c = client.current; if (c) { cycleWatch(c, dir); syncHud(); } };
 
   async function leave() {
@@ -358,11 +346,11 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
       {h && h.playing && !h.intro && (
         <div className="hm-pad">
-          {/* Use (doors, hiding — lit when there's something to use), Run, a marble to throw */}
+          {/* Use (doors, hiding — lit when there's something to use), Run, your light */}
           <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
           <button className={`hm-jump hm-run${h.runOn ? " on" : ""}`} onPointerDown={press((c) => { c.body.runOn = !c.body.runOn; })}>{h.tired ? "Tired" : "Run"}</button>
-          <button className="hm-light hm-marble" style={{ opacity: h.decoys ? 1 : 0.45 }} onPointerDown={press(decoy)}
-            title="Throw a marble: she goes to the sound">Marble<br />{h.decoys}</button>
+          <button className={`hm-light${h.light ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}
+            title="Your light: off, she has to be right beside you to see you">{h.light ? "Light on" : "Light off"}</button>
         </div>
       )}
 

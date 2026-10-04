@@ -7,12 +7,12 @@
 // you it does — doors, hiding spots and all — and a bot that walks the rooms,
 // opening doors as it goes, must be able to get out.
 import {
-  HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, INTRO_S, DECOYS, nightSize, dmap, floors, los, newNight, tick, begin,
-  jump, decoy, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, mvOK, lit, seesYou, ghostSpeed,
+  HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, INTRO_S, nightSize, dmap, floors, los, newNight, tick, begin,
+  jump, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, mvOK, lit, seesYou, ghostSpeed,
 } from "../src/components/horror/manorSim.js";
 import {
   rng, newGhost, ghostTarget, stepGhost, buildHouse,
-  newHum, stepHum, HUM_S, LISTEN_S, LISTEN_GRACE, HEAR_R, marbleLanding, MARBLE_D,
+  newHum, stepHum, HUM_S, LISTEN_S, LISTEN_GRACE, HEAR_R,
 } from "../src/components/horror/manorCore.mjs";
 
 let fails = 0;
@@ -206,23 +206,22 @@ function hall(seed = 11) {
   check("run within earshot and it comes looking", h3.G.st === "search");
 }
 
-// ── marbles ──────────────────────────────────────────────────────────────────
+// ── your light ───────────────────────────────────────────────────────────────
 {
   const s = inside(21); park(s);
-  s.G.stun = 0; s.G.x = 0.5;
-  s.P.fa = 0;
-  decoy(s);
-  const m = s.pulses[0];
-  check("a marble rattles ahead of you, and Nana goes to where it stopped", s.decoys === DECOYS - 1 && s.G.st === "search" &&
-    m && s.G.tx === (m.x | 0) && s.G.ty === (m.y | 0) && Math.hypot(m.x - s.P.x, m.y - s.P.y) > 0.5);
-  for (let i = 0; i < DECOYS; i++) decoy(s);
-  check(`${DECOYS} marbles, then none`, s.decoys === 0 && /No marbles/.test(s.msg));
+  check("your light starts on", lit(s));
+  toggleLight(s);
+  check("F (or the Light button) turns it off", !lit(s) && /Light off/.test(s.msg));
+  // Nana four tiles away down a clear hall: she sees you lit, not in the dark
   const { s: h } = hall(80);
-  h.G.x -= 4;
-  run(h, DT);
-  const before = h.decoys;
-  decoy(h);
-  check("it won't work while she's looking right at you", h.decoys === before && /looking right at you/.test(h.msg));
+  h.G.st = "patrol"; h.G.stun = 0; h.G.x = h.P.x + 4;
+  const d = Math.hypot(h.G.x - h.P.x, h.G.y - h.P.y);
+  const litSees = seesYou(h);
+  toggleLight(h);
+  const darkSees = seesYou(h);
+  check("with your light on she sees you down the hall; off, she doesn't", litSees && !darkSees, `${d.toFixed(1)} tiles`);
+  toggleLight(h);
+  check("…and on again", lit(h) && /Light on/.test(h.msg));
 }
 
 // ── doors ────────────────────────────────────────────────────────────────────
@@ -491,10 +490,6 @@ function walkOut(seed, night) {
   check("…nor from the far end of the house", G.st !== "hunt");
   G = nana();
   check("listening, she still has you if you're right beside her", stepGhost(G, env, [you(3.7, false)], 0.1, r, 0, quiet, hum(false, 1)) === 7);
-  // the marble
-  const m = marbleLanding(g, 2.5, 5.5, 0);
-  const w2 = marbleLanding(g, 26.5, 5.5, 0);
-  check("a marble rolls on ahead, then stops at the wall", Math.abs(m.x - (2.5 + MARBLE_D)) < 0.01 && w2.x < N - 1 && w2.x > 27.5);
   const H2 = buildHouse(9, { players: 1, sides: [{ key: "a", need: 3 }] });
   check("Nana's house: no barricades to jump, no batteries to find", Object.keys(H2.obst).length === 0 && H2.batts.length === 0 && H2.hum && H2.hum.on);
 }

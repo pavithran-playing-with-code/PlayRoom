@@ -122,8 +122,6 @@ export function createManorAudio() {
     ghostStep: (v) => tone(52, 0.14, v, "sine", 34),
     heartbeat: (v) => { tone(60, 0.2, 0.55 * v, "sine", 32); later(() => tone(55, 0.2, 0.4 * v, "sine", 30), 190); },
     musicBox: () => [523, 392, 466, 349, 523, 392].forEach((f, i) => later(() => tone(f, 0.5, 0.14, "triangle"), i * 230)),
-    // a glass marble: bouncing, then rolling, quieter each time
-    marble: () => [0, 260, 450, 590, 690, 760, 810].forEach((ms, i) => later(() => tone(2600 - i * 120, 0.05, 0.16 * Math.pow(0.78, i), "sine", 1900), ms)),
     // she heard you
     heard: () => { tone(330, 0.5, 0.25, "sawtooth", 160); noise(0.35, 0.35); },
     creak: (v = 0.28) => tone(170, 0.5, v, "sawtooth", 85),           // a door; v falls off with distance

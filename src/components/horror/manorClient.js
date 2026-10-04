@@ -61,7 +61,6 @@ export function createClient(init, now = Date.now()) {
     hint: {}, msg: "", msgT: 0, tm: 0, ambT: 20, hb: 0, gStep: 0,
     bodies: [], flick: 0, scareT: 25 + Math.random() * 15,
     alive: me ? me.alive : false, left: me ? !!me.left : false, spawn: init.house.spawn,
-    decoys: me ? me.decoys : 0,
     startLocal: now - init.elapsed, durMs: init.duration, introMs: init.intro,
     skipIntro: init.elapsed > SHOW_MAP_MS, deadAt: null, watch: null,
     over: init.over || null,
@@ -156,8 +155,6 @@ export function applyTick(c, m, now = Date.now()) {
       say(c, "Fresh batteries.", 2500);
     } else if (e.type === "spotted" && e.id === c.you) {
       snd("spotted");
-    } else if (e.type === "decoy") {
-      snd("marble");
     } else if (e.type === "hum") {
       snd("hum");
     } else if (e.type === "listen") {

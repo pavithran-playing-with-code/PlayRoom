@@ -398,21 +398,6 @@ export function hideIn(p, u, seenBy) {
   p.stam = Math.min(1, p.stam + 0.3);
 }
 
-// A marble, thrown the way you face: it rolls until a wall or a shut door
-// (or MARBLE_D tiles) and rattles there. Where it stops, Nana goes to look.
-export const MARBLES = 3;
-export const MARBLE_D = 5;
-export function marbleLanding(g, x, y, fa) {
-  let lx = x, ly = y;
-  for (let d = 0.25; d <= MARBLE_D; d += 0.25) {
-    const nx = x + Math.cos(fa) * d, ny = y + Math.sin(fa) * d;
-    const row = g[ny | 0];
-    if (!row || row[nx | 0] !== FLOOR) break;
-    lx = nx; ly = ny;
-  }
-  return { x: lx, y: ly };
-}
-
 export function leaveLocker(p) {
   const h = p.hiding;
   if (!h) return;

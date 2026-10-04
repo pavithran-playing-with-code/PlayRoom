@@ -274,22 +274,12 @@ let coreMod;
     stranger.me(w.code, 5, 5);
     check("someone not in the house moves nobody", ![...w.players.values()].some((q) => q.x === 5));
 
-    // marbles: thrown ahead, they rattle where they stop, and she goes there
-    const land = coreMod.marbleLanding(w.house.g, p.x, p.y, p.fa);
-    for (let i = 0; i < 4; i++) ph.h["manor:decoy"](w.code);
-    const replies = ph.got.filter((g) => g.ev === "manor:decoyed").map((g) => g.p);
-    check("marbles: three to throw, then none", replies.length === 4 && replies.slice(0, 3).every((r) => r.ok) && !replies[3].ok && replies[3].why === "empty");
-    check("…one lands ahead of you, and Nana goes to where it stopped, not to you", w.house.ghosts.some((G) => G.st === "search" && G.tx === (land.x | 0) && G.ty === (land.y | 0)) && Math.hypot(land.x - p.x, land.y - p.y) > 0.5,
-      `landed ${land.x.toFixed(1)},${land.y.toFixed(1)} from ${p.x.toFixed(1)},${p.y.toFixed(1)}`);
+    // the light: off on your phone, off in the house — she has to be right beside you to see you
+    ph.me(w.code, p.x, p.y, { lit: false });
+    check("your light off on your phone is off in the house too", p.lit === false);
+    check("no marbles to throw any more", !ph.h["manor:decoy"]);
 
     const w2 = room("free", [{ id: 61 }, { id: 62 }]);
-    const ph2 = phone(61);
-    const G = w2.house.ghosts[0];
-    G.st = "hunt"; G.prey = 61; G.lose = 0;
-    ph2.h["manor:decoy"](w2.code);
-    const r2 = ph2.got.filter((g) => g.ev === "manor:decoyed").pop().p;
-    check("…but not while it's staring at you", !r2.ok && r2.why === "watched");
-
     world.forfeit(w2.code, 61);
     check("leaving: out for good, your score still counts, the others play on", !w2.players.get(61).alive && w2.players.get(61).left && !w2.over);
   }

@@ -12,6 +12,8 @@ import FriendsDock from "../FriendsDock";
 import { ProgressRing, Avatar } from "../ui";
 import useMedia from "../../utils/useMedia";
 import { useSideways } from "../horror/LandscapeGate";
+import HowTo from "./HowTo";
+import { howToFor } from "./howToRules";
 
 const COMPACT = "(max-width: 600px)";
 
@@ -81,6 +83,7 @@ export default function GameFrame({
   }, []);
 
   const mins = timer?.max ? Math.round(timer.max / 60) : null;
+  const [help, setHelp] = useState(false);          // the ? card: how to play
 
   return (
     <div className={`gameshell${landscape ? " land" : ""}`}>
@@ -116,6 +119,9 @@ export default function GameFrame({
         </div>
 
         <div className="gb-end">
+          {howToFor(gameName) && (
+            <button className="press p-white sm gb-help" onClick={() => setHelp(true)} aria-label="How to play">?</button>
+          )}
           <FriendsDock max={compact ? 2 : 3} size={compact ? 26 : 30} />
           <button className="press p-white sm gb-quit" onClick={onQuit} aria-label={isSpectator ? "Leave" : "Quit"}>
             <span className="gb-quit-ic">{isSpectator ? "← " : "🚪 "}</span>{isSpectator ? "Leave" : "Quit"}
@@ -170,6 +176,15 @@ export default function GameFrame({
       </div>
 
       {controls && <div className="gamefoot">{controls}</div>}
+
+      {help && (
+        <div className="howto-over" role="dialog" aria-label="How to play" onClick={() => setHelp(false)}>
+          <div className="pop howto-card" onClick={(e) => e.stopPropagation()}>
+            <HowTo game={gameName} />
+            <button className="press p-sun full" onClick={() => setHelp(false)}>Got it — back to the game</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

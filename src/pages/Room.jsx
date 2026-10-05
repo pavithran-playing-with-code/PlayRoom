@@ -10,6 +10,7 @@ import { Avatar, Modal } from "../components/ui";
 import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
 import GameIcon from "../components/games/GameIcon";
+import HowTo from "../components/games/HowTo";
 
 // Team play. Four sides at most, two players each at least — the server
 // enforces the same numbers on start.
@@ -757,6 +758,11 @@ function Room() {
           {!isHost && !isSpectator && status === "waiting" && (
             <div className="note" style={{ background: "var(--paper2)", marginTop: 20 }}>
               ⏳ Waiting for the host to start the game…
+            </div>
+          )}
+          {status === "waiting" && room?.game_slug && (
+            <div className="note howto-note" style={{ marginTop: 20 }}>
+              <HowTo game={room.game_slug} />
             </div>
           )}
 

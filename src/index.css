@@ -486,6 +486,18 @@ body.in-game input,body.in-game textarea{-webkit-user-select:text;user-select:te
 /* A landscape game: the controls float in the bottom corners, under the
    thumbs, and the board takes the whole height between them. Drawn turned a
    quarter (.rot) when the phone is held upright — turn the phone. */
+.press.gb-help{width:36px;height:36px;padding:0;border-radius:50%;font-weight:900;font-size:1.05rem;flex:none}
+/* how to play: the card, in the lobby, the waiting room and over a game */
+.howto-t{font-family:Fredoka,sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:6px}
+.howto-goal{font-weight:800;margin:0 0 6px}
+.howto-steps{list-style:decimal;margin:0 0 6px;padding-left:22px;display:grid;gap:4px;font-size:.92rem;line-height:1.35}
+.howto-tip{margin:6px 0 0;padding:6px 10px;border-radius:10px;background:rgba(255,197,61,.28);font-size:.86rem}
+.howto-box{margin-bottom:16px;border:3px solid var(--ink);border-radius:var(--r);background:#fff;padding:10px 14px;box-shadow:0 3px 0 var(--ink)}
+.howto-box summary{cursor:pointer;font-family:Fredoka,sans-serif;font-weight:700;font-size:1rem}
+.howto-box[open] summary{margin-bottom:8px}
+.howto-note{background:#fff}
+.howto-over{position:absolute;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:rgba(46,33,64,.55)}
+.howto-card{width:min(420px,100%);max-height:100%;overflow:auto;padding:16px 18px;background:#fff;display:grid;gap:12px}
 .gameshell.land .gamefoot{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);z-index:6;
   background:transparent;border:0;padding:0 calc(14px + env(safe-area-inset-right,0px)) 0 calc(14px + env(safe-area-inset-left,0px));pointer-events:none}
 .gameshell.land .gamefoot > *{pointer-events:none;max-width:none}

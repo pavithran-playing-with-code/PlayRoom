@@ -11,6 +11,7 @@ import { presenceLabel } from "../utils/timeAgo";
 import PeekBuddy from "../components/characters/PeekBuddy";
 import GameIcon from "../components/games/GameIcon";
 import { SONGS, LEVELS } from "../components/games/pianoSongs";
+import HowTo from "../components/games/HowTo";
 
 // The little crew that fills up as you add seats.
 const CREW = ["🐯", "🐼", "🦊", "🐸", "🌸", "🚀", "🐙", "🦁"];
@@ -291,6 +292,12 @@ export default function Lobby() {
                 ))}
               </div>
             )}
+
+            {/* How to play it, before you start — a solo run goes straight in */}
+            <details className="howto-box" open>
+              <summary>📖 How to play {selected.name}</summary>
+              <HowTo game={selected.slug} title={false} />
+            </details>
 
             {/* What you're about to create, spelled out: game, clock, seats. */}
             <div className="lobby-sum" aria-live="polite">

@@ -13,6 +13,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
+import FloatStick from "../together/FloatStick";
 import TogetherResults from "../together/TogetherResults";
 import useTogether, { secondsLeft, smoothRows, rivals, myScore } from "../together/useTogether";
 import {
@@ -341,15 +342,7 @@ export default function KitchenRush(props) {
     applyAt({ x: tx, y: ty });
   };
 
-  // ── the stick ──────────────────────────────────────────────────────────────
-  const stickDown = (e) => {
-    e.preventDefault();
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
-    const r = gameRect(e.currentTarget, rot.current), at = toGame(e, rot.current);
-    stick.current = { id: e.pointerId, ox: r.left + r.width / 2, oy: r.top + r.height / 2, x: at.x, y: at.y };
-  };
-  const stickMove = (e) => { const s = stick.current; if (s && s.id === e.pointerId) { const at = toGame(e, rot.current); s.x = at.x; s.y = at.y; } };
-  const stickUp = (e) => { if (stick.current && stick.current.id === e.pointerId) stick.current = null; };
+  // the stick: wherever your left thumb lands (FloatStick)
   const knobRef = useRef(null);
 
   const { live: tgLive, report: tgReport } = tg;
@@ -479,10 +472,7 @@ export default function KitchenRush(props) {
   ];
   const controls = !isSpectator ? (
     <div className="kr-controls">
-      <div className="kr-stick" onPointerDown={stickDown} onPointerMove={stickMove} onPointerUp={stickUp} onPointerCancel={stickUp}
-        aria-label="Move" role="application">
-        <div className="kr-knob" ref={knobRef} />
-      </div>
+      <FloatStick stick={stick} knobRef={knobRef} label="Move" />
       <button className="press p-sun kr-use" onPointerDown={(e) => { e.preventDefault(); pressUse(); }} aria-label="Use">🖐️ Use</button>
     </div>
   ) : null;

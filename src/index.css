@@ -878,6 +878,15 @@ input::-ms-reveal,input::-ms-clear{display:none}
   box-shadow:inset 0 4px 0 rgba(46,33,64,.12);touch-action:none;flex:none}
 .kr-knob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;
   background:var(--peach);border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink);pointer-events:none}
+.kr-controls{align-items:flex-end}
+/* the floating stick (together/FloatStick): a patch bottom left; the ring
+   comes up under your thumb wherever it lands */
+.fstick-zone{position:relative;width:230px;height:220px;flex:none;touch-action:none;-webkit-tap-highlight-color:transparent}
+.fstick{position:absolute;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;border:3px solid var(--ink);
+  background:rgba(255,250,240,.6);box-shadow:inset 0 4px 0 rgba(46,33,64,.12);pointer-events:none}
+.fstick.idle{left:76px;top:150px;opacity:.4}
+.fstick-knob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;
+  background:var(--peach);border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink);pointer-events:none}
 .press.kr-use{min-width:130px;min-height:76px;font-size:1.3rem;--lift:5px;touch-action:none}
 .kr-watch{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 
@@ -885,7 +894,9 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .bb-pad{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .bb-canvas{border:3px solid var(--ink);border-radius:14px;box-shadow:0 5px 0 var(--ink);touch-action:none;image-rendering:auto}
-.bb-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;max-width:440px;padding:0 6px}
+.bb-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;width:100%;max-width:440px;padding:0 6px}
+.gameshell.land .bb-controls{max-width:none}
+.gameshell.land .bb-mid{align-self:flex-start;color:#fff;text-shadow:0 1px 3px #000}
 .bb-stick{position:relative;width:112px;height:112px;border-radius:50%;border:3px solid var(--ink);background:var(--paper2);
   box-shadow:inset 0 4px 0 rgba(46,33,64,.12);touch-action:none;flex:none}
 .bb-knob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;

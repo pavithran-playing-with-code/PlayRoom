@@ -9,10 +9,17 @@
 // This phone moves its own bomber at once (the same lane-walking rules the
 // server checks it against), tells the server where it is, and draws.
 // Move with the stick (or arrows / WASD); 💣 or Space drops a bomb.
+//
+// A landscape game (GameFrame): the stick comes up wherever your left thumb
+// lands, 💣 under the right. Sideways the arena is drawn across its diagonal
+// — 13 wide, 11 high, so the tiles come out bigger — and the stick and keys
+// are turned the same way, so right on the screen is right for you. The
+// arena itself (the server's) is the same for everyone.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import TogetherResults from "../together/TogetherResults";
 import useTogether, { secondsLeft, smoothRows, rivals, myScore } from "../together/useTogether";
+import FloatStick from "../together/FloatStick";
 import { W, H, FLOOR, SOLID, BRICK, FUSE, LEVELS, POWERS, moveBody, inside } from "../together/bombCore.mjs";
 
 const TAU = Math.PI * 2;
@@ -73,10 +80,14 @@ function bomb(ctx, cx, cy, T, left, t) {
     ctx.beginPath(); ctx.arc(sx + Math.cos(a) * d, sy + Math.sin(a) * d, T * 0.035, 0, TAU); ctx.fill();
   }
 }
-function fire(ctx, fireSet, T, t) {
-  const has = (x, y) => fireSet.has(y * W + x);
+function fire(ctx, fireSet, T, t, sw = false) {
+  // `sw`: drawn across the diagonal — the screen's x is the arena's y
+  const at = (x, y) => fireSet.has(y * W + x);
   for (const k of fireSet.keys()) {
-    const x = k % W, y = Math.floor(k / W), px = x * T, py = y * T, cx = px + T / 2, cy = py + T / 2;
+    const ax = k % W, ay = Math.floor(k / W);
+    const x = sw ? ay : ax, y = sw ? ax : ay;
+    const has = (sx, sy) => (sw ? at(sy, sx) : at(sx, sy));
+    const px = x * T, py = y * T, cx = px + T / 2, cy = py + T / 2;
     const fl = 1 + Math.sin(t * 40 + k) * 0.06;
     const band = (w, col) => {
       ctx.fillStyle = col;
@@ -217,14 +228,6 @@ export default function BombBlast(props) {
     window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
   });
-  const stickDown = (e) => {
-    e.preventDefault();
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
-    const r = e.currentTarget.getBoundingClientRect();
-    stick.current = { id: e.pointerId, ox: r.left + r.width / 2, oy: r.top + r.height / 2, x: e.clientX, y: e.clientY };
-  };
-  const stickMove = (e) => { const s = stick.current; if (s && s.id === e.pointerId) { s.x = e.clientX; s.y = e.clientY; } };
-  const stickUp = (e) => { if (stick.current && stick.current.id === e.pointerId) stick.current = null; };
 
   // ── the loop ───────────────────────────────────────────────────────────────
   const { live: tgLive, report: tgReport } = tg;
@@ -254,6 +257,8 @@ export default function BombBlast(props) {
           if (l > 10) { ix = dx; iy = dy; }
           if (knobRef.current) { const cl = Math.min(l, STICK_R) / (l || 1); knobRef.current.style.transform = `translate(${dx * cl}px, ${dy * cl}px)`; }
         } else if (knobRef.current) knobRef.current.style.transform = "";
+        // drawn across the diagonal: the screen's right is the arena's down
+        if (size.current.sw) { const t0 = ix; ix = iy; iy = t0; }
         m.moving = !!(ix || iy);
         if (m.moving) {
           // four ways only: the stronger push wins
@@ -276,8 +281,9 @@ export default function BombBlast(props) {
         }
       }
       if (c) {
-        const { T } = size.current;
-        const cw = W * T, ch = H * T, dpr = Math.min(2, window.devicePixelRatio || 1);
+        const { T, sw } = size.current;
+        const SP = (x, y) => (sw ? [y, x] : [x, y]);         // arena -> screen tile
+        const cw = (sw ? H : W) * T, ch = (sw ? W : H) * T, dpr = Math.min(2, window.devicePixelRatio || 1);
         if (c.width !== Math.round(cw * dpr)) { c.width = Math.round(cw * dpr); c.height = Math.round(ch * dpr); }
         const ctx = c.getContext("2d");
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -288,20 +294,22 @@ export default function BombBlast(props) {
         // floor, pillars, bricks
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
           const cell = Number(grid[y * W + x]);
-          if (cell === SOLID) pillar(ctx, x * T, y * T, T);
-          else if (cell === BRICK) brick(ctx, x * T, y * T, T);
+          const [sx, sy] = SP(x, y);
+          if (cell === SOLID) pillar(ctx, sx * T, sy * T, T);
+          else if (cell === BRICK) brick(ctx, sx * T, sy * T, T);
           else {
             ctx.fillStyle = (x + y) % 2 ? "#3E9B43" : "#45A84A";
-            ctx.fillRect(x * T, y * T, T, T);
-            // the shade a pillar or brick casts on the floor below it
-            if (y > 0 && Number(grid[(y - 1) * W + x]) !== FLOOR) { ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(x * T, y * T, T, T * 0.18); }
+            ctx.fillRect(sx * T, sy * T, T, T);
+            // the shade a pillar or brick casts on the floor below it (on the screen)
+            const ux = sw ? x - 1 : x, uy = sw ? y : y - 1;
+            if (ux >= 0 && uy >= 0 && Number(grid[uy * W + ux]) !== FLOOR) { ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(sx * T, sy * T, T, T * 0.18); }
           }
         }
-        for (const [k, kind] of v.pw) power(ctx, kind, k % W, Math.floor(k / W), T, t);
+        for (const [k, kind] of v.pw) { const [sx, sy] = SP(k % W, Math.floor(k / W)); power(ctx, kind, sx, sy, T, t); }
         // bombs, counting down smoothly between ticks
         const since = (Date.now() - L.viewAt) / 1000;
-        for (const b of v.b) bomb(ctx, ((b[0] % W) + 0.5) * T, (Math.floor(b[0] / W) + 0.5) * T, T, b[1] - since, t);
-        fire(ctx, new Map(v.f.map(([k, ttl]) => [k, ttl])), T, t);
+        for (const b of v.b) { const [sx, sy] = SP(b[0] % W, Math.floor(b[0] / W)); bomb(ctx, (sx + 0.5) * T, (sy + 0.5) * T, T, b[1] - since, t); }
+        fire(ctx, new Map(v.f.map(([k, ttl]) => [k, ttl])), T, t, sw);
         // bombers: others glide a moment behind the server, me where I am
         const bodies = new Map(L.world.bodies.map((b) => [b.id, b]));
         const many = L.world.bodies.length > 1;
@@ -314,7 +322,7 @@ export default function BombBlast(props) {
             fx: mine ? m.fx : Math.sign(Math.abs(dx) > Math.abs(dy) ? dx : 0), fy: mine ? m.fy : Math.sign(Math.abs(dy) >= Math.abs(dx) ? dy : 0) || 1,
             name: many ? (p[0] === myId ? "You" : nameOf(p[0])) : null,
           };
-        }).sort((a, b) => a.y - b.y);
+        }).map((b) => (sw ? { ...b, x: b.y, y: b.x, fx: b.fy, fy: b.fx } : b)).sort((a, b) => a.y - b.y);
         for (const b of draw) bomber(ctx, b, T, t, b.id === myId);
         // the knocked out float away
         const now = performance.now() / 1000;
@@ -322,7 +330,8 @@ export default function BombBlast(props) {
         for (const g of f.ghosts) {
           const q = (now - g.at) / 1.4;
           ctx.globalAlpha = 1 - q;
-          emoji(ctx, "💀", g.x * T, g.y * T - q * T * 1.4, T * (0.7 + q * 0.3));
+          const [gx, gy] = sw ? [g.y, g.x] : [g.x, g.y];
+          emoji(ctx, "💀", gx * T, gy * T - q * T * 1.4, T * (0.7 + q * 0.3));
           ctx.globalAlpha = 1;
         }
         ctx.restore();
@@ -353,9 +362,7 @@ export default function BombBlast(props) {
   const showLevel = !isSpectator && v && v.ph === "level";
   const controls = !isSpectator ? (
     <div className="bb-controls">
-      <div className="bb-stick" onPointerDown={stickDown} onPointerMove={stickMove} onPointerUp={stickUp} onPointerCancel={stickUp} aria-label="Move" role="application">
-        <div className="bb-knob" ref={knobRef} />
-      </div>
+      <FloatStick stick={stick} knobRef={knobRef} label="Move" />
       <div className="bb-mid muted">
         {v && v.ph === "pause" ? `Next round in ${Math.ceil(v.pz)}…` : v && v.ph === "play" && !amAlive ? "💀 Out — watching till the round ends" : ""}
       </div>
@@ -374,14 +381,17 @@ export default function BombBlast(props) {
         message={msg}
         onQuit={onGameEnd}
         controls={controls}
+        landscape
       >
         {({ w, h }) => {
-          const T = Math.max(18, Math.floor(Math.min(w / W, h / H)));
-          size.current = { T };
+          // wide (sideways): the arena across its diagonal, 13 x 11
+          const sw = w > h * 1.1;
+          const T = Math.max(18, Math.floor(sw ? Math.min(w / H, h / W) : Math.min(w / W, h / H)));
+          size.current = { T, sw };
           return (
             <div className="bb-pad" style={{ width: w, height: h }} onContextMenu={(e) => e.preventDefault()}>
               {!tg.ready && <div className="muted">{tg.gone ? "This arena is closed." : "Into the arena…"}</div>}
-              <canvas ref={canvasRef} className="bb-canvas" style={{ width: W * T, height: H * T, display: tg.ready ? "block" : "none" }}
+              <canvas ref={canvasRef} className="bb-canvas" style={{ width: (sw ? H : W) * T, height: (sw ? W : H) * T, display: tg.ready ? "block" : "none" }}
                 role="img" aria-label="Bomb Blast: the arena from above" />
               {v && v.ph === "pause" && (
                 <div className="bb-banner pop">

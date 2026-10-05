@@ -369,10 +369,15 @@ export function actionAt(env, p, blockers = []) {
   if (v === DOOR) return { t: "open", x: tx, y: ty };
   if (v === FLOOR && env.doors && env.doors.has(ty * env.N + tx) && !inTile(p, tx, ty) &&
       !blockers.some((b) => b && inTile(b, tx, ty))) return { t: "close", x: tx, y: ty };
+  // the room's light switch, on the wall in front of you
+  if (v === WALL && env.switches) {
+    const sw = env.switches.get(ty * env.N + tx);
+    if (sw && roomAt(env.N, p.x, p.y) === sw.room) return { t: "lamp", x: tx, y: ty, room: sw.room };
+  }
   return null;
 }
 
-export const ACTION_LABEL = { open: "Open", close: "Close", hide: "Hide", out: "Leave" };
+export const ACTION_LABEL = { open: "Open", close: "Close", hide: "Hide", out: "Leave", lamp: "Lights" };
 
 // Can a door at (x, y) shut now? Same rule as actionAt, for the server.
 export const canClose = (env, x, y, bodies) =>
@@ -459,6 +464,35 @@ export function ghostPatrol(G, env, rand) {
 // `lamps`: one 0/1 per room, in roomAt order. Near a lit room she makes it
 // flicker; that is drawing only (manorRender).
 export const lampCount = (N) => ((N - 1) / 8) ** 2;
+
+// Each room's light switch: on an inside wall, beside the first floor tile
+// of the room (top-left first) that has one. Worked out from the walls
+// alone — never a doorway, whose tile is floor or door depending on the
+// moment — so the solo house, the server and every phone put it in the
+// same place. Map: wall tile key -> { room, fx, fy } (fx, fy: the floor
+// tile you stand on to use it). A room with no inside wall to spare gets
+// one on the outside wall — never the entrance or the front door (`exitT`).
+export function lampSwitches(g, N, doors = new Set(), exitT = null) {
+  const out = new Map(), done = new Set();
+  const never = new Set([1 * N + 0, exitT ? exitT.y * N + exitT.x : -1]);
+  for (const outside of [false, true]) {
+    for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+      if (g[y][x] !== FLOOR || doors.has(y * N + x)) continue;
+      const room = roomAt(N, x + 0.5, y + 0.5);
+      if (done.has(room)) continue;
+      for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) {
+        const wx = x + dx, wy = y + dy;
+        const edge = wx <= 0 || wy <= 0 || wx >= N - 1 || wy >= N - 1;
+        // (a wall between two rooms holds one switch: the first room's)
+        if ((edge && !outside) || g[wy][wx] !== WALL || never.has(wy * N + wx) || out.has(wy * N + wx)) continue;
+        out.set(wy * N + wx, { room, fx: x, fy: y });
+        done.add(room);
+        break;
+      }
+    }
+  }
+  return out;
+}
 export const lampOn = (lamps, N, x, y) => !!(lamps && lamps[roomAt(N, x, y)]);
 export function stepLamps(lamps, N, ghosts, onOut) {
   for (const G of ghosts) {

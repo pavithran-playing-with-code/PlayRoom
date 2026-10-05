@@ -123,7 +123,7 @@ function buildWorld(room, seats, elapsedMs) {
   const w = {
     code: room.room_code, roomId: room.id, mode, seed: room.seed,
     startMs: Date.now() - elapsedMs, durMs: room.duration_seconds * 1000,
-    house, env: { g: house.g, N: house.N, obst: house.obst, doors: new Set(house.doors) },
+    house, env: { g: house.g, N: house.N, obst: house.obst, doors: new Set(house.doors), switches: core.lampSwitches(house.g, house.N, new Set(house.doors), house.exitT) },
     sides, players, pulses: [], over: false, reason: null,
     events: [], timer: null, lastScores: new Map(),
   };
@@ -494,14 +494,23 @@ function attach(server) {
       p.noiseR = num(m.n, 0, 8) ?? 0;
     });
 
-    // The light of the room you're in: on, or off.
+    // A room's light switch: { code, room, px, py }. Only from in that room,
+    // within reach of its switch (judged from where the phone says it is,
+    // if it could have got there — the last report can lag a step).
     socket.on("manor:lamp", (m) => {
       if (!m || typeof m.code !== "string") return;
       const w = worlds.get(m.code.toUpperCase());
       if (!w || w.over) return;
       const p = w.players.get(uid);
       if (!p || !p.alive || p.hiding) return;
-      const room = core.roomAt(w.house.N, p.x, p.y);
+      let fx = p.x, fy = p.y;
+      const px = num(m.px, 0, w.house.N), py = num(m.py, 0, w.house.N);
+      if (px != null && py != null && Math.hypot(px - p.x, py - p.y) <= core.MAX_SPEED + 0.6) { fx = px; fy = py; }
+      const room = Number(m.room);
+      const sw = [...w.env.switches.entries()].find(([, v]) => v.room === room);
+      if (!sw || core.roomAt(w.house.N, fx, fy) !== room) return;
+      const N = w.house.N, wx = sw[0] % N + 0.5, wy = Math.floor(sw[0] / N) + 0.5;
+      if (Math.hypot(wx - fx, wy - fy) > USE_REACH + 0.6) return;
       w.house.lamps[room] = w.house.lamps[room] ? 0 : 1;
       ev(w, { type: "lamp", room, on: w.house.lamps[room], id: uid });
     });

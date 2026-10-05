@@ -8,11 +8,11 @@
 // opening doors as it goes, must be able to get out.
 import {
   HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, INTRO_S, nightSize, dmap, floors, los, newNight, tick, begin,
-  jump, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, mvOK, lit, seesYou, ghostSpeed, listening, listeningNear,
+  jump, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, mvOK, lit, seesYou, ghostSpeed,
 } from "../src/components/horror/manorSim.js";
 import {
   rng, newGhost, ghostTarget, stepGhost, buildHouse,
-  newHum, stepHum, HUM_S, LISTEN_S, LISTEN_GRACE, HEAR_R, roomAt, GRACE_S, sendAway, stepLamps,
+  newHum, stepHum, HUM_S, LISTEN_S, LISTEN_GRACE, HEAR_R, roomAt, GRACE_S, sendAway, stepLamps, lampSwitches,
 } from "../src/components/horror/manorCore.mjs";
 
 let fails = 0;
@@ -227,48 +227,73 @@ function hall(seed = 11) {
 
 // ── the rooms' lights ────────────────────────────────────────────────────────
 {
-  // she's parked in the far corner: (0.5, 0.5) would be inside this very room
+  // she's parked in the far corner: (0.5, 0.5) would be inside a room
   const away = (q) => { q.G.x = q.N - 0.5; q.G.y = q.N - 0.5; q.G.stun = 1e9; };
-  const { s } = hall(90);
-  const room = roomAt(s.N, s.P.x, s.P.y);
-  away(s);
+  // stand at a room's switch, facing it
+  const atSwitch = (q, room = null) => {
+    for (const [k, v] of q.env.switches) {
+      if (room !== null && v.room !== room) continue;
+      const wx = k % q.N, wy = Math.floor(k / q.N);
+      Object.assign(q.P, { x: v.fx + 0.5, y: v.fy + 0.5, fa: Math.atan2(wy - v.fy, wx - v.fx), lastTile: -1 });
+      return v.room;
+    }
+    return null;
+  };
+  const s = inside(90); away(s);
+  const rooms = [...s.env.switches.values()].map((v) => v.room).sort((a, b) => a - b);
+  const placed = [...s.env.switches.entries()].every(([k, v]) => s.g[Math.floor(k / s.N)][k % s.N] === WALL && s.g[v.fy][v.fx] === FLOOR
+    && roomAt(s.N, v.fx + 0.5, v.fy + 0.5) === v.room && Math.abs(k % s.N - v.fx) + Math.abs(Math.floor(k / s.N) - v.fy) === 1);
+  check("every room has one light switch, on a wall beside a floor tile in it", rooms.join() === "0,1,2,3,4,5,6,7,8" && placed);
+  let allRooms = true, why = "";
+  for (let seed = 1; seed <= 150; seed++) for (const night of [1, 3, 5]) {
+    const q = newNight(seed, night);
+    if (q.env.switches.size !== q.lamps.length) { allRooms = false; why = `seed ${seed} night ${night}: ${q.env.switches.size} of ${q.lamps.length}`; }
+  }
+  for (let seed = 1; seed <= 150; seed++) for (const n of [1, 2, 4]) {
+    const hh = buildHouse(seed, { players: Array.from({ length: n }, (_, i) => ({ id: i + 1 })), sides: [{ key: "a", members: Array.from({ length: n }, (_, i) => i + 1) }] });
+    const sw = lampSwitches(hh.g, hh.N, new Set(hh.doors), hh.exitT);
+    if (sw.size !== hh.lamps.length) { allRooms = false; why = `house ${seed} x${n}: ${sw.size} of ${hh.lamps.length}`; }
+  }
+  check("…in every room of every house: 450 solo nights, 450 online houses", allRooms, why);
   check("every room's light starts off", s.lamps.length === 9 && s.lamps.every((v) => v === 0));
-  check("nothing else in reach: Use is the light switch", actionLabel(s) === "Lights on", actionLabel(s));
+  const room = atSwitch(s);
+  check("facing the switch: Use says Lights on", actionLabel(s) === "Lights on", String(actionLabel(s)));
+  s.P.fa += Math.PI;
+  check("…turned away from it: not the switch", actionLabel(s) !== "Lights on" && actionLabel(s) !== "Lights off", String(actionLabel(s)));
+  s.P.fa -= Math.PI;
   doAction(s);
-  check("…Use: this room's light is on, and stays on", s.lamps[room] === 1 && s.lamps.filter(Boolean).length === 1 && actionLabel(s) === "Lights off");
+  check("…Use: that room's light is on", s.lamps[room] === 1 && s.lamps.filter(Boolean).length === 1 && actionLabel(s) === "Lights off");
+  // off to another room: it stays on
+  const other = [...s.env.switches.values()].find((v) => v.room !== room);
+  Object.assign(s.P, { x: other.fx + 0.5, y: other.fy + 0.5, lastTile: -1 });
   run(s, 2);
-  check("…still on two seconds later", s.lamps[room] === 1);
+  check("…and stays on when you go to another room", s.lamps[room] === 1 && roomAt(s.N, s.P.x, s.P.y) !== room);
   // a lit room shows you like your own light: off, she still sees you there
-  toggleLight(s);
-  s.G.x = s.P.x + 4; s.G.y = s.P.y; s.G.stun = 0;
-  check("in a lit room she sees you even with your own light off", seesYou(s));
-  s.lamps[room] = 0;
-  check("…and in the dark she doesn't", !seesYou(s));
-  toggleLight(s);
+  const { s: h } = hall(90);
+  away(h);
+  const hr = roomAt(h.N, h.P.x, h.P.y);
+  h.lamps[hr] = 1;
+  toggleLight(h);
+  h.G.x = h.P.x + 4; h.G.y = h.P.y; h.G.stun = 0;
+  check("in a lit room she sees you even with your own light off", seesYou(h));
+  h.lamps[hr] = 0;
+  check("…and in the dark she doesn't", !seesYou(h));
   // she walks in: the light goes out
   const t = newNight(91, 1); begin(t); run(t, 1); t.grace = 0;
-  const r = roomAt(t.N, t.P.x, t.P.y);
-  t.lamps[r] = 1;
+  const r = atSwitch(t);
+  doAction(t);
   away(t);
   stepLamps(t.lamps, t.N, [t.G]);
   check("(set-up) she's elsewhere: the light stays on", t.lamps[r] === 1);
-  t.G.x = t.P.x + 2; t.G.y = t.P.y;
+  const RN = 3;
+  t.G.x = (r % RN) * 8 + 4.5; t.G.y = Math.floor(r / RN) * 8 + 4.5;
   run(t, DT);
   check("she walks into the lit room: the light goes out, and you're told", t.lamps[r] === 0 && /lights go out/i.test(t.msg) && t.events.some((e) => e.name === "flicker"));
   t.G.stun = 1e9;
+  atSwitch(t, r);
   doAction(t);
   run(t, 1);
   check("…you can switch it on again with her still in there", t.lamps[r] === 1);
-}
-
-// ── Nana far off ─────────────────────────────────────────────────────────────
-{
-  const s = inside(95); park(s);
-  s.hum.on = false; s.hum.since = 1; s.hum.t = 9;
-  s.G.x = s.P.x + HEAR_R + 3; s.G.y = s.P.y;
-  check("the humming stops but she's far off: no red warning", listening(s) && !listeningNear(s));
-  s.G.x = s.P.x + 10;
-  check("…near enough to hear you: the warning", listeningNear(s));
 }
 
 // ── a moment's grace when the door locks ─────────────────────────────────────

@@ -24,7 +24,7 @@ import {
   newBody, litBody, mvOK as bodyMvOK, jumpBody, stepBody,
   newGhost, ghostTarget, ghostPatrol, ghostSees, ghostSpeed as speedOf, stepGhost,
   actionAt, ACTION_LABEL, watcher, hideIn, leaveLocker,
-  newHum, stepHum, listeningNow, lampCount, lampOn, stepLamps, GRACE_S, HEAR_R,
+  newHum, stepHum, listeningNow, lampCount, lampOn, stepLamps, lampSwitches, GRACE_S, HEAR_R,
 } from "./manorCore.mjs";
 
 export { D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, dmap, floors, los, canAt, ROOM_KINDS, roomAt };
@@ -80,7 +80,7 @@ export function newNight(seed, night = 1) {
   const s = {
     seed, night, rand, N, g, need, relics, cells, exitT, obst, far, spots,
     rooms: nameRooms((N - 1) / 8, rand),
-    env: { g, N, obst, doors: new Set(doors) },
+    env: { g, N, obst, doors: new Set(doors), switches: lampSwitches(g, N, new Set(doors), exitT) },
     G: newGhost(gs[0] + 0.5, gs[1] + 0.5),
     P,
     count: 0,
@@ -118,13 +118,12 @@ export function doAction(s) {
   if (s.mode !== "play") return;
   const P = s.P;
   const u = actionAt(s.env, P, [s.G]);
-  if (!u) {
-    // nothing in reach: the room's light switch
-    if (P.entering) return;
-    const room = roomAt(s.N, P.x, P.y);
-    s.lamps[room] = s.lamps[room] ? 0 : 1;
+  if (!u) return;
+  if (u.t === "lamp") {
+    // the room's light switch: on stays on, wherever you go
+    s.lamps[u.room] = s.lamps[u.room] ? 0 : 1;
     emit(s, "click");
-    say(s, s.lamps[room] ? "Lights on. She'll see you in here — and they go out when she comes in." : "Lights off.", 2600);
+    say(s, s.lamps[u.room] ? "Lights on. They stay on — until she walks in." : "Lights off.", 2600);
     return;
   }
   if (u.t === "open") { s.g[u.y][u.x] = FLOOR; P.noiseT = 0.6; emit(s, "creak", 0.28); }
@@ -142,9 +141,9 @@ export function doAction(s) {
 export const actionLabel = (s) => {
   if (s.mode !== "play") return null;
   const u = actionAt(s.env, s.P, [s.G]);
-  if (u) return ACTION_LABEL[u.t];
-  if (s.P.entering) return null;
-  return s.lamps[roomAt(s.N, s.P.x, s.P.y)] ? "Lights off" : "Lights on";
+  if (!u) return null;
+  if (u.t === "lamp") return s.lamps[u.room] ? "Lights off" : "Lights on";
+  return ACTION_LABEL[u.t];
 };
 
 export function jump(s) {

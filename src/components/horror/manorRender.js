@@ -468,6 +468,8 @@ function scene(ctx, s, W, H, t) {
     const hitRoom = roomAt(s.N, P.x + (dx + plx * cam) * (pd - 0.02), P.y + (dy + ply * cam) * (pd - 0.02));
     let col = s.rooms ? roomOf(s, hitRoom)[2] : [96, 74, 56];
     b += (lampLv[hitRoom] || 0) * 0.85 * Math.max(0.45, 1 - pd / 18);   // a lit room: its walls in its light
+    const switches = s.switches || (s.env && s.env.switches), sw = switches && switches.get(h.my * s.N + h.mx);
+    const swHere = sw && sw.room === hitRoom ? sw : null;
     const isEx = h.mx === exitT.x && h.my === exitT.y, isEn = h.mx === 0 && h.my === 1;
     const sealed = isEn;
     const tv = h.my >= 0 && h.my < s.N && h.mx >= 0 && h.mx < s.N ? s.g[h.my][h.mx] : 1;
@@ -528,18 +530,34 @@ function scene(ctx, s, W, H, t) {
       ctx.fillRect(i * cw, ds + lh * 0.6, cw + 1, Math.max(1, lh * 0.025));
       ctx.fillRect(i * cw, ds + lh * 0.97, cw + 1, Math.max(1, lh * 0.03));
       const wallId = h.mx * 31 + h.my * 17;
-      if (wallId % 5 === 0 && h.u > 0.3 && h.u < 0.7) {
+      if (!swHere && wallId % 5 === 0 && h.u > 0.3 && h.u < 0.7) {
         // a painting in a dark frame
         ctx.fillStyle = `rgb(${(40 * b) | 0},${(26 * b) | 0},${(12 * b) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.14, cw + 1, lh * 0.34);
         if (h.u > 0.34 && h.u < 0.66) { ctx.fillStyle = `rgb(${(80 * b) | 0},${(90 * b) | 0},${(70 * b) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.18, cw + 1, lh * 0.26); }
         if (h.u > 0.45 && h.u < 0.55) { ctx.fillStyle = `rgb(${(200 * b) | 0},${(190 * b) | 0},${(170 * b) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.24, cw + 1, lh * 0.08); }
-      } else if ((h.mx * 13 + h.my * 7) % 9 === 0 && h.u > 0.47 && h.u < 0.53) {
+      } else if (!swHere && (h.mx * 13 + h.my * 7) % 9 === 0 && h.u > 0.47 && h.u < 0.53) {
         // a candle sconce: brass, a flame, a warm pool of light round it
         const mb = Math.max(b, 0.5);
         ctx.fillStyle = `rgb(${(180 * mb) | 0},${(140 * mb) | 0},${(60 * mb) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.3, cw + 1, lh * 0.05);
         ctx.fillStyle = "rgba(255,210,100,.95)"; ctx.fillRect(i * cw, ds + lh * (0.22 + Math.sin(t * 13 + h.mx) * 0.01), cw + 1, lh * 0.08);
         ctx.globalCompositeOperation = "lighter";
         ctx.fillStyle = "rgba(255,170,60,.12)"; ctx.fillRect(i * cw - cw * 6, ds + lh * 0.1, cw * 13, lh * 0.4);
+        ctx.globalCompositeOperation = "source-over";
+      }
+    }
+    if (swHere && h.u > 0.36 && h.u < 0.64) {
+      // the room's light switch: a cream plate, its toggle up and glowing when on
+      const on = s.lamps && s.lamps[swHere.room], mb = Math.max(b, 0.55);
+      const top = ds + lh * 0.36, ph = lh * 0.2;
+      ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(i * cw, top - lh * 0.01, cw + 1, ph + lh * 0.02);
+      if (h.u > 0.38 && h.u < 0.62) { ctx.fillStyle = `rgb(${(240 * mb) | 0},${(232 * mb) | 0},${(212 * mb) | 0})`; ctx.fillRect(i * cw, top, cw + 1, ph); }
+      if (h.u > 0.45 && h.u < 0.55) {
+        ctx.fillStyle = on ? "#ffd66b" : "#4a3a2c";
+        ctx.fillRect(i * cw, top + ph * (on ? 0.14 : 0.5), cw + 1, ph * 0.36);
+      }
+      if (on) {
+        ctx.globalCompositeOperation = "lighter";
+        ctx.fillStyle = "rgba(255,214,107,.18)"; ctx.fillRect(i * cw, top - ph * 0.5, cw + 1, ph * 2);
         ctx.globalCompositeOperation = "source-over";
       }
     }

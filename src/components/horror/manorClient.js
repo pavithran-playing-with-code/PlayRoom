@@ -16,7 +16,7 @@
 // No React and no DOM; ManorGame.jsx draws it and wires the socket.
 import {
   unpackWalls, newBody, stepBody, jumpBody, litBody, HURDLE, FLOOR, DOOR,
-  actionAt, ACTION_LABEL, hideIn, leaveLocker, unstick, roomAt, spotKind, ROOM_KINDS, lampCount, HEAR_R,
+  actionAt, ACTION_LABEL, hideIn, leaveLocker, unstick, roomAt, spotKind, ROOM_KINDS, lampCount, lampSwitches, HEAR_R,
 } from "./manorCore.mjs";
 import { AMBIENT, hints as hintsFor, say, scareStep } from "./manorSim.js";
 
@@ -49,7 +49,7 @@ export function createClient(init, now = Date.now()) {
   const body = newBody(me ? me.x : init.house.spawn.x, me ? me.y : init.house.spawn.y, me ? me.fa || 0 : 0);
   const c = {
     mode: init.mode, you: init.you, role: me ? "player" : "spectator", code: init.code,
-    N, g, obst, env: { g, N, obst, doors: new Set(doorList) }, exitT: init.house.exitT,
+    N, g, obst, env: { g, N, obst, doors: new Set(doorList), switches: lampSwitches(g, N, new Set(doorList), init.house.exitT) }, exitT: init.house.exitT,
     doorList, pend: new Map(),            // door tile -> until when our own change stands
     rooms: init.house.rooms || [],
     lamps: init.house.lamps ? [...init.house.lamps] : new Array(lampCount(N)).fill(0), lampPend: 0,
@@ -259,9 +259,9 @@ const blockersOf = (c) => [
 export function actionLabel(c, now = Date.now()) {
   if (!playing(c) || inIntro(c, now)) return null;
   const u = actionAt(c.env, c.body, blockersOf(c));
-  if (u) return ACTION_LABEL[u.t];
-  // nothing in reach: the room's light switch
-  return c.lamps[roomAt(c.N, c.body.x, c.body.y)] ? "Lights off" : "Lights on";
+  if (!u) return null;
+  if (u.t === "lamp") return c.lamps[u.room] ? "Lights off" : "Lights on";
+  return ACTION_LABEL[u.t];
 }
 
 // Use, now, on this phone. Returns { ask, sounds }: `ask` is what to send the
@@ -271,13 +271,13 @@ export function doAction(c, now = Date.now()) {
   if (!playing(c) || inIntro(c, now)) return none;
   const P = c.body;
   const u = actionAt(c.env, P, blockersOf(c));
-  if (!u) {
-    // the room's light: switched here at once, and the server told
-    const room = roomAt(c.N, P.x, P.y);
-    c.lamps[room] = c.lamps[room] ? 0 : 1;
+  if (!u) return none;
+  if (u.t === "lamp") {
+    // the room's light switch: flipped here at once, and the server told
+    c.lamps[u.room] = c.lamps[u.room] ? 0 : 1;
     c.lampPend = now + 800;
-    say(c, c.lamps[room] ? "Lights on. She'll see you in here — and they go out when she comes in." : "Lights off.", 2600);
-    return { ask: null, lamp: { code: c.code }, sounds: [{ name: "click" }] };
+    say(c, c.lamps[u.room] ? "Lights on. They stay on — until she walks in." : "Lights off.", 2600);
+    return { ask: null, lamp: { code: c.code, room: u.room, px: P.x, py: P.y }, sounds: [{ name: "click" }] };
   }
   const sounds = [];
   if (u.t === "open" || u.t === "close") {
@@ -370,7 +370,7 @@ export function viewState(c, now = Date.now()) {
     mode: inIntro(c, now) ? "intro" : scared ? "dead" : "play",
     introT: Math.max(0, (SHOW_MAP_MS - (now - c.startLocal)) / 1000),
     deadT: scared ? (now - c.deadAt) / 1000 : 0,
-    N: c.N, g: c.g, obst: c.obst, exitT: c.exitT, rooms: c.rooms, lamps: c.lamps,
+    N: c.N, g: c.g, obst: c.obst, exitT: c.exitT, rooms: c.rooms, lamps: c.lamps, switches: c.env.switches,
     relics: mine, cells: c.cells, pulses: c.pulses, puffs: c.puffs, tm: c.tm, bodies: own ? c.bodies : [],
     // before the first word from the server there are no ghosts yet: a
     // stand-in far away keeps the danger glow and arrows quiet

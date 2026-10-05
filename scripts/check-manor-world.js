@@ -624,27 +624,39 @@ let coreMod;
     const ph = phone(62);
     const p = w3.players.get(62), G = w3.house.ghosts[0], N = w3.house.N;
     world._tick(w3);                            // (her parking spot counts as a room: settle it)
-    const r = coreMod.roomAt(N, p.x, p.y);
+    check("every room has one light switch", w3.env.switches.size === w3.house.lamps.length, `${w3.env.switches.size} switches, ${w3.house.lamps.length} rooms`);
     check("every room's light starts off", w3.house.lamps.length === 9 && w3.house.lamps.every((v) => !v));
-    ph.h["manor:lamp"]({ code: w3.code });
-    check("the light switch: the room you're in lights up", w3.house.lamps[r] === 1 && lastEv("lamp").length === 0);
+    // a room away from the entrance, and its switch
+    const [sk, sv] = [...w3.env.switches.entries()].find(([, v]) => v.room === 4) || [...w3.env.switches.entries()][1];
+    const r = sv.room;
+    p.x = sv.fx + 0.5; p.y = sv.fy + 0.5;
+    ph.h["manor:lamp"]({ code: w3.code, room: r, px: p.x, py: p.y });
+    check("at the switch: the room's light goes on", w3.house.lamps[r] === 1);
+    // from across the house, no
+    const far = [...w3.env.switches.values()].find((v) => v.room !== r);
+    ph.h["manor:lamp"]({ code: w3.code, room: far.room, px: p.x, py: p.y });
+    check("…a switch in another room can't be reached from here", w3.house.lamps[far.room] === 0);
     sent.length = 0;
     world._tick(w3);
     const tk = sent.find((m) => m.ev === "manor:tick");
     check("…and every phone is told", tk && tk.payload.l[r] === "1" && tk.payload.e.some((e) => e.type === "lamp" && e.room === r && e.on === 1));
-    world._tick(w3);
-    check("…it stays on", w3.house.lamps[r] === 1);
+    // walk off to another room: it stays on
+    p.x = far.fx + 0.5; p.y = far.fy + 0.5;
+    world._tick(w3); world._tick(w3);
+    check("…and stays on when you go to another room", w3.house.lamps[r] === 1);
     G.x = N - 1.5; G.y = N - 1.5; world._tick(w3);  // she's elsewhere
-    G.x = p.x + 1.5; G.y = p.y; sent.length = 0;
+    G.x = (r % 3) * 8 + 4.5; G.y = Math.floor(r / 3) * 8 + 4.5; sent.length = 0;
     world._tick(w3);
     G.x = -50; G.y = -50;
     check("she walks into the lit room: its light goes out", w3.house.lamps[r] === 0 && lastEv("lampOut").some((e) => e.room === r));
-    ph.h["manor:lamp"]({ code: w3.code });
+    p.x = sv.fx + 0.5; p.y = sv.fy + 0.5;
+    ph.h["manor:lamp"]({ code: w3.code, room: r, px: p.x, py: p.y });
     check("…and you can switch it on again", w3.house.lamps[r] === 1);
+    void sk;
     // a lit room: she sees you there with your own light off
     p.lit = false;
     G.x = p.x + 3.5; G.y = p.y; G.stun = 0; G.st = "patrol"; G.room = r;
-    const clear = coreMod.los(w3.house.g, G.x, G.y, p.x, p.y);
+    const clear = coreMod.los(w3.house.g, G.x, G.y, p.x, p.y) && coreMod.roomAt(N, p.x, p.y) === r;
     world._tick(w3);
     if (clear) check("in a lit room she sees you, your own light off or not", G.st === "hunt");
   }

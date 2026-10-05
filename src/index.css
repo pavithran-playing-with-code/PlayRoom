@@ -852,6 +852,14 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .press.rr-btn{padding:10px 18px;font-size:1.2rem;--lift:4px;min-width:56px}
 
 /* ── Piano Tiles (.pt-) ── */
+/* the lobby's song picker: a card a song, its level in a pill */
+.pt-songs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:18px}
+.pt-song{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:9px 11px;text-align:left;cursor:pointer;
+  border:3px solid var(--ink);border-radius:14px;background:#fff;box-shadow:0 3px 0 var(--ink);font-size:.88rem}
+.pt-song.on{background:var(--sun);transform:translateY(-2px);box-shadow:0 5px 0 var(--ink)}
+.pt-song-ic{font-size:1.3rem;line-height:1}
+.pt-lvl{font-size:.68rem;font-weight:800;padding:1px 8px;border-radius:999px;border:2px solid var(--ink)}
+.pt-lvl.lvl-easy{background:var(--lime)}.pt-lvl.lvl-medium{background:var(--sky)}.pt-lvl.lvl-hard{background:var(--coral)}
 .pt-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .pt-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);display:block;

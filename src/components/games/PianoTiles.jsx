@@ -12,23 +12,13 @@ import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import { newSong, step, tap, release, visible, score, COLS, VISIBLE } from "./pianoSim.js";
+import { songFor, LEVELS } from "./pianoSongs.js";
 
 const KEYS = { d: 0, f: 1, j: 2, k: 3 };
 const SOUND_KEY = "piano.sound";
 
-// MIDI notes. Which song a room plays comes from its seed.
-const TUNES = [
-  { name: "Ode to Joy", notes: [64, 64, 65, 67, 67, 65, 64, 62, 60, 60, 62, 64, 64, 62, 62,
-    64, 64, 65, 67, 67, 65, 64, 62, 60, 60, 62, 64, 62, 60, 60] },
-  { name: "Twinkle Twinkle", notes: [60, 60, 67, 67, 69, 69, 67, 65, 65, 64, 64, 62, 62, 60,
-    67, 67, 65, 65, 64, 64, 62, 67, 67, 65, 65, 64, 64, 62] },
-  { name: "Für Elise", notes: [76, 75, 76, 75, 76, 71, 74, 72, 69, 60, 64, 69, 71, 64, 68, 71, 72,
-    64, 76, 75, 76, 75, 76, 71, 74, 72, 69, 60, 64, 69, 71, 64, 72, 71, 69] },
-  { name: "Jingle Bells", notes: [64, 64, 64, 64, 64, 64, 64, 67, 60, 62, 64,
-    65, 65, 65, 65, 65, 64, 64, 64, 64, 62, 62, 64, 62, 67] },
-  { name: "Happy Birthday", notes: [60, 60, 62, 60, 65, 64, 60, 60, 62, 60, 67, 65,
-    60, 60, 72, 69, 65, 64, 62, 70, 70, 69, 65, 67, 65] },
-];
+// The songs and their levels live in pianoSongs.js; the room's seed picks one
+// (the one chosen in the lobby). Every tile carries its own note.
 
 // Backgrounds that change every 50 tiles: [top, bottom].
 const BGS = [["#FFF6E6", "#FFE6C4"], ["#E8FFF8", "#C4F1E6"], ["#F4EBFF", "#DCC8FA"],
@@ -292,6 +282,10 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
 
   // before the start: which song it is
   if (!s.started) {
+    // on a card, so it reads over the black tiles too
+    const cw = Math.min(W - 16, 340), cx0 = (W - cw) / 2, cy0 = H * 0.2 - 28;
+    ctx.fillStyle = "rgba(255,250,240,.94)"; ctx.strokeStyle = "#2E2140"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(cx0, cy0, cw, 82, 14) : ctx.rect(cx0, cy0, cw, 82); ctx.fill(); ctx.stroke();
     ctx.font = "800 18px Fredoka, sans-serif";
     ctx.textAlign = "center";
     ctx.fillStyle = "#2E2140";
@@ -299,6 +293,10 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
     ctx.font = "600 13px Nunito, sans-serif";
     ctx.fillStyle = "rgba(46,33,64,.65)";
     ctx.fillText("Tap the black tiles, lowest first", W / 2, H * 0.2 + 22);
+    const lv = LEVELS[tune.level] || LEVELS.medium;
+    ctx.font = "800 13px Nunito, sans-serif";
+    ctx.fillStyle = tune.level === "hard" ? "#d62f3d" : tune.level === "easy" ? "#22783f" : "#2a7fb8";
+    ctx.fillText(`${lv.label}${lv.double ? " · two at once? tap both" : ""}${lv.long > 0.1 ? " · hold the long ones" : ""}`, W / 2, H * 0.2 + 42);
   }
 
   // stood still after a mistake: the edges go red
@@ -319,7 +317,7 @@ export default function PianoTiles(props) {
   const { addScore } = eng;
   const sim = useRef(null);
   if (sim.current === null) sim.current = newSong(seed);
-  const tune = TUNES[Math.abs(Number(seed) || 0) % TUNES.length];
+  const tune = songFor(seed);
   const canvasRef = useRef(null);
   const size = useRef({ w: 300, h: 400 });
   const overRef = useRef(false);
@@ -363,7 +361,7 @@ export default function PianoTiles(props) {
       if (!piano.current && soundRef.current) piano.current = makePiano();
       stopRing();
       const t = res.tile;
-      const midi = tune.notes[(s.hits - 1) % tune.notes.length];
+      const midi = t.midi ?? tune.notes[(s.hits - 1) % tune.notes.length];
       if (soundRef.current && piano.current) {
         const n = piano.current.note(midi, t.len > 1 ? t.len * 0.6 : 0.45);
         if (t.len > 1) ringing.current = n;

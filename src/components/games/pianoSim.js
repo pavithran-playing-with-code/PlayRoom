@@ -8,15 +8,19 @@
 // its bottom edge sits on the song, `pos` is the song row at the bottom of the
 // screen, so a tile is drawn `y - pos` rows up from the bottom.
 //
-// The song (which column, which tiles are long) comes from the room's seed:
-// everyone plays the same tiles. Nothing ever takes points away — a missed
+// The song comes from the room's seed (pianoSongs.js): everyone plays the
+// same tiles. The tiles follow its tune — a higher note sits further right —
+// and each tile plays its own note. The song's level sets the pace, how
+// many tiles are long, and how often a row has TWO black tiles (a chord:
+// tap both, in either order). Nothing ever takes points away — a missed
 // tile or a tap on white costs you your combo, some speed and a moment
 // stood still, and the clock keeps running.
 import { seededRand } from "./seededRand.js";
+import { songFor, LEVELS } from "./pianoSongs.js";
 
 export const COLS = 4;
 export const VISIBLE = 4;            // rows on the screen
-export const BASE_SPEED = 2.4;       // rows a second at the start
+export const BASE_SPEED = 2.4;       // rows a second at the start (a medium song; see LEVELS)
 export const MAX_SPEED = 7;
 export const SPEED_PER_TILE = 0.02;
 export const MISS_AT = -0.45;        // a tile's bottom this far below the screen: missed
@@ -25,13 +29,15 @@ export const HOLD_LINE = 1;          // a long tile is done when its top reaches
 export const HOLD_PTS = 10;          // for each extra row of a long tile, held all the way
 export const STUN_MISS = 0.8;        // seconds stood still after a miss
 export const STUN_WRONG = 0.45;      // …and after a tap on white
-const LONG_FROM = 8;                 // no long tiles in the first few
-const LONG_CHANCE = 0.13;
+const LONG_FROM = 8;                 // no long tiles (or chords) in the first few
 
-export function newSong(seed) {
+export function newSong(seed, song = songFor(seed)) {
+  const lv = LEVELS[song.level] || LEVELS.medium;
   const s = {
     rand: seededRand(seed), tiles: [], end: 0.5, prevCol: -1, same: 0,
-    pos: 0, speed: BASE_SPEED, started: false, next: 0,
+    song, lv, base: lv.base, max: lv.max, ni: 0,
+    lo: Math.min(...song.notes), hi: Math.max(...song.notes),
+    pos: 0, speed: lv.base, started: false, next: 0,
     combo: 0, best: 0, hits: 0, misses: 0, wrongs: 0,
     points: 0, hold: null, stunT: 0, t: 0,
   };
@@ -39,17 +45,28 @@ export function newSong(seed) {
   return s;
 }
 
-// Deal tiles until the song reaches `upto`. Never three in one column running.
+// Deal tiles until the song reaches `upto`: one row per note of the tune,
+// in the column its pitch puts it in. Never three in one column running.
 function ensure(s, upto) {
   while (s.end < upto) {
     const r = s.rand;
-    let col = Math.floor(r() * COLS);
-    if (col === s.prevCol && s.same >= 1) col = (col + 1 + Math.floor(r() * (COLS - 1))) % COLS;
+    const midi = s.song.notes[s.ni % s.song.notes.length];
+    s.ni += 1;
+    let col = Math.min(COLS - 1, Math.floor(((midi - s.lo) / (s.hi - s.lo + 1)) * COLS));
+    // a third in one column: step aside, the way the tune is going
+    const up = midi > (s.prevMidi ?? midi), down = midi < (s.prevMidi ?? midi);
+    if (col === s.prevCol && s.same >= 1) col = col === 0 ? 1 : col === COLS - 1 ? COLS - 2 : up ? col + 1 : down ? col - 1 : col + (r() < 0.5 ? -1 : 1);
+    s.prevMidi = midi;
     s.same = col === s.prevCol ? s.same + 1 : 0;
     s.prevCol = col;
     const i = s.tiles.length;
-    const len = i >= LONG_FROM && r() < LONG_CHANCE ? 2 + Math.floor(r() * 2) : 1;
-    s.tiles.push({ i, col, y: s.end, len, done: false, missed: false, held: 0, at: 0 });
+    const len = i >= LONG_FROM && r() < s.lv.long ? 2 + Math.floor(r() * 2) : 1;
+    s.tiles.push({ i, col, y: s.end, len, midi, done: false, missed: false, held: 0, at: 0 });
+    // a chord: a second black tile in the same row, a third below
+    if (len === 1 && i >= LONG_FROM && r() < s.lv.double) {
+      const other = (col + 1 + Math.floor(r() * (COLS - 1))) % COLS;
+      s.tiles.push({ i: i + 1, col: other, y: s.end, len: 1, midi: midi - 4, twin: true, done: false, missed: false, held: 0, at: 0 });
+    }
     s.end += len;
   }
 }
@@ -111,7 +128,7 @@ export function step(s, dt) {
     s.next += 1;
     s.combo = 0;
     s.misses += 1;
-    s.speed = Math.max(BASE_SPEED, s.speed * 0.8);
+    s.speed = Math.max(s.base, s.speed * 0.8);
     s.stunT = STUN_MISS;
     endHold(s);
     s.pos = tile.y - 0.7;             // roll back so you can see what you missed
@@ -129,6 +146,14 @@ export function tap(s, col, yRow) {
   if (s.stunT > 0) return { kind: "none" };
   ensure(s, s.pos + VISIBLE + 4);
   const on = (t) => t.col === col && yRow >= t.y - SLOP && yRow <= t.y + t.len + SLOP;
+  // a chord's two tiles can be played in either order: tapping the second
+  // first makes it the next one
+  const twin = s.tiles[s.next + 1];
+  if (!on(s.tiles[s.next]) && twin && twin.y === s.tiles[s.next].y && on(twin)) {
+    const a = s.tiles[s.next];
+    s.tiles[s.next] = twin; s.tiles[s.next + 1] = a;
+    twin.i = s.next; a.i = s.next + 1;
+  }
   const tile = s.tiles[s.next];
   if (on(tile)) {
     endHold(s);
@@ -140,7 +165,7 @@ export function tap(s, col, yRow) {
     s.best = Math.max(s.best, s.combo);
     s.hits += 1;
     s.points += tilePoints(s.combo);
-    s.speed = Math.min(MAX_SPEED, s.speed + SPEED_PER_TILE);
+    s.speed = Math.min(s.max, s.speed + SPEED_PER_TILE);
     if (tile.len > 1) { s.hold = tile.i; tile.held = holdProgress(s, tile); }
     return { kind: "hit", tile };
   }

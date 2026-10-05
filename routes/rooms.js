@@ -92,6 +92,7 @@ const CARROM_SEATS = [1, 2, 4];
 // Games whose scores the server keeps itself, from what happened in its world.
 const serverScored = (slug) => slug === manor.GAME || together.isTogether(slug);
 const COOP_MAX = 4;
+const PIANO_SONGS = 7;           // = SONGS.length in src/components/games/pianoSongs.js (check-piano proves it)
 
 const ROOM_CODE_RE = /^[A-Z0-9]{4,8}$/;
 const GAME_SLUG_RE = /^[a-z0-9_-]{1,40}$/;
@@ -191,7 +192,11 @@ router.post("/", verifyToken, async (req, res, next) => {
     if (roomMode === "coop" && (cap < 2 || cap > COOP_MAX))
       return res.status(400).json({ success: false, message: `Playing together takes 2 to ${COOP_MAX} players.` });
 
-    const seed = Math.floor(Math.random() * 1_000_000);
+    // Piano Tiles: the song picked in the lobby. The seed decides it
+    // (pianoSongs.js: seed % PIANO_SONGS), so pick a seed that lands on it.
+    let seed = Math.floor(Math.random() * 1_000_000);
+    const song = Math.floor(Number(req.body.song));
+    if (game_slug === "piano" && Number.isFinite(song) && song >= 0 && song < PIANO_SONGS) seed = seed - (seed % PIANO_SONGS) + song;
     const [result] = await db.execute(
       "INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed, duration_seconds, mode, last_activity_at) VALUES (?,?,?,?,?,?,?,?,NOW())",
       [code, gt[0].id, req.user.id, cap, priv, seed, duration, roomMode]
@@ -232,7 +237,7 @@ router.post("/:code/rematch", verifyToken, async (req, res, next) => {
   await prev;
   try {
     const [rows] = await db.execute(
-      `SELECT r.id, r.status, r.max_players, r.is_private, r.duration_seconds, r.mode, r.game_type_id, gt.slug, gt.is_active
+      `SELECT r.id, r.status, r.max_players, r.is_private, r.duration_seconds, r.mode, r.game_type_id, r.seed AS old_seed, gt.slug, gt.is_active
          FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id WHERE r.room_code = ?`, [oldCode]);
     if (!rows.length) return res.status(404).json({ success: false, message: "Room not found." });
     const old = rows[0];
@@ -255,7 +260,9 @@ router.post("/:code/rematch", verifyToken, async (req, res, next) => {
       const [ex] = await db.execute("SELECT id FROM rooms WHERE room_code = ?", [code]);
       if (!ex.length) break;
     } while (++tries < 10);
-    const seed = Math.floor(Math.random() * 1_000_000);
+    let seed = Math.floor(Math.random() * 1_000_000);
+    // Piano Tiles: the same song again
+    if (old.slug === "piano") seed = seed - (seed % PIANO_SONGS) + (Math.abs(Number(old.old_seed) || 0) % PIANO_SONGS);
     const [ins] = await db.execute(
       "INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed, duration_seconds, mode, last_activity_at) VALUES (?,?,?,?,?,?,?,?,NOW())",
       [code, old.game_type_id, req.user.id, old.max_players, old.is_private, seed, old.duration_seconds, old.mode]);

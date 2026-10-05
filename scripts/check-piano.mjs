@@ -14,9 +14,10 @@ import path from "node:path";
 // the module imports "./seededRand.js": copy both somewhere Node can load them as ES modules
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "piano-"));
 const src = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "components", "games");
-for (const f of ["pianoSim.js", "seededRand.js"]) fs.copyFileSync(path.join(src, f), path.join(dir, f.replace(".js", ".mjs")));
-fs.writeFileSync(path.join(dir, "pianoSim.mjs"), fs.readFileSync(path.join(dir, "pianoSim.mjs"), "utf8").replace("./seededRand.js", "./seededRand.mjs"));
+for (const f of ["pianoSim.js", "seededRand.js", "pianoSongs.js"]) fs.copyFileSync(path.join(src, f), path.join(dir, f.replace(".js", ".mjs")));
+fs.writeFileSync(path.join(dir, "pianoSim.mjs"), fs.readFileSync(path.join(dir, "pianoSim.mjs"), "utf8").replace("./seededRand.js", "./seededRand.mjs").replace("./pianoSongs.js", "./pianoSongs.mjs"));
 const m = await import(pathToFileURL(path.join(dir, "pianoSim.mjs")).href);
+const songs = await import(pathToFileURL(path.join(dir, "pianoSongs.mjs")).href);
 
 let fails = 0;
 const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`); };
@@ -47,25 +48,71 @@ function tapNext(s) {
 
 // ── the song ─────────────────────────────────────────────────────────────────
 {
-  let same = true, joined = true, one = true, three = false, longs = 0, firstLong = 99;
+  let same = true, joined = true, one = true, three = false, longs = 0, firstLong = 99, twinsOk = true, twins = 0;
   for (let seed = 1; seed <= 200; seed++) {
     const a = m.newSong(seed), b = m.newSong(seed);
     a.pos = 300; b.pos = 300; m.visible(a); m.visible(b);
     if (JSON.stringify(a.tiles.map((t) => [t.col, t.y, t.len])) !== JSON.stringify(b.tiles.map((t) => [t.col, t.y, t.len]))) same = false;
-    for (let k = 1; k < a.tiles.length; k++) {
-      if (Math.abs(a.tiles[k].y - (a.tiles[k - 1].y + a.tiles[k - 1].len)) > 1e-9) joined = false;
-      if (a.tiles[k].col < 0 || a.tiles[k].col >= m.COLS) one = false;
-      if (k >= 2 && a.tiles[k].col === a.tiles[k - 1].col && a.tiles[k].col === a.tiles[k - 2].col) three = true;
-      if (a.tiles[k].len > 1) { longs++; firstLong = Math.min(firstLong, k); }
+    // the tune's tiles (a chord's second tile sits beside one, in the same row)
+    const tune = a.tiles.filter((t) => !t.twin);
+    for (let k = 1; k < tune.length; k++) {
+      if (Math.abs(tune[k].y - (tune[k - 1].y + tune[k - 1].len)) > 1e-9) joined = false;
+      if (tune[k].col < 0 || tune[k].col >= m.COLS) one = false;
+      if (k >= 2 && tune[k].col === tune[k - 1].col && tune[k].col === tune[k - 2].col) three = true;
+      if (tune[k].len > 1) { longs++; firstLong = Math.min(firstLong, k); }
+    }
+    for (let k = 0; k < a.tiles.length; k++) {
+      const t = a.tiles[k];
+      if (t.twin && !(a.tiles[k - 1] && a.tiles[k - 1].y === t.y && a.tiles[k - 1].col !== t.col && a.tiles[k - 1].len === 1)) twinsOk = false;
+      if (t.twin) twins++;
     }
   }
   check("the same seed deals the same song", same);
-  check("the rows join up, one tile in each, inside the four columns", joined && one);
+  check("the rows join up, one tune tile in each, inside the four columns", joined && one);
   check("never three in one column running", !three);
+  check("a chord: a second tile in the same row, in another column", twinsOk && twins > 100, `${twins} chords`);
   check("long tiles turn up, but not in the first few", longs > 1000 && firstLong >= 8, `${longs} long tiles, first at ${firstLong}`);
   const c = m.newSong(1), d = m.newSong(2);
   c.pos = d.pos = 40; m.visible(c); m.visible(d);
   check("a different seed deals a different song", c.tiles.map((t) => t.col).join() !== d.tiles.map((t) => t.col).join());
+}
+
+// ── songs and levels ─────────────────────────────────────────────────────────
+{
+  const S = songs.SONGS;
+  check("seven songs, each with a level", S.length === 7 && S.every((x) => songs.LEVELS[x.level] && x.notes.length >= 20));
+  // the server picks a seed that lands on the song chosen in the lobby
+  const rooms = fs.readFileSync(path.join(src, "..", "..", "..", "routes", "rooms.js"), "utf8");
+  const n = Number((rooms.match(/PIANO_SONGS = (\d+)/) || [])[1]);
+  check("the server knows how many songs there are", n === S.length, `server ${n}, songs ${S.length}`);
+  // the tiles follow the tune: each plays its note, and a higher note sits further right
+  const tw = m.newSong(7, S[0]);
+  tw.pos = 40; m.visible(tw);
+  const tune = tw.tiles.filter((t) => !t.twin).slice(0, S[0].notes.length);
+  check("each tile carries the next note of the song", tune.every((t, k) => t.midi === S[0].notes[k]));
+  let rises = 0, falls = 0;
+  for (let k = 1; k < tune.length; k++) {
+    if (tune[k].midi > tune[k - 1].midi && tune[k].col < tune[k - 1].col) falls++;
+    if (tune[k].midi > tune[k - 1].midi) rises++;
+  }
+  check("…and a note going up never jumps left", falls === 0 && rises > 3, `${rises} rises`);
+  // easy is slower and plain; hard is fast, with long tiles and chords
+  const easy = m.newSong(3, S.find((x) => x.level === "easy")), hard = m.newSong(3, S.find((x) => x.level === "hard"));
+  easy.pos = hard.pos = 300; m.visible(easy); m.visible(hard);
+  check("an easy song: slower, no chords", easy.base < hard.base && easy.max < hard.max && !easy.tiles.some((t) => t.twin));
+  check("a hard song: chords and more long tiles", hard.tiles.some((t) => t.twin) && hard.tiles.filter((t) => t.len > 1).length > easy.tiles.filter((t) => t.len > 1).length);
+  // a chord, either order
+  for (const order of [0, 1]) {
+    const c = m.newSong(5, S.find((x) => x.level === "hard"));
+    c.pos = 200; m.visible(c); c.pos = 0;
+    let k = c.tiles.findIndex((t) => t.twin) - 1;
+    // play up to the chord
+    for (let i = 0; i < k; i++) { const t = c.tiles[c.next]; m.tap(c, t.col, t.y + 0.5); }
+    const first = c.tiles[c.next], second = c.tiles[c.next + 1];
+    const a1 = order ? second : first, a2 = order ? first : second;
+    const r1 = m.tap(c, a1.col, a1.y + 0.5), r2 = m.tap(c, a2.col, a2.y + 0.5);
+    check(order ? "a chord played right to left: both tiles count" : "a chord played left to right: both tiles count", r1.kind === "hit" && r2.kind === "hit" && c.wrongs === 0, `${r1.kind} ${r2.kind}`);
+  }
 }
 
 // ── starting ─────────────────────────────────────────────────────────────────

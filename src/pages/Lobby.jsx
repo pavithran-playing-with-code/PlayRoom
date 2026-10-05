@@ -10,6 +10,7 @@ import { usePresence } from "../utils/PresenceContext";
 import { presenceLabel } from "../utils/timeAgo";
 import PeekBuddy from "../components/characters/PeekBuddy";
 import GameIcon from "../components/games/GameIcon";
+import { SONGS, LEVELS } from "../components/games/pianoSongs";
 
 // The little crew that fills up as you add seats.
 const CREW = ["🐯", "🐼", "🦊", "🐸", "🌸", "🚀", "🐙", "🦁"];
@@ -43,6 +44,7 @@ export default function Lobby() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [teamMode, setTeamMode] = useState(false);
   const [coopMode, setCoopMode] = useState(false);
+  const [song, setSong] = useState(0);             // Piano Tiles: which song
   const [creating, setCreating] = useState(false);
 
   const [joinCode, setJoinCode] = useState("");
@@ -106,6 +108,7 @@ export default function Lobby() {
         is_private: isSolo ? true : isPrivate,   // solo rooms are never listed
         duration_seconds: duration,
         mode: teams ? "teams" : coop ? "coop" : "free",
+        ...(game === "piano" ? { song } : {}),
       });
       const data = await res.json();
       if (!data.success) { toast.error(data.message || "Failed to create room."); return; }
@@ -275,6 +278,20 @@ export default function Lobby() {
               </>
             )}
 
+            {/* Piano Tiles: pick the song — everyone in the room plays it */}
+            {game === "piano" && (
+              <div className="pt-songs" role="radiogroup" aria-label="Pick a song">
+                {SONGS.map((sg, i) => (
+                  <button key={sg.name} type="button" role="radio" aria-checked={song === i}
+                    className={`pt-song${song === i ? " on" : ""}`} onClick={() => setSong(i)}>
+                    <span className="pt-song-ic">{sg.icon}</span>
+                    <b>{sg.name}</b>
+                    <span className={`pt-lvl lvl-${sg.level}`}>{LEVELS[sg.level].label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* What you're about to create, spelled out: game, clock, seats. */}
             <div className="lobby-sum" aria-live="polite">
               <span className="chip" style={{ background: selected.col }}><GameIcon slug={selected.slug} icon={selected.icon} /> {selected.name}</span>
@@ -282,6 +299,7 @@ export default function Lobby() {
               <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
               {teams && <span className="chip c-grape">⚔️ Teams</span>}
               {coop && <span className="chip c-grape">🤝 Together</span>}
+              {game === "piano" && <span className="chip c-sun">{SONGS[song].icon} {SONGS[song].name}</span>}
             </div>
             <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
               {creating ? "Creating…"

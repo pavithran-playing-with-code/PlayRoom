@@ -3,10 +3,9 @@
 // the shots and the little bursts. Plain canvas calls, no React — the game
 // (TowerGuard.jsx) decides what to draw where, this draws it.
 //
-// A tower changes as it levels, not just by a pip:
-//   Archer   1 a wooden lookout · 2 a stone tower, red roof · 3 a tall keep, blue roof and a banner
-//   Cannon   1 a cannon on a cart · 2 on a stone bastion · 3 twin barrels on a fortress
-//   Frost    1 one ice crystal · 2 a cluster · 3 a glowing spire with snowflakes going round
+// A tower is a plain badge — its icon on a stone base, its builder's colour
+// round it — and its level shows as stars and a bronze, silver or gold rim.
+// Shots are simple: an arrow, a lobbed ball and its burst, a frost beam.
 import { W, H, TOWERS } from "../together/towerCore.mjs";
 
 const TAU = Math.PI * 2;
@@ -135,7 +134,7 @@ export function castle(ctx, map, T, t, lives, max) {
   }
 }
 
-// ── towers ───────────────────────────────────────────────────────────────────
+// level stars under a tower
 function stars(ctx, cx, y, n, T) {
   for (let i = 0; i < n; i++) {
     const x = cx + (i - (n - 1) / 2) * T * 0.2, r = T * 0.085;
@@ -145,34 +144,7 @@ function stars(ctx, cx, y, n, T) {
     ctx.closePath(); ctx.fill(); ctx.stroke();
   }
 }
-function archerMan(ctx, x, y, T, aim, colour) {
-  ctx.fillStyle = colour; ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.arc(x, y, T * 0.1, 0, TAU); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#F2C9A0"; ctx.beginPath(); ctx.arc(x, y - T * 0.02, T * 0.05, 0, TAU); ctx.fill();
-  ctx.save(); ctx.translate(x, y); ctx.rotate(aim);
-  ctx.strokeStyle = "#7A4A2A"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(T * 0.06, 0, T * 0.12, -1.1, 1.1); ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,.8)"; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(T * 0.06 + Math.cos(-1.1) * T * 0.12, Math.sin(-1.1) * T * 0.12); ctx.lineTo(T * 0.06 + Math.cos(1.1) * T * 0.12, Math.sin(1.1) * T * 0.12); ctx.stroke();
-  ctx.restore();
-}
-function barrel(ctx, x, y, T, aim, len, wid, band) {
-  ctx.save(); ctx.translate(x, y); ctx.rotate(aim);
-  ctx.fillStyle = "#2B2730"; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
-  rr(ctx, 0, -wid / 2, len, wid, wid * 0.35); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "#4A4452"; ctx.fillRect(len * 0.1, -wid / 2 + 1, len * 0.8, wid * 0.25);
-  if (band) { ctx.fillStyle = band; ctx.fillRect(len * 0.72, -wid / 2, len * 0.1, wid); }
-  ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(len, 0, wid * 0.32, 0, TAU); ctx.fill();
-  ctx.restore();
-}
-function crystal(ctx, x, y, w, h, glow) {
-  const g = ctx.createLinearGradient(x, y - h, x, y);
-  g.addColorStop(0, "#F2FCFF"); g.addColorStop(0.5, "#8FD8F5"); g.addColorStop(1, "#3A86C8");
-  ctx.fillStyle = g; ctx.strokeStyle = INK; ctx.lineWidth = 1.4;
-  ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x + w / 2, y - h * 0.55); ctx.lineTo(x + w * 0.35, y); ctx.lineTo(x - w * 0.35, y); ctx.lineTo(x - w / 2, y - h * 0.55); ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = "rgba(255,255,255,.75)"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(x, y - h); ctx.lineTo(x - w * 0.12, y - h * 0.3); ctx.stroke();
-  if (glow) { ctx.fillStyle = `rgba(143,216,245,${glow})`; ctx.beginPath(); ctx.arc(x, y - h * 0.5, w, 0, TAU); ctx.fill(); }
-}
+
 function snowflake(ctx, x, y, r) {
   ctx.strokeStyle = "#FFFFFF"; ctx.lineWidth = 1.2;
   for (let k = 0; k < 3; k++) { const a = (k * Math.PI) / 3; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * r, y - Math.sin(a) * r); ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); ctx.stroke(); }
@@ -181,96 +153,27 @@ function snowflake(ctx, x, y, r) {
 // One tower: kind, level 1–3, the way it last shot, the builder's colour.
 // `pop` (0..1) is a level-up / build bounce.
 export function drawTower(ctx, kind, level, cx, cy, T, t, aim, colour, pop = 0) {
-  const s = 1 + pop * 0.25;
+  const def = TOWERS[kind], s = 1 + pop * 0.25, y = cy + T * 0.1;
   ctx.save();
-  ctx.translate(cx, cy + T * 0.18);
-  ctx.scale(s, s);
-  const base = T * (0.32 + 0.04 * level);
-  shade(ctx, 0, T * 0.14, base * 1.1, T * 0.12, 0.3);
-  // the builder's colour, a ring on the ground
-  ctx.strokeStyle = colour; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.ellipse(0, T * 0.12, base * 1.05, T * 0.12, 0, 0, TAU); ctx.stroke();
-
-  if (kind === "archer") {
-    if (level === 1) {
-      // a wooden lookout: four posts and a plank floor
-      ctx.fillStyle = "#8A5A33"; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
-      for (const px of [-0.22, 0.22]) { ctx.fillRect(px * T - T * 0.03, -T * 0.3, T * 0.06, T * 0.42); ctx.strokeRect(px * T - T * 0.03, -T * 0.3, T * 0.06, T * 0.42); }
-      ctx.fillStyle = "#C08550"; rr(ctx, -T * 0.3, -T * 0.4, T * 0.6, T * 0.14, 3); ctx.fill(); ctx.stroke();
-      ctx.strokeStyle = "rgba(46,33,64,.35)"; for (const k of [-0.1, 0.1]) { ctx.beginPath(); ctx.moveTo(k * T, -T * 0.4); ctx.lineTo(k * T, -T * 0.26); ctx.stroke(); }
-      archerMan(ctx, 0, -T * 0.48, T, aim, "#4E9F3D");
-    } else {
-      // stone: a round tower, then a tall keep with a banner
-      const tall = level === 3 ? 0.62 : 0.42, wid = level === 3 ? 0.62 : 0.54;
-      ctx.fillStyle = "#B9B4C8"; ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
-      rr(ctx, -wid * T / 2, -tall * T, wid * T, tall * T + T * 0.12, 4); ctx.fill(); ctx.stroke();
-      ctx.strokeStyle = "rgba(46,33,64,.25)"; ctx.lineWidth = 1;
-      for (let row = 1; row < (level === 3 ? 5 : 3); row++) { const y = -tall * T + row * T * 0.14; ctx.beginPath(); ctx.moveTo(-wid * T / 2, y); ctx.lineTo(wid * T / 2, y); ctx.stroke(); }
-      // the window, and the roof over the archer's platform
-      ctx.fillStyle = "#2E2140"; rr(ctx, -T * 0.04, -tall * T + T * 0.18, T * 0.08, T * 0.14, 3); ctx.fill();
-      const roof = level === 3 ? "#3A86FF" : "#E85D5D";
-      ctx.fillStyle = "#9C97AE"; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
-      for (let k = -2; k <= 2; k++) ctx.fillRect(k * T * 0.12 - T * 0.04, -tall * T - T * 0.08, T * 0.08, T * 0.09);
-      archerMan(ctx, 0, -tall * T - T * 0.14, T, aim, level === 3 ? "#3A86FF" : "#4E9F3D");
-      ctx.fillStyle = roof;
-      ctx.beginPath(); ctx.moveTo(-wid * T * 0.62, -tall * T - T * 0.22); ctx.lineTo(0, -tall * T - T * (level === 3 ? 0.62 : 0.5)); ctx.lineTo(wid * T * 0.62, -tall * T - T * 0.22); ctx.closePath();
-      ctx.globalAlpha = 0.92; ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
-      if (level === 3) {
-        const fy = -tall * T - T * 0.62;
-        ctx.strokeStyle = INK; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, fy); ctx.lineTo(0, fy - T * 0.3); ctx.stroke();
-        ctx.fillStyle = "#FFC53D"; ctx.beginPath(); ctx.moveTo(0, fy - T * 0.3);
-        for (let k = 0; k <= 5; k++) ctx.lineTo((k / 5) * T * 0.28, fy - T * 0.3 + Math.sin(t * 7 + k) * T * 0.02);
-        ctx.lineTo(T * 0.28, fy - T * 0.16); ctx.lineTo(0, fy - T * 0.16); ctx.closePath(); ctx.fill(); ctx.stroke();
-      }
-    }
-  } else if (kind === "cannon") {
-    if (level === 1) {
-      // a cannon on a wooden cart
-      ctx.fillStyle = "#8A5A33"; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
-      rr(ctx, -T * 0.26, -T * 0.12, T * 0.52, T * 0.2, 4); ctx.fill(); ctx.stroke();
-      for (const wx of [-0.18, 0.18]) { ctx.fillStyle = "#5B3A1E"; ctx.beginPath(); ctx.arc(wx * T, T * 0.06, T * 0.09, 0, TAU); ctx.fill(); ctx.stroke(); }
-      barrel(ctx, 0, -T * 0.14, T, aim, T * 0.34, T * 0.15, null);
-    } else {
-      const fort = level === 3;
-      // a stone bastion, or a dark fortress with red trim
-      ctx.fillStyle = fort ? "#6E6782" : "#B9B4C8"; ctx.strokeStyle = INK; ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      for (let k = 0; k < 8; k++) { const a = (k * TAU) / 8 + Math.PI / 8; ctx.lineTo(Math.cos(a) * base, -T * 0.08 + Math.sin(a) * base * 0.62); }
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = fort ? "#57506A" : "#9C97AE";
-      ctx.fillRect(-base, -T * 0.08, base * 2, T * 0.16); ctx.strokeRect(-base, -T * 0.08, base * 2, T * 0.16);
-      if (fort) { ctx.fillStyle = "#E85D5D"; ctx.fillRect(-base, -T * 0.02, base * 2, T * 0.04); }
-      if (fort) {
-        const px = -Math.sin(aim) * T * 0.07, py = Math.cos(aim) * T * 0.07;
-        barrel(ctx, px, -T * 0.16 + py, T, aim, T * 0.4, T * 0.13, "#FFC53D");
-        barrel(ctx, -px, -T * 0.16 - py, T, aim, T * 0.4, T * 0.13, "#FFC53D");
-      } else barrel(ctx, 0, -T * 0.16, T, aim, T * 0.42, T * 0.17, "#FFC53D");
-      ctx.fillStyle = fort ? "#E85D5D" : "#8A8494"; ctx.strokeStyle = INK; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.arc(0, -T * 0.16, T * 0.09, 0, TAU); ctx.fill(); ctx.stroke();
-    }
-  } else {
-    // frost: a stone pedestal, the ice on it grows
-    ctx.fillStyle = "#B9B4C8"; ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
-    rr(ctx, -T * 0.22, -T * 0.08, T * 0.44, T * 0.2, 4); ctx.fill(); ctx.stroke();
-    const glow = 0.12 + 0.1 * Math.sin(t * 3);
-    if (level === 1) crystal(ctx, 0, -T * 0.06, T * 0.26, T * 0.42, 0);
-    else if (level === 2) {
-      crystal(ctx, -T * 0.13, -T * 0.06, T * 0.18, T * 0.3, 0);
-      crystal(ctx, T * 0.13, -T * 0.06, T * 0.18, T * 0.32, 0);
-      crystal(ctx, 0, -T * 0.06, T * 0.26, T * 0.5, glow * 0.7);
-    } else {
-      crystal(ctx, -T * 0.15, -T * 0.06, T * 0.18, T * 0.34, 0);
-      crystal(ctx, T * 0.15, -T * 0.06, T * 0.18, T * 0.36, 0);
-      crystal(ctx, 0, -T * 0.06, T * 0.3, T * 0.78, glow);
-      for (let k = 0; k < 3; k++) {
-        const a = t * 1.8 + (k * TAU) / 3;
-        snowflake(ctx, Math.cos(a) * T * 0.34, -T * 0.4 + Math.sin(a) * T * 0.12, T * 0.06);
-      }
-    }
-  }
+  ctx.translate(cx, y); ctx.scale(s, s);
+  shade(ctx, 0, T * 0.3, T * 0.36, T * 0.12, 0.25);
+  // the base: stone, its rim bronze, silver or gold by level, the builder's colour inside it
+  ctx.fillStyle = "#D9D2C5"; ctx.strokeStyle = LEVEL_RIM[level - 1] || INK; ctx.lineWidth = 3.5;
+  ctx.beginPath(); ctx.arc(0, T * 0.06, T * 0.38, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = colour; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(0, T * 0.06, T * 0.3, 0, TAU); ctx.stroke();
+  // the barrel, pointing where it last shot
+  ctx.save(); ctx.rotate(aim || -Math.PI / 2);
+  ctx.fillStyle = def.colour; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+  ctx.fillRect(0, -T * 0.07, T * 0.36, T * 0.14); ctx.strokeRect(0, -T * 0.07, T * 0.36, T * 0.14);
   ctx.restore();
-  stars(ctx, cx, cy + T * 0.44, level, T);
+  ctx.fillStyle = def.colour; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(0, 0, T * 0.25, 0, TAU); ctx.fill(); ctx.stroke();
+  emoji(ctx, def.icon, 0, 0, T * 0.38);
+  ctx.restore();
+  stars(ctx, cx, y + T * 0.42, level, T);
 }
+const LEVEL_RIM = ["#B07A45", "#AEB6C2", "#FFC53D"];
 
 // ── monsters ─────────────────────────────────────────────────────────────────
 export function drawMonster(ctx, kind, x, y, T, t, id, hp, slowed, flash) {
@@ -346,31 +249,20 @@ export function drawMonster(ctx, kind, x, y, T, t, id, hp, slowed, flash) {
 // q: 0..1 through the shot's life.
 export function drawShot(ctx, kind, level, x0, y0, x1, y1, q, T) {
   if (kind === "archer") {
-    const k = Math.min(1, q * 2.2), hx = x0 + (x1 - x0) * k, hy = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * T * 0.15;
-    if (k >= 1) return;
-    const a = Math.atan2(y1 - y0, x1 - x0);
-    ctx.save(); ctx.translate(hx, hy); ctx.rotate(a);
-    ctx.strokeStyle = "#7A4A2A"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-T * 0.2, 0); ctx.lineTo(0, 0); ctx.stroke();
-    ctx.fillStyle = level === 3 ? "#3A86FF" : "#C9C9D1"; ctx.beginPath(); ctx.moveTo(T * 0.06, 0); ctx.lineTo(-T * 0.02, -T * 0.035); ctx.lineTo(-T * 0.02, T * 0.035); ctx.fill();
-    ctx.fillStyle = "#FFFFFF"; ctx.fillRect(-T * 0.22, -T * 0.03, T * 0.05, T * 0.06);
-    ctx.restore();
+    const k = Math.min(1, q * 2), hx = x0 + (x1 - x0) * k, hy = y0 + (y1 - y0) * k;
+    ctx.strokeStyle = `rgba(90,60,30,${1 - q})`; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(hx - (x1 - x0) * 0.12, hy - (y1 - y0) * 0.12); ctx.lineTo(hx, hy); ctx.stroke();
   } else if (kind === "cannon") {
     if (q < 0.5) {
-      const k = q * 2, hx = x0 + (x1 - x0) * k, hy = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * T * 0.7;
-      ctx.fillStyle = "rgba(160,160,170,.4)"; ctx.beginPath(); ctx.arc(x0 + (x1 - x0) * k * 0.8, y0 + (y1 - y0) * k * 0.8 - Math.sin(k * 0.8 * Math.PI) * T * 0.7, T * 0.07, 0, TAU); ctx.fill();
-      ctx.fillStyle = "#2B2730"; ctx.beginPath(); ctx.arc(hx, hy, T * (0.07 + level * 0.012), 0, TAU); ctx.fill();
+      const k = q * 2, hx = x0 + (x1 - x0) * k, hy = y0 + (y1 - y0) * k - Math.sin(k * Math.PI) * T * 0.6;
+      ctx.fillStyle = INK; ctx.beginPath(); ctx.arc(hx, hy, T * 0.08, 0, TAU); ctx.fill();
     } else {
       const k = (q - 0.5) * 2;
-      ctx.fillStyle = `rgba(255,197,61,${0.8 * (1 - k)})`; ctx.beginPath(); ctx.arc(x1, y1, T * (0.25 + 0.75 * k), 0, TAU); ctx.fill();
-      ctx.fillStyle = `rgba(255,107,60,${0.7 * (1 - k)})`; ctx.beginPath(); ctx.arc(x1, y1, T * (0.15 + 0.5 * k), 0, TAU); ctx.fill();
-      ctx.strokeStyle = `rgba(255,255,255,${0.8 * (1 - k)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x1, y1, T * (0.3 + 0.9 * k), 0, TAU); ctx.stroke();
+      ctx.fillStyle = `rgba(255,163,108,${0.7 * (1 - k)})`; ctx.beginPath(); ctx.arc(x1, y1, T * (0.3 + 0.7 * k), 0, TAU); ctx.fill();
     }
   } else {
-    ctx.strokeStyle = `rgba(143,216,245,${1 - q})`; ctx.lineWidth = 3 + level * 1.5;
+    ctx.strokeStyle = `rgba(143,216,245,${1 - q})`; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-    ctx.strokeStyle = `rgba(255,255,255,${1 - q})`; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-    snowflake(ctx, x1, y1, T * (0.08 + q * 0.12));
   }
 }
 

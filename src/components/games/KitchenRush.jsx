@@ -12,6 +12,7 @@
 // or tap a counter you're next to.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
+import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
 import TogetherResults from "../together/TogetherResults";
 import useTogether, { secondsLeft, smoothRows, rivals, myScore } from "../together/useTogether";
 import {
@@ -205,10 +206,14 @@ function drawChef(ctx, p, T, t, col, me, name) {
   }
 }
 
-function drawOrders(ctx, orders, cw, oh, t, flash) {
-  const n = 4, gap = 6, w = (cw - gap * (n + 1)) / n;
+// The four order tickets: along the top, or (sideways, `down`) in a column
+// down the left of the kitchen.
+function drawOrders(ctx, orders, bw, bh, t, flash, down = false) {
+  const n = 4, gap = 6;
+  const w = down ? bw - gap * 2 : (bw - gap * (n + 1)) / n;
+  const tall = down ? (bh - gap * (n + 1)) / n : bh - 12;
   for (let i = 0; i < n; i++) {
-    const x = gap + i * (w + gap), y = 6, h = oh - 12;
+    const x = down ? gap : gap + i * (w + gap), y = down ? gap + i * (tall + gap) : 6, h = tall;
     const o = orders[i];
     if (!o) {
       ctx.strokeStyle = "rgba(46,33,64,.18)"; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
@@ -246,7 +251,9 @@ export default function KitchenRush(props) {
   const me = useRef(null);                       // my chef, moved here at once
   const fx = useRef({ pops: [], flash: new Map(), ring: null });
   const canvasRef = useRef(null);
-  const size = useRef({ cw: 360, T: 40, oh: 64 });
+  // the canvas: cw x ch; the kitchen starts at (ox, oy); the orders take the
+  // top strip, or (side) a column down the left
+  const size = useRef({ cw: 360, ch: 424, T: 40, ox: 0, oy: 64, side: false });
   const keys = useRef({});
   const stick = useRef(null);
   const sentAt = useRef(0);
@@ -311,16 +318,22 @@ export default function KitchenRush(props) {
     return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
   });
 
+  // A landscape game: on a phone held upright GameFrame draws it turned a
+  // quarter, and every pointer position is turned back before it's read.
+  const rotated = useUprightTouch();
+  const rot = useRef(rotated);
+  rot.current = rotated;
+
   // tap a counter on the board: use it if it's in reach
   const onBoardTap = (e) => {
     const m = me.current, c = canvasRef.current;
     if (!m || !c || isSpectator) return;
-    const r = c.getBoundingClientRect();
-    const { T, oh, cw } = size.current;
+    const r = gameRect(c, rot.current), at = toGame(e, rot.current);
+    const { T, ox, oy, cw } = size.current;
     // inside the border, in drawing units
     const k = cw / (c.clientWidth || cw);
-    const px = (e.clientX - r.left - c.clientLeft) * k, py = (e.clientY - r.top - c.clientTop) * k;
-    const tx = Math.floor(px / T), ty = Math.floor((py - oh) / T);
+    const px = (at.x - r.left - c.clientLeft) * k, py = (at.y - r.top - c.clientTop) * k;
+    const tx = Math.floor((px - ox) / T), ty = Math.floor((py - oy) / T);
     if (ty < 0 || kindAt(tx, ty) === "floor" || kindAt(tx, ty) === "wall") return;
     if (Math.hypot(tx + 0.5 - m.x, ty + 0.5 - m.y) > REACH) { flash(WHY.far, "info"); return; }
     const dx = tx + 0.5 - m.x, dy = ty + 0.5 - m.y, l = Math.hypot(dx, dy) || 1;
@@ -332,10 +345,10 @@ export default function KitchenRush(props) {
   const stickDown = (e) => {
     e.preventDefault();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
-    const r = e.currentTarget.getBoundingClientRect();
-    stick.current = { id: e.pointerId, ox: r.left + r.width / 2, oy: r.top + r.height / 2, x: e.clientX, y: e.clientY };
+    const r = gameRect(e.currentTarget, rot.current), at = toGame(e, rot.current);
+    stick.current = { id: e.pointerId, ox: r.left + r.width / 2, oy: r.top + r.height / 2, x: at.x, y: at.y };
   };
-  const stickMove = (e) => { const s = stick.current; if (s && s.id === e.pointerId) { s.x = e.clientX; s.y = e.clientY; } };
+  const stickMove = (e) => { const s = stick.current; if (s && s.id === e.pointerId) { const at = toGame(e, rot.current); s.x = at.x; s.y = at.y; } };
   const stickUp = (e) => { if (stick.current && stick.current.id === e.pointerId) stick.current = null; };
   const knobRef = useRef(null);
 
@@ -379,8 +392,7 @@ export default function KitchenRush(props) {
       }
       const c = canvasRef.current;
       if (c && L) {
-        const { cw, T, oh } = size.current;
-        const ch = oh + T * H;
+        const { cw, ch, T, ox, oy, side } = size.current;
         const dpr = Math.min(2, window.devicePixelRatio || 1);
         if (c.width !== Math.round(cw * dpr) || c.height !== Math.round(ch * dpr)) { c.width = Math.round(cw * dpr); c.height = Math.round(ch * dpr); }
         const ctx = c.getContext("2d");
@@ -388,9 +400,9 @@ export default function KitchenRush(props) {
         const t = ts / 1000;
         ctx.fillStyle = "#FFF6E6";
         ctx.fillRect(0, 0, cw, ch);
-        drawOrders(ctx, L.view.o, cw, oh, t, fx.current.flash);
+        drawOrders(ctx, L.view.o, side ? ox : cw, side ? ch : oy, t, fx.current.flash, side);
         ctx.save();
-        ctx.translate(0, oh);
+        ctx.translate(ox, oy);
         // floor
         for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
           if (kindAt(x, y) !== "floor") continue;
@@ -487,16 +499,22 @@ export default function KitchenRush(props) {
         message={msg}
         onQuit={onGameEnd}
         controls={controls}
+        landscape
       >
         {({ w, h }) => {
-          const T = Math.max(22, Math.floor(Math.min(w / W, (h - 74) / H)));
-          const cw = T * W, oh = Math.max(58, Math.min(76, Math.round(T * 1.6)));
-          size.current = { cw, T, oh };
+          // a wide space (sideways): the orders in a column beside the kitchen,
+          // so it gets the whole height; otherwise along the top
+          const side = w > h * 1.25;
+          const T = side ? Math.max(22, Math.floor(Math.min(h / H, w / (W + 2.3))))
+            : Math.max(22, Math.floor(Math.min(w / W, (h - 74) / H)));
+          const ow = side ? Math.round(T * 2.3) : 0, oh = side ? 0 : Math.max(58, Math.min(76, Math.round(T * 1.6)));
+          const cw = ow + T * W, ch = oh + T * H;
+          size.current = { cw, ch, T, ox: ow, oy: oh, side };
           return (
             <div className="kr-pad" style={{ width: w, height: h }} onContextMenu={(e) => e.preventDefault()}>
               {!tg.ready && <div className="muted">{tg.gone ? "This kitchen has closed." : "Opening the kitchen…"}</div>}
               <canvas ref={canvasRef} className="kr-canvas" onPointerDown={onBoardTap}
-                style={{ width: cw, height: oh + T * H, display: tg.ready ? "block" : "none" }}
+                style={{ width: cw, height: ch, display: tg.ready ? "block" : "none" }}
                 role="img" aria-label="Kitchen Rush: the kitchen from above, orders along the top" />
               {isSpectator && L && L.sides.length > 1 && (
                 <div className="kr-watch">

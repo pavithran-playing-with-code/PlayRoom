@@ -74,3 +74,11 @@ export function toGame(e, rotated) {
   if (!rotated) return { x: e.clientX, y: e.clientY };
   return { x: e.clientY, y: window.innerWidth - e.clientX };
 }
+
+// An element's box in the game's own frame (drawn sideways, its screen box
+// is the turned one).
+export function gameRect(el, rotated) {
+  const r = el.getBoundingClientRect();
+  if (!rotated) return { left: r.left, top: r.top, width: r.width, height: r.height };
+  return { left: r.top, top: window.innerWidth - r.right, width: r.height, height: r.width };
+}

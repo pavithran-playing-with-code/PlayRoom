@@ -483,6 +483,19 @@ body.in-game input,body.in-game textarea{-webkit-user-select:text;user-select:te
   justify-content:center;overflow:hidden;padding:clamp(10px,2.2vw,26px)}
 .gamefoot{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;flex-shrink:0;
   padding:8px 16px;background:var(--card);border-top:3px solid var(--ink)}
+/* A landscape game: the controls float in the bottom corners, under the
+   thumbs, and the board takes the whole height between them. Drawn turned a
+   quarter (.rot) when the phone is held upright — turn the phone. */
+.gameshell.land .gamefoot{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);z-index:6;
+  background:transparent;border:0;padding:0 calc(14px + env(safe-area-inset-right,0px)) 0 calc(14px + env(safe-area-inset-left,0px));pointer-events:none}
+.gameshell.land .gamefoot > *{pointer-events:none;max-width:none}
+.gameshell.land .gamefoot > * > *{pointer-events:auto}
+.gameshell.land .gameboard{padding:6px}
+.gameshell.rot{inset:auto;top:0;left:100vw;right:auto;width:100vh;width:100dvh;height:100vw;
+  transform:rotate(90deg);transform-origin:0 0}
+.gf-rothint{position:absolute;left:50%;top:42%;z-index:20;transform:translateX(-50%);pointer-events:none;
+  padding:10px 18px;border:3px solid var(--ink);border-radius:999px;background:var(--sun);font-weight:800;
+  white-space:nowrap;animation:hmHint 4.5s ease forwards}
 /* phone: one slim header row, and a single swipeable opponent strip */
 @media(max-width:600px){
   .gamebar{flex-wrap:nowrap;gap:8px;padding:6px 10px}
@@ -847,6 +860,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .press.pt-btn{padding:10px 18px;font-size:1rem;--lift:4px}
 
 /* ── Kitchen Rush (.kr-) ── */
+.gameshell.land .press.kr-use{width:100px;height:100px;min-width:0;min-height:0;aspect-ratio:1;border-radius:50%;padding:0;font-size:1.05rem;flex:0 0 auto}
 .kr-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .kr-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);touch-action:none;

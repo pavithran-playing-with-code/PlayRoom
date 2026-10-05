@@ -11,6 +11,7 @@ import Logo from "../Logo";
 import FriendsDock from "../FriendsDock";
 import { ProgressRing, Avatar } from "../ui";
 import useMedia from "../../utils/useMedia";
+import { useSideways } from "../horror/LandscapeGate";
 
 const COMPACT = "(max-width: 600px)";
 
@@ -40,6 +41,7 @@ export default function GameFrame({
   message = null,             // { text, type }
   controls = null,            // node
   onQuit,
+  landscape = false,          // a sideways game: see Sideways below
   children,                   // node, or ({ w, h }) => node
 }) {
   const msgFill = { success: "var(--lime)", error: "var(--coral)", info: "var(--sky)" };
@@ -81,7 +83,8 @@ export default function GameFrame({
   const mins = timer?.max ? Math.round(timer.max / 60) : null;
 
   return (
-    <div className="gameshell">
+    <div className={`gameshell${landscape ? " land" : ""}`}>
+      {landscape && <Sideways />}
       {/* Header: one row on a phone, roomier on bigger screens */}
       <div className="gamebar">
         <div className={`gb-id${isSpectator ? " keep" : ""}`}>
@@ -169,4 +172,18 @@ export default function GameFrame({
       {controls && <div className="gamefoot">{controls}</div>}
     </div>
   );
+}
+
+// A landscape game (Kitchen Rush): the phone is asked to turn, and if it stays
+// upright the whole frame is drawn turned a quarter (.gameshell.rot), so you
+// just turn the phone. The controls float in the bottom corners, under your
+// thumbs, and the board gets the full height. A game that reads pointer
+// positions turns them with LandscapeGate.toGame / gameRect.
+function Sideways() {
+  const [rotated] = useSideways();
+  useLayoutEffect(() => {
+    const shell = document.querySelector(".gameshell");
+    if (shell) shell.classList.toggle("rot", !!rotated);
+  }, [rotated]);
+  return rotated ? <div className="gf-rothint" aria-hidden="true">↺ Turn your phone sideways</div> : null;
 }

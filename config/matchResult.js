@@ -11,7 +11,7 @@ const MAX_SCORE_PER_GAME = 25000;
 // "complete", so a solo run of one is recorded as `incomplete` rather than
 // being scored as a win or a loss.
 // Must match TOTAL_PAIRS in the game component — see src/components/MahjongGame.jsx.
-const OBJECTIVE_PAIRS = { mahjong: 24, memory: 16 };
+const OBJECTIVE_PAIRS = { mahjong: 24, memory: 10 };
 
 const cap = (n) => Math.max(0, Math.min(Number(n) || 0, MAX_SCORE_PER_GAME));
 

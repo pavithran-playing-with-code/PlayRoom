@@ -505,6 +505,18 @@ body.in-game input,body.in-game textarea{-webkit-user-select:text;user-select:te
 
 /* ---------- game boards ---------- */
 .memgrid{display:grid;touch-action:manipulation}
+/* Mahjong: a stack of big ivory tiles on green felt. Each tile shows its
+   thickness down and to the right; a raised layer sits up and to the left. */
+.mj-felt{position:relative;border-radius:22px;touch-action:manipulation;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 35%,#2f9b55 0%,#1f7a40 60%,#165e31 100%);
+  box-shadow:inset 0 0 0 3px var(--ink),inset 0 0 40px rgba(0,0,0,.25)}
+.mj-tile{position:absolute;padding:0;display:flex;align-items:center;justify-content:center;line-height:1;
+  border:2px solid var(--ink);background:linear-gradient(160deg,#fffdf4 0%,#f7efd9 70%,#efe2c1 100%);
+  cursor:pointer;transition:top .12s,filter .12s;-webkit-tap-highlight-color:transparent}
+.mj-tile span{filter:drop-shadow(0 1px 0 rgba(46,33,64,.25))}
+.mj-tile.stuck{filter:brightness(.82) saturate(.75);cursor:not-allowed}
+.mj-tile.sel{background:linear-gradient(160deg,#fff6c9 0%,#ffe27a 100%)}
+.mj-tile.hint{background:linear-gradient(160deg,#ffe3f1 0%,#ffb3d6 100%)}
 .memcard{width:100%;height:100%;padding:0;border:3px solid var(--ink);border-radius:14px;
   display:flex;align-items:center;justify-content:center;user-select:none;line-height:1;
   -webkit-tap-highlight-color:transparent;

@@ -1,6 +1,7 @@
 // src/components/MemoryGame.jsx
-// Flip two cards; a matching pair stays face-up. Clear all 16 pairs before the
-// clock runs out. Everyone in a room gets the same seeded deck.
+// Flip two cards; a matching pair stays face-up. Clear all 10 pairs before the
+// clock runs out. Twenty big cards, not thirty-two small ones: on a phone the
+// small ones were hard to tell apart and to hit. Everyone in a room gets the same seeded deck.
 //
 // The board lives in a ref, not in React state. Two taps can land in the same
 // tick (two fingers on a phone, or a quick double-tap), and each one has to
@@ -12,7 +13,8 @@ import GameFrame from "./games/GameFrame";
 import GameOver from "./games/GameOver";
 import useGameEngine from "./games/useGameEngine";
 
-const EMOJIS      = ["🎮","🀄","🃏","🧩","🎯","🎲","🏆","⚡","🔥","🌟","🐉","🦊","🎪","🎨","🎵","🎸"];
+// ten pictures that differ in shape and colour, not just in detail
+const EMOJIS      = ["🍎","🐸","🚗","⭐","🎈","🐙","🌵","🍕","👑","🦋"];
 const TOTAL_PAIRS = EMOJIS.length;
 const PAIR_POINTS = 100;   // plus the seconds left on the clock
 const MISS        = -5;
@@ -35,17 +37,17 @@ function buildCards(seed) {
   return deck;
 }
 
-// The biggest cards that fit the board area: 4 wide x 8 tall on a phone,
-// 8 wide x 4 tall on a laptop, whichever gives larger cards.
+// The biggest cards that fit the board area: 4 wide x 5 tall on a phone,
+// 5 wide x 4 tall on a laptop, whichever gives larger cards.
 function layout(w, h) {
   const gap = Math.round(Math.max(6, Math.min(14, Math.min(w, h) * 0.02)));
   const room = h - 6;                       // the hard shadow under the last row
   let best = { cols: 4, cw: 0 };
-  for (const [cols, rows] of [[4, 8], [8, 4]]) {
+  for (const [cols, rows] of [[4, 5], [5, 4]]) {
     const cw = Math.min((w - (cols - 1) * gap) / cols, (room - (rows - 1) * gap) / rows / RATIO);
     if (cw > best.cw) best = { cols, cw };
   }
-  const cw = Math.max(26, Math.min(112, Math.floor(best.cw)));
+  const cw = Math.max(26, Math.min(160, Math.floor(best.cw)));
   return { cols: best.cols, gap, cw, ch: Math.floor(cw * RATIO) };
 }
 

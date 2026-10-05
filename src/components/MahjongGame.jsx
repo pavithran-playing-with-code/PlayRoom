@@ -1,11 +1,15 @@
 // src/components/MahjongGame.jsx
-// Match pairs of free tiles (a tile is free when at least one side is open)
-// and clear the board before the clock stops.
+// Mahjong solitaire, the real thing: a stack of big ivory tiles in three
+// layers on green felt. Match two free tiles with the same picture — free
+// means nothing on top and its left or right side open — and clear the board
+// before the clock stops. The board itself (where tiles sit, which are free,
+// a deal that can always be cleared) is games/mahjongBoard.js.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import GameFrame from "./games/GameFrame";
 import GameOver from "./games/GameOver";
 import useGameEngine from "./games/useGameEngine";
 import { confetti } from "./ui/FunLayer";
+import { SLOTS, DRAW_ORDER, TOTAL_PAIRS, BOARD_W, BOARD_H, deal, isFree, findPair, reshuffle } from "./games/mahjongBoard";
 
 // ── Tile definitions ─────────────────────────────────────────────────────────
 // PICTURE TILES, not numbers.
@@ -46,46 +50,10 @@ const TILE_TYPES = TILE_CATEGORIES.flatMap((c) =>
   c.items.map((e, i) => ({ e, k: `${c.id}${i}`, cat: c.id }))
 );
 
-const CAT_STYLE = Object.fromEntries(TILE_CATEGORIES.map((c) => [c.id, c]));
-
-// Big picture on a category-coloured, ink-outlined disc — the same "physical
-// object" treatment every other control gets.
-function TileFace({ tile, size }) {
-  const style = CAT_STYLE[tile.cat] || CAT_STYLE.animals;
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", justifyContent: "center",
-      width: "78%", aspectRatio: "1 / 1", borderRadius: "50%",
-      background: style.tint,
-      border: `${size < 40 ? 2 : 2.5}px solid var(--ink)`,
-      fontSize: Math.max(11, Math.round(size * 0.44)), lineHeight: 1,
-      userSelect: "none",
-    }}>
-      <span>{tile.e}</span>
-    </div>
-  );
-}
-
 // ── The board ────────────────────────────────────────────────────────────────
-// Always 8 wide x 6 tall *in logic*, on every screen. Whether a tile is free
-// depends on its neighbours, so the grid can't change with the window. The old
-// board re-flowed by screen width: every resize moved tiles next to different
-// neighbours, and a phone and a laptop in the same room were playing different
-// games. A tall screen shows the same board turned on its side. The free rule
-// looks at all four sides, so turning the board changes nothing.
-//
-// 8 x 6 rather than the earlier 10 x 7. Seventy tiles on a phone came out around 30
-// pixels wide — too small to read the picture or hit the one you meant. Fewer,
-// bigger tiles is the same game and an actually playable one. The board is the
-// same on every screen, so a phone and a laptop in one room still race the same
-// layout; shrinking it only for phones would have made them different games.
-//
-// NOTE: OBJECTIVE_PAIRS.mahjong in routes/leaderboard.js must match TOTAL_PAIRS,
-// or a solo clear stops counting as a win.
-const COLS = 8;
-const ROWS = 6;
-const TOTAL_PAIRS = 24;
-const RATIO = 1.18;          // tile height / width
+// NOTE: OBJECTIVE_PAIRS.mahjong in config/matchResult.js must match
+// TOTAL_PAIRS (24), or a solo clear stops counting as a win.
+const RATIO = 1.3;           // tile height / width
 const MATCH = 100;           // plus the seconds left on the clock
 const CLEAR_BONUS = 400;     // for clearing a whole board, x the board number
 const NEXT_BOARD_MS = 1400;  // long enough to enjoy having cleared it
@@ -93,89 +61,18 @@ const MISS = -10;
 const HINT_COST = -20;
 const SHUFFLE_COST = -50;
 
-// Tile indexes in the order they're drawn.
-const LANDSCAPE = Array.from({ length: COLS * ROWS }, (_, i) => i);
-const PORTRAIT = [];
-for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) PORTRAIT.push(r * COLS + c);
-
-function seededRand(seed) {
-  let s = (seed || 42) % 2147483647;
-  if (s <= 0) s += 2147483646;
-  return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
-}
-
-function buildTiles(seed) {
-  const rand = seededRand(seed);
-  const raw = [];
-  TILE_TYPES.slice(0, TOTAL_PAIRS).forEach((t) => {
-    raw.push({ ...t, matched: false });
-    raw.push({ ...t, matched: false });
-  });
-  for (let i = raw.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [raw[i], raw[j]] = [raw[j], raw[i]];
-  }
-  return raw;
-}
-
-// A tile is playable when it has at least one OPEN side — you could slide it
-// out that way. Board edges count as open.
-function isFree(tiles, idx) {
-  const tile = tiles[idx];
-  if (!tile || tile.matched) return false;
-  const r = Math.floor(idx / COLS);
-  const c = idx % COLS;
-  const taken = (rr, cc) =>
-    rr >= 0 && cc >= 0 && rr < ROWS && cc < COLS && !tiles[rr * COLS + cc].matched;
-  return !taken(r, c - 1) || !taken(r, c + 1) || !taken(r - 1, c) || !taken(r + 1, c);
-}
-
-// Two free tiles showing the same picture, or null.
-function findPair(tiles) {
-  const free = [];
-  for (let i = 0; i < tiles.length; i++) if (isFree(tiles, i)) free.push(i);
-  for (let a = 0; a < free.length; a++) {
-    for (let b = a + 1; b < free.length; b++) {
-      if (tiles[free[a]].k === tiles[free[b]].k) return [free[a], free[b]];
-    }
-  }
-  return null;
-}
-
-// Redistribute EVERY remaining tile across every remaining position, and keep
-// trying until the result actually has a legal move. Returns the original
-// array (identity) when it can't produce a playable board.
-function reshuffle(tiles, maxTries = 40) {
-  const slots = [];
-  for (let i = 0; i < tiles.length; i++) if (!tiles[i].matched) slots.push(i);
-  if (slots.length < 2) return tiles;
-
-  for (let attempt = 0; attempt < maxTries; attempt++) {
-    const pool = slots.map((i) => tiles[i]);
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    const next = [...tiles];
-    slots.forEach((idx, k) => { next[idx] = pool[k]; });
-    if (findPair(next)) return next;
-  }
-  return tiles;
-}
-
+const buildTiles = (seed) => deal(seed, TILE_TYPES);
 const matchedIndices = (tiles) => tiles.map((t, i) => (t.matched ? i : -1)).filter((i) => i >= 0);
 
-// The biggest tiles that fit the board area, lying down or standing up.
+// The biggest tiles that fit: five across, six down, and each layer up sits a
+// little up and to the left, so the stack shows its height.
 function layout(w, h) {
-  const gap = Math.round(Math.max(3, Math.min(10, Math.min(w, h) * 0.012)));
-  const room = h - 10;                    // a lifted tile's shadow
-  const fit = (cols, rows) =>
-    Math.min((w - (cols - 1) * gap) / cols, (room - (rows - 1) * gap) / rows / RATIO);
-  const land = fit(COLS, ROWS);
-  const port = fit(ROWS, COLS);
-  const portrait = port > land;
-  const tw = Math.max(22, Math.min(88, Math.floor(portrait ? port : land)));
-  return { portrait, cols: portrait ? ROWS : COLS, gap, tw, th: Math.floor(tw * RATIO) };
+  const pad = 10;
+  const cols = BOARD_W / 2, rows = BOARD_H / 2;
+  const tw = Math.max(30, Math.min(96, Math.floor(Math.min((w - pad * 2) / (cols + 0.35), (h - pad * 2) / (rows * RATIO + 0.35)))));
+  const th = Math.round(tw * RATIO), d = Math.max(3, Math.round(tw * 0.09));
+  const bw = cols * tw + d * 2, bh = rows * th + d * 2;
+  return { tw, th, d, bw, bh, ox: Math.round((w - bw) / 2) + d * 2, oy: Math.round((h - bh) / 2) + d * 2 };
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -272,7 +169,7 @@ export default function MahjongGame({
     const s = live.current;
     const tile = s.tiles[idx];
     if (!tile || tile.matched) return;
-    if (!isFree(s.tiles, idx)) { showMsg("Boxed in! Pick a tile with an open side", "error"); return; }
+    if (!isFree(s.tiles, idx)) { showMsg("Stuck — a free tile has nothing on top and an open side", "error"); return; }
     setHintIdx([]);
 
     if (s.selected === null || s.selected === idx) {
@@ -369,68 +266,28 @@ export default function MahjongGame({
       >
         {({ w, h }) => {
           const L = layout(w, h);
-          const order = L.portrait ? PORTRAIT : LANDSCAPE;
           const lift = Math.max(4, Math.round(L.tw * 0.12));
           return (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${L.cols}, ${L.tw}px)`,
-              gridAutoRows: `${L.th}px`,
-              gap: L.gap,
-              touchAction: "manipulation",
-            }}>
-              {order.map((idx) => {
+            <div className="mj-felt" style={{ width: w, height: h }}>
+              {DRAW_ORDER.map((idx) => {
                 const tile = tiles[idx];
-                const free = !tile.matched && isFree(tiles, idx);
-                const isSel = selected === idx;
-                const isHint = hintIdx.includes(idx);
-
-                // Every tile is a physical object: white card stock, ink outline,
-                // hard shadow. State is carried by how far it sits off the table —
-                // a selected tile lifts, a blocked one sits flat and greys out.
-                let bg = "#fff";
-                let transform = "translateY(0)";
-                let shadow = `0 ${Math.round(lift * 0.7)}px 0 var(--ink)`;
-                let opacity = 1;
-                let cursor = "pointer";
-                let filter = "none";
-
-                if (tile.matched) {
-                  // gone: a faint ghost of the slot, so the board reads clearly
-                  bg = "var(--paper2)";
-                  opacity = 0.14; shadow = "none"; cursor = "default";
-                } else if (isSel) {
-                  bg = "var(--sun)";
-                  transform = `translateY(-${lift}px)`;
-                  shadow = `0 ${lift + 4}px 0 var(--ink)`;
-                } else if (isHint) {
-                  bg = "var(--bubble)";
-                  transform = `translateY(-${Math.round(lift / 2)}px)`;
-                  shadow = `0 ${Math.round(lift / 2) + 4}px 0 var(--ink)`;
-                } else if (!free) {
-                  // blocked for now, not dead: keep the picture easy to read,
-                  // just sitting flat on the table
-                  bg = "var(--paper2)";
-                  opacity = 0.78; cursor = "not-allowed";
-                  shadow = "0 2px 0 var(--ink)";
-                }
-
+                if (!tile || tile.matched) return null;
+                const at = SLOTS[idx];
+                const free = isFree(tiles, idx);
+                const isSel = selected === idx, isHint = hintIdx.includes(idx);
+                const up = isSel ? lift : isHint ? Math.round(lift / 2) : 0;
                 return (
                   <button key={idx} type="button" onClick={(ev) => clickTile(idx, ev)}
-                    aria-label={tile.matched ? "Cleared" : `${tile.e}${free ? "" : " (blocked)"}`}
+                    className={`mj-tile${isSel ? " sel" : ""}${isHint ? " hint" : ""}${free ? "" : " stuck"}`}
+                    aria-label={`${tile.e}${free ? "" : " (stuck)"}`}
                     style={{
-                      position: "relative", width: "100%", height: "100%", padding: 0,
-                      background: bg,
-                      border: `${L.tw < 40 ? 2 : 3}px solid var(--ink)`,
-                      borderRadius: Math.max(6, Math.round(L.tw * 0.18)),
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      cursor, transition: "transform 0.12s, box-shadow 0.12s, opacity 0.12s",
-                      boxShadow: shadow, transform, opacity, filter,
-                      outline: isSel ? "3px solid var(--ink)" : "none",
-                      outlineOffset: 2,
-                      userSelect: "none", WebkitTapHighlightColor: "transparent",
+                      left: L.ox + (at.x / 2) * L.tw - at.z * L.d,
+                      top: L.oy + (at.y / 2) * L.th - at.z * L.d - up,
+                      width: L.tw, height: L.th, fontSize: Math.round(L.tw * 0.6),
+                      borderRadius: Math.max(6, Math.round(L.tw * 0.14)),
+                      boxShadow: `${L.d}px ${L.d}px 0 #c9b385, ${L.d}px ${L.d}px 0 2px var(--ink)${isSel ? ", 0 0 0 4px var(--sun)" : ""}`,
                     }}>
-                    <TileFace tile={tile} size={L.tw} />
+                    <span>{tile.e}</span>
                   </button>
                 );
               })}

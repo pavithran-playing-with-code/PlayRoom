@@ -138,7 +138,8 @@ There is no test runner. What works:
 - **Pure logic** — board modules (`tetrisBoard.js`, `pipesBoard.js`,
   `flappySim.js`…) and `config/matchResult.js` are plain JS with no React or
   database, so they can be exercised from a Node script directly
-  (`scripts/check-runner.mjs`, `scripts/check-speedway.mjs`, `scripts/check-piano.mjs`, `check-manor*`).
+  (`scripts/check-runner.mjs`, `scripts/check-speedway.mjs`, `scripts/check-piano.mjs`,
+  `scripts/check-mahjong.mjs`, `check-manor*`).
 - **The together games run on the server** — Kitchen Rush, Bomb Blast,
   Tower Guard, Carrom: `config/togetherWorld.js` keeps a world per side (one each,
   per team, or one for a co-op room) on the rules in

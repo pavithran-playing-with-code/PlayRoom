@@ -15,7 +15,7 @@ import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R, METRES_PER_TILE } from 
 import { createManorAudio } from "../horror/manorAudio";
 import {
   createClient, applyTick, stepLocal, report, doAction, actionDone, actionLabel, playing, respawning, inIntro, timeLeft, sideOfMe,
-  watchedPlayer, cycleWatch, viewState, roomNameAt, isListening, nearestGhost,
+  watchedPlayer, cycleWatch, viewState, roomNameAt, isListening, listeningNear, nearestGhost,
 } from "../horror/manorClient";
 import { useSideways, toGame } from "../horror/LandscapeGate";
 import { usePlayAgain } from "./PlayAgain";
@@ -60,7 +60,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       crouch: c.body.crouch, watching: w && { name: w.name, color: w.color }, use: actionLabel(c, now),
       room: roomNameAt(c, playing(c) ? c.body : w || c.body),
       players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left })),
-      playing: playing(c), listening: isListening(c),
+      playing: playing(c), listening: listeningNear(c), quiet: isListening(c) && !listeningNear(c),
       ...(() => {
         // the nearest key of yours not found yet, and Nana: how far
         const P = c.body, m = (d) => Math.round(d * METRES_PER_TILE);
@@ -212,6 +212,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     const r = doAction(c);
     for (const s of r.sounds) audio.current.play(s);
     if (r.ask && socket) socket.emit("manor:use", r.ask);
+    if (r.lamp && socket) socket.emit("manor:lamp", r.lamp);
   }, [socket]);
 
   // ── keyboard ───────────────────────────────────────────────────────────────
@@ -355,7 +356,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       {h && !h.intro && !over && (
         <>
           {/* while she hums you may move; when it stops, she listens */}
-          <div className={`hm-humming${h.listening ? " off" : ""}`} aria-hidden="true">♪ Nana is humming…</div>
+          <div className={`hm-humming${h.listening ? " off" : ""}`} aria-hidden="true">{h.quiet ? "Nana has gone quiet — far off, she can't hear you" : "♪ Nana is humming…"}</div>
           <div className={`hm-listen${h.listening ? "" : " off"}`} role="alert">
             <b>SHE'S LISTENING</b>
             <span>The humming stopped. Freeze. Do not move.</span>
@@ -366,7 +367,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       {h && h.playing && !h.intro && (
         <div className="hm-pad">
           {/* Use (doors, hiding — lit when there's something to use) and your light */}
-          <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
+          <button className={`hm-use${h.use && !/^Lights/.test(h.use) ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
           <button className={`hm-light${h.light ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}
             title="Your light: off, she has to be right beside you to see you">{h.light ? "Light on" : "Light off"}</button>
         </div>

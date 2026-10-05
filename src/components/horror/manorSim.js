@@ -24,7 +24,7 @@ import {
   newBody, litBody, mvOK as bodyMvOK, jumpBody, stepBody,
   newGhost, ghostTarget, ghostPatrol, ghostSees, ghostSpeed as speedOf, stepGhost,
   actionAt, ACTION_LABEL, watcher, hideIn, leaveLocker,
-  newHum, stepHum, listeningNow,
+  newHum, stepHum, listeningNow, lampCount, lampOn, stepLamps, GRACE_S, HEAR_R,
 } from "./manorCore.mjs";
 
 export { D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, dmap, floors, los, canAt, ROOM_KINDS, roomAt };
@@ -85,6 +85,7 @@ export function newNight(seed, night = 1) {
     P,
     count: 0,
     pulses: [], puffs: [], hint: {}, hum: newHum(rand),
+    lamps: new Array(lampCount(N)).fill(0), grace: 0,
     tm: 0, gStep: 0, hb: 0, ambT: 20,
     bodies: [], flick: 0, scareT: 25 + rand() * 15,
     msg: "", msgT: 0,
@@ -117,7 +118,15 @@ export function doAction(s) {
   if (s.mode !== "play") return;
   const P = s.P;
   const u = actionAt(s.env, P, [s.G]);
-  if (!u) return;
+  if (!u) {
+    // nothing in reach: the room's light switch
+    if (P.entering) return;
+    const room = roomAt(s.N, P.x, P.y);
+    s.lamps[room] = s.lamps[room] ? 0 : 1;
+    emit(s, "click");
+    say(s, s.lamps[room] ? "Lights on. She'll see you in here — and they go out when she comes in." : "Lights off.", 2600);
+    return;
+  }
   if (u.t === "open") { s.g[u.y][u.x] = FLOOR; P.noiseT = 0.6; emit(s, "creak", 0.28); }
   else if (u.t === "close") {
     s.g[u.y][u.x] = DOOR; P.noiseT = 0.3; emit(s, "creak", 0.15);
@@ -131,8 +140,11 @@ export function doAction(s) {
   } else { leaveLocker(P); emit(s, "locker"); }
 }
 export const actionLabel = (s) => {
-  const u = s.mode === "play" && actionAt(s.env, s.P, [s.G]);
-  return u ? ACTION_LABEL[u.t] : null;
+  if (s.mode !== "play") return null;
+  const u = actionAt(s.env, s.P, [s.G]);
+  if (u) return ACTION_LABEL[u.t];
+  if (s.P.entering) return null;
+  return s.lamps[roomAt(s.N, s.P.x, s.P.y)] ? "Lights off" : "Lights on";
 };
 
 export function jump(s) {
@@ -151,7 +163,8 @@ export function toggleRun(s) { s.P.runOn = !s.P.runOn; }
 
 // ── the thing ────────────────────────────────────────────────────────────────
 
-const asTarget = (s) => ({ id: 1, x: s.P.x, y: s.P.y, lit: litBody(s.P), cr: s.P.cr, noiseR: s.P.noiseR, hid: s.P.hiding });
+// a lit room shows you as plainly as your own light does
+const asTarget = (s) => ({ id: 1, x: s.P.x, y: s.P.y, lit: litBody(s.P) || lampOn(s.lamps, s.N, s.P.x, s.P.y), cr: s.P.cr, noiseR: s.P.noiseR, hid: s.P.hiding });
 export const seesYou = (s) => ghostSees(s.G, s.env, asTarget(s));
 // Faster with each relic you take and each night you survive.
 export const hustleOf = (s) => 0.12 * s.count + 0.08 * (s.night - 1);
@@ -184,6 +197,7 @@ function update(s, inp, dt) {
     s.g[1][0] = WALL;
     emit(s, "gateSlam");
     s.G.stun = 3;
+    s.grace = GRACE_S;                       // a moment to get your bearings
     say(s, "The front door locks behind you. Find the three keys.", 5000);
   }
 
@@ -225,8 +239,13 @@ function update(s, inp, dt) {
     else if (s.msgT <= 0) say(s, "The front door is locked. Find all three keys.", 2500);
   }
 
+  s.grace = Math.max(0, s.grace - dt);
   if (!P.entering) {
-    const got = stepGhost(s.G, s.env, [asTarget(s)], dt, s.rand, hustleOf(s), (name, e) => {
+    // walking into a lit room, she puts its light out
+    stepLamps(s.lamps, s.N, [s.G], (room) => {
+      if (roomAt(s.N, P.x, P.y) === room) { emit(s, "flicker"); say(s, "The lights go out. She's in here.", 2500); }
+    });
+    const got = stepGhost(s.G, s.env, s.grace > 0 ? [] : [asTarget(s)], dt, s.rand, hustleOf(s), (name, e) => {
       if (name === "spotted") emit(s, "spotted");
       if (name === "heard") { emit(s, "heard"); say(s, "She heard you. She's coming.", 2500); }
       if (name === "lost") say(s, "She lost you...", 2500);
@@ -345,3 +364,5 @@ export const roomName = (s, x = s.P.x, y = s.P.y) => ROOM_KINDS[s.rooms[roomAt(s
 // Is she listening right now (the humming has stopped)? And how long until
 // that changes — for the page's "she's listening" and its sounds.
 export const listening = (s) => listeningNow(s.hum);
+// …and near enough to hear you: the red warning is only for then
+export const listeningNear = (s) => listening(s) && Math.hypot(s.G.x - s.P.x, s.G.y - s.P.y) < HEAR_R;

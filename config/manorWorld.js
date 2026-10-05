@@ -259,7 +259,10 @@ function tick(w) {
     if (hum) ev(w, { type: hum });
   }
 
-  const targets = living(w).map((p) => ({ id: p.id, x: p.x, y: p.y, lit: p.lit, cr: p.cr, noiseR: p.noiseR, hid: p.hiding }));
+  // the just-back-in are left alone a moment; a lit room shows you like your own light
+  const targets = living(w).filter((p) => !(p.graceUntil > now)).map((p) => ({
+    id: p.id, x: p.x, y: p.y, lit: p.lit || core.lampOn(w.house.lamps, w.house.N, p.x, p.y), cr: p.cr, noiseR: p.noiseR, hid: p.hiding,
+  }));
   if (awake) {
     w.house.ghosts.forEach((G, gi) => {
       const caught = core.stepGhost(G, w.env, targets, DT, w.house.rand, hustle(w), (name, extra) => {
@@ -276,13 +279,18 @@ function tick(w) {
       }
     });
     if (w.over) return;
+    // walking into a lit room, she puts its light out
+    core.stepLamps(w.house.lamps, w.house.N, w.house.ghosts, (room) => ev(w, { type: "lampOut", room }));
   }
-  // the caught come back in
+  // the caught come back in — with her sent off to the far side of the house
+  // if she's anywhere near the entrance, and a moment's grace
   for (const p of w.players.values()) {
     if (p.alive || p.left || !p.respawnAt || now < p.respawnAt) continue;
     p.alive = true;
     p.respawnAt = 0;
     toSpawn(w, p);
+    p.graceUntil = now + core.GRACE_S * 1000;
+    for (const G of w.house.ghosts) if (Math.hypot(G.x - p.x, G.y - p.y) < 14) core.sendAway(G, w.env, w.house.spawn, w.house.rand);
     ev(w, { type: "respawn", id: p.id, x: p.x, y: p.y, why: "caught" });
   }
 
@@ -335,6 +343,7 @@ function broadcast(w, now) {
     m: w.pulses.map((q) => [r2(q.x), r2(q.y), r2(q.t)]),
     // the lullaby: [humming?, seconds till it changes, seconds since it did]
     h: [w.house.hum.on ? 1 : 0, r2(w.house.hum.t), r2(w.house.hum.since)],
+    l: w.house.lamps.join(""),                 // the rooms' lights
     e: w.events,
   });
   w.events = [];
@@ -392,7 +401,7 @@ function initFor(w, uid, role) {
       rooms: w.house.rooms,
       relics: w.house.relics.map((r) => [r.x, r.y, r.side, r.got ? 1 : 0]),
       batts: w.house.batts.map((b) => [b.x, b.y, b.got ? 1 : 0]),
-      spawn: w.house.spawn,
+      spawn: w.house.spawn, lamps: w.house.lamps,
     },
     sides: w.sides.map((s) => ({ key: s.key, name: s.name, color: s.color, need: s.need, got: s.got, open: s.open,
       escapes: s.escapes, total: s.total, score: scoreOf(s), members: s.members.map(Number) })),
@@ -483,6 +492,18 @@ function attach(server) {
       p.cr = num(m.cr, 0, 1) ?? 0;
       p.lit = !!m.lit;
       p.noiseR = num(m.n, 0, 8) ?? 0;
+    });
+
+    // The light of the room you're in: on, or off.
+    socket.on("manor:lamp", (m) => {
+      if (!m || typeof m.code !== "string") return;
+      const w = worlds.get(m.code.toUpperCase());
+      if (!w || w.over) return;
+      const p = w.players.get(uid);
+      if (!p || !p.alive || p.hiding) return;
+      const room = core.roomAt(w.house.N, p.x, p.y);
+      w.house.lamps[room] = w.house.lamps[room] ? 0 : 1;
+      ev(w, { type: "lamp", room, on: w.house.lamps[room], id: uid });
     });
 
     // Use: { code, act: open | close | hide | out, x, y }. Only the tile in

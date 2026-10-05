@@ -453,6 +453,35 @@ export function ghostPatrol(G, env, rand) {
   ghostTarget(G, env, c[0], c[1]);
 }
 
+// ── the house's lights ───────────────────────────────────────────────────────
+// Every room has a light. Switched on, it stays on — until she walks into the
+// room: then it goes out. (You can switch it on again, her there or not.)
+// `lamps`: one 0/1 per room, in roomAt order. Near a lit room she makes it
+// flicker; that is drawing only (manorRender).
+export const lampCount = (N) => ((N - 1) / 8) ** 2;
+export const lampOn = (lamps, N, x, y) => !!(lamps && lamps[roomAt(N, x, y)]);
+export function stepLamps(lamps, N, ghosts, onOut) {
+  for (const G of ghosts) {
+    const ri = roomAt(N, G.x, G.y);
+    if (G.room === ri) continue;
+    G.room = ri;
+    if (lamps[ri]) { lamps[ri] = 0; if (onOut) onOut(ri); }
+  }
+}
+
+// Coming back in after she caught you: she is sent to the far side of the
+// house first, and for GRACE_S she can't see, hear or catch you — or she
+// would be waiting, a step from the entrance, every time.
+export const GRACE_S = 5;
+export function sendAway(G, env, from, rand) {
+  const f = floors(env.g, env.N).map((c) => [c, Math.hypot(c[0] + 0.5 - from.x, c[1] + 0.5 - from.y)]);
+  const far = Math.max(...f.map((q) => q[1]));
+  const pick = f.filter((q) => q[1] >= far * 0.8);
+  const c = pick[(rand() * pick.length) | 0][0];
+  Object.assign(G, { x: c[0] + 0.5, y: c[1] + 0.5, st: "patrol", prey: null, lose: 0, wait: 0, stun: 2, sniff: 0 });
+  ghostPatrol(G, env, rand);
+}
+
 // Can it see this body? 5 tiles with the torch on, 2 without, less again
 // crouched, and only along a clear line. Never someone hiding.
 export function ghostSees(G, env, t) {
@@ -666,7 +695,7 @@ export function buildHouse(seed, { players, sides }) {
     N, g, exitT, relics, batts, obst, ghosts, doors,
     spots: hideSpots, rooms,
     spawn: { x: 1.5, y: 1.5 }, rand,
-    hum: newHum(rand),
+    hum: newHum(rand), lamps: new Array(lampCount(N)).fill(0),
   };
 }
 

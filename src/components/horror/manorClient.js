@@ -16,7 +16,7 @@
 // No React and no DOM; ManorGame.jsx draws it and wires the socket.
 import {
   unpackWalls, newBody, stepBody, jumpBody, litBody, HURDLE, FLOOR, DOOR,
-  actionAt, ACTION_LABEL, hideIn, leaveLocker, unstick, roomAt, spotKind, ROOM_KINDS,
+  actionAt, ACTION_LABEL, hideIn, leaveLocker, unstick, roomAt, spotKind, ROOM_KINDS, lampCount, HEAR_R,
 } from "./manorCore.mjs";
 import { AMBIENT, hints as hintsFor, say, scareStep } from "./manorSim.js";
 
@@ -52,6 +52,7 @@ export function createClient(init, now = Date.now()) {
     N, g, obst, env: { g, N, obst, doors: new Set(doorList) }, exitT: init.house.exitT,
     doorList, pend: new Map(),            // door tile -> until when our own change stands
     rooms: init.house.rooms || [],
+    lamps: init.house.lamps ? [...init.house.lamps] : new Array(lampCount(N)).fill(0), lampPend: 0,
     sides, players, mySide, body,
     relics: init.house.relics.map(([x, y, side, got]) => ({
       x, y, side, got: !!got, color: sides.get(side)?.color, mine: init.mode === "coop" || side === mySide,
@@ -80,6 +81,8 @@ export const respawning = (c) => c.role === "player" && !c.alive && !c.left && !
 export const sideOfMe = (c) => (c.mySide ? c.sides.get(c.mySide) : null);
 // Has the humming stopped? Then she is listening, and you should be still.
 export const isListening = (c) => !!c.hum && !c.hum.on;
+// …and near enough to hear you: the red warning is only for then
+export const listeningNear = (c) => isListening(c) && !!c.body && c.ghosts.some((G) => Math.hypot(G.x - c.body.x, G.y - c.body.y) < HEAR_R);
 const nameOf = (c, id) => (c.players.get(id) || {}).name || "Someone";
 
 // ── what the server says ─────────────────────────────────────────────────────
@@ -122,6 +125,7 @@ export function applyTick(c, m, now = Date.now()) {
   }
   c.pulses = m.m.map(([x, y, t]) => ({ x, y, t }));
   if (m.h) c.hum = { on: !!m.h[0], t: m.h[1], since: m.h[2] };
+  if (m.l && now > c.lampPend) c.lamps = [...m.l].map(Number);   // the rooms' lights, but not one you just switched
 
   for (const e of m.e || []) {
     const mine = e.side && e.side === c.mySide;
@@ -159,6 +163,11 @@ export function applyTick(c, m, now = Date.now()) {
       snd("hum");
     } else if (e.type === "listen") {
       snd("listen");
+    } else if (e.type === "lampOut") {
+      const here = c.body && roomAt(c.N, c.body.x, c.body.y) === e.room;
+      if (here) { snd("flicker"); say(c, "The lights go out. She's in here.", 2500); }
+    } else if (e.type === "lamp" && e.id !== c.you) {
+      if (c.body && roomAt(c.N, c.body.x, c.body.y) === e.room) { snd("click"); say(c, `${nameOf(c, e.id)} switched the light ${e.on ? "on" : "off"}.`, 2000); }
     } else if (e.type === "heard") {
       if (e.id === c.you) { snd("heard"); say(c, "She heard you. She's coming.", 2500); }
       else say(c, `She heard ${nameOf(c, e.id)}!`, 2500);
@@ -250,7 +259,9 @@ const blockersOf = (c) => [
 export function actionLabel(c, now = Date.now()) {
   if (!playing(c) || inIntro(c, now)) return null;
   const u = actionAt(c.env, c.body, blockersOf(c));
-  return u ? ACTION_LABEL[u.t] : null;
+  if (u) return ACTION_LABEL[u.t];
+  // nothing in reach: the room's light switch
+  return c.lamps[roomAt(c.N, c.body.x, c.body.y)] ? "Lights off" : "Lights on";
 }
 
 // Use, now, on this phone. Returns { ask, sounds }: `ask` is what to send the
@@ -260,7 +271,14 @@ export function doAction(c, now = Date.now()) {
   if (!playing(c) || inIntro(c, now)) return none;
   const P = c.body;
   const u = actionAt(c.env, P, blockersOf(c));
-  if (!u) return none;
+  if (!u) {
+    // the room's light: switched here at once, and the server told
+    const room = roomAt(c.N, P.x, P.y);
+    c.lamps[room] = c.lamps[room] ? 0 : 1;
+    c.lampPend = now + 800;
+    say(c, c.lamps[room] ? "Lights on. She'll see you in here — and they go out when she comes in." : "Lights off.", 2600);
+    return { ask: null, lamp: { code: c.code }, sounds: [{ name: "click" }] };
+  }
   const sounds = [];
   if (u.t === "open" || u.t === "close") {
     const open = u.t === "open";
@@ -352,7 +370,7 @@ export function viewState(c, now = Date.now()) {
     mode: inIntro(c, now) ? "intro" : scared ? "dead" : "play",
     introT: Math.max(0, (SHOW_MAP_MS - (now - c.startLocal)) / 1000),
     deadT: scared ? (now - c.deadAt) / 1000 : 0,
-    N: c.N, g: c.g, obst: c.obst, exitT: c.exitT, rooms: c.rooms,
+    N: c.N, g: c.g, obst: c.obst, exitT: c.exitT, rooms: c.rooms, lamps: c.lamps,
     relics: mine, cells: c.cells, pulses: c.pulses, puffs: c.puffs, tm: c.tm, bodies: own ? c.bodies : [],
     // before the first word from the server there are no ghosts yet: a
     // stand-in far away keeps the danger glow and arrows quiet

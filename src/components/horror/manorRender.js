@@ -401,6 +401,32 @@ function cast(s, rx, ry) {
   return { d: Math.max(0.05, pd), side, mx, my, u: wx - Math.floor(wx) };
 }
 
+// The rooms' lights, 0..1 each: a lit room is 1, steady — unless she is near
+// it, when it stutters, worse the nearer she is. Each flicker is held a
+// moment so it reads as a failing bulb, not a strobe.
+const lampFlick = new Map();
+function lampLevels(s, t) {
+  const out = [];
+  if (!s.lamps) return out;
+  const RN = Math.round(Math.sqrt(s.lamps.length));
+  s.lamps.forEach((on, ri) => {
+    if (!on) { out[ri] = 0; return; }
+    const cx = (ri % RN) * 8 + 4.5, cy = Math.floor(ri / RN) * 8 + 4.5;
+    let d = Infinity;
+    for (const G of ghostsOf(s)) d = Math.min(d, Math.hypot(G.x - cx, G.y - cy));
+    if (d > 10) { out[ri] = 1; return; }
+    const k = Math.min(1, 1 - (d - 4) / 6);
+    let f = lampFlick.get(ri);
+    if (!f || t > f.until || t < f.at) {
+      const dark = Math.random() < 0.2 + 0.45 * k;
+      f = { at: t, until: t + 0.04 + Math.random() * 0.16, v: dark ? 0.05 + Math.random() * 0.25 : 0.8 + Math.random() * 0.2 };
+      lampFlick.set(ri, f);
+    }
+    out[ri] = f.v;
+  });
+  return out;
+}
+
 function scene(ctx, s, W, H, t) {
   const { P, exitT } = s;
   const dx = Math.cos(P.fa), dy = Math.sin(P.fa), plx = -dy * PLANE, ply = dx * PLANE;
@@ -414,12 +440,22 @@ function scene(ctx, s, W, H, t) {
   const eye = low ? 0.14 : 0.5 + P.jz - P.cr * 0.26, L = litBody(P);
   const here = s.rooms ? roomOf(s, roomAt(s.N, P.x, P.y))[2] : [60, 44, 30];
   const fl = 0.92 + Math.sin(t * 7) * 0.05 + (Math.random() < 0.02 ? -0.25 * Math.random() : 0);
+  const lampLv = lampLevels(s, t), hereLamp = (s.lamps && lampLv[roomAt(s.N, P.x, P.y)]) || 0;
 
   ctx.fillStyle = "#050507";
   ctx.fillRect(0, 0, W, hz);
+  if (hereLamp > 0) {
+    // the room's light, overhead: a warm pool on the ceiling
+    const cg = ctx.createRadialGradient(W / 2, 0, 0, W / 2, 0, Math.max(W, H) * 0.6);
+    cg.addColorStop(0, `rgba(255,214,150,${0.5 * hereLamp})`);
+    cg.addColorStop(1, "rgba(255,214,150,0)");
+    ctx.fillStyle = cg;
+    ctx.fillRect(0, 0, W, hz);
+  }
   const fg = ctx.createLinearGradient(0, hz, 0, H);
-  fg.addColorStop(0, "#000");
-  fg.addColorStop(1, L ? `rgb(${(here[0] * 0.3) | 0},${(here[1] * 0.3) | 0},${(here[2] * 0.3) | 0})` : "#0d0906");
+  fg.addColorStop(0, hereLamp > 0 ? `rgb(${(here[0] * 0.18 * hereLamp) | 0},${(here[1] * 0.18 * hereLamp) | 0},${(here[2] * 0.18 * hereLamp) | 0})` : "#000");
+  const fk = Math.min(0.95, (L ? 0.3 : 0) + hereLamp * 0.8);
+  fg.addColorStop(1, fk > 0 ? `rgb(${(here[0] * fk) | 0},${(here[1] * fk) | 0},${(here[2] * fk) | 0})` : "#0d0906");
   ctx.fillStyle = fg;
   ctx.fillRect(0, hz, W, H - hz);
 
@@ -429,7 +465,9 @@ function scene(ctx, s, W, H, t) {
     let b = 0.03 + Math.max(0, 1 - pd / 2.2) * (L ? 0.32 : 0.18) +
       (L ? Math.pow(Math.max(0, 1 - pd / 7.5), 1.4) * (1 - Math.abs(cam) * 0.45) * fl : 0);
     // each room its own colour: the room on our side of the wall we hit
-    let col = s.rooms ? roomOf(s, roomAt(s.N, P.x + (dx + plx * cam) * (pd - 0.02), P.y + (dy + ply * cam) * (pd - 0.02)))[2] : [96, 74, 56];
+    const hitRoom = roomAt(s.N, P.x + (dx + plx * cam) * (pd - 0.02), P.y + (dy + ply * cam) * (pd - 0.02));
+    let col = s.rooms ? roomOf(s, hitRoom)[2] : [96, 74, 56];
+    b += (lampLv[hitRoom] || 0) * 0.85 * Math.max(0.45, 1 - pd / 18);   // a lit room: its walls in its light
     const isEx = h.mx === exitT.x && h.my === exitT.y, isEn = h.mx === 0 && h.my === 1;
     const sealed = isEn;
     const tv = h.my >= 0 && h.my < s.N && h.mx >= 0 && h.mx < s.N ? s.g[h.my][h.mx] : 1;
@@ -540,7 +578,8 @@ function scene(ctx, s, W, H, t) {
     ctx.clip();
     if (o.k === "g") {
       const cam = o.tx / o.ty / PLANE;
-      const gb = (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cam) * 0.45) : 0) + Math.max(0, 1 - o.ty / 2.2) * 0.3;
+      const gb = (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cam) * 0.45) : 0) + Math.max(0, 1 - o.ty / 2.2) * 0.3 +
+        (lampLv[roomAt(s.N, o.x, o.y)] || 0) * 0.6;              // in a lit room she's plain to see
       const gy = cy + Math.sin(t * 3) * size * 0.03, hunting = o.G.st === "hunt";
       ctx.globalAlpha = Math.min(1, gb * 1.5 + 0.04) * (0.85 + 0.15 * Math.sin(t * 9));
       drawGhost(ctx, scr, gy, size * 1.15, hunting, t);
@@ -570,7 +609,7 @@ function scene(ctx, s, W, H, t) {
       ctx.fillStyle = "#e9e3d3";
       ctx.fillRect(scr - size * 0.1, by - size * 0.5, size * 0.2, size * 0.15);
     } else if (o.k === "f") {
-      drawFurniture(ctx, o, scr, u, hz, eye, L, t);
+      drawFurniture(ctx, o, scr, u, hz, eye, L, t, lampLv[roomAt(s.N, o.x, o.y)] || 0);
     } else if (o.k === "bd") {
       // it drops on a rope, swings, and lies there
       const fall = Math.min(1, o.t / 0.35), by = hz + (eye - (0.95 - fall * 0.85)) * u;
@@ -634,9 +673,9 @@ function spotsOf(s) {
 
 // Furniture you can hide in. Billboards like everything else; heights are in
 // wall units, so they sit on the floor at the right size.
-function drawFurniture(ctx, o, scr, u, hz, eye, L, t) {
+function drawFurniture(ctx, o, scr, u, hz, eye, L, t, lamp = 0) {
   const cm = o.tx / o.ty / PLANE;
-  const br = Math.min(1, (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cm) * 0.45) : 0) * 1.25 + Math.max(0, 1 - o.ty / 2.2) * 0.3 + 0.07);
+  const br = Math.min(1, (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cm) * 0.45) : 0) * 1.25 + Math.max(0, 1 - o.ty / 2.2) * 0.3 + 0.07 + lamp * 0.85 * Math.max(0.45, 1 - o.ty / 18));
   const C = (r, g, b, a = 1) => `rgba(${(r * br) | 0},${(g * br) | 0},${(b * br) | 0},${a})`;
   const foot = hz + eye * u, F = (h) => foot - h * u;              // h: height above the floor
   ctx.fillStyle = `rgba(0,0,0,${0.35 * Math.min(1, br + 0.3)})`;  // its shadow on the floor

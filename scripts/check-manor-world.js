@@ -173,6 +173,7 @@ let coreMod;
     check("…then back in at the entrance", cy.alive && Math.hypot(cy.x - w.house.spawn.x, cy.y - w.house.spawn.y) < 1e-9 && lastEv("respawn").some((e) => e.id === 3 && e.why === "caught"));
     check("…keeping the keys you'd found", w.sides[2].got === 1);
 
+
     for (const r of w.house.relics.filter((q) => q.side === "p1")) { walk(w, A, 1, r.x, r.y); world._tick(w); }
     check("walk onto your own and it's yours", w.sides[0].got === 3 && w.sides[0].open);
     check("…and the score is written by the server: 100 a key", score(1) === 300);
@@ -596,6 +597,56 @@ let coreMod;
     await S.h["manor:hello"](w.code);
     const initS = S.got.find((g) => g.ev === "manor:init");
     check("someone without a seat in the house is sent it to watch", initS && initS.p.role === "spectator");
+  }
+
+  {
+    // coming back in: Nana near the entrance is sent off, and a moment's grace
+    const w2 = room("free", [{ id: 61 }]);
+    const p = w2.players.get(61), G = w2.house.ghosts[0];
+    p.alive = false; p.respawnAt = Date.now() - 1;
+    G.x = w2.house.spawn.x + 3; G.y = w2.house.spawn.y; G.stun = 0; G.st = "patrol";
+    world._tick(w2);
+    const gone = Math.hypot(G.x - p.x, G.y - p.y);
+    check("back in after being caught: Nana by the entrance is sent to the far side of the house", p.alive && gone > 14, `${gone.toFixed(1)} tiles`);
+    check("…and you get a few seconds' grace", p.graceUntil > Date.now() + 3000);
+    G.x = p.x + 0.2; G.y = p.y; G.stun = 0; G.st = "hunt";
+    world._tick(w2);
+    check("…in which she can't catch you, even right on top of you", p.alive);
+    p.graceUntil = Date.now() - 1;
+    G.x = p.x + 0.2; G.y = p.y; G.stun = 0;
+    world._tick(w2);
+    check("…after it, she can", !p.alive);
+  }
+
+  {
+    // the rooms' lights
+    const w3 = room("free", [{ id: 62 }]);
+    const ph = phone(62);
+    const p = w3.players.get(62), G = w3.house.ghosts[0], N = w3.house.N;
+    world._tick(w3);                            // (her parking spot counts as a room: settle it)
+    const r = coreMod.roomAt(N, p.x, p.y);
+    check("every room's light starts off", w3.house.lamps.length === 9 && w3.house.lamps.every((v) => !v));
+    ph.h["manor:lamp"]({ code: w3.code });
+    check("the light switch: the room you're in lights up", w3.house.lamps[r] === 1 && lastEv("lamp").length === 0);
+    sent.length = 0;
+    world._tick(w3);
+    const tk = sent.find((m) => m.ev === "manor:tick");
+    check("…and every phone is told", tk && tk.payload.l[r] === "1" && tk.payload.e.some((e) => e.type === "lamp" && e.room === r && e.on === 1));
+    world._tick(w3);
+    check("…it stays on", w3.house.lamps[r] === 1);
+    G.x = N - 1.5; G.y = N - 1.5; world._tick(w3);  // she's elsewhere
+    G.x = p.x + 1.5; G.y = p.y; sent.length = 0;
+    world._tick(w3);
+    G.x = -50; G.y = -50;
+    check("she walks into the lit room: its light goes out", w3.house.lamps[r] === 0 && lastEv("lampOut").some((e) => e.room === r));
+    ph.h["manor:lamp"]({ code: w3.code });
+    check("…and you can switch it on again", w3.house.lamps[r] === 1);
+    // a lit room: she sees you there with your own light off
+    p.lit = false;
+    G.x = p.x + 3.5; G.y = p.y; G.stun = 0; G.st = "patrol"; G.room = r;
+    const clear = coreMod.los(w3.house.g, G.x, G.y, p.x, p.y);
+    world._tick(w3);
+    if (clear) check("in a lit room she sees you, your own light off or not", G.st === "hunt");
   }
 
   {

@@ -8,11 +8,11 @@
 // opening doors as it goes, must be able to get out.
 import {
   HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, INTRO_S, nightSize, dmap, floors, los, newNight, tick, begin,
-  jump, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, mvOK, lit, seesYou, ghostSpeed,
+  jump, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, mvOK, lit, seesYou, ghostSpeed, listening, listeningNear,
 } from "../src/components/horror/manorSim.js";
 import {
   rng, newGhost, ghostTarget, stepGhost, buildHouse,
-  newHum, stepHum, HUM_S, LISTEN_S, LISTEN_GRACE, HEAR_R,
+  newHum, stepHum, HUM_S, LISTEN_S, LISTEN_GRACE, HEAR_R, roomAt, GRACE_S, sendAway, stepLamps,
 } from "../src/components/horror/manorCore.mjs";
 
 let fails = 0;
@@ -31,6 +31,7 @@ function inside(seed = 1, night = 1) {
   begin(s);
   run(s, 1);
   s.events.length = 0;
+  s.grace = 0;                    // the moment's grace after the door locks: its own check below
   return s;
 }
 const park = (s) => { s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9; };
@@ -222,6 +223,71 @@ function hall(seed = 11) {
   check("with your light on she sees you down the hall; off, she doesn't", litSees && !darkSees, `${d.toFixed(1)} tiles`);
   toggleLight(h);
   check("…and on again", lit(h) && /Light on/.test(h.msg));
+}
+
+// ── the rooms' lights ────────────────────────────────────────────────────────
+{
+  // she's parked in the far corner: (0.5, 0.5) would be inside this very room
+  const away = (q) => { q.G.x = q.N - 0.5; q.G.y = q.N - 0.5; q.G.stun = 1e9; };
+  const { s } = hall(90);
+  const room = roomAt(s.N, s.P.x, s.P.y);
+  away(s);
+  check("every room's light starts off", s.lamps.length === 9 && s.lamps.every((v) => v === 0));
+  check("nothing else in reach: Use is the light switch", actionLabel(s) === "Lights on", actionLabel(s));
+  doAction(s);
+  check("…Use: this room's light is on, and stays on", s.lamps[room] === 1 && s.lamps.filter(Boolean).length === 1 && actionLabel(s) === "Lights off");
+  run(s, 2);
+  check("…still on two seconds later", s.lamps[room] === 1);
+  // a lit room shows you like your own light: off, she still sees you there
+  toggleLight(s);
+  s.G.x = s.P.x + 4; s.G.y = s.P.y; s.G.stun = 0;
+  check("in a lit room she sees you even with your own light off", seesYou(s));
+  s.lamps[room] = 0;
+  check("…and in the dark she doesn't", !seesYou(s));
+  toggleLight(s);
+  // she walks in: the light goes out
+  const t = newNight(91, 1); begin(t); run(t, 1); t.grace = 0;
+  const r = roomAt(t.N, t.P.x, t.P.y);
+  t.lamps[r] = 1;
+  away(t);
+  stepLamps(t.lamps, t.N, [t.G]);
+  check("(set-up) she's elsewhere: the light stays on", t.lamps[r] === 1);
+  t.G.x = t.P.x + 2; t.G.y = t.P.y;
+  run(t, DT);
+  check("she walks into the lit room: the light goes out, and you're told", t.lamps[r] === 0 && /lights go out/i.test(t.msg) && t.events.some((e) => e.name === "flicker"));
+  t.G.stun = 1e9;
+  doAction(t);
+  run(t, 1);
+  check("…you can switch it on again with her still in there", t.lamps[r] === 1);
+}
+
+// ── Nana far off ─────────────────────────────────────────────────────────────
+{
+  const s = inside(95); park(s);
+  s.hum.on = false; s.hum.since = 1; s.hum.t = 9;
+  s.G.x = s.P.x + HEAR_R + 3; s.G.y = s.P.y;
+  check("the humming stops but she's far off: no red warning", listening(s) && !listeningNear(s));
+  s.G.x = s.P.x + 10;
+  check("…near enough to hear you: the warning", listeningNear(s));
+}
+
+// ── a moment's grace when the door locks ─────────────────────────────────────
+{
+  const s = newNight(97, 1); begin(s);
+  run(s, 1);
+  check("the door locks behind you: a moment's grace", s.grace > GRACE_S - 1.2 && s.grace <= GRACE_S, s.grace.toFixed(2));
+  s.G.x = s.P.x; s.G.y = s.P.y; s.G.stun = 0; s.G.st = "patrol";
+  run(s, 1);
+  check("…she can't catch you in it", s.mode === "play");
+  run(s, GRACE_S);
+  s.G.x = s.P.x; s.G.y = s.P.y; s.G.stun = 0;
+  run(s, 0.5);
+  check("…and after it, she can", s.mode === "dead");
+  // sent away: to the far side of the house from the entrance
+  const h = inside(98);
+  h.G.x = 2.5; h.G.y = 2.5;
+  sendAway(h.G, h.env, { x: 1.5, y: 1.5 }, h.rand);
+  check("sent away: she ends up on the far side of the house", Math.hypot(h.G.x - 1.5, h.G.y - 1.5) > h.N * 0.7 && h.g[h.G.y | 0][h.G.x | 0] === FLOOR, `${Math.hypot(h.G.x - 1.5, h.G.y - 1.5).toFixed(1)} tiles`);
 }
 
 // ── doors ────────────────────────────────────────────────────────────────────

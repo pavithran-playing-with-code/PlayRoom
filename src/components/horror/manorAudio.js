@@ -125,6 +125,7 @@ export function createManorAudio() {
     // she heard you
     heard: () => { tone(330, 0.5, 0.25, "sawtooth", 160); noise(0.35, 0.35); },
     creak: (v = 0.28) => tone(170, 0.5, v, "sawtooth", 85),           // a door; v falls off with distance
+    click: () => { tone(1500, 0.03, 0.1, "square", 900); later(() => tone(900, 0.03, 0.06, "square", 600), 40); },
     locker: () => { tone(240, 0.12, 0.08, "square", 120); noise(0.08, 0.1); },
     buzz: (v = 0.5) => tone(90 + v * 60, 0.08, 0.08, "square"),        // a stuttering light
     thud: () => later(() => { tone(60, 0.3, 0.5, "sine", 30); noise(0.2, 0.3); }, 330),

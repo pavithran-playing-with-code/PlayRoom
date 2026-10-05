@@ -7,8 +7,8 @@
 // One kitchen, seen from above, nine tiles by nine. Orders come in at the
 // top; take the ingredients from the crates, chop what needs chopping on a
 // board, grill the meat on a stove (and take it off before it burns), put it
-// all on a plate, and hand the plate in at the window before the order runs
-// out. Everybody on a side shares the kitchen: pass things across the
+// all on a plate, and hand the plate in at the window — on the left wall,
+// beside where the orders are shown — before the order runs out. Everybody on a side shares the kitchen: pass things across the
 // counters, one chops while one cooks.
 //
 // Positions are in tiles: (x, y) is a chef's centre, tile (tx, ty) covers
@@ -31,11 +31,11 @@ export const TIP = 0.5;               // a plate handed in at once earns half ag
 //   # counter   T tomato  L lettuce  C cheese  B bun  M meat   (crates)
 //   K chopping board   S stove   P plates   W serving window   X bin   . floor
 export const LAYOUT = [
-  "#TLCWWBM#",
+  "#TLCKKBM#",
   "#.......#",
-  "K.......S",
-  "#.......S",
-  "K..#P#..#",
+  "W.......S",
+  "W.......S",
+  "#..#P#..#",
   "#..###..X",
   "#.......S",
   "#.......#",
@@ -105,11 +105,19 @@ export function ready(it) {
   return it.s === "raw";
 }
 function addTo(pl, it) {
-  if (!pl || pl.k !== "plate" || !ready(it)) return false;
-  if (pl.on.includes(it.k) || pl.on.length >= 4) return false;
+  if (whyNot(pl, it)) return false;
   pl.on.push(it.k);
   pl.on.sort();
   return true;
+}
+// Why `it` can't go on plate `pl` (null if it can): raw meat has to be
+// grilled first, lettuce and the rest chopped first; one of each on a plate.
+function whyNot(pl, it) {
+  if (!pl || pl.k !== "plate" || !it || it.k === "plate") return "busy";
+  if (!ready(it)) return it.s === "burnt" ? "burnt" : ING[it.k].cook ? "cook" : ING[it.k].chop ? "chop" : "busy";
+  if (pl.on.includes(it.k)) return "full";
+  if (pl.on.length >= 4) return "plateful";
+  return null;
 }
 
 // How many points make one, two and three stars, for this many cooks and
@@ -214,6 +222,7 @@ export function use(s, pid, tx, ty) {
         return done("put");
       }
       if (h && h.k === "plate" && it && addTo(h, it)) { t.item = null; return done("plate"); }
+      if (h && h.k === "plate" && it) return no(whyNot(h, it));
       return no(it ? "busy" : "hands");
     case "stove":
       if (!h && it) { t.item = null; p.hold = it; return done("take"); }
@@ -223,12 +232,16 @@ export function use(s, pid, tx, ty) {
         return done("put");
       }
       if (h && h.k === "plate" && it && addTo(h, it)) { t.item = null; return done("plate"); }
+      if (h && h.k === "plate" && it) return no(whyNot(h, it));
       return no(it ? "busy" : "hands");
     default: // a plain counter
       if (!h && it) { t.item = null; p.hold = it; return done("take"); }
       if (h && !it) { t.item = h; p.hold = null; return done("put"); }
       if (h && h.k === "plate" && it && it.k !== "plate" && addTo(h, it)) { t.item = null; return done("plate"); }
       if (h && h.k !== "plate" && it && it.k === "plate" && addTo(it, h)) { p.hold = null; return done("plate"); }
+      // a plate and something for it, one in hand and one down: say why not
+      if (h && it && h.k === "plate" && it.k !== "plate") return no(whyNot(h, it));
+      if (h && it && h.k !== "plate" && it.k === "plate") return no(whyNot(it, h));
       return no("busy");
   }
 }

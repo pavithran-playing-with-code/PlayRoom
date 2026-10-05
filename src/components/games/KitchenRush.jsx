@@ -24,9 +24,10 @@ const REPORT_MS = 66;
 const STICK_R = 44;
 const CHEF_COLOURS = ["#4CC9F0", "#FF8FC7", "#8FDB5C", "#FFA36C"];
 const WHY = {
-  far: "Walk up to it first", chop: "Chop that on a board first", cook: "Cook that on the stove first",
+  far: "Walk up to it first", chop: "🔪 Chop it on a board first", cook: "🔥 Grill the meat on a stove first — then it goes on the plate",
   nochop: "That doesn't go on a board", nocook: "Only meat goes on the stove", busy: "Something's already there",
   hands: "Your hands are full", empty: "Nothing to do there", plate: "Bring it on a plate", full: "That's already on the plate",
+  plateful: "The plate's full", burnt: "It's burnt — bin it 🗑️",
 };
 const TAU = Math.PI * 2;
 
@@ -129,16 +130,22 @@ function drawTile(ctx, ch, x, y, T, t, it) {
       ctx.beginPath(); ctx.ellipse(cx, cy + i * 3 - 3, T * 0.32, T * 0.24, 0, 0, TAU); ctx.fill(); ctx.stroke();
     }
   } else if (kind === "window") {
+    // the serving hatch in the left wall: a striped awning on the outside,
+    // the counter inside, one SERVE sign along both tiles
     ctx.fillStyle = "#FFF6E6";
-    ctx.fillRect(px + 1, py + T * 0.28, T - 2, T * 0.52);
-    for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? "#FFFFFF" : "#FF6B6B"; ctx.fillRect(px + (i * T) / 4, py, T / 4, T * 0.26); }
-    ctx.strokeStyle = "#2E2140"; ctx.lineWidth = 2; ctx.strokeRect(px + 1, py + 1, T - 2, T * 0.26);
-    if (x === LAYOUT[0].lastIndexOf("W")) {
-      // one sign across the whole window
+    ctx.fillRect(px + T * 0.28, py + 1, T * 0.6, T - 2);
+    for (let i = 0; i < 4; i++) { ctx.fillStyle = i % 2 ? "#FFFFFF" : "#FF6B6B"; ctx.fillRect(px, py + (i * T) / 4, T * 0.26, T / 4); }
+    ctx.strokeStyle = "#2E2140"; ctx.lineWidth = 2; ctx.strokeRect(px + 1, py + 1, T * 0.26, T - 2);
+    const rows = LAYOUT.map((r, ry) => (r[x] === "W" ? ry : -1)).filter((ry) => ry >= 0);
+    if (y === rows[rows.length - 1]) {
+      ctx.save();
+      ctx.translate(px + T * 0.6, py);
+      ctx.rotate(-Math.PI / 2);
       ctx.font = `800 ${Math.round(T * 0.3)}px Fredoka,sans-serif`;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillStyle = "#2E2140";
-      ctx.fillText("SERVE", px, py + T * 0.56);
+      ctx.fillText("SERVE", 0, 0);
+      ctx.restore();
     }
   } else if (kind === "bin") {
     emoji(ctx, "🗑️", cx, cy, T * 0.58);

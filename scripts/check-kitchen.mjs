@@ -49,7 +49,7 @@ function dist(fx, fy) {
 
 // ── a cook that works like a player ──────────────────────────────────────────
 const find = (ch) => { const out = []; k.LAYOUT.forEach((r, y) => [...r].forEach((c, x) => { if (c === ch) out.push([x, y]); })); return out; };
-const BOARDS = find("K"), STOVES = find("S"), STAGES = [[0, 1], [0, 3], [0, 5], [0, 6]];
+const BOARDS = find("K"), STOVES = find("S"), STAGES = [[0, 1], [0, 4], [0, 5], [0, 6]];   // plain counters to set a plate down on
 const CRATES = Object.fromEntries(Object.entries(k.CRATE).map(([ch, ing]) => [ing, find(ch)[0]]));
 const PLATES = find("P")[0], WINDOW = find("W")[0];
 
@@ -162,9 +162,11 @@ function run(seed, cooks, secs) {
   const s = k.createSide(3, { players: [1], durMs: 120000 });
   const p = s.players.get(1);
   const at = (x, y) => { p.x = x + 0.5; p.y = y + 0.5; };
+  // stand on the floor beside counter (tx, ty)
+  const beside = (tx, ty) => { const f = [[0, 1], [1, 0], [0, -1], [-1, 0]].map(([a, b]) => [tx + a, ty + b]).find(([x, y]) => k.kindAt(x, y) === "floor"); at(f[0], f[1]); };
   // meat can't go on a board
   at(...[CRATES.meat[0], 1]); k.use(s, 1, ...CRATES.meat);
-  at(1, BOARDS[0][1]);
+  beside(...BOARDS[0]);
   check("meat won't go on a chopping board", !k.use(s, 1, ...BOARDS[0]).ok && p.hold.k === "meat");
   // …but it goes on the stove, cooks, then burns
   at(7, STOVES[0][1]);
@@ -183,27 +185,43 @@ function run(seed, cooks, secs) {
   at(CRATES.tomato[0], 1); k.use(s, 1, ...CRATES.tomato);
   at(PLATES[0], PLATES[1] - 1);
   check("a raw tomato won't go on a plate", !k.use(s, 1, ...PLATES).ok);
-  at(1, BOARDS[0][1]);
+  beside(...BOARDS[0]);
   check("putting it on a board starts the chopping", k.use(s, 1, ...BOARDS[0]).ok && p.chop !== null);
   const bd = s.at.get(BOARDS[0][1] * k.W + BOARDS[0][0]);
   k.step(s, 0.5);
   at(5, 5.5); p.y = 6.5;                     // walk away
   k.step(s, 1.5);
   check("walking away stops the chopping", bd.item.s === "raw" && p.chop === null && bd.item.p > 0.2 && bd.item.p < 0.5);
-  at(1, BOARDS[0][1]);
+  beside(...BOARDS[0]);
   k.use(s, 1, ...BOARDS[0]);
   for (let t = 0; t < k.CHOP_S; t += DT) k.step(s, DT);
   check("…and coming back carries on where it was", bd.item.s === "chopped");
   // two of the same on one plate
   at(PLATES[0], PLATES[1] - 1); k.use(s, 1, ...PLATES);
-  at(1, BOARDS[0][1]);
+  beside(...BOARDS[0]);
   check("chopped tomato onto a plate", k.use(s, 1, ...BOARDS[0]).ok && p.hold.on.join() === "tomato");
   at(CRATES.bun[0], 1);
   check("a bun straight from the crate onto the plate", k.use(s, 1, ...CRATES.bun).ok && p.hold.on.join() === "bun,tomato");
   check("…but not a second bun", !k.use(s, 1, ...CRATES.bun).ok);
+  // the burger the player tried: bread on a plate on a counter, then the meat
+  {
+    const s3 = k.createSide(9, { players: [1], durMs: 120000 }), q = s3.players.get(1);
+    const put = (x, y) => { q.x = x + 0.5; q.y = y + 0.5; };
+    const stage = STAGES[0], standAt = [stage[0] + 1, stage[1]];
+    q.hold = { k: "plate", s: "", p: 0, on: ["bun"] };
+    put(...standAt); k.use(s3, 1, ...stage);                       // set the plate with its bread down
+    q.hold = { k: "meat", s: "raw", p: 0 };
+    const r = k.use(s3, 1, ...stage);
+    check("raw meat onto the bread's plate: refused, and told to grill it first (not 'something's already there')", !r.ok && r.why === "cook", r.why);
+    q.hold = { k: "meat", s: "cooked", p: 0 };
+    const r2 = k.use(s3, 1, ...stage);
+    check("…grilled meat goes straight on: a burger", r2.ok && s3.at.get(stage[1] * k.W + stage[0]).item.on.join() === "bun,meat");
+    q.hold = { k: "meat", s: "cooked", p: 0 };
+    check("…a second piece of meat: already on the plate", k.use(s3, 1, ...stage).why === "full");
+  }
   // a plate nobody ordered
   s.orders = [{ id: 99, r: "salad", until: s.t + 30, life: 60 }];
-  at(WINDOW[0], 1);
+  beside(...WINDOW);
   const sc = s.score;
   k.use(s, 1, ...WINDOW);
   check("a plate nobody ordered scores nothing, and is gone", s.score === sc && !p.hold && s.orders.length === 1);

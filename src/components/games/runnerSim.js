@@ -14,13 +14,13 @@ import { seededRand, shuffleInPlace } from "./seededRand.js";
 
 export const LANES = [-1, 0, 1];
 export const LANE_W = 2.2;                    // metres between lane centres
-export const BASE_SPEED = 12;                 // m/s at the start, and after a crash
-export const MAX_SPEED = 26;
-export const ACCEL = 0.15;                    // m/s gained every second
+export const BASE_SPEED = 14;                 // m/s at the start, and after a crash
+export const MAX_SPEED = 30;
+export const ACCEL = 0.28;                    // m/s gained every second
 export const JUMP_V = 7.5;                    // up, m/s
 export const GRAVITY = 22;
 export const SLIDE_S = 0.75;
-export const STUN_S = 0.8;                    // a crash: stumbling, no steering
+export const STUN_S = 1.0;                    // a crash: stumbling, no steering
 export const SAFE_S = 1.6;                    // …then untouchable this long
 export const COIN_POINTS = 10;
 export const VIEW_AHEAD = 140;                // how far ahead the course is laid
@@ -44,20 +44,24 @@ export function newRun(seed) {
   return s;
 }
 
-// One row of the course. Early on, one thing at a time; later two lanes may
-// be taken — never all three, so there is always a way through.
+// One row of the course. Early on, one thing at a time; then two lanes
+// taken more often than not; and later a wall across all three, where at
+// least one is a barrier or a bar — never three trains, so there is always
+// a way through, jumping or sliding.
 function makeRow(s) {
   const r = s.rand, n = s.made++;
   const z = s.nextZ;
   const items = [];
-  const busy = n < 4 ? 1 : r() < 0.45 ? 2 : 1;
+  const wall = n >= 10 && r() < 0.25;
+  const busy = wall ? 3 : n < 3 ? 1 : r() < 0.6 ? 2 : 1;
   // Fisher–Yates, not sort(() => r() - 0.5): browsers sort differently, and
   // an iPhone would have laid a different course from everyone else's
   const lanes = shuffleInPlace([-1, 0, 1], r);
   let longest = 0;
   for (let i = 0; i < busy; i++) {
     const roll = r();
-    const kind = roll < 0.36 ? LOW : roll < 0.68 ? HIGH : TRAIN;
+    // a wall's last lane is always one you can get through
+    const kind = wall && i === 2 ? (roll < 0.5 ? LOW : HIGH) : roll < 0.36 ? LOW : roll < 0.68 ? HIGH : TRAIN;
     const len = kind === TRAIN ? 9 + Math.floor(r() * 7) : DEPTH[kind];
     items.push({ kind, lane: lanes[i], z, len, hit: false });
     longest = Math.max(longest, len);
@@ -76,7 +80,7 @@ function makeRow(s) {
   // gaps open out with distance (not speed: the course must be the same for
   // everyone, however their run is going) — about a second and a half to
   // react, whatever the pace.
-  s.nextZ = z + longest + 18 + Math.min(14, z / 150) + Math.floor(r() * 8);
+  s.nextZ = z + longest + 15 + Math.min(12, z / 160) + Math.floor(r() * 7);
 }
 
 function layCourse(s) {
@@ -116,6 +120,7 @@ export const score = (s) => Math.floor(s.z) + s.coins * COIN_POINTS;
 // passes under you: at that point it's drawn behind the runner, and taking
 // it there looked like the first few coins of a line slipping past you.
 export const COIN_REACH = 1.6;
+const COIN_LEAD = 7;                     // the furthest a row lays its coins before itself
 export function step(s, dt) {
   const d = Math.max(0, Math.min(0.1, dt));
   const out = { coins: 0, crashed: false, got: [] };
@@ -137,7 +142,9 @@ export function step(s, dt) {
   s.slideT = Math.max(0, s.slideT - d);
 
   for (const row of s.rows) {
-    if (row.z > s.z + 3 || row.z + 20 < s.z - 3) continue;
+    // a row's coins start up to COIN_LEAD before it: look that far ahead, or
+    // the first coins of a line are behind you before the row is looked at
+    if (row.z - COIN_LEAD > s.z + COIN_REACH || row.z + 20 < s.z - 3) continue;
     for (const o of row.items) {
       if (Math.abs(o.lane - s.x) > (o.kind === "coin" ? 0.6 : 0.55)) continue;
       if (o.kind === "coin") {

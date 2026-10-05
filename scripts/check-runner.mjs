@@ -24,24 +24,27 @@ const DT = 1 / 60;
 
 // ── the course ───────────────────────────────────────────────────────────────
 {
-  let ok = true, why = "", same = true;
+  let ok = true, why = "", same = true, walls = 0;
   for (let seed = 1; seed <= 200; seed++) {
     const s = m.newRun(seed), t = m.newRun(seed);
     while (s.made < 120) { s.z += 50; m.step(s, 0); }
     while (t.made < 120) { t.z += 50; m.step(t, 0); }
     if (JSON.stringify(s.rows.map((r) => r.items.map((o) => [o.kind, o.lane, o.z]))) !== JSON.stringify(t.rows.map((r) => r.items.map((o) => [o.kind, o.lane, o.z])))) same = false;
   }
-  // every row: at least one lane with nothing that can't be passed by jumping or sliding
+  // every row: at least one lane with nothing that can't be passed by jumping or sliding,
+  // and the later rows do sometimes block all three (with a way through)
   for (let seed = 1; seed <= 200; seed++) {
     const s = m.newRun(seed);
     const rows = [];
     while (s.made < 150) { s.z += 40; m.step(s, 0); rows.push(...s.rows); }
     for (const row of rows) {
-      const blocked = new Set(row.items.filter((o) => o.kind !== "coin").map((o) => o.lane));
-      if (blocked.size >= 3) { ok = false; why = `seed ${seed}: a row with all three lanes taken`; }
+      const trains = new Set(row.items.filter((o) => o.kind === m.TRAIN).map((o) => o.lane));
+      if (trains.size >= 3) { ok = false; why = `seed ${seed}: a row with a train in all three lanes`; }
+      if (new Set(row.items.filter((o) => o.kind !== "coin").map((o) => o.lane)).size === 3) walls++;
     }
   }
-  check("200 courses: every row leaves at least one lane open", ok, why);
+  check("200 courses: every row has a way through (never three trains)", ok, why);
+  check("…and walls across all three lanes do come, later on", walls > 200, `${walls} walls`);
   check("the same seed lays the same course", same);
 }
 
@@ -56,7 +59,7 @@ function facing(kind, lane = 0) {
 const runTo = (s, z, act) => { let crashed = false; while (s.z < z) { if (act) act(s); crashed = m.step(s, DT).crashed || crashed; } return crashed; };
 {
   check("run into a barrier: crash", runTo(facing(m.LOW), 22));
-  check("jump it: clear", !runTo(facing(m.LOW), 22, (s) => { if (s.z > 18.6 && s.z < 18.8) m.jump(s); }));
+  check("jump it: clear", !runTo(facing(m.LOW), 22, (s) => { if (s.z > 18.0 && !s.jumped) { s.jumped = true; m.jump(s); } }));
   check("run into a high bar: crash", runTo(facing(m.HIGH), 22));
   check("slide under it: clear", !runTo(facing(m.HIGH), 22, (s) => { if (s.z > 18.5 && s.z < 18.7) m.slide(s); }));
   check("jumping a high bar doesn't help", runTo(facing(m.HIGH), 22, (s) => { if (s.z > 18.6 && s.z < 18.8) m.jump(s); }));
@@ -88,6 +91,29 @@ const runTo = (s, z, act) => { let crashed = false; while (s.z < z) { if (act) a
   let firstFour = 0;
   while (line.z < 40) { const o = m.step(line, DT); if (line.coins <= 4) firstFour += o.got.length; }
   check("a line of ten coins: all ten taken, the first four included", line.coins === 10 && firstFour === 4);
+  // the line as the course lays it: it starts six metres before its row
+  // (the row's z is where the barrier is). The first two used to be passed
+  // before the row was looked at, so they never counted or flew off.
+  const real = m.newRun(3);
+  real.rows = [{ z: 30, items: Array.from({ length: 6 }, (_, i) => ({ kind: "coin", lane: 0, z: 30 - 6 + i * 2, y: 0.6, got: false })) }];
+  real.nextZ = 1e9; real.z = 5;
+  const order = [];
+  while (real.z < 40) { const o = m.step(real, DT); for (const g of o.got) order.push(g.z); }
+  check("a line laid before its row: all six taken, in order, the first two included", real.coins === 6 && order.join() === "24,26,28,30,32,34", `${real.coins} taken: ${order.join(" ")}`);
+  // and on a real course: every coin you run through is yours
+  {
+    const r = m.newRun(11);
+    let missed = 0;
+    for (let t = 0; t < 60; t += DT) {
+      const ahead = r.rows.flatMap((row) => row.items).find((o) => o.kind === "coin" && !o.got && o.z > r.z + 2);
+      if (ahead && ahead.lane !== r.lane && !r.rows.flatMap((row) => row.items).some((o) => o.kind !== "coin" && o.lane === ahead.lane && Math.abs(o.z - ahead.z) < 12)) m.steer(r, Math.sign(ahead.lane - r.lane));
+      // a ground coin you're lined up with, on your feet, as you reach it: it must be taken
+      for (const row of r.rows) for (const o of row.items) if (o.kind === "coin" && Math.abs(o.y - 0.6) < 0.05 && o.z > r.z && o.z < r.z + 0.5 && Math.abs(r.x - o.lane) < 0.2 && r.y < 0.2) o.due = true;
+      m.step(r, DT);
+    }
+    for (const row of r.rows) for (const o of row.items) if (o.due && !o.got) missed++;
+    check("a minute on a real course: no ground coin in your lane slips past", missed === 0, `${missed} missed, ${r.coins} taken`);
+  }
   const sp = m.newRun(1); sp.rows = []; sp.nextZ = 1e9;
   for (let t = 0; t < 200; t += DT) m.step(sp, DT);
   check("the run speeds up, to a limit", sp.speed === m.MAX_SPEED);

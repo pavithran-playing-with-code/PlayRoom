@@ -506,60 +506,15 @@ function scene(ctx, s, W, H, t) {
         ctx.globalCompositeOperation = "source-over";
       }
     } else if (tv === DOOR && !isEn) {
-      // a door: dark jambs at the edges, two sunk panels, a brass handle
-      ctx.fillStyle = "rgba(0,0,0,.45)";
-      if (h.u < 0.07 || h.u > 0.93) ctx.fillRect(i * cw, ds, cw + 1, lh);
-      else {
-        if ((h.u > 0.18 && h.u < 0.21) || (h.u > 0.62 && h.u < 0.65)) {
-          ctx.fillRect(i * cw, ds + lh * 0.1, cw + 1, lh * 0.33);
-          ctx.fillRect(i * cw, ds + lh * 0.55, cw + 1, lh * 0.35);
-        } else if (h.u > 0.21 && h.u < 0.62) {
-          for (const f of [0.1, 0.42, 0.55, 0.88]) ctx.fillRect(i * cw, ds + lh * f, cw + 1, Math.max(1, lh * 0.02));
-        }
-        if (h.u > 0.74 && h.u < 0.84) {
-          ctx.fillStyle = `rgb(${(240 * b) | 0},${(200 * b) | 0},${(90 * b) | 0})`;
-          ctx.fillRect(i * cw, ds + lh * 0.5, cw + 1, lh * 0.07);
-        }
-      }
+      decorDoor(ctx, i * cw, cw + 1, ds, lh, h.u, b);
     } else if (plain) {
-      // wallpaper above, darker panelling below, a rail between
-      ctx.fillStyle = "rgba(0,0,0,.24)";
-      ctx.fillRect(i * cw, ds + lh * 0.62, cw + 1, lh * 0.38);
-      if ((h.u * 7 % 1) < 0.14) { ctx.fillStyle = "rgba(0,0,0,.08)"; ctx.fillRect(i * cw, ds, cw + 1, lh * 0.6); }
-      ctx.fillStyle = "rgba(0,0,0,.4)";
-      ctx.fillRect(i * cw, ds + lh * 0.6, cw + 1, Math.max(1, lh * 0.025));
-      ctx.fillRect(i * cw, ds + lh * 0.97, cw + 1, Math.max(1, lh * 0.03));
       const wallId = h.mx * 31 + h.my * 17;
-      if (!swHere && wallId % 5 === 0 && h.u > 0.3 && h.u < 0.7) {
-        // a painting in a dark frame
-        ctx.fillStyle = `rgb(${(40 * b) | 0},${(26 * b) | 0},${(12 * b) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.14, cw + 1, lh * 0.34);
-        if (h.u > 0.34 && h.u < 0.66) { ctx.fillStyle = `rgb(${(80 * b) | 0},${(90 * b) | 0},${(70 * b) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.18, cw + 1, lh * 0.26); }
-        if (h.u > 0.45 && h.u < 0.55) { ctx.fillStyle = `rgb(${(200 * b) | 0},${(190 * b) | 0},${(170 * b) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.24, cw + 1, lh * 0.08); }
-      } else if (!swHere && (h.mx * 13 + h.my * 7) % 9 === 0 && h.u > 0.47 && h.u < 0.53) {
-        // a candle sconce: brass, a flame, a warm pool of light round it
-        const mb = Math.max(b, 0.5);
-        ctx.fillStyle = `rgb(${(180 * mb) | 0},${(140 * mb) | 0},${(60 * mb) | 0})`; ctx.fillRect(i * cw, ds + lh * 0.3, cw + 1, lh * 0.05);
-        ctx.fillStyle = "rgba(255,210,100,.95)"; ctx.fillRect(i * cw, ds + lh * (0.22 + Math.sin(t * 13 + h.mx) * 0.01), cw + 1, lh * 0.08);
-        ctx.globalCompositeOperation = "lighter";
-        ctx.fillStyle = "rgba(255,170,60,.12)"; ctx.fillRect(i * cw - cw * 6, ds + lh * 0.1, cw * 13, lh * 0.4);
-        ctx.globalCompositeOperation = "source-over";
-      }
-    }
-    if (swHere && h.u > 0.36 && h.u < 0.64) {
-      // the room's light switch: a cream plate, its toggle up and glowing when on
-      const on = s.lamps && s.lamps[swHere.room], mb = Math.max(b, 0.55);
-      const top = ds + lh * 0.36, ph = lh * 0.2;
-      ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(i * cw, top - lh * 0.01, cw + 1, ph + lh * 0.02);
-      if (h.u > 0.38 && h.u < 0.62) { ctx.fillStyle = `rgb(${(240 * mb) | 0},${(232 * mb) | 0},${(212 * mb) | 0})`; ctx.fillRect(i * cw, top, cw + 1, ph); }
-      if (h.u > 0.45 && h.u < 0.55) {
-        ctx.fillStyle = on ? "#ffd66b" : "#4a3a2c";
-        ctx.fillRect(i * cw, top + ph * (on ? 0.14 : 0.5), cw + 1, ph * 0.36);
-      }
-      if (on) {
-        ctx.globalCompositeOperation = "lighter";
-        ctx.fillStyle = "rgba(255,214,107,.18)"; ctx.fillRect(i * cw, top - ph * 0.5, cw + 1, ph * 2);
-        ctx.globalCompositeOperation = "source-over";
-      }
+      decorWall(ctx, i * cw, cw + 1, ds, lh, h.u, b, col, t, {
+        painting: !swHere && wallId % 5 === 0 ? wallId % 3 : -1,
+        sconce: !swHere && wallId % 5 !== 0 && (h.mx * 13 + h.my * 7) % 9 === 0,
+        sw: swHere ? (s.lamps && s.lamps[swHere.room] ? 2 : 1) : 0,
+        eyes: Math.max(0, 1 - Math.min(...ghostsOf(s).map((G) => Math.hypot(G.x - h.mx - 0.5, G.y - h.my - 0.5))) / 6),
+      });
     }
   }
 
@@ -574,6 +529,8 @@ function scene(ctx, s, W, H, t) {
   }
   for (const k in s.obst) sp.push({ x: (+k % s.N) + 0.5, y: ((+k / s.N) | 0) + 0.5, k: s.obst[k] });
   for (const c of s.cells) if (!c.got) sp.push({ x: c.x, y: c.y, k: "b" });
+  // every room's light, hanging from its ceiling in the middle of the room
+  if (s.lamps) { const RN = Math.round(Math.sqrt(s.lamps.length)); for (let ri = 0; ri < s.lamps.length; ri++) sp.push({ x: (ri % RN) * 8 + 4.5, y: Math.floor(ri / RN) * 8 + 4.5, k: "lamp", ri }); }
   for (const G of ghostsOf(s)) sp.push({ x: G.x, y: G.y, k: "g", G });
   for (const o of s.others || []) sp.push({ x: o.x, y: o.y, k: "o", o });
   for (const o of sp) {
@@ -585,7 +542,7 @@ function scene(ctx, s, W, H, t) {
   for (const o of sp) {
     if (o.ty < 0.2 || o.ty > 18) continue;
     const ob = o.k === HURDLE || o.k === BEAM, scr = W / 2 * (1 + o.tx / o.ty), u = H / o.ty;
-    const size = (ob || o.k === "p" || o.k === "f") ? u : o.k === "o" ? u * 1.6 : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : o.k === "bd" ? 0.6 : 0.3);
+    const size = o.k === "lamp" ? u * 2.2 : (ob || o.k === "p" || o.k === "f") ? u : o.k === "o" ? u * 1.6 : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : o.k === "bd" ? 0.6 : 0.3);
     const cy = hz + (eye - (o.k === "g" ? 0.5 : o.k === "r" || o.k === "b" ? 0.45 : 0.2)) * u;
     const x0 = Math.max(0, Math.floor((scr - size / 2) / cw)), x1 = Math.min(cols - 1, Math.floor((scr + size / 2) / cw));
     ctx.save();
@@ -594,7 +551,10 @@ function scene(ctx, s, W, H, t) {
     for (let i = x0; i <= x1; i++) if (zb[i] > o.ty) { ctx.rect(i * cw, 0, cw, H); vis = true; }
     if (!vis) { ctx.restore(); continue; }
     ctx.clip();
-    if (o.k === "g") {
+    if (o.k === "lamp") {
+      const lbr = Math.min(1, (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) : 0) + 0.08);
+      drawLamp(ctx, scr, u, hz, eye, lampLv[o.ri] || 0, lbr);
+    } else if (o.k === "g") {
       const cam = o.tx / o.ty / PLANE;
       const gb = (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cam) * 0.45) : 0) + Math.max(0, 1 - o.ty / 2.2) * 0.3 +
         (lampLv[roomAt(s.N, o.x, o.y)] || 0) * 0.6;              // in a lit room she's plain to see
@@ -689,6 +649,210 @@ function spotsOf(s) {
   return list;
 }
 
+// ── walls, one strip at a time ───────────────────────────────────────────────
+// The walls are drawn as thin upright strips (a raycaster), so everything on
+// them is worked out for one strip: `u` is how far along the wall face this
+// strip is (0..1), and heights are fractions of the wall (0 at the top).
+// Wall faces are square, so a circle is the same in u and in height.
+const shadeOf = (c, b) => `rgb(${(c[0] * b) | 0},${(c[1] * b) | 0},${(c[2] * b) | 0})`;
+function band(ctx, X, W, ds, lh, v0, v1, fill) {
+  if (v1 <= v0) return;
+  ctx.fillStyle = fill;
+  ctx.fillRect(X, ds + lh * v0, W, Math.max(1, lh * (v1 - v0)));
+}
+
+// A panelled door: architrave, four raised panels, a brass knob and keyhole.
+function decorDoor(ctx, X, W, ds, lh, u, b) {
+  const B = (c) => shadeOf(c, b);
+  if (u < 0.06 || u > 0.94) { band(ctx, X, W, ds, lh, 0, 1, B([150, 112, 70])); if (u < 0.02 || u > 0.98) band(ctx, X, W, ds, lh, 0, 1, B([60, 38, 22])); return; }
+  // wood grain
+  if ((u * 37) % 1 < 0.12) band(ctx, X, W, ds, lh, 0.03, 1, "rgba(0,0,0,.08)");
+  band(ctx, X, W, ds, lh, 0, 0.03, B([150, 112, 70]));            // the lintel
+  for (const [a, z] of [[0.16, 0.46], [0.54, 0.84]]) {
+    if (u < a || u > z) continue;
+    const edge = u < a + 0.025 ? "l" : u > z - 0.025 ? "r" : "";
+    for (const [v0, v1] of [[0.1, 0.44], [0.52, 0.92]]) {
+      if (edge === "l") band(ctx, X, W, ds, lh, v0, v1, "rgba(255,230,190,.18)");
+      else if (edge === "r") band(ctx, X, W, ds, lh, v0, v1, "rgba(0,0,0,.32)");
+      else {
+        band(ctx, X, W, ds, lh, v0, v0 + 0.02, "rgba(255,230,190,.22)");   // light on the top bevel
+        band(ctx, X, W, ds, lh, v1 - 0.02, v1, "rgba(0,0,0,.35)");          // shade under the bottom one
+        band(ctx, X, W, ds, lh, v0 + 0.04, v1 - 0.04, "rgba(0,0,0,.06)");
+      }
+    }
+  }
+  // the knob and the keyhole plate
+  const dk = Math.abs(u - 0.82);
+  if (dk < 0.035) {
+    const r = Math.sqrt(0.035 * 0.035 - dk * dk);
+    band(ctx, X, W, ds, lh, 0.5 - r, 0.5 + r, `rgb(${(235 * Math.max(b, 0.35)) | 0},${(190 * Math.max(b, 0.35)) | 0},${(80 * Math.max(b, 0.35)) | 0})`);
+    if (u < 0.81) band(ctx, X, W, ds, lh, 0.5 - r, 0.5 - r * 0.3, "rgba(255,255,230,.55)");
+  }
+  if (Math.abs(u - 0.82) < 0.016) {
+    band(ctx, X, W, ds, lh, 0.55, 0.62, shadeOf([200, 160, 70], Math.max(b, 0.3)));
+    if (Math.abs(u - 0.82) < 0.006) band(ctx, X, W, ds, lh, 0.57, 0.6, "#140c06");
+  }
+}
+
+// A plain wall: patterned paper over raised panelling, a rail, a skirting;
+// sometimes a painting in a gilt frame, a candle sconce, or the room's switch.
+function decorWall(ctx, X, W, ds, lh, u, b, col, t, o) {
+  const B = (c) => shadeOf(c, b);
+  // the paper: a faint stripe, and a little diamond in every other one
+  const fu = (u * 6) % 1;
+  if (fu < 0.5) band(ctx, X, W, ds, lh, 0, 0.6, "rgba(0,0,0,.07)");
+  const dd = Math.abs(fu - 0.25);
+  if (dd < 0.1) for (let k = 0; k < 4; k++) { const c = 0.08 + k * 0.14 + (Math.floor(u * 6) % 2) * 0.07, r = (0.1 - dd) * 0.25; band(ctx, X, W, ds, lh, c - r, c + r, "rgba(255,240,210,.09)"); }
+  // the panelling: a rail, raised panels, a skirting
+  band(ctx, X, W, ds, lh, 0.6, 1, "rgba(30,15,5,.34)");
+  band(ctx, X, W, ds, lh, 0.585, 0.6, B([150, 112, 72]));
+  band(ctx, X, W, ds, lh, 0.585, 0.59, "rgba(255,230,190,.25)");
+  const pu = (u * 2) % 1;
+  if (pu < 0.08 || pu > 0.92) band(ctx, X, W, ds, lh, 0.6, 0.93, "rgba(0,0,0,.18)");
+  else {
+    band(ctx, X, W, ds, lh, 0.64, 0.655, "rgba(255,230,190,.12)");
+    band(ctx, X, W, ds, lh, 0.875, 0.89, "rgba(0,0,0,.28)");
+    if (pu < 0.1 || pu > 0.9) band(ctx, X, W, ds, lh, 0.64, 0.89, pu < 0.5 ? "rgba(255,230,190,.1)" : "rgba(0,0,0,.2)");
+  }
+  band(ctx, X, W, ds, lh, 0.93, 1, B([58, 36, 20]));
+  band(ctx, X, W, ds, lh, 0.93, 0.94, "rgba(255,230,190,.2)");
+
+  if (o.painting >= 0) painting(ctx, X, W, ds, lh, u, b, o.painting, o.eyes, t);
+  else if (o.sconce) sconce(ctx, X, W, ds, lh, u, b, t);
+  if (o.sw) lightSwitch(ctx, X, W, ds, lh, u, b, o.sw === 2);
+}
+
+// A painting in a gilt frame: a moonlit landscape, a portrait (whose eyes
+// catch the light when she's near), or flowers in a vase.
+function painting(ctx, X, W, ds, lh, u, b, kind, eyes, t) {
+  const U0 = 0.27, U1 = 0.73, V0 = 0.1, V1 = 0.5, F = 0.035;
+  if (u < U0 || u > U1) return;
+  const gold = (k) => shadeOf([214 * k, 168 * k, 72 * k], Math.max(b, 0.3));
+  band(ctx, X, W, ds, lh, V1, V1 + 0.02, "rgba(0,0,0,.35)");                          // its shadow on the paper
+  if (u < U0 + F || u > U1 - F) {
+    const e = u < U0 + F ? (u - U0) / F : (U1 - u) / F;
+    band(ctx, X, W, ds, lh, V0, V1, gold(0.55 + 0.6 * Math.sin(e * Math.PI)));
+    if (e > 0.85) band(ctx, X, W, ds, lh, V0 + F, V1 - F, "rgba(40,20,5,.7)");
+    return;
+  }
+  band(ctx, X, W, ds, lh, V0, V0 + F, gold(1.05));
+  band(ctx, X, W, ds, lh, V0 + F * 0.4, V0 + F * 0.6, gold(1.25));
+  band(ctx, X, W, ds, lh, V1 - F, V1, gold(0.7));
+  band(ctx, X, W, ds, lh, V1 - F * 0.6, V1 - F * 0.4, gold(0.95));
+  const a = V0 + F, z = V1 - F, pu = (u - U0 - F) / (U1 - U0 - 2 * F);
+  const C = (c) => shadeOf(c, Math.max(b, 0.18));
+  if (kind === 0) {
+    // a hill under the moon, a lit window in a little house
+    band(ctx, X, W, ds, lh, a, z, C([34, 40, 78]));
+    band(ctx, X, W, ds, lh, a, a + (z - a) * 0.4, C([24, 26, 58]));
+    const dm = Math.abs(u - 0.6);
+    if (dm < 0.035) { const r = Math.sqrt(0.035 * 0.035 - dm * dm); band(ctx, X, W, ds, lh, 0.2 - r, 0.2 + r, C([238, 232, 200])); }
+    const hill = z - 0.09 - 0.03 * Math.sin(pu * 7.5);
+    band(ctx, X, W, ds, lh, hill, z, C([30, 62, 40]));
+    if (pu > 0.18 && pu < 0.34) { band(ctx, X, W, ds, lh, hill - 0.06, hill + 0.01, C([60, 40, 34])); if (pu > 0.23 && pu < 0.29) band(ctx, X, W, ds, lh, hill - 0.04, hill - 0.02, C([255, 200, 90])); }
+  } else if (kind === 1) {
+    // a lady in black, her hair up — and her eyes
+    band(ctx, X, W, ds, lh, a, z, C([92, 30, 36]));
+    band(ctx, X, W, ds, lh, a, a + 0.05, C([70, 22, 28]));
+    const dh = Math.abs(u - 0.5);
+    if (dh < 0.055) { const r = Math.sqrt(0.055 * 0.055 - dh * dh) * 1.25; band(ctx, X, W, ds, lh, 0.26 - r, 0.26 + r, C([226, 206, 186])); }
+    if (dh < 0.04) { const r = Math.sqrt(0.04 * 0.04 - dh * dh); band(ctx, X, W, ds, lh, 0.18 - r, 0.19 + r * 0.4, C([90, 86, 92])); }
+    const ds2 = Math.abs(u - 0.5);
+    if (ds2 < 0.15) { const r = Math.sqrt(0.15 * 0.15 - ds2 * ds2) * 0.75; band(ctx, X, W, ds, lh, Math.max(0.385, z - r * 0.9), z, C([26, 22, 30])); }
+    for (const ex of [0.478, 0.522]) if (Math.abs(u - ex) < 0.007) band(ctx, X, W, ds, lh, 0.254, 0.266, eyes > 0.05 ? `rgba(255,${(60 - eyes * 60) | 0},${(60 - eyes * 60) | 0},${0.5 + eyes * 0.5 * (0.7 + 0.3 * Math.sin(t * 9))})` : C([40, 30, 30]));
+  } else {
+    // flowers in a blue vase
+    band(ctx, X, W, ds, lh, a, z, C([96, 104, 70]));
+    const dv = Math.abs(u - 0.5);
+    if (dv < 0.06) { const r = Math.sqrt(0.06 * 0.06 - dv * dv) * 1.1; band(ctx, X, W, ds, lh, 0.4 - r, Math.min(z, 0.4 + r), C([60, 90, 150])); }
+    if (Math.abs(u - 0.5) < 0.004 || Math.abs(u - 0.47) < 0.003 || Math.abs(u - 0.535) < 0.003) band(ctx, X, W, ds, lh, 0.24, 0.36, C([40, 90, 40]));
+    for (const [fx, fy, fc] of [[0.5, 0.21, [220, 60, 80]], [0.455, 0.25, [240, 200, 80]], [0.545, 0.24, [240, 140, 170]], [0.49, 0.28, [255, 240, 240]]]) {
+      const d = Math.abs(u - fx);
+      if (d < 0.028) { const r = Math.sqrt(0.028 * 0.028 - d * d); band(ctx, X, W, ds, lh, fy - r, fy + r, C(fc)); }
+    }
+  }
+  // varnish: a soft sheen across the top
+  if (pu > 0.1 && pu < 0.4) band(ctx, X, W, ds, lh, a, a + 0.05, "rgba(255,255,255,.05)");
+}
+
+// A candle sconce: a brass back-plate and arm, a dripping candle, its flame
+// and a halo of light on the paper round it.
+function sconce(ctx, X, W, ds, lh, u, b, t) {
+  const d = Math.abs(u - 0.5);
+  const fl = 0.85 + 0.15 * Math.sin(t * 13 + u * 40);
+  if (d < 0.18) {                                                        // the halo
+    const k = (1 - d / 0.18) ** 2 * 0.22 * fl;
+    ctx.globalCompositeOperation = "lighter";
+    band(ctx, X, W, ds, lh, 0.08, 0.5, `rgba(255,170,70,${k})`);
+    ctx.globalCompositeOperation = "source-over";
+  }
+  const brass = (k) => shadeOf([200 * k, 160 * k, 70 * k], Math.max(b, 0.45));
+  if (d < 0.03) { const r = Math.sqrt(0.03 * 0.03 - d * d) * 1.6; band(ctx, X, W, ds, lh, 0.34 - r, 0.34 + r, brass(1 - d * 10)); }   // the back-plate
+  if (d < 0.05) band(ctx, X, W, ds, lh, 0.3, 0.315, brass(1.1));                                                               // the cup
+  if (d < 0.013) {
+    band(ctx, X, W, ds, lh, 0.215, 0.3, "#f3ead6");                                                                               // the candle
+    if (u > 0.5) band(ctx, X, W, ds, lh, 0.215, 0.3, "rgba(0,0,0,.12)");
+  }
+  if (Math.abs(u - 0.508) < 0.004) band(ctx, X, W, ds, lh, 0.215, 0.245, "#f3ead6");                                            // a drip
+  const df = Math.abs(u - 0.5);
+  if (df < 0.012) { const r = (0.012 - df) * 2.2 * fl; band(ctx, X, W, ds, lh, 0.205 - r * 1.3, 0.212, `rgba(255,${(200 + 40 * (1 - df / 0.012)) | 0},110,.95)`); }
+}
+
+// The room's light switch: a brass plate with two screws, a lever up (on)
+// or down (off), and a little amber light that glows while it's on.
+function lightSwitch(ctx, X, W, ds, lh, u, b, on) {
+  const U0 = 0.44, U1 = 0.56, V0 = 0.36, V1 = 0.53;
+  if (u < U0 - 0.01 || u > U1 + 0.01) return;
+  const mb = Math.max(b, 0.5);
+  if (on) { ctx.globalCompositeOperation = "lighter"; band(ctx, X, W, ds, lh, V0 - 0.04, V1 + 0.04, `rgba(255,200,90,${0.12 * (1 - Math.abs(u - 0.5) / 0.07)})`); ctx.globalCompositeOperation = "source-over"; }
+  if (u < U0 || u > U1) { band(ctx, X, W, ds, lh, V0 + 0.01, V1 + 0.01, "rgba(0,0,0,.4)"); return; }
+  const e = Math.min(u - U0, U1 - u) / 0.012;
+  band(ctx, X, W, ds, lh, V0, V1, shadeOf([210, 170, 80], mb * (e < 1 ? 0.75 : 1)));
+  band(ctx, X, W, ds, lh, V0, V0 + 0.008, `rgba(255,240,190,${0.5 * mb})`);
+  band(ctx, X, W, ds, lh, V1 - 0.008, V1, "rgba(60,30,0,.45)");
+  if (Math.abs(u - 0.5) < 0.006) { band(ctx, X, W, ds, lh, V0 + 0.012, V0 + 0.022, shadeOf([90, 70, 30], mb)); band(ctx, X, W, ds, lh, V1 - 0.022, V1 - 0.012, shadeOf([90, 70, 30], mb)); }
+  if (Math.abs(u - 0.5) < 0.016) {
+    band(ctx, X, W, ds, lh, 0.432, 0.458, "#2a1a10");                                  // the slot
+    band(ctx, X, W, ds, lh, on ? 0.4 : 0.445, on ? 0.447 : 0.492, shadeOf([245, 236, 214], mb));   // the lever
+    band(ctx, X, W, ds, lh, on ? 0.4 : 0.484, on ? 0.408 : 0.492, shadeOf([190, 178, 160], mb));
+  }
+  if (Math.abs(u - 0.5) < 0.008) band(ctx, X, W, ds, lh, 0.5, 0.512, on ? "#ffb52e" : "#4a3020");   // the little light
+}
+
+// A room's light hanging from the ceiling: a cord, a fringed shade, the bulb.
+// Lit, it glows and throws a cone of light down; when she's near it stutters.
+function drawLamp(ctx, scr, u, hz, eye, lv, br) {
+  const foot = hz + eye * u, F = (h) => foot - h * u;
+  const top = F(1), y0 = F(0.86), y1 = F(0.76), wT = 0.1 * u, wB = 0.19 * u;
+  ctx.strokeStyle = `rgba(30,22,18,${0.6 + 0.4 * br})`; ctx.lineWidth = Math.max(1, u * 0.008);
+  ctx.beginPath(); ctx.moveTo(scr, top); ctx.lineTo(scr, y0); ctx.stroke();
+  if (lv > 0.05) {
+    ctx.globalCompositeOperation = "lighter";
+    const cone = ctx.createLinearGradient(0, y1, 0, F(0.05));
+    cone.addColorStop(0, `rgba(255,210,140,${0.22 * lv})`); cone.addColorStop(1, "rgba(255,210,140,0)");
+    ctx.fillStyle = cone;
+    ctx.beginPath(); ctx.moveTo(scr - wB, y1); ctx.lineTo(scr + wB, y1); ctx.lineTo(scr + wB * 3.2, F(0.05)); ctx.lineTo(scr - wB * 3.2, F(0.05)); ctx.closePath(); ctx.fill();
+    const g = ctx.createRadialGradient(scr, y1, 1, scr, y1, u * 0.45);
+    g.addColorStop(0, `rgba(255,220,150,${0.5 * lv})`); g.addColorStop(1, "rgba(255,200,120,0)");
+    ctx.fillStyle = g; ctx.fillRect(scr - u * 0.45, y1 - u * 0.45, u * 0.9, u * 0.9);
+    ctx.globalCompositeOperation = "source-over";
+  }
+  const k = Math.max(0.12, br) + lv * 0.9;
+  const sh = ctx.createLinearGradient(scr - wB, 0, scr + wB, 0);
+  sh.addColorStop(0, `rgb(${(120 * Math.min(1, k)) | 0},${(50 * Math.min(1, k)) | 0},${(56 * Math.min(1, k)) | 0})`);
+  sh.addColorStop(0.5, lv > 0.05 ? `rgb(${(255 * Math.min(1, k)) | 0},${(190 * Math.min(1, k)) | 0},${(140 * Math.min(1, k)) | 0})` : `rgb(${(170 * Math.min(1, k)) | 0},${(80 * Math.min(1, k)) | 0},${(86 * Math.min(1, k)) | 0})`);
+  sh.addColorStop(1, `rgb(${(110 * Math.min(1, k)) | 0},${(44 * Math.min(1, k)) | 0},${(50 * Math.min(1, k)) | 0})`);
+  ctx.fillStyle = sh;
+  ctx.beginPath(); ctx.moveTo(scr - wT, y0); ctx.lineTo(scr + wT, y0); ctx.lineTo(scr + wB, y1); ctx.lineTo(scr - wB, y1); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "rgba(20,10,10,.6)"; ctx.lineWidth = Math.max(1, u * 0.006); ctx.stroke();
+  // the fringe
+  ctx.fillStyle = `rgba(${(200 * Math.min(1, k)) | 0},${(150 * Math.min(1, k)) | 0},${(70 * Math.min(1, k)) | 0},.9)`;
+  for (let q = 0; q < 9; q++) ctx.fillRect(scr - wB + (q / 8) * wB * 2 - u * 0.004, y1, Math.max(1, u * 0.008), u * 0.025);
+  // the bulb, under the shade
+  ctx.fillStyle = lv > 0.05 ? `rgba(255,250,220,${0.6 + 0.4 * lv})` : "rgba(90,80,70,.8)";
+  ctx.beginPath(); ctx.ellipse(scr, y1 + u * 0.012, u * 0.03, u * 0.022, 0, 0, TAU); ctx.fill();
+}
+
 // Furniture you can hide in. Billboards like everything else; heights are in
 // wall units, so they sit on the floor at the right size.
 function drawFurniture(ctx, o, scr, u, hz, eye, L, t, lamp = 0) {
@@ -696,56 +860,142 @@ function drawFurniture(ctx, o, scr, u, hz, eye, L, t, lamp = 0) {
   const br = Math.min(1, (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cm) * 0.45) : 0) * 1.25 + Math.max(0, 1 - o.ty / 2.2) * 0.3 + 0.07 + lamp * 0.85 * Math.max(0.45, 1 - o.ty / 18));
   const C = (r, g, b, a = 1) => `rgba(${(r * br) | 0},${(g * br) | 0},${(b * br) | 0},${a})`;
   const foot = hz + eye * u, F = (h) => foot - h * u;              // h: height above the floor
+  const X = (k) => scr + k * u;                                     // k: across, in tiles
+  const lw = Math.max(1, u * 0.008), ink = `rgba(20,10,4,${0.55 + 0.35 * br})`;
+  const rrect = (x0, y0, w, h, r) => { ctx.beginPath(); ctx.moveTo(x0 + r, y0); ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, r); ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, r); ctx.arcTo(x0, y0 + h, x0, y0, r); ctx.arcTo(x0, y0, x0 + w, y0, r); ctx.closePath(); };
+  const wood = (x0, x1, c0, c1) => { const g = ctx.createLinearGradient(X(x0), 0, X(x1), 0); g.addColorStop(0, C(...c1)); g.addColorStop(0.45, C(...c0)); g.addColorStop(1, C(...c1)); return g; };
   ctx.fillStyle = `rgba(0,0,0,${0.35 * Math.min(1, br + 0.3)})`;  // its shadow on the floor
-  ctx.beginPath(); ctx.ellipse(scr, F(0), 0.46 * u, 0.06 * u, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(scr, F(0), 0.48 * u, 0.06 * u, 0, 0, TAU); ctx.fill();
+  ctx.lineWidth = lw; ctx.strokeStyle = ink;
+
   if (o.kind === "bed") {
-    // legs, the dark under it (where you hide), the frame, sheet, a striped quilt, pillow, posts
-    ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(scr - 0.44 * u, F(0.3), 0.88 * u, 0.16 * u);
-    ctx.fillStyle = C(60, 38, 20); ctx.fillRect(scr - 0.44 * u, F(0.14), 0.06 * u, 0.14 * u); ctx.fillRect(scr + 0.38 * u, F(0.14), 0.06 * u, 0.14 * u);
-    ctx.fillStyle = C(78, 50, 28); ctx.fillRect(scr - 0.46 * u, F(0.3), 0.92 * u, 0.17 * u);
-    ctx.fillStyle = C(226, 220, 206); ctx.fillRect(scr - 0.44 * u, F(0.4), 0.88 * u, 0.1 * u);
-    ctx.fillStyle = C(72, 96, 168); ctx.fillRect(scr - 0.44 * u, F(0.5), 0.66 * u, 0.18 * u);
-    ctx.fillStyle = C(102, 128, 200); for (let q = 0; q < 6; q++) ctx.fillRect(scr - 0.44 * u + q * 0.11 * u, F(0.5), 0.05 * u, 0.18 * u);
-    ctx.fillStyle = C(150, 60, 70); ctx.fillRect(scr - 0.44 * u, F(0.5), 0.66 * u, 0.02 * u);   // a ribbon of trim
-    ctx.fillStyle = C(236, 232, 240); ctx.beginPath(); ctx.ellipse(scr + 0.3 * u, F(0.5), 0.13 * u, 0.06 * u, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = C(70, 44, 24); ctx.fillRect(scr + 0.36 * u, F(0.7), 0.1 * u, 0.7 * u); ctx.beginPath(); ctx.arc(scr + 0.41 * u, F(0.7), 0.05 * u, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = C(98, 62, 34); ctx.fillRect(scr + 0.38 * u, F(0.62), 0.06 * u, 0.4 * u);
-    ctx.fillStyle = C(70, 44, 24); ctx.fillRect(scr - 0.46 * u, F(0.46), 0.05 * u, 0.34 * u);
-  } else if (o.kind === "wardrobe") {
-    // feet, the body, a crown and a skirting, two panelled doors, an oval mirror, brass knobs
-    ctx.fillStyle = C(52, 32, 18); ctx.fillRect(scr - 0.32 * u, F(0.06), 0.08 * u, 0.06 * u); ctx.fillRect(scr + 0.24 * u, F(0.06), 0.08 * u, 0.06 * u);
-    ctx.fillStyle = C(98, 64, 38); ctx.fillRect(scr - 0.34 * u, F(1), 0.68 * u, 0.94 * u);
-    ctx.fillStyle = C(66, 42, 24); ctx.fillRect(scr - 0.38 * u, F(1.06), 0.76 * u, 0.07 * u); ctx.fillRect(scr - 0.37 * u, F(0.1), 0.74 * u, 0.04 * u);
-    for (const k of [-1, 1]) {
-      const d0 = k < 0 ? scr - 0.31 * u : scr + 0.02 * u;
-      ctx.fillStyle = C(112, 74, 44); ctx.fillRect(d0, F(0.92), 0.29 * u, 0.78 * u);
-      ctx.strokeStyle = C(60, 38, 20); ctx.lineWidth = Math.max(1, u * 0.012); ctx.strokeRect(d0 + 0.025 * u, F(0.89), 0.24 * u, 0.72 * u);
+    // the dark under it (where you hide), turned legs
+    ctx.fillStyle = "rgba(0,0,0,.7)"; ctx.fillRect(X(-0.42), F(0.26), 0.8 * u, 0.2 * u);
+    ctx.fillStyle = C(70, 44, 24);
+    for (const k of [-0.42, 0.33]) { ctx.fillRect(X(k), F(0.18), 0.05 * u, 0.18 * u); ctx.beginPath(); ctx.arc(X(k + 0.025), F(0.1), 0.03 * u, 0, TAU); ctx.fill(); }
+    // the footboard, low, and the headboard, carved, with finials
+    ctx.fillStyle = wood(-0.47, -0.39, [120, 78, 44], [74, 46, 24]);
+    rrect(X(-0.47), F(0.62), 0.07 * u, 0.48 * u, 0.02 * u); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C(150, 105, 60); ctx.beginPath(); ctx.arc(X(-0.435), F(0.65), 0.035 * u, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = wood(0.36, 0.47, [128, 84, 48], [70, 44, 22]);
+    ctx.beginPath(); ctx.moveTo(X(0.36), F(0.14)); ctx.lineTo(X(0.36), F(0.86)); ctx.quadraticCurveTo(X(0.415), F(0.98), X(0.47), F(0.86)); ctx.lineTo(X(0.47), F(0.14)); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = C(170, 125, 75); ctx.beginPath(); ctx.moveTo(X(0.38), F(0.78)); ctx.quadraticCurveTo(X(0.415), F(0.88), X(0.45), F(0.78)); ctx.stroke(); ctx.strokeStyle = ink;
+    for (const k of [0.365, 0.465]) { ctx.fillStyle = C(160, 115, 66); ctx.beginPath(); ctx.arc(X(k), F(0.9), 0.025 * u, 0, TAU); ctx.fill(); ctx.stroke(); }
+    // the skirt: cream, scalloped
+    ctx.fillStyle = C(214, 200, 176);
+    ctx.beginPath(); ctx.moveTo(X(-0.39), F(0.34)); ctx.lineTo(X(0.36), F(0.34)); ctx.lineTo(X(0.36), F(0.16));
+    for (let q = 0; q <= 10; q++) { const x = 0.36 - q * 0.075; ctx.quadraticCurveTo(X(x + 0.0375), F(0.12), X(x), F(0.16)); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // the mattress
+    ctx.fillStyle = C(236, 228, 210); rrect(X(-0.39), F(0.42), 0.75 * u, 0.09 * u, 0.03 * u); ctx.fill(); ctx.stroke();
+    // the quilt: patchwork, hanging over the side, stitched
+    const qx0 = -0.39, qx1 = 0.16, qy0 = 0.5, qy1 = 0.27;
+    ctx.save(); rrect(X(qx0), F(qy0), (qx1 - qx0) * u, (qy0 - qy1) * u, 0.035 * u); ctx.clip();
+    const n = 6, m = 3;
+    for (let a = 0; a < n; a++) for (let c = 0; c < m; c++) {
+      const pal = [[178, 70, 86], [232, 210, 176], [92, 120, 168], [232, 210, 176]][(a + c * 3) % 4];
+      ctx.fillStyle = C(...pal);
+      ctx.fillRect(X(qx0 + (a * (qx1 - qx0)) / n), F(qy0 - (c * (qy0 - qy1)) / m), ((qx1 - qx0) / n) * u + 1, ((qy0 - qy1) / m) * u + 1);
     }
-    ctx.fillStyle = C(120, 150, 170); ctx.beginPath(); ctx.ellipse(scr - 0.165 * u, F(0.55), 0.09 * u, 0.2 * u, 0, 0, TAU); ctx.fill();
-    ctx.strokeStyle = C(200, 170, 90); ctx.lineWidth = Math.max(1, u * 0.015); ctx.stroke();
-    ctx.strokeStyle = `rgba(255,255,255,${0.35 * br})`; ctx.beginPath(); ctx.moveTo(scr - 0.2 * u, F(0.65)); ctx.lineTo(scr - 0.15 * u, F(0.45)); ctx.stroke();
-    ctx.fillStyle = C(235, 195, 95); ctx.beginPath(); ctx.arc(scr - 0.03 * u, F(0.5), 0.016 * u, 0, TAU); ctx.arc(scr + 0.05 * u, F(0.5), 0.016 * u, 0, TAU); ctx.fill();
+    ctx.strokeStyle = `rgba(255,250,240,${0.35 * br})`; ctx.setLineDash([u * 0.012, u * 0.01]);
+    for (let a = 1; a < n; a++) { ctx.beginPath(); ctx.moveTo(X(qx0 + (a * (qx1 - qx0)) / n), F(qy0)); ctx.lineTo(X(qx0 + (a * (qx1 - qx0)) / n), F(qy1)); ctx.stroke(); }
+    ctx.setLineDash([]);
+    const qs = ctx.createLinearGradient(0, F(qy0), 0, F(qy1)); qs.addColorStop(0, "rgba(255,255,255,.12)"); qs.addColorStop(1, "rgba(0,0,0,.28)");
+    ctx.fillStyle = qs; ctx.fillRect(X(qx0), F(qy0), (qx1 - qx0) * u, (qy0 - qy1) * u);
+    ctx.restore(); ctx.strokeStyle = ink;
+    rrect(X(qx0), F(qy0), (qx1 - qx0) * u, (qy0 - qy1) * u, 0.035 * u); ctx.stroke();
+    // the sheet folded back over it, then two plump pillows
+    ctx.fillStyle = C(246, 242, 234); rrect(X(0.12), F(0.52), 0.08 * u, 0.1 * u, 0.02 * u); ctx.fill(); ctx.stroke();
+    for (const [px, py] of [[0.22, 0.53], [0.28, 0.5]]) {
+      const pg = ctx.createRadialGradient(X(px - 0.03), F(py + 0.02), 1, X(px), F(py), 0.11 * u);
+      pg.addColorStop(0, C(255, 252, 246)); pg.addColorStop(1, C(196, 190, 186));
+      ctx.fillStyle = pg; ctx.beginPath(); ctx.ellipse(X(px), F(py), 0.085 * u, 0.045 * u, -0.12, 0, TAU); ctx.fill(); ctx.stroke();
+    }
+  } else if (o.kind === "wardrobe") {
+    // bun feet
+    ctx.fillStyle = C(60, 36, 18);
+    for (const k of [-0.29, 0.29]) { ctx.beginPath(); ctx.ellipse(X(k), F(0.04), 0.045 * u, 0.04 * u, 0, 0, TAU); ctx.fill(); ctx.stroke(); }
+    // the body, the skirting, the crown and its arched top with a rosette
+    ctx.fillStyle = wood(-0.35, 0.35, [116, 76, 44], [70, 44, 24]);
+    ctx.fillRect(X(-0.35), F(1.02), 0.7 * u, 0.94 * u); ctx.strokeRect(X(-0.35), F(1.02), 0.7 * u, 0.94 * u);
+    ctx.fillStyle = C(76, 48, 26); ctx.fillRect(X(-0.37), F(0.13), 0.74 * u, 0.06 * u); ctx.strokeRect(X(-0.37), F(0.13), 0.74 * u, 0.06 * u);
+    ctx.fillStyle = C(86, 54, 30); ctx.fillRect(X(-0.39), F(1.08), 0.78 * u, 0.07 * u); ctx.strokeRect(X(-0.39), F(1.08), 0.78 * u, 0.07 * u);
+    ctx.fillStyle = C(150, 104, 60); ctx.fillRect(X(-0.39), F(1.08), 0.78 * u, 0.015 * u);
+    ctx.fillStyle = wood(-0.22, 0.22, [110, 72, 40], [72, 46, 24]);
+    ctx.beginPath(); ctx.moveTo(X(-0.22), F(1.08)); ctx.quadraticCurveTo(scr, F(1.22), X(0.22), F(1.08)); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C(200, 160, 80); ctx.beginPath(); ctx.arc(scr, F(1.12), 0.025 * u, 0, TAU); ctx.fill(); ctx.stroke();
+    // two doors, each with a raised panel; a crack of dark between them
+    for (const d0 of [-0.32, 0.015]) {
+      ctx.fillStyle = wood(d0, d0 + 0.305, [124, 82, 48], [86, 56, 30]);
+      ctx.fillRect(X(d0), F(0.96), 0.305 * u, 0.79 * u); ctx.strokeRect(X(d0), F(0.96), 0.305 * u, 0.79 * u);
+      const px = d0 + 0.04, pw = 0.225;
+      ctx.fillStyle = C(132, 90, 54); ctx.fillRect(X(px), F(0.9), pw * u, 0.67 * u);
+      ctx.fillStyle = C(170, 124, 78); ctx.fillRect(X(px), F(0.9), pw * u, 0.012 * u); ctx.fillRect(X(px), F(0.9), 0.012 * u, 0.67 * u);
+      ctx.fillStyle = C(60, 38, 20); ctx.fillRect(X(px), F(0.235), pw * u, 0.012 * u); ctx.fillRect(X(px + pw - 0.012), F(0.9), 0.012 * u, 0.67 * u);
+    }
+    ctx.fillStyle = "rgba(0,0,0,.75)"; ctx.fillRect(X(-0.004), F(0.96), 0.012 * u, 0.79 * u);
+    // the oval mirror, in gilt, with a sheen across it
+    const mx = X(-0.168), my = F(0.57), rx = 0.085 * u, ry = 0.21 * u;
+    const mg = ctx.createLinearGradient(mx - rx, my - ry, mx + rx, my + ry);
+    mg.addColorStop(0, C(170, 196, 214)); mg.addColorStop(0.5, C(98, 122, 140)); mg.addColorStop(1, C(60, 76, 92));
+    ctx.fillStyle = mg; ctx.beginPath(); ctx.ellipse(mx, my, rx, ry, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = C(214, 172, 80); ctx.lineWidth = Math.max(1.5, u * 0.016); ctx.stroke(); ctx.lineWidth = lw; ctx.strokeStyle = ink;
+    ctx.save(); ctx.beginPath(); ctx.ellipse(mx, my, rx, ry, 0, 0, TAU); ctx.clip();
+    ctx.fillStyle = `rgba(255,255,255,${0.22 * br})`;
+    ctx.beginPath(); ctx.moveTo(mx - rx, my - ry * 0.2); ctx.lineTo(mx - rx * 0.2, my - ry); ctx.lineTo(mx + rx * 0.1, my - ry); ctx.lineTo(mx - rx, my + ry * 0.15); ctx.fill();
+    ctx.restore();
+    // brass pulls and keyholes
+    for (const k of [-0.035, 0.045]) {
+      ctx.fillStyle = C(226, 186, 92); rrect(X(k - 0.008), F(0.6), 0.016 * u, 0.1 * u, 0.008 * u); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#120a04"; ctx.beginPath(); ctx.arc(X(k), F(0.45), 0.008 * u, 0, TAU); ctx.fill(); ctx.fillRect(X(k) - 0.003 * u, F(0.45), 0.006 * u, 0.02 * u);
+    }
   } else {
-    // a table under a fringed cloth with a red band; a lit candle, a teapot, two cups
-    ctx.fillStyle = C(208, 200, 178);
-    ctx.beginPath(); ctx.moveTo(scr - 0.4 * u, F(0.46)); ctx.lineTo(scr + 0.4 * u, F(0.46)); ctx.lineTo(scr + 0.47 * u, F(0.04));
-    for (let q = 0; q <= 7; q++) ctx.lineTo(scr + 0.47 * u - q * 0.1343 * u, F(0.04) + (q % 2 ? 0.03 * u : 0));
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C(150, 40, 48); ctx.fillRect(scr - 0.44 * u, F(0.2), 0.88 * u, 0.045 * u);
-    ctx.fillStyle = C(180, 150, 90); ctx.fillRect(scr - 0.44 * u, F(0.14), 0.88 * u, 0.015 * u);
-    ctx.fillStyle = C(236, 230, 212); ctx.beginPath(); ctx.ellipse(scr, F(0.46), 0.4 * u, 0.05 * u, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = C(190, 150, 70); ctx.fillRect(scr - 0.13 * u, F(0.5), 0.07 * u, 0.03 * u);
-    ctx.fillStyle = C(240, 232, 210); ctx.fillRect(scr - 0.115 * u, F(0.62), 0.04 * u, 0.11 * u);
-    // the teapot and its cups
-    ctx.fillStyle = C(60, 110, 120); ctx.beginPath(); ctx.ellipse(scr + 0.16 * u, F(0.52), 0.045 * u, 0.06 * u, 0, 0, TAU); ctx.fill(); ctx.fillRect(scr + 0.145 * u, F(0.6), 0.03 * u, 0.05 * u);
-    ctx.strokeStyle = C(60, 110, 120); ctx.lineWidth = Math.max(1, u * 0.01); ctx.beginPath(); ctx.moveTo(scr + 0.2 * u, F(0.53)); ctx.lineTo(scr + 0.25 * u, F(0.57)); ctx.stroke();
-    ctx.fillStyle = C(236, 230, 220); for (const cx of [0.3, -0.28]) { ctx.fillRect(scr + cx * u, F(0.5), 0.05 * u, 0.04 * u); }
-    // the candle's flame, and its warm light — lit even when your own light is off
-    const fk = 1 + 0.2 * Math.sin(t * 14 + o.x * 3), fx = scr - 0.095 * u, fyy = F(0.74);
-    ctx.fillStyle = "rgba(255,205,90,.95)"; ctx.beginPath(); ctx.ellipse(fx, fyy, 0.011 * u, 0.026 * u * fk, 0, 0, TAU); ctx.fill();
-    const gl = ctx.createRadialGradient(fx, fyy, 1, fx, fyy, 0.35 * u);
-    gl.addColorStop(0, "rgba(255,180,70,.5)"); gl.addColorStop(1, "rgba(255,150,40,0)");
-    ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = gl; ctx.fillRect(fx - 0.4 * u, fyy - 0.4 * u, 0.8 * u, 0.8 * u); ctx.globalCompositeOperation = "source-over";
+    // a round table under a long cloth with a lace hem and a red band
+    const cl = ctx.createLinearGradient(X(-0.46), 0, X(0.46), 0);
+    cl.addColorStop(0, C(170, 160, 140)); cl.addColorStop(0.35, C(228, 220, 200)); cl.addColorStop(0.7, C(214, 204, 182)); cl.addColorStop(1, C(150, 140, 120));
+    ctx.fillStyle = cl;
+    ctx.beginPath(); ctx.moveTo(X(-0.4), F(0.46)); ctx.lineTo(X(0.4), F(0.46)); ctx.lineTo(X(0.47), F(0.06));
+    for (let q = 0; q <= 12; q++) { const x = 0.47 - q * (0.94 / 12); ctx.quadraticCurveTo(X(x - 0.039), F(0.025), X(x - 0.078), F(0.06)); }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    // folds
+    ctx.strokeStyle = `rgba(0,0,0,${0.12 * br + 0.05})`;
+    for (const k of [-0.28, -0.1, 0.1, 0.28]) { ctx.beginPath(); ctx.moveTo(X(k * 0.85), F(0.42)); ctx.lineTo(X(k), F(0.07)); ctx.stroke(); }
+    ctx.strokeStyle = ink;
+    ctx.fillStyle = C(150, 40, 50); ctx.fillRect(X(-0.452), F(0.2), 0.904 * u, 0.04 * u);
+    ctx.fillStyle = C(214, 176, 92); ctx.fillRect(X(-0.455), F(0.145), 0.91 * u, 0.012 * u);
+    ctx.fillStyle = `rgba(0,0,0,${0.3 * br})`; for (let q = 0; q < 14; q++) { ctx.beginPath(); ctx.arc(X(-0.42 + q * 0.065), F(0.09), 0.008 * u, 0, TAU); ctx.fill(); }   // the lace's holes
+    const top = ctx.createLinearGradient(0, F(0.5), 0, F(0.42)); top.addColorStop(0, C(250, 246, 236)); top.addColorStop(1, C(214, 206, 188));
+    ctx.fillStyle = top; ctx.beginPath(); ctx.ellipse(scr, F(0.46), 0.41 * u, 0.055 * u, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    // cups on saucers
+    for (const cx of [0.27, -0.3]) {
+      ctx.fillStyle = C(236, 232, 224); ctx.beginPath(); ctx.ellipse(X(cx), F(0.475), 0.045 * u, 0.012 * u, 0, 0, TAU); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = C(246, 242, 234); rrect(X(cx - 0.025), F(0.53), 0.05 * u, 0.055 * u, 0.012 * u); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = C(160, 60, 70); ctx.fillRect(X(cx - 0.025), F(0.515), 0.05 * u, 0.01 * u);
+    }
+    // the teapot: body, lid and knob, spout, handle
+    const tx = X(0.12), ty = F(0.53);
+    const tg = ctx.createRadialGradient(tx - 0.025 * u, ty - 0.03 * u, 1, tx, ty, 0.08 * u);
+    tg.addColorStop(0, C(140, 200, 210)); tg.addColorStop(1, C(40, 96, 110));
+    ctx.beginPath(); ctx.moveTo(tx + 0.055 * u, ty - 0.01 * u); ctx.quadraticCurveTo(tx + 0.1 * u, ty - 0.03 * u, tx + 0.115 * u, ty - 0.075 * u); ctx.lineWidth = Math.max(1.5, u * 0.014); ctx.strokeStyle = C(50, 110, 124); ctx.stroke();
+    ctx.beginPath(); ctx.arc(tx - 0.07 * u, ty - 0.005 * u, 0.03 * u, Math.PI * 0.5, Math.PI * 1.5); ctx.stroke(); ctx.lineWidth = lw; ctx.strokeStyle = ink;
+    ctx.fillStyle = tg; ctx.beginPath(); ctx.ellipse(tx, ty, 0.06 * u, 0.055 * u, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C(50, 110, 124); ctx.beginPath(); ctx.ellipse(tx, ty - 0.052 * u, 0.035 * u, 0.012 * u, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = C(214, 176, 92); ctx.beginPath(); ctx.arc(tx, ty - 0.068 * u, 0.012 * u, 0, TAU); ctx.fill();
+    // a brass candlestick, the candle dripping, its flame and warm light
+    const cx = X(-0.1);
+    ctx.fillStyle = C(214, 172, 80);
+    ctx.beginPath(); ctx.ellipse(cx, F(0.47), 0.045 * u, 0.012 * u, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.fillRect(cx - 0.01 * u, F(0.58), 0.02 * u, 0.11 * u);
+    ctx.beginPath(); ctx.ellipse(cx, F(0.58), 0.03 * u, 0.009 * u, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = C(246, 238, 218); ctx.fillRect(cx - 0.016 * u, F(0.73), 0.032 * u, 0.15 * u);
+    ctx.fillRect(cx + 0.008 * u, F(0.73), 0.008 * u, 0.06 * u); ctx.beginPath(); ctx.arc(cx + 0.012 * u, F(0.67), 0.006 * u, 0, TAU); ctx.fill();
+    const fk = 1 + 0.2 * Math.sin(t * 14 + o.x * 3), fyy = F(0.765);
+    const flame = ctx.createRadialGradient(cx, fyy + 0.01 * u, 1, cx, fyy, 0.03 * u * fk);
+    flame.addColorStop(0, "rgba(255,255,230,1)"); flame.addColorStop(0.5, "rgba(255,200,80,.95)"); flame.addColorStop(1, "rgba(255,120,30,0)");
+    ctx.fillStyle = flame; ctx.beginPath(); ctx.ellipse(cx, fyy, 0.016 * u, 0.034 * u * fk, 0, 0, TAU); ctx.fill();
+    const gl = ctx.createRadialGradient(cx, fyy, 1, cx, fyy, 0.38 * u);
+    gl.addColorStop(0, "rgba(255,180,70,.45)"); gl.addColorStop(1, "rgba(255,150,40,0)");
+    ctx.globalCompositeOperation = "lighter"; ctx.fillStyle = gl; ctx.fillRect(cx - 0.4 * u, fyy - 0.4 * u, 0.8 * u, 0.8 * u); ctx.globalCompositeOperation = "source-over";
   }
 }
 

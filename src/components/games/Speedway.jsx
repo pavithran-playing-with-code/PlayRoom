@@ -3,10 +3,13 @@
 // your car — with everyone in the room on the same road at the same time.
 // You see their cars ahead of you (and pass them), with their names over
 // them; on your own, three computer cars race you. The pedal is always down:
-// steer with the buttons, by holding either side of the road, or the arrow
-// keys; hold Turbo (or up / space) for a burst past top speed, while the
-// tank lasts. Stay on the tarmac — the grass is slow, and turbo won't work
-// there — and don't drive into the back of anyone.
+// steer by tilting the phone like a wheel, by holding either side of the
+// road, with the buttons, or the arrow keys. Turbo comes from the glowing
+// booster pads on the road — drive over one in its lane and your tank fills;
+// hold Turbo (or up / space) for a burst past top speed. Pads never go, so
+// everyone can take them. A map in the corner shows where every car is.
+// Stay on the tarmac — the grass is slow, and turbo won't work there — and
+// don't drive into the back of anyone. A landscape game (GameFrame).
 //
 // Each phone drives its own car and tells the room where it is (race:pos,
 // ~10 times a second); everyone else's car is drawn from that, carried
@@ -21,9 +24,10 @@ import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import { useSocket } from "../../utils/SocketContext";
+import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
 import {
   buildTrack, newCar, drive, newBots, driveBot, segAt, lapOf, kmh, raceScore, placeOf,
-  SEG, ROAD_W, LAPS, MAX_SPEED, START_S, TURBO_READY,
+  SEG, ROAD_W, LAPS, MAX_SPEED, START_S, PAD_W,
 } from "./speedwaySim.js";
 
 const DRAW = 180;                                     // segments drawn ahead
@@ -131,6 +135,8 @@ function drawCar(ctx, x, y, w, color, tilt = 0, opt = {}) {
 }
 
 function render(ctx, W, H, track, me, cars, t, skyOff) {
+  const padsBySeg = new Map();
+  for (const p of track.pads || []) { const i = Math.floor(p.z / SEG); if (!padsBySeg.has(i)) padsBySeg.set(i, []); padsBySeg.get(i).push(p); }
   const L = track.LAP, len = track.segs.length;
   const pos = (((me.d - PLAYER_Z) % L) + L) % L;
   const baseI = Math.floor(pos / SEG), basePct = (pos % SEG) / SEG;
@@ -206,6 +212,13 @@ function render(ctx, W, H, track, me, cars, t, skyOff) {
       quad(p1.x + p1.w * lane * 2, p1.w * 0.02, p2.x + p2.w * lane * 2, p2.w * 0.02, "#f2f2f2");
     }
     if (seg.i % len === 0 || seg.i % len === 1) quad(p1.x, p1.w, p2.x, p2.w, (seg.i % 2) ? "#111" : "#fafafa");  // the line
+    // a booster pad: a glowing strip across its lane, chevrons pointing on
+    for (const pad of padsBySeg.get(seg.i) || []) {
+      const glow = 0.75 + 0.25 * Math.sin(t * 10);
+      for (const [k, col] of [[1.12, `rgba(255,120,30,${0.55 * glow})`], [1, "#ffb02e"], [0.5, `rgba(255,248,200,${glow})`]]) {
+        quad(p1.x + p1.w * pad.x, p1.w * PAD_W * k, p2.x + p2.w * pad.x, p2.w * PAD_W * k, col);
+      }
+    }
     maxy = p1.y;
   }
 
@@ -323,11 +336,11 @@ function render(ctx, W, H, track, me, cars, t, skyOff) {
   drawCar(ctx, W / 2 + (me.steerShow || 0) * W * 0.01, H - H * 0.04 + bounce, Math.min(W * 0.32, H * 0.38), me.color, steerTilt,
     { spin: me.d / 400, boosting: me.boosting, braking: me.braking, t });
 
-  // the turbo tank, bottom left
-  const tw = Math.min(120, W * 0.32), tx = 12, ty = H - 22;
+  // the turbo tank, top left (the steering buttons sit bottom left)
+  const tw = Math.min(140, W * 0.3), tx = 14, ty = 26;
   ctx.fillStyle = "rgba(20,15,30,.55)";
   ctx.fillRect(tx - 3, ty - 3, tw + 6, 14);
-  const ready = !me.dry || me.turbo >= TURBO_READY;
+  const ready = me.turbo > 0;
   const tg = ctx.createLinearGradient(tx, 0, tx + tw, 0);
   tg.addColorStop(0, ready ? "#ffb02e" : "#7a6a55");
   tg.addColorStop(1, ready ? "#ff4d3d" : "#5e5246");
@@ -336,7 +349,59 @@ function render(ctx, W, H, track, me, cars, t, skyOff) {
   ctx.fillStyle = "#fff";
   ctx.font = "bold 10px system-ui, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText(me.boosting ? "TURBO!" : ready ? "TURBO" : "refilling…", tx, ty - 6);
+  ctx.fillText(me.boosting ? "TURBO!" : ready ? "TURBO" : "drive over a pad for turbo", tx, ty - 6);
+
+  drawMap(ctx, W, H, track, me, cars);
+}
+
+// The circuit seen from above, for the map: turn by each segment's bend, then
+// spread the gap between where it ends and where it began back over the lap,
+// so the loop closes. Points every 6 segments, fitted to a 0..1 box.
+function trackShape(track) {
+  const segs = track.segs, n = segs.length;
+  const total = segs.reduce((a, s) => a + s.curve, 0);
+  const k = Math.abs(total) > 40 ? (Math.PI * 2) / total : 0.003;
+  let h = 0, x = 0, y = 0;
+  const raw = [];
+  for (let i = 0; i < n; i++) { raw.push([x, y]); h += segs[i].curve * k; x += Math.cos(h); y += Math.sin(h); }
+  const ex = x, ey = y;
+  const pts = raw.map(([px, py], i) => [px - (ex * i) / n, py - (ey * i) / n]);
+  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs), y0 = Math.min(...ys), span = Math.max(Math.max(...xs) - x0, Math.max(...ys) - y0) || 1;
+  return { at: pts.map(([px, py]) => [(px - x0) / span, (py - y0) / span]), w: (Math.max(...xs) - x0) / span, h: (Math.max(...ys) - y0) / span };
+}
+
+// The map, top right: the circuit, the line, a dot for every car.
+function drawMap(ctx, W, H, track, me, cars) {
+  const shape = track.shape;
+  if (!shape) return;
+  const box = Math.round(Math.min(118, Math.max(70, Math.min(W, H) * 0.3)));
+  const pad = 8, bw = box * Math.max(0.5, shape.w), bh = box * Math.max(0.5, shape.h);
+  const ox = W - bw - pad * 2 - 8, oy = 8;
+  ctx.fillStyle = "rgba(20,15,30,.55)";
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(ox, oy, bw + pad * 2, bh + pad * 2, 10) : ctx.rect(ox, oy, bw + pad * 2, bh + pad * 2); ctx.fill();
+  const P = (i) => { const [px, py] = shape.at[i % shape.at.length]; return [ox + pad + px * box, oy + pad + py * box]; };
+  const L = track.segs.length;
+  ctx.lineJoin = "round";
+  for (const [col, lw] of [["#2e2140", 6], ["#d9d4e2", 3]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw;
+    ctx.beginPath();
+    for (let i = 0; i <= L; i += 6) { const [px, py] = P(i); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+    ctx.closePath(); ctx.stroke();
+  }
+  // the line, and the pads
+  const [sx, sy] = P(0);
+  ctx.fillStyle = "#fff"; ctx.fillRect(sx - 3, sy - 3, 6, 6);
+  for (const p of track.pads || []) { const [px, py] = P(Math.floor(p.z / SEG)); ctx.fillStyle = "#ffb02e"; ctx.beginPath(); ctx.arc(px, py, 2.4, 0, TAU); ctx.fill(); }
+  const at = (d) => P(Math.floor((((d % track.LAP) + track.LAP) % track.LAP) / SEG));
+  for (const c of cars) {
+    const [px, py] = at(c.d);
+    ctx.fillStyle = c.color || "#fff"; ctx.strokeStyle = "#2e2140"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(px, py, 4, 0, TAU); ctx.fill(); ctx.stroke();
+  }
+  const [mx, my] = at(me.d);
+  ctx.fillStyle = me.color; ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(mx, my, 5.5, 0, TAU); ctx.fill(); ctx.stroke();
 }
 
 // ── the game ─────────────────────────────────────────────────────────────────
@@ -346,7 +411,7 @@ export default function Speedway(props) {
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const { addScore } = eng;
   const { socket } = useSocket() || {};
-  const track = useMemo(() => buildTrack(seed), [seed]);
+  const track = useMemo(() => { const t = buildTrack(seed); t.shape = trackShape(t); return t; }, [seed]);
 
   // grid slots by join order (user id), the same on every phone
   const seated = useMemo(() => (players || []).filter((p) => !p.is_spectator)
@@ -361,6 +426,33 @@ export default function Speedway(props) {
   if (bots.current === null) bots.current = solo ? newBots(seed, 3, 1) : [];
   const remote = useRef(new Map());                   // user id -> { d, x, s, f, at }
   const input = useRef({ left: false, right: false, turbo: false, brake: false });
+  // A landscape game: on a phone held upright GameFrame draws it turned, and
+  // a touch's position is turned back before it's read.
+  const rotated = useUprightTouch();
+  const rot = useRef(rotated);
+  rot.current = rotated;
+  // Tilt: the phone is the wheel. Gravity across the phone's long side is how
+  // far it's turned; which way round depends on which way it's held sideways.
+  const tilt = useRef({ on: true, steer: 0, asked: false, seen: false });
+  const [tiltOn, setTiltOn] = useState(true);
+  useEffect(() => {
+    if (isSpectator) return undefined;
+    const onMotion = (e) => {
+      const a = e.accelerationIncludingGravity;
+      if (!a || a.x == null || a.y == null) return;
+      tilt.current.seen = true;
+      const v = (a.y / 4.5) * (a.x >= 0 ? 1 : -1);          // ~25 degrees is full lock
+      tilt.current.steer = Math.abs(v) < 0.12 ? 0 : Math.max(-1, Math.min(1, v));
+    };
+    window.addEventListener("devicemotion", onMotion);
+    return () => window.removeEventListener("devicemotion", onMotion);
+  }, [isSpectator]);
+  // iPhones ask first, and only on a tap
+  const askTilt = () => {
+    if (tilt.current.asked) return;
+    tilt.current.asked = true;
+    try { if (typeof DeviceMotionEvent !== "undefined" && DeviceMotionEvent.requestPermission) DeviceMotionEvent.requestPermission().catch(() => {}); } catch { /* not this phone */ }
+  };
   const shake = useRef(0);
   const canvasRef = useRef(null);
   const size = useRef({ w: 300, h: 400 });
@@ -412,9 +504,10 @@ export default function Speedway(props) {
   const holds = useRef(new Map());
   const onDown = (e) => {
     if (isSpectator) return;
+    askTilt();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not supported */ }
-    const box = e.currentTarget.getBoundingClientRect();
-    holds.current.set(e.pointerId, e.clientX - box.left < box.width / 2 ? "left" : "right");
+    const box = gameRect(e.currentTarget, rot.current), at = toGame(e, rot.current);
+    holds.current.set(e.pointerId, at.x - box.left < box.width / 2 ? "left" : "right");
   };
   const onUp = (e) => { holds.current.delete(e.pointerId); };
 
@@ -442,11 +535,13 @@ export default function Speedway(props) {
       if (!overRef.current) {
         const held = [...holds.current.values()];
         const left = input.current.left || held.includes("left"), right = input.current.right || held.includes("right");
-        const steer = (left ? -1 : 0) + (right ? 1 : 0);
+        // a finger or a key wins; otherwise the tilt
+        const steer = left || right ? (left ? -1 : 0) + (right ? 1 : 0) : tilt.current.on ? tilt.current.steer : 0;
         car.steerShow += (steer - (car.steerShow || 0)) * Math.min(1, dt * 10);
         car.braking = input.current.brake;
         const out = drive(track, car, { steer, turbo: input.current.turbo, brake: input.current.brake }, dt, go, others, elapsed);
         if (out.bumped) { flash("Bump!", "error", 600); shake.current = 10; }
+        if (out.boosted) flash("⚡ Turbo! Hold the button", "success", 1100);
         // dust off the grass, from behind the wheels
         const { w: cw0, h: ch0 } = size.current;
         if (Math.abs(car.x) > 1 && car.speed > 500) {
@@ -498,7 +593,16 @@ export default function Speedway(props) {
       onPointerUp={() => { input.current[side] = false; }} onPointerCancel={() => { input.current[side] = false; }}
       onPointerLeave={() => { input.current[side] = false; }}>{label}</button>
   );
-  const controls = !isSpectator ? <>{hold("left", "◀", "Steer left")}{hold("turbo", "🔥 Turbo", "Turbo")}{hold("right", "▶", "Steer right")}</> : null;
+  const controls = !isSpectator ? (
+    <div className="sw-controls">
+      <div className="sw-steer">{hold("left", "◀", "Steer left")}{hold("right", "▶", "Steer right")}</div>
+      <div className="sw-right">
+        <button className={`press sm sw-tilt${tiltOn ? " p-sun" : " p-white"}`} aria-pressed={tiltOn}
+          onClick={() => { askTilt(); tilt.current.on = !tilt.current.on; setTiltOn(tilt.current.on); }}>📱 Tilt {tiltOn ? "on" : "off"}</button>
+        {hold("turbo", "🔥 Turbo", "Turbo")}
+      </div>
+    </div>
+  ) : null;
   const count = Math.ceil(hud.count);
 
   return (
@@ -513,12 +617,13 @@ export default function Speedway(props) {
         message={msg}
         onQuit={eng.endMatch}
         controls={controls}
+        landscape
       >
         {({ w, h }) => {
           if (isSpectator) {
             return <div className="muted">👀 Watching {spectatorWatching?.username} — {Number(spectatorWatching?.score ?? 0).toLocaleString()} pts</div>;
           }
-          const cw = w, ch = Math.min(h, w * 1.25);
+          const cw = w, ch = h;
           size.current = { w: cw, h: ch };
           return (
             <div className="sw-pad" style={{ width: w, height: h }}
@@ -537,7 +642,7 @@ export default function Speedway(props) {
                 {hud.count > 0 && <div className="sw-count">{count}</div>}
                 {hud.count <= 0 && hud.since >= 0 && hud.since < 1.2 && <div className="sw-count go">GO!</div>}
               </div>
-              <div className="sw-help muted">{solo ? "Race the computer · " : ""}Hold ◀ ▶ (or either side of the road) to steer</div>
+
             </div>
           );
         }}

@@ -77,10 +77,41 @@ const steerFor = (t, car) => Math.max(-1, Math.min(1, -car.x * 3 + m.segAt(t, ca
   check("…but you can pass beside it", !m.drive(t, e, { steer: 0 }, DT, true, [other]).bumped);
 }
 
-// ── turbo ──────────────────────────────────────────────────────────────────
+// ── booster pads ───────────────────────────────────────────────────────────
 {
   const t = m.buildTrack(3);
-  const car = m.newCar(0); car.d = 2000; car.x = 0; car.speed = m.MAX_SPEED;
+  check("booster pads round the lap, each in a lane, the same for everyone", t.pads.length === m.PADS && t.pads.every((p) => [-0.55, 0, 0.55].includes(p.x)) && JSON.stringify(m.buildTrack(3).pads) === JSON.stringify(t.pads));
+  check("…and adding them changed no road", JSON.stringify(m.buildTrack(3).segs) === JSON.stringify(t.segs));
+  const fresh = m.newCar(0);
+  check("a car starts with an empty tank", fresh.turbo === 0);
+  fresh.d = 2000; fresh.speed = m.MAX_SPEED;
+  m.drive(t, fresh, { steer: 0, turbo: true }, DT, true);
+  check("…so turbo does nothing yet", !fresh.boosting);
+  // drive over the first pad in its lane
+  const p = t.pads[0];
+  const a = m.newCar(0); a.d = p.z - 300; a.x = p.x; a.speed = m.MAX_SPEED * 0.8;
+  let got = false;
+  for (let i = 0; i < 30; i++) { a.x = p.x; if (m.drive(t, a, { steer: 0 }, DT, true).boosted) got = true; }
+  check("over a booster pad: the tank fills", got && a.turbo === m.PAD_FILL, `tank ${a.turbo}`);
+  // a friend right behind takes it too: pads never go
+  const b = m.newCar(1); b.d = p.z - 300; b.x = p.x; b.speed = m.MAX_SPEED * 0.8;
+  for (let i = 0; i < 30; i++) { b.x = p.x; m.drive(t, b, { steer: 0 }, DT, true); }
+  check("…and the pad is still there for the next car", b.turbo === m.PAD_FILL);
+  // the next lane over misses it
+  const c = m.newCar(0); c.d = p.z - 300; c.x = p.x === 0 ? 0.55 : 0; c.speed = m.MAX_SPEED * 0.8;
+  const cx = c.x;
+  for (let i = 0; i < 30; i++) { c.x = cx; m.drive(t, c, { steer: 0 }, DT, true); }
+  check("…but not if you're in another lane", c.turbo === 0);
+  // a lap later it's yours again
+  const e = m.newCar(0); e.d = p.z - 300 + t.LAP; e.x = p.x; e.speed = m.MAX_SPEED * 0.8;
+  for (let i = 0; i < 30; i++) { e.x = p.x; m.drive(t, e, { steer: 0 }, DT, true); }
+  check("…and once round the lap, it's yours again", e.turbo === m.PAD_FILL);
+}
+
+// ── turbo ──────────────────────────────────────────────────────────────────
+{
+  const t = { ...m.buildTrack(3), pads: [] };           // the tank on its own: no pads to top it up
+  const car = m.newCar(0); car.d = 2000; car.x = 0; car.speed = m.MAX_SPEED; car.turbo = 1;
   const straight = () => { car.x = 0; };
   for (let i = 0; i < 60; i++) { m.drive(t, car, { steer: 0, turbo: true }, DT, true); straight(); }
   check("turbo: past top speed", car.speed > m.MAX_SPEED * 1.1, `${(car.speed / m.MAX_SPEED).toFixed(2)}× top`);
@@ -89,9 +120,9 @@ const steerFor = (t, car) => Math.max(-1, Math.min(1, -car.x * 3 + m.segAt(t, ca
   for (let i = 0; i < 160; i++) { m.drive(t, car, { steer: 0, turbo: true }, DT, true); straight(); if (car.turbo === 0) ranDry = true; }
   for (let i = 0; i < 90; i++) { m.drive(t, car, { steer: 0 }, DT, true); straight(); }   // let go, and ease back
   check("…until it's empty: then back to normal top speed (eased, not slammed)", ranDry && !car.boosting && car.speed <= m.MAX_SPEED * 1.02, `${(car.speed / m.MAX_SPEED).toFixed(2)}×`);
-  for (let i = 0; i < 60 * 8; i++) { m.drive(t, car, { steer: 0 }, DT, true); straight(); }
-  check("…and it fills back up by itself", car.turbo === 1);
-  const g = m.newCar(0); g.d = 2000; g.x = 1.6; g.speed = m.MAX_SPEED * 0.5;
+  for (let i = 0; i < 60 * 2; i++) { m.drive(t, car, { steer: 0 }, DT, true); straight(); }
+  check("…and it does NOT fill back up by itself: only pads fill it", car.turbo === 0);
+  const g = m.newCar(0); g.d = 2000; g.x = 1.6; g.speed = m.MAX_SPEED * 0.5; g.turbo = 1;
   m.drive(t, g, { steer: 0, turbo: true }, DT, true);
   check("no turbo on the grass", !g.boosting);
 }

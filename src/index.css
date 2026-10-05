@@ -946,6 +946,12 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .press.lvl-medium{background:var(--sun)}
 .press.lvl-hard{background:var(--coral)}
 .press.sw-btn{padding:12px 22px;font-size:1.15rem;--lift:4px;min-width:64px;touch-action:none}
+/* landscape: ◀ ▶ under the left thumb, Tilt and Turbo under the right */
+.sw-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;width:100%}
+.sw-steer,.sw-right{display:flex;align-items:flex-end;gap:10px}
+.gameshell.land .press.sw-btn{min-width:74px;min-height:62px;font-size:1.3rem}
+.gameshell.land .sw-right .press.sw-btn{min-width:110px;min-height:76px}
+.press.sw-tilt{font-size:.8rem;padding:6px 10px}
 .sw-stage{position:relative}
 .sw-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font:900 4.5rem/1 Fredoka,Nunito,sans-serif;
   color:#fff;-webkit-text-stroke:3px var(--ink);text-shadow:0 5px 0 var(--ink);pointer-events:none;

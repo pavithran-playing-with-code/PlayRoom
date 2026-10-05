@@ -13,7 +13,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import TogetherResults from "../together/TogetherResults";
-import useTogether, { secondsLeft, blend, rivals, myScore } from "../together/useTogether";
+import useTogether, { secondsLeft, smoothRows, rivals, myScore } from "../together/useTogether";
 import {
   W, H, LAYOUT, CRATE, ING, RECIPES, SPEED, REACH, R, kindAt, facingTile, slide, unpackItem, tileIndex,
 } from "../together/kitchenCore.mjs";
@@ -420,16 +420,13 @@ export default function KitchenRush(props) {
           rr(ctx, ring.x * T, ring.y * T, T, T, 8); ctx.stroke();
         }
         // the chefs: others eased between ticks, me where I am
-        const k = blend(L);
-        const prev = new Map((L.prev?.p || []).map((p) => [p[0], p]));
-        const chefs = L.view.p.map((p, i) => {
-          const q = prev.get(p[0]) || p;
+        const chefs = smoothRows(L, "p", [1, 2]).map(({ row: p, moving }, i) => {
           const mine = m && p[0] === myId;
           return {
             id: p[0], i,
-            x: mine ? m.x : q[1] + (p[1] - q[1]) * k, y: mine ? m.y : q[2] + (p[2] - q[2]) * k,
+            x: mine ? m.x : p[1], y: mine ? m.y : p[2],
             fx: mine ? m.fx : p[3], fy: mine ? m.fy : p[4], hold: unpackItem(p[5]), chop: !!p[6], left: !!p[7],
-            moving: mine ? m.moving : Math.hypot(p[1] - q[1], p[2] - q[2]) > 0.01,
+            moving: mine ? m.moving : moving,
           };
         }).filter((p) => !p.left).sort((a, b) => a.y - b.y);
         const names = L.view.p.length > 1;

@@ -25,6 +25,9 @@ const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 const TEAM_NAMES = ["Red", "Yellow", "Blue", "Green"];
 const TEAM_COLOURS = ["var(--coral)", "var(--sun)", "var(--sky)", "var(--mint)"];
 
+// a long press anywhere but a typing box: no copy / search menu
+const noMenu = (e) => { if (!/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) e.preventDefault(); };
+
 export default function GameFrame({
   gameName,
   badge,
@@ -45,10 +48,15 @@ export default function GameFrame({
   const [size, setSize] = useState(guess);
 
   // A game owns the whole screen: stop the page behind it from scrolling, so
-  // the header can't be pushed out of sight on a phone.
+  // the header can't be pushed out of sight on a phone. And a long press on a
+  // button is a held button, not a request for the copy / search menu.
   useLayoutEffect(() => {
     document.body.classList.add("in-game");
-    return () => document.body.classList.remove("in-game");
+    document.addEventListener("contextmenu", noMenu);
+    return () => {
+      document.body.classList.remove("in-game");
+      document.removeEventListener("contextmenu", noMenu);
+    };
   }, []);
 
   useLayoutEffect(() => {

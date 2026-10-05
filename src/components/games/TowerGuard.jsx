@@ -11,7 +11,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import TogetherResults from "../together/TogetherResults";
-import useTogether, { secondsLeft, blend, rivals, myScore } from "../together/useTogether";
+import useTogether, { secondsLeft, smoothRows, rivals, myScore } from "../together/useTogether";
 import { W, H, TOWERS, MONSTERS, MAX_LEVEL, SELL_BACK, LIVES, at, buildable, towerStats, upgradeCost } from "../together/towerCore.mjs";
 import { paintMap, caveEyes, castle, drawTower, drawMonster, drawShot, statChips, emoji } from "./towerArt";
 
@@ -140,13 +140,9 @@ export default function TowerGuard(props) {
       }
       // monsters (behind what's lower on the screen) and towers, sorted by depth
       const owners = L.players.map((x) => x.id);
-      const k = blend(L);
-      const prev = new Map((L.prev?.m || []).map((m) => [m[0], m]));
       const things = [];
-      for (const m of v.m) {
-        const q = prev.get(m[0]);
-        const d = q ? q[2] + (m[2] - q[2]) * k : m[2];
-        const [x, y] = at(map, d);
+      for (const { row: m } of smoothRows(L, "m", [2])) {
+        const [x, y] = at(map, m[2]);
         if (y > -0.5) things.push({ y, draw: () => drawMonster(ctx, m[1], x * T, y * T, T, t, m[0], m[3], m[4], Math.max(0, 1 - (now - (f.flash.get(m[0]) || -9)) / 0.15)) });
       }
       for (const tw of v.tw) {

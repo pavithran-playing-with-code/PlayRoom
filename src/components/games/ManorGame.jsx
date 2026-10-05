@@ -77,9 +77,12 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
   useEffect(() => {
     document.body.classList.add("in-game");
+    const noMenu = (e) => e.preventDefault();          // a long press is a held button, not a copy menu
+    document.addEventListener("contextmenu", noMenu);
     audio.current = createManorAudio();
     return () => {
       document.body.classList.remove("in-game");
+      document.removeEventListener("contextmenu", noMenu);
       audio.current.close();
     };
   }, []);

@@ -158,9 +158,15 @@ async function loadSeats(roomId) {
 }
 
 // The house for a room, building it on first use. Null if the room is not a
-// running game of Hollow Manor.
-async function worldFor(code) {
-  if (worlds.has(code)) return worlds.get(code);
+// running game of Nana's Lullaby. Calls at once (the room starting, phones
+// saying hello) share one build, or two houses would tick into one room.
+const building = new Map();
+function worldFor(code) {
+  if (worlds.has(code)) return Promise.resolve(worlds.get(code));
+  if (!building.has(code)) building.set(code, buildFor(code).finally(() => building.delete(code)));
+  return building.get(code);
+}
+async function buildFor(code) {
   await coreReady;
   const room = await loadRoom(code);
   if (!room || room.game_slug !== GAME || room.status !== "in_progress") return null;

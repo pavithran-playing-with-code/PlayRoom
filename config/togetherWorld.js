@@ -133,10 +133,17 @@ async function loadSeats(roomId) {
 }
 
 // The world for a room, building it on first use. Null unless the room is a
-// running game of one of these.
-async function worldFor(code) {
+// running game of one of these. Two hellos at once (a phone's connect and its
+// screen mounting) share one build: two builds meant two worlds ticking into
+// the same room, and every bomber flickering between two different arenas.
+const building = new Map();
+function worldFor(code) {
   code = String(code).toUpperCase();
-  if (worlds.has(code)) return worlds.get(code);
+  if (worlds.has(code)) return Promise.resolve(worlds.get(code));
+  if (!building.has(code)) building.set(code, buildFor(code).finally(() => building.delete(code)));
+  return building.get(code);
+}
+async function buildFor(code) {
   await ready;
   const room = await loadRoom(code);
   if (!room || !isTogether(room.game_slug) || !cores[room.game_slug] || room.status !== "in_progress") return null;

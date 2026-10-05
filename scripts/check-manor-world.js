@@ -14,6 +14,10 @@ const fakeDb = {
   execute: async (sql, args) => {
     // "are you in this room?" — everyone the tests send is seated
     if (/^\s*SELECT rp\.is_spectator/.test(sql)) return [[{ is_spectator: 0 }]];
+    // a house being started, for the "calls at once" check
+    const later = () => new Promise((r) => setImmediate(r));
+    if (/FROM rooms r JOIN game_types/.test(sql) && args[0] === "RACE01") { await later(); return [[{ id: 900, room_code: "RACE01", status: "in_progress", seed: 77, mode: "coop", duration_seconds: 300, elapsed_ms: 0, game_slug: "manor" }]]; }
+    if (/FROM room_players rp JOIN users/.test(sql) && args[0] === 900) { await later(); return [[{ user_id: 31, team: null, game_state: null, username: "p31", avatar: "🙂" }]]; }
     writes.push({ sql: sql.replace(/\s+/g, " ").trim(), args });
     return [{ affectedRows: 1 }];
   },
@@ -592,6 +596,13 @@ let coreMod;
     await S.h["manor:hello"](w.code);
     const initS = S.got.find((g) => g.ev === "manor:init");
     check("someone without a seat in the house is sent it to watch", initS && initS.p.role === "spectator");
+  }
+
+  {
+    // the room starting and phones saying hello, all at once: one house
+    const ws = await Promise.all([world.worldFor("RACE01"), world.worldFor("RACE01"), world.worldFor("RACE01")]);
+    check("three calls at once build one house, not three", ws[0] && ws.every((x) => x === ws[0]) && world._worlds.get("RACE01") === ws[0]);
+    for (const x of new Set(ws)) if (x) clearInterval(x.timer);
   }
 
   console.log(fails ? `\n${fails} FAILED` : "\nall passed");

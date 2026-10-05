@@ -18,6 +18,9 @@ let spectators = new Set();
 const fakeDb = {
   execute: async (sql, args) => {
     if (/^\s*SELECT rp\.is_spectator/.test(sql)) return [[{ is_spectator: spectators.has(Number(args[1])) ? 1 : 0 }]];
+    // a room being started, for the "two hellos at once" check
+    if (/FROM rooms r JOIN game_types/.test(sql) && args[0] === "RACE01") { await tick(); return [[{ id: 900, room_code: "RACE01", status: "in_progress", seed: 77, mode: "free", duration_seconds: 120, elapsed_ms: 0, game_slug: "bomb" }]]; }
+    if (/FROM room_players rp JOIN users/.test(sql) && args[0] === 900) { await tick(); return [[{ user_id: 31, team: null, game_state: null, username: "p31", avatar: "🙂" }]]; }
     writes.push({ sql: sql.replace(/\s+/g, " ").trim(), args });
     return [{ affectedRows: 1 }];
   },
@@ -176,6 +179,17 @@ function room(game, mode, seats, { elapsed = 0, duration = 120 } = {}) {
     const tm = R("teams", [{ user_id: 1, team: 1, score: 600 }, { user_id: 2, team: 1, score: 600 }, { user_id: 3, team: 2, score: 700 }, { user_id: 4, team: 2, score: 700 }]);
     check("teams: sides compared on their own score, not a sum", tm.get(3) === "win" && tm.get(1) === "loss");
     check("the together rules are only for the together games", typeof togetherResults === "function" && resultsFor({ game_slug: "dino", mode: "free" }, [{ user_id: 1, score: 5 }]).get(1) === "incomplete");
+  }
+
+  {
+    // the room starting and two phones saying hello, all at once: one world
+    const ws = await Promise.all([world.worldFor("RACE01"), world.worldFor("RACE01"), world.worldFor("RACE01")]);
+    check("three calls at once build one world, not three", ws[0] && ws.every((x) => x === ws[0]) && world._worlds.get("RACE01") === ws[0]);
+    const before = sent.length;
+    await new Promise((r) => setTimeout(r, 350));
+    const ticks = sent.slice(before).filter((m) => m.ev === "tg:tick" && m.ch.includes("RACE01"));
+    check("…ticking once per tick, not twice", ticks.length >= 2 && ticks.length <= 4, `${ticks.length} ticks in 350 ms`);
+    for (const x of new Set(ws)) clearInterval(x.timer);
   }
 
   console.log(fails ? `\n${fails} failed` : "\nall passed");

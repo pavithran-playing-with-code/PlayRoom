@@ -12,7 +12,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import TogetherResults from "../together/TogetherResults";
-import useTogether, { secondsLeft, blend, rivals, myScore } from "../together/useTogether";
+import useTogether, { secondsLeft, smoothRows, rivals, myScore } from "../together/useTogether";
 import { W, H, FLOOR, SOLID, BRICK, FUSE, LEVELS, POWERS, moveBody, inside } from "../together/bombCore.mjs";
 
 const TAU = Math.PI * 2;
@@ -302,18 +302,15 @@ export default function BombBlast(props) {
         const since = (Date.now() - L.viewAt) / 1000;
         for (const b of v.b) bomb(ctx, ((b[0] % W) + 0.5) * T, (Math.floor(b[0] / W) + 0.5) * T, T, b[1] - since, t);
         fire(ctx, new Map(v.f.map(([k, ttl]) => [k, ttl])), T, t);
-        // bombers: others eased between ticks, me where I am
-        const kk = blend(L);
-        const prev = new Map((L.prev?.p || []).map((p) => [p[0], p]));
+        // bombers: others glide a moment behind the server, me where I am
         const bodies = new Map(L.world.bodies.map((b) => [b.id, b]));
         const many = L.world.bodies.length > 1;
-        const draw = v.p.filter((p) => p[3]).map((p) => {
-          const q = prev.get(p[0]) || p, mine = m && p[0] === myId;
-          const x = mine ? m.x : q[1] + (p[1] - q[1]) * kk, y = mine ? m.y : q[2] + (p[2] - q[2]) * kk;
-          const dx = p[1] - q[1], dy = p[2] - q[2];
+        const draw = smoothRows(L, "p", [1, 2]).filter(({ row }) => row[3]).map(({ row: p, moving, dx = 0, dy = 0 }) => {
+          const mine = m && p[0] === myId;
+          const x = mine ? m.x : p[1], y = mine ? m.y : p[2];
           return {
             id: p[0], x, y, cpu: p[0] < 0, colour: bodies.get(p[0])?.colour || "#FFFFFF",
-            moving: mine ? m.moving : Math.hypot(dx, dy) > 0.01,
+            moving: mine ? m.moving : moving,
             fx: mine ? m.fx : Math.sign(Math.abs(dx) > Math.abs(dy) ? dx : 0), fy: mine ? m.fy : Math.sign(Math.abs(dy) >= Math.abs(dx) ? dy : 0) || 1,
             name: many ? (p[0] === myId ? "You" : nameOf(p[0])) : null,
           };

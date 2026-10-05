@@ -184,20 +184,29 @@ export default function useGameEngine({
   //
   // Throttled: a fast tapper can fire several moves a second and a spectator
   // cannot see the difference.
+  // A change inside the gap isn't dropped: it goes when the gap is up, so the
+  // last letter of a burst of taps still reaches the watcher.
   const lastLive = useRef(0);
+  const liveTimer = useRef(null);
+  useEffect(() => () => clearTimeout(liveTimer.current), []);
   useEffect(() => {
     if (!socket || !isOnline || !roomCode || isSpectator || overRef.current) return;
-    const now = Date.now();
-    if (now - lastLive.current < 180) return;
-    lastLive.current = now;
-    const p = payload();
-    socket.emit("room:live", {
-      code: roomCode,
-      score: p.score,
-      pairs_matched: p.pairs_matched ?? 0,
-      moves: p.moves,
-      game_state: typeof p.game_state === "string" ? p.game_state : null,
-    });
+    const send = () => {
+      if (overRef.current) return;
+      lastLive.current = Date.now();
+      const p = payload();
+      socket.emit("room:live", {
+        code: roomCode,
+        score: p.score,
+        pairs_matched: p.pairs_matched ?? 0,
+        moves: p.moves,
+        game_state: typeof p.game_state === "string" ? p.game_state : null,
+      });
+    };
+    clearTimeout(liveTimer.current);
+    const wait = 180 - (Date.now() - lastLive.current);
+    if (wait <= 0) send();
+    else liveTimer.current = setTimeout(send, wait);
   }, [socket, isOnline, roomCode, isSpectator, score, moves, extraState, payload]);
 
   // ── Team standings ──

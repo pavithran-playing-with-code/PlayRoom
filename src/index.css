@@ -1166,6 +1166,30 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .hm.hm-rot .hm-msg{bottom:calc(env(safe-area-inset-bottom,0px) + 14px)}
 
 /* ---------- Typing Race (.ty-) ---------- */
+/* the race: a lane each on a strip of road, a little car in each */
+.ty-track{display:flex;flex-direction:column;gap:2px;padding:5px 8px;border:3px solid var(--ink);border-radius:16px;
+  background:linear-gradient(#5d5867,#4b4655);box-shadow:0 3px 0 var(--ink)}
+.ty-lane{display:flex;align-items:center;gap:6px;height:26px}
+.ty-lane + .ty-lane{border-top:2px dashed rgba(255,255,255,.28)}
+.ty-name{width:52px;flex-shrink:0;font-size:.68rem;font-weight:800;color:#fff;opacity:.85}
+.ty-lane.me .ty-name{color:var(--sun);opacity:1}
+.ty-lap{width:24px;flex-shrink:0;text-align:right;font-size:.68rem;font-weight:800;color:#fff;opacity:.8}
+.ty-road{position:relative;flex:1;height:100%}
+.ty-finish{position:absolute;right:0;top:2px;bottom:2px;width:8px;border-radius:2px;
+  background:repeating-conic-gradient(#fff 0 25%,#222 0 50%) 0 0/8px 8px}
+.ty-car{position:absolute;top:50%;width:34px;height:18px;margin-top:-10px;transition:left .45s cubic-bezier(.2,.8,.3,1)}
+.ty-car i{position:absolute;left:0;right:0;top:3px;bottom:4px;border:2px solid var(--ink);border-radius:9px 12px 5px 5px}
+.ty-car b{position:absolute;left:15px;top:5px;width:9px;height:5px;border-radius:2px;background:#dff4ff;border:1.5px solid var(--ink)}
+.ty-car s{position:absolute;bottom:0;width:9px;height:9px;border-radius:50%;background:#2E2140;border:2px solid #9c96a8}
+.ty-car s.w1{left:4px}.ty-car s.w2{right:4px}
+.ty-lane.me .ty-car{filter:drop-shadow(0 0 5px rgba(255,197,61,.9))}
+.ty-car.sputter{animation:tySputter .18s linear infinite}
+.ty-car.sputter::before{content:"💨";position:absolute;left:-17px;top:-3px;font-size:13px;animation:tyPuff .5s ease-out infinite}
+.ty-car.spin{animation:tySpin .7s ease-out}
+.ty-car.spin::after{content:"💥";position:absolute;left:8px;top:-14px;font-size:15px;animation:tyPuff .7s ease-out}
+@keyframes tySputter{0%,100%{transform:translate(0,0)}25%{transform:translate(-1px,1px)}75%{transform:translate(1px,-1px)}}
+@keyframes tySpin{from{transform:rotate(0)}to{transform:rotate(720deg)}}
+@keyframes tyPuff{from{opacity:1;transform:translateX(0) scale(.7)}to{opacity:0;transform:translateX(-10px) scale(1.2)}}
 /* Pinned to the top of the board: on a phone the keyboard takes the bottom. */
 .ty-wrap{align-self:flex-start;margin:6px auto 0;display:flex;flex-direction:column;gap:10px}
 .ty-box{position:relative;border:3px solid var(--ink);border-radius:20px;background:var(--card);

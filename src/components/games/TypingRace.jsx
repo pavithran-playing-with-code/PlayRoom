@@ -16,6 +16,35 @@ import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
 import { wordStream, pointsFor, check, clean, wpm, accuracy } from "./typingBoard";
 
+// The race you can see: a lane each, a little car each, driven by points —
+// type faster, drive faster. A wrong letter and your car sputters; a missed
+// word and it spins out. Friends' cars run in the lanes above yours.
+const LAP = 400;             // points once round the track: about eighteen words
+const CAR_COLOURS = ["#4CC9F0", "#FF6B6B", "#8FDB5C", "#FF8FC7", "#FFC53D", "#C77DFF"];
+
+function Track({ lanes }) {
+  return (
+    <div className="ty-track" aria-label="The race">
+      {lanes.map((l) => {
+        const lap = Math.floor(l.pts / LAP) + 1, k = (l.pts % LAP) / LAP;
+        return (
+          <div key={l.id} className={`ty-lane${l.me ? " me" : ""}`}>
+            <span className="ty-name truncate">{l.me ? "You" : l.name}</span>
+            <div className="ty-road">
+              <span className="ty-finish" />
+              <div className={`ty-car${l.sputter ? " sputter" : ""}${l.spin ? " spin" : ""}`}
+                style={{ left: `calc(${(k * 100).toFixed(2)}% - ${(k * 34).toFixed(1)}px)` }}>
+                <i style={{ background: l.colour }} /><b /><s className="w1" /><s className="w2" />
+              </div>
+            </div>
+            <span className="ty-lap">L{lap}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const PER_LINE = 6;          // words shown per line
 const LINES = 3;             // lines on screen: where you are, and what's next
 const KEEP = 40;             // results remembered behind you (for drawing, and spectators)
@@ -31,6 +60,9 @@ export default function TypingRace(props) {
   const refresh = () => bump((n) => n + 1);
   const [focused, setFocused] = useState(false);
   const [flash, setFlash] = useState(null);        // { ok, pts, n } after each word
+  const [spin, setSpin] = useState(false);         // a missed word: your car spins out
+  const spinT = useRef(null);
+  useEffect(() => () => clearTimeout(spinT.current), []);
   const inputRef = useRef(null);
   const uid = useRef(0);
 
@@ -77,6 +109,9 @@ export default function TypingRace(props) {
       s.streak = 0;
       s.wrong += 1;
       setFlash({ ok: false, pts: 0, n });
+      setSpin(true);
+      clearTimeout(spinT.current);
+      spinT.current = setTimeout(() => setSpin(false), 750);
     }
     s.res[s.i] = right;
     for (const k of Object.keys(s.res)) if (Number(k) < s.i - KEEP) delete s.res[k];
@@ -114,6 +149,18 @@ export default function TypingRace(props) {
   const shown = words.slice(start, start + PER_LINE * LINES);
   const elapsed = Math.max(0, durationSeconds - eng.timeLeft);
   const now = check(words[s.i] || "", clean(s.typed));
+  // the lanes: everyone else first, you at the bottom, next to your words.
+  // A car's colour is its seat's, so it's the same on every phone.
+  const seats = (players || []).filter((p) => !p.is_spectator).map((p) => Number(p.user_id)).sort((a, b) => a - b);
+  const colourOf = (id) => CAR_COLOURS[Math.max(0, seats.indexOf(Number(id))) % CAR_COLOURS.length];
+  const myId = Number(isSpectator ? spectatorWatching?.user_id : currentUser?.id);
+  const lanes = [
+    ...Object.values(eng.opponents).filter((p) => Number(p.user_id) !== myId)
+      .map((p) => ({ id: p.user_id, name: p.username, pts: Number(p.score) || 0, colour: colourOf(p.user_id) })),
+    { id: myId || "me", me: true, pts: isSpectator ? Number(spectatorWatching?.score) || 0 : eng.score,
+      colour: colourOf(myId), sputter: now.bad && !isSpectator, spin },
+  ];
+
   const stats = isSpectator
     ? [{ label: "Score", value: Number(spectatorWatching?.score ?? 0).toLocaleString() },
        { label: "Words", value: s.right }]
@@ -136,6 +183,7 @@ export default function TypingRace(props) {
       >
         {({ w }) => (
           <div className="ty-wrap" style={{ width: Math.min(w, 640) }} onPointerDown={() => { if (!focused) focusBox(); }}>
+            <Track lanes={lanes} />
             <div className={`ty-box${now.bad ? " bad" : ""}${focused || isSpectator ? "" : " asleep"}`}>
               <div className="ty-words" aria-hidden="true">
                 {shown.map((word, k) => {

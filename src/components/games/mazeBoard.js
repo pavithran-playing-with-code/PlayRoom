@@ -10,7 +10,7 @@
 // suddenly be two ways round.
 //
 // Seeded, so everyone in a room runs the same maze.
-import { seededRand } from "./seededRand";
+import { seededRand } from "./seededRand.js";
 
 // Walls as bits, so a cell is one number.
 export const N = 1, E = 2, S = 4, W = 8;
@@ -23,9 +23,9 @@ export const DIRS = [
 ];
 
 // Grows a cell each maze, alternating width and height, and stops before the
-// cells get too small to tap.
-export const MIN_SIZE = 5;
-export const MAX_SIZE = 11;
+// cells get too small to see on a phone (15 across is 24 px a cell at 390).
+export const MIN_SIZE = 7;
+export const MAX_SIZE = 15;
 export function sizeFor(level) {
   const grow = Math.max(0, level - 1);
   const cols = Math.min(MAX_SIZE, MIN_SIZE + Math.ceil(grow / 2));
@@ -122,6 +122,19 @@ export function distances(maze, from = maze.start) {
 }
 
 export const shortestPath = (maze) => distances(maze)[idx(maze, maze.goal.r, maze.goal.c)];
+
+// Together: the door (the goal) is locked, and the key is the cell as far
+// as it can be from both the start and the door — a trip of its own. The
+// same maze gives the same key for everyone; ties go to the first cell.
+export function keyCell(maze) {
+  const a = distances(maze, maze.start), b = distances(maze, maze.goal);
+  let best = -1, at = 0;
+  for (let i = 0; i < a.length; i++) {
+    const v = Math.min(a[i], b[i]);
+    if (v > best) { best = v; at = i; }
+  }
+  return { r: Math.floor(at / maze.cols), c: at % maze.cols };
+}
 
 // The fewest moves (rolls) that get from the start to the flag.
 export function fewestRolls(maze) {

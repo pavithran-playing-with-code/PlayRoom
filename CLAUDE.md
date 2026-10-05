@@ -139,7 +139,11 @@ There is no test runner. What works:
   `flappySim.js`…) and `config/matchResult.js` are plain JS with no React or
   database, so they can be exercised from a Node script directly
   (`scripts/check-runner.mjs`, `scripts/check-speedway.mjs`, `scripts/check-piano.mjs`,
-  `scripts/check-mahjong.mjs`, `check-manor*`).
+  `scripts/check-mahjong.mjs`, `scripts/check-maze.mjs`, `check-manor*`).
+- **Maze Runner together** is relayed, not server-run: each phone moves its
+  own ball and sends `maze:pos` (maze, where, key taken, door reached);
+  `config/socket.js` passes it on, and a phone that missed something catches
+  up from the next message.
 - **The together games run on the server** — Kitchen Rush, Bomb Blast,
   Tower Guard, Carrom: `config/togetherWorld.js` keeps a world per side (one each,
   per team, or one for a co-op room) on the rules in

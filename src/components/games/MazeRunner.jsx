@@ -8,12 +8,25 @@
 // Arrows, WASD, the arrow pad, or swipe anywhere on the board. A move rolls
 // the ball to the end of the corridor — the next wall, turning or the flag.
 // Points are per board cleared (see scoreForBoard): never taken away.
-import React, { useEffect, useMemo, useRef, useState } from "react";
+//
+// Against friends, everyone runs the same mazes (the room's seed) on their
+// own. Together (a co-op room), everyone is in ONE maze: the flag is a locked
+// door, somebody has to fetch the key first, then whoever reaches the door
+// takes you all through to the next. Each phone moves its own ball and tells
+// the room (maze:pos: which maze, where, key taken, door reached); every
+// message says what that phone knows, so one that missed something catches
+// up from the next. Everyone scores the same for each door.
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSocket } from "../../utils/SocketContext";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
-import { N, E, S, W, DIRS, makeMaze, isOpen, slide, scoreForBoard } from "./mazeBoard";
+import { N, E, S, W, DIRS, makeMaze, isOpen, slide, scoreForBoard, keyCell, BOARD_BASE, BOARD_STEP } from "./mazeBoard";
+
+const MATE_COLOURS = ["#4CC9F0", "#FF6B6B", "#8FDB5C", "#FF8FC7", "#FFC53D", "#C77DFF"];
+// together, a door is worth the same to everyone: no bonus for one phone's moves
+const doorPoints = (level) => BOARD_BASE + BOARD_STEP * (Math.max(1, level) - 1);
 
 const EASE = 0.28;            // how much of the gap the token closes each frame
 const SOLVED_MS = 700;
@@ -22,7 +35,10 @@ const SWIPE_MIN = 24;         // px before a drag counts as a direction
 export default function MazeRunner(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
     startedAt, serverNow, isSpectator = false, spectatorWatching = null,
-    spectatorState = null } = props;
+    spectatorState = null, mode } = props;
+  const coop = mode === "coop" && !!roomCode;
+  const { socket } = useSocket() || {};
+  const myId = Number(currentUser?.id);
 
   const [level, setLevel] = useState(1);
   const [pos, setPos] = useState({ r: 0, c: 0 });
@@ -34,7 +50,11 @@ export default function MazeRunner(props) {
   const [roll, setRoll] = useState(1);   // squares in the last move, so a long roll takes a little longer
 
   // Moves act on the ref: two taps in one tick must each see the other.
-  const live = useRef({ level: 1, r: 0, c: 0, moves: 0, solved: 0, busy: false, seen: ["0,0"] });
+  const live = useRef({ level: 1, r: 0, c: 0, moves: 0, solved: 0, busy: false, seen: ["0,0"], key: false });
+  // together: the others, as they last said — { lv, r, c, k, done } by user id
+  const mates = useRef(new Map());
+  const [, redraw] = useState(0);
+  const [hasKey, setHasKey] = useState(false);
   const timers = useRef([]);
   const uid = useRef(0);
   useEffect(() => {
@@ -49,13 +69,15 @@ export default function MazeRunner(props) {
     isSpectator, spectatorState,
     snapshot: () => ({
       level: live.current.level, r: live.current.r, c: live.current.c,
-      moves: live.current.moves, solved: live.current.solved, seen: live.current.seen,
+      moves: live.current.moves, solved: live.current.solved, seen: live.current.seen, key: live.current.key,
     }),
     apply: (st) => {
       live.current.level = st.level;
       live.current.r = st.r; live.current.c = st.c;
       live.current.moves = st.moves; live.current.solved = st.solved;
       live.current.seen = st.seen || [];
+      live.current.key = !!st.key;
+      setHasKey(!!st.key);
       setLevel(st.level);
       setPos({ r: st.r, c: st.c });
       setMoves(st.moves);
@@ -64,10 +86,24 @@ export default function MazeRunner(props) {
     },
   });
 
+  // doors gone through travel as pairs_matched: together, one is a win
+  const spectateState = spectate.extraState;
+  const extraState = useCallback(() => ({ ...spectateState(), pairs_matched: live.current.solved }), [spectateState]);
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
-    extraState: spectate.extraState });
+    extraState });
 
   const maze = useMemo(() => makeMaze(seed, level), [seed, level]);
+  const keyAt = useMemo(() => (coop ? keyCell(maze) : null), [coop, maze]);
+  const seats = (players || []).filter((p) => !p.is_spectator).map((p) => Number(p.user_id)).sort((a, b) => a - b);
+  const colourOf = (id) => MATE_COLOURS[Math.max(0, seats.indexOf(Number(id))) % MATE_COLOURS.length];
+  const nameOf = (id) => (players || []).find((p) => Number(p.user_id) === Number(id))?.username || "Someone";
+
+  // together: tell the room where I am and what I know
+  const tell = useCallback(() => {
+    if (!coop || !socket || isSpectator) return;
+    const s = live.current;
+    socket.emit("maze:pos", { code: roomCode, lv: s.level, r: s.r, c: s.c, k: s.key ? 1 : 0, done: s.busy ? 1 : 0 });
+  }, [coop, socket, isSpectator, roomCode]);
 
   function say(text, type) {
     const n = ++uid.current;
@@ -98,28 +134,86 @@ export default function MazeRunner(props) {
     setSeen(new Set(s.seen));
     eng.addMove();
 
-    if (s.r === m.goal.r && s.c === m.goal.c) {
-      s.busy = true;
-      const gain = scoreForBoard(m, s.level, s.moves);
-      eng.addScore(gain);
-      s.solved += 1;
-      setSolved(s.solved);
-      setDone(true);
-      say(`Board ${s.level} cleared in ${s.moves} moves! +${gain}`, "success");
-      later(() => {
-        s.level += 1;
-        s.r = 0; s.c = 0;
-        s.moves = 0;
-        s.seen = ["0,0"];
-        s.busy = false;
-        setLevel(s.level);
-        setPos({ r: 0, c: 0 });
-        setMoves(0);
-        setSeen(new Set(["0,0"]));
-        setDone(false);
-      }, SOLVED_MS);
+    // together: rolling over the key takes it, and the door opens for everyone
+    if (coop && !s.key) {
+      const k = keyCell(m);
+      if (path.some((p) => p.r === k.r && p.c === k.c)) {
+        s.key = true;
+        setHasKey(true);
+        say("🗝️ Got the key — the door is open!", "success");
+      }
     }
+
+    if (s.r === m.goal.r && s.c === m.goal.c) {
+      if (coop && !s.key) { say("🔒 The door's locked — someone has to find the 🗝️", "error"); tell(); return; }
+      clearBoard(coop ? doorPoints(s.level) : scoreForBoard(m, s.level, s.moves), null);
+    }
+    tell();
   }
+
+  // A board done: by me (who: null) or, together, by somebody else.
+  function clearBoard(gain, who) {
+    const s = live.current;
+    if (s.busy) return;
+    s.busy = true;
+    eng.addScore(gain);
+    s.solved += 1;
+    setSolved(s.solved);
+    setDone(true);
+    say(coop ? `${who ? `🚪 ${who} opened the door!` : "🚪 Through the door!"} +${gain}` : `Board ${s.level} cleared in ${s.moves} moves! +${gain}`, "success");
+    tell();
+    later(() => nextBoard(s.level + 1), SOLVED_MS);
+  }
+  function nextBoard(lv) {
+    const s = live.current;
+    s.level = lv;
+    s.r = 0; s.c = 0;
+    s.moves = 0;
+    s.seen = ["0,0"];
+    s.busy = false;
+    s.key = false;
+    setHasKey(false);
+    setLevel(s.level);
+    setPos({ r: 0, c: 0 });
+    setMoves(0);
+    setSeen(new Set(["0,0"]));
+    setDone(false);
+    tell();
+  }
+
+  // together: hear the others
+  useEffect(() => {
+    if (!coop || !socket) return undefined;
+    const onPos = (m) => {
+      if (Number(m.user_id) === myId) return;
+      mates.current.set(Number(m.user_id), m);
+      const s = live.current;
+      if (!isSpectator && !s.busy) {
+        if (m.lv > s.level) {
+          // they're further on: we missed a door — take its points and catch up
+          for (let lv = s.level; lv < m.lv; lv++) { eng.addScore(doorPoints(lv)); s.solved += 1; }
+          setSolved(s.solved);
+          nextBoard(m.lv);
+        } else if (m.lv === s.level) {
+          if (m.k && !s.key) {
+            s.key = true; setHasKey(true);
+            const m0 = makeMaze(seed, s.level);
+            // already waiting at the door: straight through
+            if (s.r === m0.goal.r && s.c === m0.goal.c) clearBoard(doorPoints(s.level), null);
+            else say(`🗝️ ${nameOf(m.user_id)} found the key — the door is open!`, "success");
+          }
+          if (m.done) clearBoard(doorPoints(s.level), nameOf(m.user_id));
+        }
+      }
+      redraw((n) => n + 1);
+    };
+    socket.on("maze:pos", onPos);
+    // and say where I am now and then, for anyone who has just come in
+    const beat = setInterval(tell, 2000);
+    tell();
+    return () => { socket.off("maze:pos", onPos); clearInterval(beat); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coop, socket, myId, isSpectator, tell]);
 
   const byBit = (bit) => DIRS.find((d) => d.bit === bit);
 
@@ -164,9 +258,10 @@ export default function MazeRunner(props) {
   const oppList = Object.values(eng.opponents);
   const stats = [
     { label: "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
-    { label: "Mazes", value: solved },
-    { label: "Moves", value: moves },
+    { label: coop ? "Doors" : "Mazes", value: solved },
+    coop ? { label: "Key", value: hasKey ? "🗝️" : "—" } : { label: "Moves", value: moves },
   ];
+  const others = coop ? [...mates.current.values()].filter((m) => m.lv === level && Number(m.user_id) !== myId) : [];
 
   // An arrow pad: up on its own above, left-down-right beneath, like a
   // keyboard's arrow keys. Chevrons drawn as SVG, so they're crisp and the
@@ -225,10 +320,19 @@ export default function MazeRunner(props) {
                           borderBottomWidth: isOpen(maze, r, c, S) ? 0 : wall,
                           borderLeftWidth: isOpen(maze, r, c, W) ? 0 : wall,
                         }}>
-                        {isGoal && <span className="mz-flag" style={{ fontSize: Math.round(cell * 0.6) }}>🚩</span>}
+                        {isGoal && <span className={`mz-flag${coop ? (hasKey ? " open" : " locked") : ""}`} style={{ fontSize: Math.round(cell * 0.6) }}>{coop ? "🚪" : "🚩"}</span>}
+                        {coop && !hasKey && keyAt && keyAt.r === r && keyAt.c === c && <span className="mz-key" style={{ fontSize: Math.round(cell * 0.62) }}>🗝️</span>}
                       </span>
                     );
                   })}
+                  {/* together: everyone else's ball, in their colour */}
+                  {others.map((m) => (
+                    <span key={m.user_id} className="mz-token mz-mate" title={nameOf(m.user_id)}
+                      style={{
+                        width: Math.round(cell * 0.44), height: Math.round(cell * 0.44), background: colourOf(m.user_id),
+                        transform: `translate(${m.c * cell + cell * 0.28}px, ${m.r * cell + cell * 0.28}px)`,
+                      }} />
+                  ))}
                   {/* the token eases across rather than jumping */}
                   <span className="mz-token"
                     style={{
@@ -239,7 +343,9 @@ export default function MazeRunner(props) {
                 </div>
               </div>
               <div className="muted mz-help">
-                {maze.rows}×{maze.cols} · swipe or tap an arrow — the ball rolls to the next turning
+                {coop
+                  ? (hasKey ? "The door is open — get anyone to the 🚪" : "Find the 🗝️ — then the 🚪 opens for everyone")
+                  : <>{maze.rows}×{maze.cols} · swipe or tap an arrow — the ball rolls to the next turning</>}
               </div>
             </div>
           );

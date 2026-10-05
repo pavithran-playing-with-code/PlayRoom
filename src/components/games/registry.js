@@ -154,6 +154,9 @@ export const GAMES = [
     slug: "maze", name: "Maze Runner", icon: "🧭",
     blurb: "One way out, and it gets bigger every time you find it.",
     minPlayers: 1, maxPlayers: 8, tag: "Brain", col: "var(--leaf)",
+    coopMax: 4, defaultDuration: 180,
+    coopLabel: "one maze — find the key, open the door",
+    coopNote: "One maze for all of you. Someone finds the 🗝️, then anyone can open the 🚪 — and you all go on to a bigger one.",
     Component: MazeRunner,
   },
   {

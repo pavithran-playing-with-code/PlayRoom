@@ -139,6 +139,19 @@ function initSocket(httpServer) {
       });
     });
 
+    // Maze Runner together: where my ball is in the shared maze, and what I
+    // know — which maze we're on, whether the key's been taken, whether this
+    // maze is done. Every phone keeps the latest it has heard, so one that
+    // missed something catches up from the next message.
+    socket.on("maze:pos", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const n = (v, lo, hi) => { const x = Math.floor(Number(v)); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
+      socket.to(roomChannel(code)).emit("maze:pos", {
+        user_id: uid, lv: n(msg.lv, 1, 999), r: n(msg.r, 0, 63), c: n(msg.c, 0, 63), k: msg.k ? 1 : 0, done: msg.done ? 1 : 0,
+      });
+    });
+
     socket.on("disconnect", () => {
       const set = online.get(uid);
       if (!set) return;

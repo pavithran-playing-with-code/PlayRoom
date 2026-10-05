@@ -972,6 +972,13 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .mz-cell.walked{background:rgba(143,219,92,.22)}
 .mz-cell.goal{background:rgba(255,197,61,.45)}
 .mz-flag{line-height:1;pointer-events:none}
+/* together: a locked door, then an open one; the key; the others' balls */
+.mz-flag.locked{filter:grayscale(.6) brightness(.85)}
+.mz-flag.open{filter:drop-shadow(0 0 6px rgba(143,219,92,.95));animation:mzDoor 1s ease-in-out infinite alternate}
+.mz-key{line-height:1;pointer-events:none;animation:mzKey 1.2s ease-in-out infinite alternate}
+.mz-mate{border:2px solid var(--ink);opacity:.92;transition:transform .25s ease}
+@keyframes mzKey{from{transform:translateY(-2px) rotate(-8deg)}to{transform:translateY(2px) rotate(8deg)}}
+@keyframes mzDoor{from{transform:scale(1)}to{transform:scale(1.12)}}
 .mz-token{position:absolute;left:0;top:0;border-radius:999px;background:var(--sky);
   border:3px solid var(--ink);box-shadow:0 2px 0 var(--ink);
   transition-property:transform;transition-timing-function:cubic-bezier(.34,1.4,.64,1);

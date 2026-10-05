@@ -420,6 +420,7 @@ function Room() {
           seed={seed}
           players={seatedPlayers}
           currentUser={user}
+          mode={room?.mode}
           durationSeconds={duration || 120}
           startedAt={startedAt}
           serverNow={serverNow}
@@ -484,6 +485,7 @@ function Room() {
           seed={seed}
           players={seatedPlayers}
           currentUser={user}
+          mode={room?.mode}
           durationSeconds={duration || 120}
           startedAt={startedAt}
           serverNow={serverNow}

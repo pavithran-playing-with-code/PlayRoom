@@ -117,6 +117,14 @@ function resultsFor(room, seated) {
   if (TOGETHER_GAMES.has(room.game_slug)) return togetherResults(room, seated);
   const out = new Map();
 
+  // Maze Runner together: one side, one score. Through at least one door
+  // together is a win for everyone; none is a loss.
+  if (room.mode === "coop" && room.game_slug === "maze") {
+    const won = seated.some((p) => (Number(p.pairs_matched) || 0) >= 1);
+    for (const p of seated) out.set(Number(p.user_id), won ? "win" : "loss");
+    return out;
+  }
+
   if (room.mode === "teams" && seated.some(p => p.team != null)) {
     const sideOf = (p) => (p.team == null ? `solo:${p.user_id}` : `team:${p.team}`);
     const totals = new Map();

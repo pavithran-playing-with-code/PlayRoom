@@ -168,9 +168,12 @@ There is no test runner. What works:
   `check-carrom.mjs` test
   the rules. Carrom and Bomb Blast are SHARED: one board or arena for the
   whole room, scored per side.
-- **Speedway is live-shared**: each phone sends its car over the socket
-  (`race:pos`, relayed by `config/socket.js`); everyone else's car is drawn
-  from that. The score sync still decides the result.
+- **Speedway is live-shared**: a top-down drift racer (`driftSim.js`, the
+  "Turbo Drift" look). Each phone sends its car over the socket (`race:pos`:
+  position, angle, velocity, drift and boost, relayed by `config/socket.js`);
+  everyone else's car is eased toward that and drawn with the same effects.
+  Laps follow the room clock (`lapsFor`). The score sync still decides the
+  result.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

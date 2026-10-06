@@ -879,9 +879,9 @@ input::-ms-reveal,input::-ms-clear{display:none}
   user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .rh-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
 .rh-help{font-size:.78rem;text-align:center}
-.rr-pad,.sw-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+.rr-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
-.rr-canvas,.sw-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
+.rr-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
 .rr-help,.sw-help{font-size:.78rem;text-align:center}
 .press.rr-btn{padding:10px 18px;font-size:1.2rem;--lift:4px;min-width:56px}
 
@@ -998,26 +998,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .press.lvl-easy{background:var(--lime)}
 .press.lvl-medium{background:var(--sun)}
 .press.lvl-hard{background:var(--coral)}
-.press.sw-btn{padding:12px 22px;font-size:1.15rem;--lift:4px;min-width:64px;touch-action:none}
-/* landscape: ◀ ▶ under the left thumb, Tilt and Turbo under the right */
-.sw-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;width:100%}
-.sw-steer,.sw-right{display:flex;align-items:flex-end;gap:10px}
-.gameshell.land .press.sw-btn{min-width:74px;min-height:62px;font-size:1.3rem}
-.gameshell.land .press.sw-btn{min-width:96px;min-height:76px;font-size:1.6rem}
-.gameshell.land .sw-right{flex-direction:column;align-items:flex-end;gap:8px}
-.press.sw-tilt{font-size:.8rem;padding:6px 10px}
-.sw-stage{position:relative}
-.sw-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font:900 4.5rem/1 Fredoka,Nunito,sans-serif;
-  color:#fff;-webkit-text-stroke:3px var(--ink);text-shadow:0 5px 0 var(--ink);pointer-events:none;
-  animation:swPop .9s ease-out infinite}
-.sw-count.go{color:var(--lime);animation:none}
-/* the start lights: red one by one, then all green */
-.sw-lights{position:absolute;left:50%;top:12px;transform:translateX(-50%);display:flex;gap:8px;padding:7px 10px;
-  background:#1c1826;border:3px solid var(--ink);border-radius:999px;pointer-events:none}
-.sw-lights i{width:18px;height:18px;border-radius:50%;background:#3a2e36;display:block}
-.sw-lights i.on{background:#ff3b3b;box-shadow:0 0 12px #ff3b3b}
-.sw-lights.go i.on{background:#3ddc6b;box-shadow:0 0 12px #3ddc6b}
-@keyframes swPop{0%{transform:translate(-50%,-50%) scale(1.25)}100%{transform:translate(-50%,-50%) scale(1)}}
 
 /* ── Maze Runner ──────────────────────────────────────────────────────────────
    Cells are absolutely positioned so their walls are real borders that meet
@@ -1298,3 +1278,21 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .room-loading-dots i:nth-child(3){animation-delay:.3s}
 @keyframes roomBounce{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-14px) rotate(6deg)}}
 @keyframes roomDot{0%,100%{opacity:.25;transform:scale(.8)}50%{opacity:1;transform:scale(1.15)}}
+
+/* ── Speedway (.sw-): a top-down drift racer in Turbo Drift's dusk look ───── */
+.sw-pad{position:relative;background:#0f141b;border:3px solid var(--ink);border-radius:18px;overflow:hidden;
+  box-shadow:0 5px 0 var(--ink);touch-action:none;user-select:none;-webkit-user-select:none;box-sizing:border-box}
+.sw-canvas{display:block;position:absolute;inset:0;touch-action:none}
+.sw-top{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:2}
+.sw-mute{width:44px;height:36px;font:700 16px 'Barlow Condensed','Arial Narrow',Arial,sans-serif;color:#f4efe6;
+  background:rgba(15,20,27,.7);border:2px solid #2a3442;cursor:pointer}
+.sw-mute:focus-visible,.sw-tbtn:focus-visible{outline:3px solid #37c8e6;outline-offset:2px}
+.sw-touch{display:flex;justify-content:space-between;align-items:center;width:100%;gap:12px}
+.sw-grp{display:flex;gap:12px}
+.sw-tbtn{width:72px;height:72px;border-radius:50%;border:3px solid rgba(255,255,255,.55);background:#1b2430;color:#fff;
+  font:700 26px 'Barlow Condensed','Arial Narrow',Arial,sans-serif;touch-action:none;-webkit-tap-highlight-color:transparent;
+  box-shadow:0 4px 0 #0f141b;user-select:none;-webkit-user-select:none}
+.sw-tbtn.sm{font:400 14px Bungee,Impact,sans-serif}
+.sw-tbtn.on{background:#ff5d3b;transform:translateY(2px);box-shadow:0 2px 0 #0f141b}
+.sw-keys{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 16px;font:500 16px 'Barlow Condensed','Arial Narrow',Arial,sans-serif;color:#5b5466}
+.sw-keys b{font-weight:700;color:var(--ink)}

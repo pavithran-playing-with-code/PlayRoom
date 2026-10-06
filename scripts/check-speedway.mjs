@@ -1,141 +1,143 @@
-// scripts/check-speedway.mjs — Speedway's rules, with no browser.
+// scripts/check-speedway.mjs — Speedway's rules (driftSim.js), with no browser.
 //
 //   node scripts/check-speedway.mjs
 //
-// The road loops back on itself, the same seed builds the same road, laps
-// count, the finish freezes your time, a car that holds the racing line can
-// finish three laps well inside two minutes, the grass is slow, the back of
-// another car is slower, and the score and places rank the way a race does.
+// The same code builds the same track; tracks are closed, gentle and never
+// touch themselves; the car's top speeds and grip; drift charge pays out the
+// right boost; laps count (and going back over the line uncounts one); the
+// computer can finish the race well inside the clock for every lap count;
+// the wall and other cars push back; and the score and places rank as a race.
 import { pathToFileURL, fileURLToPath } from "node:url";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speedway-"));
 const src = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "components", "games");
-fs.copyFileSync(path.join(src, "seededRand.js"), path.join(dir, "seededRand.mjs"));
-fs.writeFileSync(path.join(dir, "speedwaySim.mjs"), fs.readFileSync(path.join(src, "speedwaySim.js"), "utf8").replace("./seededRand.js", "./seededRand.mjs"));
-const m = await import(pathToFileURL(path.join(dir, "speedwaySim.mjs")).href);
+const m = await import(pathToFileURL(path.join(src, "driftSim.js")).href);
+const { buildTrack, makeCar, stepCar, trackUpdate, wallHit, bump, aiInput, checkStuck, raceScore, placeOf, raced, padHit, lapsFor, trackCode, M, MAXV, GRASSV, HALF, CURB, WALL } = m;
 
 let fails = 0;
 const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`); };
-const DT = 1 / 60;
+const dt = 1 / 60;
 
-// ── the road ─────────────────────────────────────────────────────────────────
+// ── tracks ───────────────────────────────────────────────────────────────────
+const T = buildTrack(trackCode(424242));
+const T2 = buildTrack(trackCode(424242) + "");
+check("the same code builds the same track", JSON.stringify(T.P.slice(0, 20)) === JSON.stringify(buildTrack("room-424242").P.slice(0, 20)) && T2 === T);
+check("a different code, a different track", JSON.stringify(buildTrack(trackCode(7)).P[100]) !== JSON.stringify(T.P[100]));
+let good = 0, worst = 0;
+for (let s = 1; s <= 40; s++) { const t = buildTrack(trackCode(s * 9973)); if (t.ok) good++; worst = Math.max(worst, t.attempt); }
+check("tracks come out gentle and never touch themselves", good === 40, `${good}/40, most retries ${worst}`);
+check(`${M} evenly spaced points round a closed loop`, T.P.length === M && Math.abs(Math.hypot(T.P[0].x - T.P[M - 1].x, T.P[0].y - T.P[M - 1].y) - T.ds) < T.ds * 0.05);
+check("seven boost pads or so, on the road", T.pads.length >= 5 && T.pads.length <= 7 && T.pads.every((p) => Math.abs(p.lane) <= 45));
+check("trees stay off the road", T.trees.every((tr) => T.P.every((p, i) => i % 4 || Math.hypot(tr.x - p.x, tr.y - p.y) > WALL)));
+
+// ── the car ──────────────────────────────────────────────────────────────────
+function drive(car, inp, secs, onTrack = true) {
+  for (let t = 0; t < secs; t += dt) { stepCar(T, car, inp, dt); if (onTrack) { trackUpdate(T, car); wallHit(T, car); } }
+  return Math.hypot(car.vx, car.vy);
+}
 {
-  let loops = true, same = true, lengths = [];
-  for (let seed = 1; seed <= 100; seed++) {
-    const t = m.buildTrack(seed), u = m.buildTrack(seed);
-    if (JSON.stringify(t.segs.map((s) => [s.curve, s.y1])) !== JSON.stringify(u.segs.map((s) => [s.curve, s.y1]))) same = false;
-    const last = t.segs[t.segs.length - 1];
-    if (Math.abs(last.y2 - t.segs[0].y1) > 1e-6 || Math.abs(t.segs[0].y1) > 1e-6) loops = false;
-    lengths.push(t.segs.length);
+  const c = makeCar(T, 0); c.off = 0;
+  const v = drive(c, { thr: 1, brk: 0, str: 0, dr: 0 }, 6, false);
+  // 480 is the cap; drag settles a car at ~423, as in Turbo Drift
+  check("flat out on the road: ~420 (480 the cap)", v > 400 && v <= MAXV, v.toFixed(0));
+  const g = makeCar(T, 0); g.off = HALF + CURB + 30;
+  let gv = 0;
+  for (let t = 0; t < 6; t += dt) { stepCar(T, g, { thr: 1, brk: 0, str: 0, dr: 0 }, dt); g.off = HALF + CURB + 30; gv = Math.hypot(g.vx, g.vy); }
+  check("on the grass: much slower, under the 270 cap", gv <= GRASSV && gv < 0.5 * 423, gv.toFixed(0));
+  const r = makeCar(T, 0);
+  const rv = drive(r, { thr: 0, brk: 1, str: 0, dr: 0 }, 3, false);
+  check("reversing is capped at 160", rv <= 161, rv.toFixed(0));
+}
+// drift: charge and payout
+for (const [charge, want] of [[0.5, 0], [1.2, 0.6], [2.2, 1.1], [3.2, 1.6]]) {
+  const c = makeCar(T, 0);
+  drive(c, { thr: 1, brk: 0, str: 0, dr: 0 }, 3, false);
+  // drift through a long bend until the charge is there, then let go
+  let t = 0;
+  while (c.charge < charge && t < 8) { stepCar(T, c, { thr: 1, brk: 0, str: 0.5, dr: 1 }, dt); t += dt; }
+  const still = c.drifting;
+  const got = stepCar(T, c, { thr: 1, brk: 0, str: 0.5, dr: 0 }, dt).boosted;
+  check(`drift to charge ${charge}, let go: boost ${want ? want + " s" : "none"}`, still && got === want, `got ${got} after ${t.toFixed(1)}s`);
+}
+{
+  const a = makeCar(T, 0), b = makeCar(T, 0);
+  drive(a, { thr: 1, brk: 0, str: 0, dr: 0 }, 2, false); drive(b, { thr: 1, brk: 0, str: 0, dr: 0 }, 2, false);
+  for (let i = 0; i < 40; i++) { stepCar(T, a, { thr: 1, brk: 0, str: 1, dr: 0 }, dt); stepCar(T, b, { thr: 1, brk: 0, str: 1, dr: 1 }, dt); }
+  const slip = (c) => Math.abs(-Math.sin(c.a) * c.vx + Math.cos(c.a) * c.vy);
+  check("drifting slides sideways more than gripping", slip(b) > slip(a) * 1.5, `${slip(b).toFixed(0)} vs ${slip(a).toFixed(0)}`);
+}
+
+// ── walls, cars, pads ────────────────────────────────────────────────────────
+{
+  const c = makeCar(T, 0);
+  const i = c.idx;
+  c.x = T.P[i].x + T.Rx[i] * (WALL + 15); c.y = T.P[i].y + T.Ry[i] * (WALL + 15);
+  c.vx = T.Rx[i] * 300; c.vy = T.Ry[i] * 300;
+  trackUpdate(T, c);
+  const hit = wallHit(T, c);
+  trackUpdate(T, c);
+  const vn = c.vx * T.Rx[i] + c.vy * T.Ry[i];
+  check("the wall stops you and bounces you back", hit > 250 && vn < 0 && Math.abs(c.off) <= WALL + 0.5, `hit ${hit.toFixed(0)}, back at ${vn.toFixed(0)}`);
+}
+{
+  const a = { x: 0, y: 0, vx: 200, vy: 0 }, b = { x: 30, y: 0, vx: 0, vy: 0 };
+  const h = bump(a, b);
+  check("two cars: pushed apart, bounced", h > 0 && b.x - a.x >= 42 - 1e-6 && b.vx > 0 && a.vx < 200);
+  const c = { x: 0, y: 0, vx: 200, vy: 0 }, f = { x: 30, y: 0, vx: 0, vy: 0 };
+  bump(c, f, false, true);
+  check("a friend's car (fixed): only yours moves", f.x === 30 && f.vx === 0 && c.x <= -12 && c.vx < 0);
+}
+{
+  const p = T.pads[0], c = makeCar(T, 0);
+  c.idx = p.idx; c.x = p.x; c.y = p.y;
+  check("a boost pad boosts", padHit(T, c) && c.boostT === 1);
+}
+
+// ── laps and a whole race ────────────────────────────────────────────────────
+{
+  const c = makeCar(T, 0);
+  trackUpdate(T, c);
+  check("on the grid: lap 0, nothing raced", c.lap === 0 && raced(c) === 0);
+  c.idx = M - 2; c.lap = 0;
+  c.x = T.P[3].x; c.y = T.P[3].y;
+  check("over the line: lap 1", trackUpdate(T, c) === 1 && c.lap === 1);
+  c.x = T.P[M - 3].x; c.y = T.P[M - 3].y;
+  trackUpdate(T, c);
+  check("back over the line: that lap uncounted", c.lap === 0);
+}
+for (const secs of [120, 180, 240, 300]) {
+  const laps = lapsFor(secs);
+  const cars = [0, 1, 2, 3].map((s) => makeCar(T, s, { ai: true, skill: [0.96, 0.92, 0.88, 0.9][s], lane: (s - 1.5) * 20, ph: s }));
+  let t = 0, clock = 0;
+  const fin = [];
+  while (t < secs - 3 && fin.length < cars.length) {
+    for (const c of cars) {
+      if (c.finAt !== null) continue;
+      stepCar(T, c, aiInput(T, c, null, clock), dt);
+    }
+    for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) bump(cars[i], cars[j]);
+    for (const c of cars) {
+      trackUpdate(T, c); wallHit(T, c); padHit(T, c); checkStuck(T, c, dt);
+      if (c.finAt === null && c.lap > laps) { c.finAt = t + 3; fin.push(c); }
+    }
+    t += dt; clock += dt;
   }
-  check("every road comes back to where it began (level, for the next lap)", loops);
-  check("the same seed builds the same road", same);
-  check("roads have bends and hills", m.buildTrack(7).segs.some((s) => s.curve !== 0) && m.buildTrack(7).segs.some((s) => s.y1 !== 0));
-  console.log(`      laps are ${Math.min(...lengths)}–${Math.max(...lengths)} segments`);
-}
-
-// ── driving ──────────────────────────────────────────────────────────────────
-// a driver that holds the middle of the road against the bends
-const steerFor = (t, car) => Math.max(-1, Math.min(1, -car.x * 3 + m.segAt(t, car.d).curve * 0.15));
-{
-  const t = m.buildTrack(3);
-  const car = m.newCar(0);
-  m.drive(t, car, { steer: 0 }, DT, false);
-  check("before the lights: nothing moves", car.speed === 0 && car.d === m.newCar(0).d);
-  let elapsed = 0, lap2At = null;
-  while (car.finishedAt === null && elapsed < 300) {
-    m.drive(t, car, { steer: steerFor(t, car) }, DT, true, [], elapsed);
-    elapsed += DT;
-    if (lap2At === null && m.lapOf(t, car.d) === 2) lap2At = elapsed;
+  check(`${secs / 60} min, ${laps} laps: the computer finishes with time to spare`, fin.length === 4, `slowest ${fin.length === 4 ? (fin[3].finAt).toFixed(0) + "s" : "didn't finish"}`);
+  if (secs === 120) {
+    const order = cars.map((c) => placeOf(c, cars)).sort();
+    check("places are 1 2 3 4", order.join() === "1,2,3,4");
+    const s = cars.map((c) => raceScore(c, laps, secs));
+    check("the first across the line scores most", s[cars.indexOf(fin[0])] === Math.max(...s) && Math.max(...s) < 25000, s.join(" "));
   }
-  check("laps count", lap2At !== null && m.lapOf(t, car.d) === 3);
-  check("three laps on the racing line inside two minutes", car.finishedAt !== null && car.finishedAt < 110, `${car.finishedAt && car.finishedAt.toFixed(1)}s (lap one ${lap2At && lap2At.toFixed(1)}s)`);
-  const at = car.finishedAt, d0 = car.d;
-  for (let i = 0; i < 120; i++) m.drive(t, car, { steer: 0 }, DT, true, [], elapsed + i * DT);
-  check("across the line: your time stands, and you roll to a stop", car.finishedAt === at && car.d >= d0 && car.speed < m.MAX_SPEED * 0.2);
-
-  // the grass is slow
-  const a = m.newCar(0), b = m.newCar(0);
-  for (let i = 0; i < 400; i++) { m.drive(t, a, { steer: steerFor(t, a) }, DT, true); m.drive(t, b, { steer: 1 }, DT, true); }
-  check("drive onto the grass and you slow right down", Math.abs(b.x) > 1 && b.speed <= m.OFF_ROAD_LIMIT * 1.2 && a.speed > b.speed * 2);
-  // the bends push you out
-  const c = m.newCar(0);
-  c.d = t.segs.find((s) => Math.abs(s.curve) >= 3).z1;
-  c.speed = m.MAX_SPEED;
-  const x0 = c.x;
-  for (let i = 0; i < 30; i++) m.drive(t, c, { steer: 0 }, DT, true);
-  check("a bend pushes you towards the outside if you don't steer", Math.abs(c.x - x0) > 0.05);
-  // into the back of someone
-  const d = m.newCar(0); d.speed = m.MAX_SPEED * 0.9; d.d = 5000; d.x = 0;
-  const other = { d: 5000 + m.SEG * 0.5, x: 0 };
-  const r = m.drive(t, d, { steer: 0 }, DT, true, [other]);
-  check("drive into the back of a car: you lose speed", r.bumped && d.speed < m.MAX_SPEED * 0.6);
-  const e = m.newCar(0); e.speed = m.MAX_SPEED * 0.9; e.d = 5000; e.x = 0.6;
-  check("…but you can pass beside it", !m.drive(t, e, { steer: 0 }, DT, true, [other]).bumped);
 }
-
-// ── booster pads: turbo by itself ──────────────────────────────────────────
 {
-  const t = m.buildTrack(3);
-  check("booster pads round the lap, each in a lane, the same for everyone", t.pads.length === m.PADS && t.pads.every((p) => [-0.55, 0, 0.55].includes(p.x)) && JSON.stringify(m.buildTrack(3).pads) === JSON.stringify(t.pads));
-  check("…and adding them changed no road", JSON.stringify(m.buildTrack(3).segs) === JSON.stringify(t.segs));
-  const p = t.pads[0];
-  const over = (car, x) => { let got = false; for (let i = 0; i < 30; i++) { car.x = x; if (m.drive(t, car, { steer: 0 }, DT, true).boosted) got = true; } return got; };
-  const a = m.newCar(0); a.d = p.z - 300; a.speed = m.MAX_SPEED;
-  check("a car starts with no boost", !a.boosting && !a.boostT);
-  check("over a booster pad: it boosts by itself, no button", over(a, p.x) && a.boosting && a.boostT > 0);
-  for (let i = 0; i < 40; i++) { a.x = p.x; m.drive(t, a, { steer: 0 }, DT, true); }
-  check("…past top speed", a.speed > m.MAX_SPEED * 1.1, `${(a.speed / m.MAX_SPEED).toFixed(2)}x`);
-  const b = m.newCar(1); b.d = p.z - 300; b.speed = m.MAX_SPEED * 0.8;
-  check("…and the pad is still there for the next car", over(b, p.x));
-  const c = m.newCar(0); c.d = p.z - 300; c.speed = m.MAX_SPEED * 0.8;
-  check("…but not if you're in another lane", !over(c, p.x === 0 ? 0.55 : 0));
-  const e = m.newCar(0); e.d = p.z - 300 + t.LAP; e.speed = m.MAX_SPEED * 0.8;
-  check("…and once round the lap, it's yours again", over(e, p.x));
+  const a = makeCar(T, 0), b = makeCar(T, 1);
+  a.prog = M + 300; b.prog = M + 200;
+  check("still racing: further round is ahead", placeOf(a, [a, b]) === 1 && raceScore(a, 3, 120) > raceScore(b, 3, 120));
+  b.finAt = 90; b.prog = 4 * M;
+  check("finished beats still racing", placeOf(b, [a, b]) === 1 && raceScore(b, 3, 120) > raceScore(a, 3, 120));
+  check("8 laps, finished in good time: under the 25,000 cap", raceScore({ prog: 9 * M, finAt: 30 }, 8, 300) < 25000);
 }
 
-// ── a boost ends ─────────────────────────────────────────────────────────────
-{
-  const t = { ...m.buildTrack(3), pads: [] };
-  const car = m.newCar(0); car.d = 2000; car.x = 0; car.speed = m.MAX_SPEED; car.boostT = m.BOOST_S;
-  for (let i = 0; i < 30; i++) { m.drive(t, car, { steer: 0 }, DT, true); car.x = 0; }
-  check("boosting: past top speed", car.boosting && car.speed > m.MAX_SPEED * 1.05);
-  for (let i = 0; i < 60 * (m.BOOST_S + 1.5); i++) { m.drive(t, car, { steer: 0 }, DT, true); car.x = 0; }
-  check("…after BOOST_S it ends, and you ease back to top speed", !car.boosting && car.speed <= m.MAX_SPEED * 1.02, `${(car.speed / m.MAX_SPEED).toFixed(2)}x`);
-  const g = m.newCar(0); g.d = 2000; g.x = 1.6; g.speed = m.MAX_SPEED * 0.5; g.boostT = 1;
-  m.drive(t, g, { steer: 0 }, DT, true);
-  check("no boost on the grass", !g.boosting);
-}
-
-// ── score and places ─────────────────────────────────────────────────────────
-{
-  const t = m.buildTrack(9);
-  const first = { d: m.LAPS * t.LAP, finishedAt: 70 }, second = { d: m.LAPS * t.LAP, finishedAt: 80 };
-  const racing = { d: 2.9 * t.LAP, finishedAt: null }, behind = { d: 1.2 * t.LAP, finishedAt: null };
-  const all = [behind, second, racing, first];
-  check("places: first across the line is first, then second, then by how far", m.placeOf(first, all) === 1 && m.placeOf(second, all) === 2 && m.placeOf(racing, all) === 3 && m.placeOf(behind, all) === 4);
-  const sc = (c) => m.raceScore(t, c, 120);
-  check("scores rank the same way", sc(first) > sc(second) && sc(second) > sc(racing) && sc(racing) > sc(behind), [first, second, racing, behind].map(sc).join(" > "));
-  check("…and stay under the score cap", m.raceScore(t, { d: m.LAPS * t.LAP, finishedAt: 0 }, 300) <= 25000);
-}
-
-// ── racing the computer ──────────────────────────────────────────────────────
-{
-  const t = m.buildTrack(4);
-  const me = m.newCar(0), bots = m.newBots(4, 3, 1);
-  let elapsed = 0;
-  while (elapsed < 120 && bots.some((b) => b.finishedAt === null)) {
-    for (const b of bots) m.driveBot(t, b, DT, true, [me, ...bots.filter((o) => o !== b)], elapsed);
-    elapsed += DT;
-  }
-  check("the computer's cars finish the race in under two minutes", bots.every((b) => b.finishedAt !== null && b.finishedAt < 120), bots.map((b) => b.finishedAt && b.finishedAt.toFixed(1)).join(", "));
-  check("…at different paces", new Set(bots.map((b) => Math.round(b.finishedAt))).size === 3);
-  check("…and stay on the road", bots.every((b) => Math.abs(b.x) < 1.2));
-}
-
-fs.rmSync(dir, { recursive: true, force: true });
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
 process.exit(fails ? 1 : 0);

@@ -125,16 +125,21 @@ function initSocket(httpServer) {
     });
 
     // Speedway: where my car is, ~10 times a second, so everyone in the room
-    // sees everyone else's car on the same road. Ephemeral like room:live —
-    // the score sync is still what the result is built from — and the
-    // sender is their verified token, never the payload.
+    // sees everyone else's car on the same track — where, which way, how fast,
+    // and whether it's drifting (lv: the charge, 0-3) or boosting, so it's
+    // drawn sliding and flaming like the real thing. Ephemeral like
+    // room:live — the score sync is still what the result is built from —
+    // and the sender is their verified token, never the payload.
     socket.on("race:pos", (msg) => {
       const code = msg && msg.code;
       if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
       const n = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
       socket.to(roomChannel(code)).emit("race:pos", {
         user_id: uid,
-        d: n(msg.d, -1e6, 1e8), x: n(msg.x, -3, 3), s: n(msg.s, 0, 1e5),
+        px: n(msg.px, -1e5, 1e5), py: n(msg.py, -1e5, 1e5), a: n(msg.a, -1e4, 1e4),
+        vx: n(msg.vx, -2000, 2000), vy: n(msg.vy, -2000, 2000), p: Math.floor(n(msg.p, -1e4, 1e5)),
+        dr: msg.dr ? 1 : 0, sl: msg.sl ? 1 : 0, lv: Math.floor(n(msg.lv, 0, 3)), b: n(msg.b, 0, 5), bm: n(msg.bm, 0, 5),
+        st: n(msg.st, -1, 1), br: msg.br ? 1 : 0,
         f: msg.f === null || msg.f === undefined ? null : n(msg.f, 0, 1e4),
       });
     });

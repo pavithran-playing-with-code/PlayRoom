@@ -111,9 +111,9 @@ export const HOW_TO = {
   },
   speedway: {
     name: "Speedway",
-    goal: "Win the 3-lap race.",
-    steps: ["Tilt the phone like a wheel, hold either side of the road, or use ◀ ▶ to steer.", "Drive over a glowing ⚡ pad and you boost by yourself — no button.", "The map in the corner shows where every car is."],
-    tip: "Stay off the grass — it's slow, and turbo won't work there.",
+    goal: "Win the race — 3 laps, 5 on a 3–4 minute clock, 8 on 5 minutes.",
+    steps: ["◀ ▶ steer, BRK brakes — the pedal's down by itself (keys: W A S D or the arrows).", "Hold DRIFT through a bend: sparks go white, blue, orange, purple. Let go to boost — the longer the drift, the bigger it is.", "Yellow pads on the road boost you too. The map bottom-right shows every car."],
+    tip: "Stay off the grass and away from the wall — both cost you speed.",
   },
   storm: {
     name: "Dodge Storm",

@@ -166,7 +166,7 @@ export const GAMES = [
   },
   {
     slug: "speedway", name: "Speedway", icon: "🏁",
-    blurb: "Three laps, one road, everyone on it at once. First across the line wins.",
+    blurb: "Top-down drift racing. Slide the corners to charge a boost — first across the line wins.",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--sky)",
     Component: Speedway,
   },

@@ -15,7 +15,7 @@ import Pipes from "./Pipes";
 import FlappyDash from "./FlappyDash";
 import SlidePuzzle from "./SlidePuzzle";
 import BlockDrop from "./BlockDrop";
-import TurboRacer from "./TurboRacer";
+import RoadHopper from "./RoadHopper";
 import RailRunner from "./RailRunner";
 import Speedway from "./Speedway";
 import DodgeStorm from "./DodgeStorm";
@@ -127,10 +127,12 @@ export const GAMES = [
     Component: BlockDrop,
   },
   {
-    slug: "racer", name: "Turbo Racer", icon: "🏎️",
-    blurb: "Swerve through the traffic, grab the coins, never slow down.",
+    // the "racer" slot: Turbo Racer once, now Road Hopper (the slug stays, so
+    // old rooms and results still line up)
+    slug: "racer", name: "Road Hopper", icon: "🐔",
+    blurb: "Hop across roads, rivers and railways — how far can you get?",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--slate)",
-    Component: TurboRacer,
+    Component: RoadHopper,
   },
   {
     slug: "runner", name: "Rail Runner", icon: "🏃",

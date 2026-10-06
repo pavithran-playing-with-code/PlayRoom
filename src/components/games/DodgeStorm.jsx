@@ -107,7 +107,7 @@ export default function DodgeStorm(props) {
   const bits = useRef([]);
   const shake = useRef(0);
   const keys = useRef({});
-  // Every finished run's score, kept aside — see TurboRacer for why.
+  // Every finished run's score, kept aside, so a hit never takes away what was won.
   const banked = useRef(0);
   const overRef = useRef(false);
   useEffect(() => { overRef.current = eng.gameOver; }, [eng.gameOver]);
@@ -171,7 +171,7 @@ export default function DodgeStorm(props) {
           const run = ++runRef.current;
           timers.current.push(setTimeout(() => {
             if (overRef.current || runRef.current !== run) return;
-            // Banked here rather than at the hit — see TurboRacer.
+            // Banked here rather than at the hit.
             banked.current = Math.max(0, banked.current + totalScore(sim.current) - HIT_COST);
             sim.current = newStorm((Number(seed) || 1) + run * 613);
             setMsg({ text: "Again!", type: "info" });

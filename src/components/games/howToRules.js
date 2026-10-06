@@ -97,10 +97,10 @@ export const HOW_TO = {
     tip: "Keep a space free for the big pieces.",
   },
   racer: {
-    name: "Turbo Racer",
-    goal: "Dodge the traffic and grab the coins.",
-    steps: ["Swipe, tap a side of the road, or use the buttons to change lane.", "Coins are worth swerving for.", "A crash costs a few points — you keep the rest."],
-    tip: "The road speeds up — watch further ahead.",
+    name: "Road Hopper",
+    goal: "Hop as far as you can across roads, rivers and railways.",
+    steps: ["Tap to hop forward. Swipe left, right or down to hop that way.", "Roads: wait for a gap in the cars. Rivers: hop on the logs — the water's deadly.", "Railways: when the red light flashes, a train is coming!", "Don't hang about — fall too far behind and the eagle gets you."],
+    tip: "10 points a row, 25 a coin. A crash puts you back a few rows — keep going.",
   },
   runner: {
     name: "Rail Runner",

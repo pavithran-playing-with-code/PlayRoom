@@ -866,6 +866,10 @@ input::-ms-reveal,input::-ms-clear{display:none}
 
 /* ── Rail Runner (.rr-) and Speedway (.sw-) ──────────────────────────────────
    The whole board takes swipes / holds, so it never scrolls under a thumb. */
+.rh-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;touch-action:none;
+  user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.rh-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
+.rh-help{font-size:.78rem;text-align:center}
 .rr-pad,.sw-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .rr-canvas,.sw-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}

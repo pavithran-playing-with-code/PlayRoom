@@ -59,6 +59,27 @@ for (const [charge, want] of [[0.5, 0], [1.2, 0.6], [2.2, 1.1], [3.2, 1.6]]) {
   const got = stepCar(T, c, { thr: 1, brk: 0, str: 0.5, dr: 0 }, dt).boosted;
   check(`drift to charge ${charge}, let go: boost ${want ? want + " s" : "none"}`, still && got === want, `got ${got} after ${t.toFixed(1)}s`);
 }
+// A thumb is always full lock: once the drift is on, Speedway.jsx steers at
+// DRIFT_STEER (0.55). Full lock spins out before a boost charges; 0.55 holds
+// a long slide, charges the big boosts, and still turns fast enough for the
+// track's tightest bend (radius 175 at ~400 px/s).
+for (const [steer, wantLong] of [[1, false], [0.55, true]]) {
+  const c = makeCar(T, 0);
+  drive(c, { thr: 1, brk: 0, str: 0, dr: 0 }, 3, false);
+  let firstEnd = null, maxC = 0, turn = 0, vsum = 0, n = 0, prev = null;
+  for (let t = 0; t < 3; t += dt) {
+    const dr = t > 0.28 ? 1 : 0;
+    stepCar(T, c, { thr: 1, brk: 0, str: dr ? steer : 1, dr }, dt);
+    if (dr && t > 0.35 && !c.drifting && firstEnd === null) firstEnd = t;
+    maxC = Math.max(maxC, c.charge);
+    const h = Math.atan2(c.vy, c.vx);
+    if (t > 1 && prev !== null) { let d = h - prev; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; turn += d; vsum += Math.hypot(c.vx, c.vy); n++; }
+    prev = h;
+  }
+  const radius = (vsum / n) / (Math.abs(turn) / (n * dt));        // the circle the car's path traces
+  if (wantLong) check("thumb drift (steer 0.55): a long slide, a big boost, a circle tight enough for the bends", firstEnd === null && maxC > 1.7 && radius < 260, `charge ${maxC.toFixed(1)}, circle radius ${radius.toFixed(0)}`);
+  else check("full lock in a drift spins out within a second (why the thumb drift eases off)", firstEnd !== null && firstEnd < 1.2, `slide ended at ${firstEnd && firstEnd.toFixed(2)}s`);
+}
 {
   const a = makeCar(T, 0), b = makeCar(T, 0);
   drive(a, { thr: 1, brk: 0, str: 0, dr: 0 }, 2, false); drive(b, { thr: 1, brk: 0, str: 0, dr: 0 }, 2, false);

@@ -112,7 +112,7 @@ export const HOW_TO = {
   speedway: {
     name: "Speedway",
     goal: "Win the race — 3 laps, 5 on a 3–4 minute clock, 8 on 5 minutes.",
-    steps: ["◀ ▶ steer, BRK brakes — the pedal's down by itself (keys: W A S D or the arrows).", "Hold DRIFT through a bend: sparks go white, blue, orange, purple. Let go to boost — the longer the drift, the bigger it is.", "Yellow pads on the road boost you too. The map bottom-right shows every car."],
+    steps: ["Hold the left half of the screen to steer left, the right half to steer right. The pedal's down by itself.", "Keep holding through a bend and you drift: sparks go white, blue, orange, purple. Let go to boost — the longer the drift, the bigger.", "Both halves at once: brake. Yellow pads on the road boost you too.", "Keyboard: W A S D or the arrows, Shift or Space to drift."],
     tip: "Stay off the grass and away from the wall — both cost you speed.",
   },
   storm: {

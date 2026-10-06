@@ -16,23 +16,36 @@
 // across the line wins; if the clock runs out first, whoever got furthest.
 //
 // The rules are driftSim.js. This file draws, plays the sounds and reads keys
-// (W/↑ go, S/↓ brake, A D/← → steer, Shift/Space drift) and thumbs (◀ ▶ on
-// the left, BRK and DRIFT on the right; the pedal's down by itself).
+// (W/↑ go, S/↓ brake, A D/← → steer, Shift/Space drift) and thumbs.
+//
+// Thumbs: one job each. The left half of the screen steers left, the right
+// half steers right — the whole half is the button, so you never have to look
+// for it. Keep holding through a bend at speed and the car drifts by itself,
+// charging a boost; let go and it fires. Both halves at once is the brake.
+// (Separate DRIFT and BRAKE buttons would need a third thumb: the one on ▶
+// can't also be on DRIFT.) The pedal is down by itself.
 //
 // A landscape game (GameFrame): on a phone held upright the frame is drawn
-// turned, and the thumb buttons float over the bottom corners of the track
-// like a phone racing game — so the map sits top right, out of their way.
+// turned, and a touch is turned back (toGame) before it's read — so "left
+// half" is always the left half of the track as the player sees it.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import { useSocket } from "../../utils/SocketContext";
+import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
 import {
   buildTrack, trackCode, lapsFor, makeCar, stepCar, carFx, trackUpdate, wallHit, bump, aiInput, checkStuck,
   raceScore, placeOf, padHit, chargeLevel, clamp, ad, HALF, CURB, WALL, START_S, KMH, COLORS,
 } from "./driftSim.js";
 
 const SEND_MS = 100;
+const DRIFT_HOLD_MS = 280;                            // hold a side this long (at speed) and it's a drift, not a tap
+// A thumb on the screen is always full lock, and full lock in a drift spins
+// the car round in under a second, before any boost has charged. So once the
+// drift is on, a held side steers at this much: a long sweeping slide that
+// still makes the tightest bend (check-speedway.mjs drives it).
+const DRIFT_STEER = 0.55;
 const TAU = Math.PI * 2;
 const DISPLAY = "Bungee, Impact, sans-serif";
 const BODY = "'Barlow Condensed', 'Arial Narrow', Arial, sans-serif";
@@ -307,7 +320,12 @@ export default function Speedway(props) {
   const keys = useRef({});
   // a phone: thumb buttons from the start, the pedal down by itself (as in Turbo Drift)
   const coarse = typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer:coarse)").matches;
-  const touch = useRef({ on: coarse, l: 0, r: 0, b: 0, d: 0 });
+  const touch = useRef({ on: coarse, l: 0, r: 0, lSince: 0, rSince: 0 });
+  const holds = useRef(new Map());                    // finger -> "l" | "r"
+  const zoneL = useRef(null), zoneR = useRef(null);
+  const upright = useUprightTouch();
+  const rot = useRef(upright);
+  rot.current = upright;
   const [touchUi, setTouchUi] = useState(coarse);
   const [muted, setMuted] = useState(false);
   const audio = useRef(null);
@@ -324,7 +342,7 @@ export default function Speedway(props) {
     if (startedAt && serverNow) { const g = (new Date(serverNow).getTime() - new Date(startedAt).getTime()) / 1000; if (Number.isFinite(g)) gone = clamp(g, 0, durationSeconds); }
     anchor.current = performance.now() - gone * 1000;
   }
-  const [hud, setHud] = useState({ place: 1, of: 1, lap: 1, finished: false, finPlace: 0 });
+  const [hud, setHud] = useState({ place: 1, of: 1, lap: 1, finished: false, finPlace: 0, hint: true });
 
   // everyone else's cars, from the room
   useEffect(() => {
@@ -373,7 +391,15 @@ export default function Speedway(props) {
     let str = (any("KeyD", "ArrowRight") ? 1 : 0) - (any("KeyA", "ArrowLeft") ? 1 : 0);
     let dr = any("ShiftLeft", "ShiftRight", "Space") ? 1 : 0;
     const t = touch.current;
-    if (t.on) { thr = 1; str += (t.r ? 1 : 0) - (t.l ? 1 : 0); if (t.d) dr = 1; if (t.b) { thr = 0; brk = 1; } }
+    if (t.on) {
+      if (t.l && t.r) { thr = 0; brk = 1; }                       // both thumbs down: brake
+      else {
+        thr = 1;
+        str += (t.r ? 1 : 0) - (t.l ? 1 : 0);
+        const since = t.l ? t.lSince : t.r ? t.rSince : 0;
+        if ((t.l || t.r) && performance.now() - since > DRIFT_HOLD_MS) { dr = 1; str = Math.sign(str) * DRIFT_STEER; }   // held: drift
+      }
+    }
     return { thr, brk, str: clamp(str, -1, 1), dr };
   };
 
@@ -563,8 +589,9 @@ export default function Speedway(props) {
       }
       if (now - lastHud > 250) {
         lastHud = now;
-        setHud((hh) => (hh.place === place && hh.of === all.length && hh.lap === car.lap && hh.finished === car.finished ? hh
-          : { place, of: all.length, lap: car.lap, finished: car.finished, finPlace }));
+        const hint = elapsed < START_S + 5;
+        setHud((hh) => (hh.place === place && hh.of === all.length && hh.lap === car.lap && hh.finished === car.finished && hh.hint === hint ? hh
+          : { place, of: all.length, lap: car.lap, finished: car.finished, finPlace, hint }));
       }
       raf = requestAnimationFrame(frame);
     };
@@ -572,22 +599,41 @@ export default function Speedway(props) {
     return () => cancelAnimationFrame(raf);
   }, [isSpectator, addScore, socket, roomCode, T, code, laps, durationSeconds]);
 
-  // thumbs
-  const hold = (k, label, aria, cls = "") => (
-    <button className={`sw-tbtn${cls}`} aria-label={aria} data-k={k}
-      onPointerDown={(e) => { e.preventDefault(); audio.current.init(); touch.current.on = true; touch.current[k] = 1; e.currentTarget.classList.add("on"); }}
-      onPointerUp={(e) => { touch.current[k] = 0; e.currentTarget.classList.remove("on"); }}
-      onPointerCancel={(e) => { touch.current[k] = 0; e.currentTarget.classList.remove("on"); }}
-      onPointerLeave={(e) => { touch.current[k] = 0; e.currentTarget.classList.remove("on"); }}
-      onContextMenu={(e) => e.preventDefault()}>{label}</button>
-  );
-  // thumbs: steering under the left, brake and a big drift under the right
-  const controls = !isSpectator && touchUi ? (
-    <div className="sw-touch">
-      <div className="sw-grp">{hold("l", "◀", "Steer left")}{hold("r", "▶", "Steer right")}</div>
-      <div className="sw-grp sw-act">{hold("b", "BRK", "Brake", " sm")}{hold("d", "DRIFT", "Drift", " sm big")}</div>
-    </div>
-  ) : null;
+  // ── thumbs: the two halves of the track ──────────────────────────────────
+  // Which fingers are down where -> left / right / both, and since when (a
+  // side newly held, or coming out of a brake, starts its drift wait again).
+  const sync = () => {
+    const t = touch.current, now = performance.now(), v = [...holds.current.values()];
+    const l = v.includes("l"), r = v.includes("r");
+    if (l && !t.l) t.lSince = now;
+    if (r && !t.r) t.rSince = now;
+    if (l && r) { t.lSince = now; t.rSince = now; }
+    t.l = l; t.r = r;
+    if (zoneL.current) { zoneL.current.classList.toggle("on", l && !r); zoneL.current.classList.toggle("brk", l && r); }
+    if (zoneR.current) { zoneR.current.classList.toggle("on", r && !l); zoneR.current.classList.toggle("brk", l && r); }
+  };
+  const sideOf = (e, el) => {
+    const box = gameRect(el, rot.current), at = toGame(e, rot.current);
+    return at.x - box.left < box.width / 2 ? "l" : "r";
+  };
+  const padDown = (e) => {
+    audio.current.init();
+    if (e.pointerType === "mouse" || e.target.closest(".sw-mute")) return;   // a mouse drives with the keys
+    e.preventDefault();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not supported */ }
+    if (!touch.current.on || !touchUi) { touch.current.on = true; setTouchUi(true); }
+    holds.current.set(e.pointerId, sideOf(e, e.currentTarget));
+    sync();
+  };
+  const padMove = (e) => {
+    if (!holds.current.has(e.pointerId)) return;
+    const side = sideOf(e, e.currentTarget);                   // a thumb slid across the middle
+    if (side !== holds.current.get(e.pointerId)) { holds.current.set(e.pointerId, side); sync(); }
+  };
+  const padUp = (e) => {
+    if (!holds.current.delete(e.pointerId)) return;
+    sync();
+  };
 
   return (
     <>
@@ -600,7 +646,6 @@ export default function Speedway(props) {
         opponents={Object.values(eng.opponents)}
         teams={eng.teams}
         onQuit={eng.endMatch}
-        controls={controls}
         landscape
       >
         {({ w, h }) => {
@@ -610,10 +655,22 @@ export default function Speedway(props) {
           size.current = { w, h };
           return (
             <div className="sw-pad" style={{ width: w, height: h }}
-              onPointerDown={(e) => { audio.current.init(); if (e.pointerType === "touch" && !touchUi) { touch.current.on = true; setTouchUi(true); } }}
+              onPointerDown={padDown} onPointerMove={padMove} onPointerUp={padUp} onPointerCancel={padUp}
               onContextMenu={(e) => e.preventDefault()}>
               <canvas ref={canvasRef} className="sw-canvas" style={{ width: w, height: h }}
-                role="img" aria-label={`Speedway: ${laps} laps, drift to charge a boost`} />
+                role="img" aria-label={`Speedway: ${laps} laps — hold the left or right half to steer, keep holding to drift`} />
+              {touchUi && (
+                <>
+                  {/* where to press: each half of the track, marked in its bottom corner */}
+                  <div ref={zoneL} className="sw-zone l" aria-hidden="true"><span>◀</span></div>
+                  <div ref={zoneR} className="sw-zone r" aria-hidden="true"><span>▶</span></div>
+                  {hud.hint && (
+                    <div className="sw-hint" aria-hidden="true">
+                      <b>Hold left / right</b> to steer · <b>keep holding</b> to drift · <b>let go</b> = boost · <b>both</b> = brake
+                    </div>
+                  )}
+                </>
+              )}
               <div className="sw-top">
                 <button type="button" className="sw-mute" aria-label={muted ? "Sound on" : "Sound off"} aria-pressed={muted}
                   onClick={() => { audio.current.init(); setMuted((m) => !m); }}>{muted ? "✕" : "♪"}</button>

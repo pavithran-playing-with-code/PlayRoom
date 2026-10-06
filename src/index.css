@@ -1292,16 +1292,16 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .sw-mute{width:44px;height:36px;font:700 16px 'Barlow Condensed','Arial Narrow',Arial,sans-serif;color:#f4efe6;
   background:rgba(15,20,27,.7);border:2px solid #2a3442;cursor:pointer}
 .sw-mute:focus-visible,.sw-tbtn:focus-visible{outline:3px solid #37c8e6;outline-offset:2px}
-.sw-touch{display:flex;justify-content:space-between;align-items:flex-end;width:100%;gap:12px}
-.sw-grp{display:flex;gap:14px;align-items:flex-end}
-.sw-tbtn{width:72px;height:72px;border-radius:50%;border:3px solid rgba(255,255,255,.6);background:rgba(15,20,27,.55);color:#fff;
-  font:700 28px 'Barlow Condensed','Arial Narrow',Arial,sans-serif;touch-action:none;-webkit-tap-highlight-color:transparent;
-  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
-  display:grid;place-items:center;padding:0;cursor:pointer}
-.sw-tbtn.sm{font:400 13px Bungee,Impact,sans-serif;width:60px;height:60px}
-.sw-tbtn.big{width:84px;height:84px;font-size:15px;border-color:rgba(255,200,61,.85)}
-.sw-tbtn.on{background:#ff5d3b;border-color:#fff;transform:scale(.94)}
-.sw-tbtn.big.on{background:#ffc83d;color:#1a1200}
-.gameshell.land .sw-tbtn{width:78px;height:78px}
-.gameshell.land .sw-tbtn.sm{width:62px;height:62px}
-.gameshell.land .sw-tbtn.big{width:92px;height:92px}
+/* the two halves of the track are the steering: a mark in each bottom corner
+   that lights up while held, red on both when braking */
+.sw-zone{position:absolute;bottom:12px;width:76px;height:76px;border-radius:50%;display:grid;place-items:center;
+  border:3px solid rgba(255,255,255,.5);background:rgba(15,20,27,.4);color:rgba(255,255,255,.85);
+  font:700 30px 'Barlow Condensed','Arial Narrow',Arial,sans-serif;pointer-events:none;transition:transform .08s,background .08s}
+.sw-zone.l{left:12px}
+.sw-zone.r{right:12px}
+.sw-zone.on{background:#ff5d3b;border-color:#fff;color:#fff;transform:scale(1.08)}
+.sw-zone.brk{background:#e0452c;border-color:#ffc83d;color:#fff}
+.sw-hint{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 200px);
+  padding:6px 12px;background:rgba(15,20,27,.78);border:2px solid #2a3442;color:#f4efe6;text-align:center;
+  font:500 15px/1.2 'Barlow Condensed','Arial Narrow',Arial,sans-serif;pointer-events:none}
+.sw-hint b{color:#ffc83d;font-weight:700}

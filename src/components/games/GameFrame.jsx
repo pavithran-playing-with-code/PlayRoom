@@ -45,6 +45,10 @@ export default function GameFrame({
   controls = null,            // node
   onQuit,
   landscape = false,          // a sideways game: see Sideways below
+  bare = false,               // full screen, like a phone game: no header bar or
+                              // strip — the clock, ?, Leave (and `floatExtra`)
+                              // float over the top of the game instead
+  floatExtra = null,          // node: more buttons for that floating row
   children,                   // node, or ({ w, h }) => node
 }) {
   const msgFill = { success: "var(--lime)", error: "var(--coral)", info: "var(--sky)" };
@@ -87,10 +91,21 @@ export default function GameFrame({
   const [help, setHelp] = useState(false);          // the ? card: how to play
 
   return (
-    <div className={`gameshell${landscape ? " land" : ""}`}>
+    <div className={`gameshell${landscape ? " land" : ""}${bare ? " bare" : ""}`}>
       {landscape && <Sideways />}
+      {/* Full screen: the clock and the buttons float over the game */}
+      {bare && (
+        <div className="gf-float">
+          {timer && (
+            <span className={`gf-clock${timer.value <= 20 ? " low" : ""}`} aria-label="Time left">⏱ {clock(timer.value)}</span>
+          )}
+          {floatExtra}
+          {howToFor(gameName) && <button type="button" className="gf-btn" onClick={() => setHelp(true)} aria-label="How to play">?</button>}
+          <button type="button" className="gf-btn gf-leave" onClick={onQuit} aria-label="Leave">✕ Leave</button>
+        </div>
+      )}
       {/* Header: one row on a phone, roomier on bigger screens */}
-      <div className="gamebar">
+      {!bare && <div className="gamebar">
         <div className={`gb-id${isSpectator ? " keep" : ""}`}>
           <Logo size="sm" showText={false} />
           <span className="chip c-sun">
@@ -128,12 +143,12 @@ export default function GameFrame({
             <span className="gb-quit-ic">{isSpectator ? "← " : "🚪 "}</span>{isSpectator ? "Leave" : "Quit"}
           </button>
         </div>
-      </div>
+      </div>}
 
       {/* In a team room the sides come first: your own score matters, but the
           number that decides the match is your side's total. Sizes are shown
           because a bigger side is an advantage under a straight total. */}
-      {teams && teams.length > 0 && (
+      {!bare && teams && teams.length > 0 && (
         <div className="gamerow teamrow">
           {teams.map((t, i) => (
             <div key={t.team} className={`teamscore${t.mine ? " mine" : ""}`}
@@ -151,7 +166,7 @@ export default function GameFrame({
       )}
 
       {/* Opponent strip: a single row that swipes sideways on a phone */}
-      {opponents.length > 0 && (
+      {!bare && opponents.length > 0 && (
         <div className="gamerow">
           {opponents.map((p) => (
             <div key={p.user_id} className={`oppcard${p.col ? " mate" : ""}`} style={p.col ? { "--mate": p.col } : undefined}>

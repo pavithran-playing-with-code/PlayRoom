@@ -618,7 +618,7 @@ export default function Speedway(props) {
   };
   const padDown = (e) => {
     audio.current.init();
-    if (e.pointerType === "mouse" || e.target.closest(".sw-mute")) return;   // a mouse drives with the keys
+    if (e.pointerType === "mouse") return;                   // a mouse drives with the keys
     e.preventDefault();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not supported */ }
     if (!touch.current.on || !touchUi) { touch.current.on = true; setTouchUi(true); }
@@ -647,6 +647,11 @@ export default function Speedway(props) {
         teams={eng.teams}
         onQuit={eng.endMatch}
         landscape
+        bare
+        floatExtra={!isSpectator ? (
+          <button type="button" className="gf-btn" aria-label={muted ? "Sound on" : "Sound off"} aria-pressed={muted}
+            onClick={() => { audio.current.init(); setMuted((m) => !m); }}>{muted ? "✕ ♪" : "♪"}</button>
+        ) : null}
       >
         {({ w, h }) => {
           if (isSpectator) {
@@ -671,10 +676,6 @@ export default function Speedway(props) {
                   )}
                 </>
               )}
-              <div className="sw-top">
-                <button type="button" className="sw-mute" aria-label={muted ? "Sound on" : "Sound off"} aria-pressed={muted}
-                  onClick={() => { audio.current.init(); setMuted((m) => !m); }}>{muted ? "✕" : "♪"}</button>
-              </div>
             </div>
           );
         }}

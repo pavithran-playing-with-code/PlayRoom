@@ -488,6 +488,20 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
   animation:aePop .2s cubic-bezier(.34,1.7,.64,1)}
 .gameboard{position:relative;flex:1;min-height:0;display:flex;align-items:center;
   justify-content:center;overflow:hidden;padding:clamp(10px,2.2vw,26px)}
+/* full screen (bare): the game edge to edge, its clock and buttons floating on top */
+.gameshell.bare{background:#0f141b}
+.gameshell.bare .gameboard,.gameshell.land.bare .gameboard{padding:0}
+.gf-float{position:absolute;z-index:8;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);
+  display:flex;gap:6px;align-items:center;white-space:nowrap}
+.gf-clock,.gf-btn{height:34px;display:inline-flex;align-items:center;justify-content:center;padding:0 10px;min-width:40px;
+  border:2px solid #2a3442;background:rgba(15,20,27,.74);color:#f4efe6;font:700 17px 'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  letter-spacing:.04em;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.gf-btn{cursor:pointer;transform:skewX(-8deg)}
+.gf-btn:active{transform:skewX(-8deg) translateY(1px)}
+.gf-btn:focus-visible{outline:3px solid #37c8e6;outline-offset:2px}
+.gf-leave{color:#fff;background:rgba(224,69,44,.85);border-color:#e0452c}
+.gf-clock{font-variant-numeric:tabular-nums;min-width:68px}
+.gf-clock.low{color:#fff;background:rgba(224,69,44,.9);border-color:#ffc83d}
 .gamefoot{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;flex-shrink:0;
   padding:8px 16px;background:var(--card);border-top:3px solid var(--ink)}
 /* A landscape game: the controls float in the bottom corners, under the
@@ -513,7 +527,12 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
 .howto-box[open] summary{margin-bottom:8px}
 .howto-note{background:#fff}
 .howto-over{position:absolute;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:rgba(46,33,64,.55)}
-.howto-card{width:min(420px,100%);max-height:100%;overflow:auto;padding:16px 18px;background:#fff;display:grid;gap:12px}
+.howto-card{width:min(420px,100%);max-height:100%;overflow:hidden;padding:16px 18px;background:#fff;
+  display:flex;flex-direction:column;gap:12px}
+/* the rules scroll; "Got it" always stays in reach — on a sideways game held
+   upright the card is taller than the screen it's drawn on */
+.howto-card > :not(button){overflow:auto;min-height:0;flex:1 1 auto;-webkit-overflow-scrolling:touch}
+.howto-card > button{flex:none}
 .gameshell.land .gamefoot{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);z-index:6;
   background:transparent;border:0;padding:0 calc(14px + env(safe-area-inset-right,0px)) 0 calc(14px + env(safe-area-inset-left,0px));pointer-events:none}
 .gameshell.land .gamefoot > *{pointer-events:none;max-width:none}
@@ -1288,6 +1307,8 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .sw-pad{position:relative;background:#0f141b;border:3px solid var(--ink);border-radius:18px;overflow:hidden;
   box-shadow:0 5px 0 var(--ink);touch-action:none;user-select:none;-webkit-user-select:none;box-sizing:border-box}
 .sw-canvas{display:block;position:absolute;inset:0;touch-action:none}
+.gameshell.bare .sw-pad{border:0;border-radius:0;box-shadow:none}
+.gameshell.bare .muted{color:#9aa6b6}
 .sw-top{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:2}
 .sw-mute{width:44px;height:36px;font:700 16px 'Barlow Condensed','Arial Narrow',Arial,sans-serif;color:#f4efe6;
   background:rgba(15,20,27,.7);border:2px solid #2a3442;cursor:pointer}

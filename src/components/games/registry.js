@@ -46,12 +46,18 @@ export const GAMES = [
     slug: "mahjong", name: "Mahjong Solitaire", icon: "🀄",
     blurb: "Match free tiles and clear the board before the clock stops.",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--sun)",
+    coopMax: 4,
+    coopLabel: "one stack — take pairs together",
+    coopNote: "One stack for all of you. Pick a tile, and anyone can take it with its twin. Clear the stack together to win.",
     Component: MahjongGame,
   },
   {
     slug: "memory", name: "Memory Match", icon: "🃏",
     blurb: "Flip cards, remember pairs, race everyone else to the last one.",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--coral)",
+    coopMax: 4,
+    coopLabel: "one deck — find the pairs together",
+    coopNote: "One deck for all of you. Each of you turns one card at a time — turn the twin of anyone's card to make a pair. Clear the deck together to win.",
     Component: MemoryGame,
   },
   {
@@ -94,6 +100,9 @@ export const GAMES = [
     slug: "numbers", name: "Number Rush", icon: "🔢",
     blurb: "Tap 1, 2, 3… in order. Every grid you clear brings a bigger, busier one.",
     minPlayers: 1, maxPlayers: 8, tag: "Focus", col: "var(--ice)",
+    coopMax: 4,
+    coopLabel: "one grid — count together",
+    coopNote: "One grid for all of you. Whoever taps the next number moves everyone on. Clear 5 grids together to win.",
     Component: NumberRush,
   },
   {
@@ -106,6 +115,9 @@ export const GAMES = [
     slug: "pipes", name: "Pipes", icon: "🚰",
     blurb: "Turn the pipes until every one joins up to the source. No loose ends!",
     minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--pipe)",
+    coopMax: 4,
+    coopLabel: "one board — join the pipes together",
+    coopNote: "One board for all of you — anyone can turn any pipe. Join 3 boards together to win.",
     Component: Pipes,
   },
   {

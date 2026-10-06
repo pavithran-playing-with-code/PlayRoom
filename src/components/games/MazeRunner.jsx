@@ -353,7 +353,8 @@ export default function MazeRunner(props) {
       </GameFrame>
 
       {eng.gameOver && !isSpectator && (
-        <GameOver eng={eng} me={currentUser} extra={`Mazes solved: ${solved}`} />
+        <GameOver eng={eng} me={currentUser} extra={`${coop ? "Doors" : "Mazes solved"}: ${solved}`}
+          together={coop ? { reached: solved >= 1, goal: "through a door together" } : null} />
       )}
     </>
   );

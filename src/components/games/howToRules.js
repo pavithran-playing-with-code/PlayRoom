@@ -14,6 +14,7 @@ export const HOW_TO = {
       "Tap two tiles with the same picture to take them off.",
       "Only free tiles can be taken: nothing on top, and an open side to the left or right.",
       "Greyed tiles are stuck for now — take the ones around them first.",
+      "Together: one stack for everyone. Pick a tile, and anyone can take it with its twin.",
       "Clear the board for a big bonus and a fresh one.",
     ],
     tip: "💡 Hint shows a pair (costs points). 🔀 Shuffle if you're stuck.",
@@ -21,7 +22,7 @@ export const HOW_TO = {
   memory: {
     name: "Memory Match",
     goal: "Find all 10 pairs before the clock runs out.",
-    steps: ["Tap a card to turn it over, then another.", "Same picture: they stay up. Different: they turn back."],
+    steps: ["Tap a card to turn it over, then another.", "Same picture: they stay up. Different: they turn back.", "Together: one deck for everyone. Turn the twin of anyone's card to make a pair."],
     tip: "Remember where each picture was — the faster you finish, the more you score.",
   },
   speedmath: {
@@ -63,7 +64,7 @@ export const HOW_TO = {
   numbers: {
     name: "Number Rush",
     goal: "Tap the numbers in order, 1, 2, 3…",
-    steps: ["Find 1, then 2, then 3 — as fast as you can.", "Clear a grid and the next is bigger, with colours and tilted numbers to fool you."],
+    steps: ["Find 1, then 2, then 3 — as fast as you can.", "Clear a grid and the next is bigger, with colours and tilted numbers to fool you.", "Together: one grid — whoever taps the next number moves everyone on. Clear 5 grids to win."],
     tip: "Look ahead for the next number while you tap this one.",
   },
   colors: {
@@ -75,7 +76,7 @@ export const HOW_TO = {
   pipes: {
     name: "Pipes",
     goal: "Connect every pipe to the water.",
-    steps: ["Tap a tile to turn its pipe.", "Pipes joined to the source fill with water.", "Join them all with no loose ends to clear the board."],
+    steps: ["Tap a tile to turn its pipe.", "Pipes joined to the source fill with water.", "Join them all with no loose ends to clear the board.", "Together: one board — anyone can turn any pipe. Join 3 boards to win."],
     tip: "Start from the corners and edges — they can only turn so many ways.",
   },
   flappy: {

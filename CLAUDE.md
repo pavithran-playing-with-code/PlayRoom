@@ -144,6 +144,14 @@ There is no test runner. What works:
   own ball and sends `maze:pos` (maze, where, key taken, door reached);
   `config/socket.js` passes it on, and a phone that missed something catches
   up from the next message.
+- **Memory, Mahjong, Number Rush and Pipes together** share one board through
+  a move log: `config/coopBoard.js` numbers every move (`cb:act`) and keeps
+  the room's list; each phone plays the list through the rules in
+  `src/components/games/coopBoards.js` (`coopLog.js`, `useCoopBoard.js`), its
+  own moves shown at once and rebased when the server's order comes back.
+  Rules must be pure — no clock, no `Math.random`, never mutate the state.
+  `scripts/check-coop.mjs` proves crossed moves from three phones converge.
+  A side wins by reaching `COOP_GOAL` in `config/matchResult.js`.
 - **The together games run on the server** — Kitchen Rush, Bomb Blast,
   Tower Guard, Carrom: `config/togetherWorld.js` keeps a world per side (one each,
   per team, or one for a co-op room) on the rules in

@@ -38,7 +38,8 @@ export default function GameFrame({
   spectatorName = "",
   stats = [],                 // [{ label, value, urgent }]
   timer,                      // { value, max } seconds — renders the ring
-  opponents = [],             // [{ user_id, username, avatar, score }]
+  opponents = [],             // [{ user_id, username, avatar, score }] — or, together,
+                              // teammates with their own `label` and colour `col`
   teams = null,               // [{ team, total, members, mine }] in a team room, else null
   message = null,             // { text, type }
   controls = null,            // node
@@ -153,11 +154,11 @@ export default function GameFrame({
       {opponents.length > 0 && (
         <div className="gamerow">
           {opponents.map((p) => (
-            <div key={p.user_id} className="oppcard">
+            <div key={p.user_id} className={`oppcard${p.col ? " mate" : ""}`} style={p.col ? { "--mate": p.col } : undefined}>
               <Avatar emoji={p.avatar} size={compact ? 26 : 32} seed={p.user_id} />
               <div style={{ minWidth: 0 }}>
                 <div className="truncate opp-name">{p.username}</div>
-                <div className="muted opp-pts">{Number(p.score ?? 0).toLocaleString()} pts</div>
+                <div className="muted opp-pts">{p.label ?? `${Number(p.score ?? 0).toLocaleString()} pts`}</div>
               </div>
             </div>
           ))}

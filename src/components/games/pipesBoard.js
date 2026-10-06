@@ -7,7 +7,7 @@
 // turns them back.
 //
 // A tile's pipe is a 4-bit mask of the sides it opens onto.
-import { seededRand } from "./seededRand";
+import { seededRand } from "./seededRand.js";
 
 export const N = 1, E = 2, S = 4, W = 8;
 export const DIRS = [

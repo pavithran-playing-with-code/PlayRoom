@@ -285,6 +285,9 @@ app.set("io", io);
 // and so do the kitchens, bombs and castles of the together games.
 require("./config/manorWorld").attach(io);
 require("./config/togetherWorld").attach(io);
+// Memory, Mahjong, Number Rush and Pipes played together: one board, the
+// moves put in one order here (the phones know the rules).
+require("./config/coopBoard").attach(io);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Every game the app offers needs its row in game_types, or creating a room for

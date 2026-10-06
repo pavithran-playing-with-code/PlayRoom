@@ -13,6 +13,10 @@ const MAX_SCORE_PER_GAME = 25000;
 // Must match TOTAL_PAIRS in the game component — see src/components/MahjongGame.jsx.
 const OBJECTIVE_PAIRS = { mahjong: 24, memory: 10 };
 
+// Boards a together side has to clear for the match to be a win. Must match
+// GOAL in src/components/games/coopBoards.js (scripts/check-coop.mjs proves it).
+const COOP_GOAL = { maze: 1, memory: 1, mahjong: 1, numbers: 5, pipes: 3 };
+
 const cap = (n) => Math.max(0, Math.min(Number(n) || 0, MAX_SCORE_PER_GAME));
 
 /**
@@ -117,10 +121,12 @@ function resultsFor(room, seated) {
   if (TOGETHER_GAMES.has(room.game_slug)) return togetherResults(room, seated);
   const out = new Map();
 
-  // Maze Runner together: one side, one score. Through at least one door
-  // together is a win for everyone; none is a loss.
-  if (room.mode === "coop" && room.game_slug === "maze") {
-    const won = seated.some((p) => (Number(p.pairs_matched) || 0) >= 1);
+  // Played together on one board (Maze Runner, and Memory, Mahjong, Number
+  // Rush and Pipes — config/coopBoard.js): one side, one score, and
+  // pairs_matched is the boards the side has cleared. Reaching the game's
+  // goal is a win for everyone; short of it, a loss.
+  if (room.mode === "coop" && COOP_GOAL[room.game_slug]) {
+    const won = seated.some((p) => (Number(p.pairs_matched) || 0) >= COOP_GOAL[room.game_slug]);
     for (const p of seated) out.set(Number(p.user_id), won ? "win" : "loss");
     return out;
   }
@@ -146,4 +152,4 @@ function resultsFor(room, seated) {
   return out;
 }
 
-module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, ESCAPE_POINTS, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults, togetherResults, TOGETHER_GAMES };
+module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, COOP_GOAL, ESCAPE_POINTS, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults, togetherResults, TOGETHER_GAMES };

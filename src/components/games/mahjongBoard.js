@@ -84,14 +84,16 @@ export function deal(seed, types) {
 }
 
 // Stuck: every tile still on the table moved to a new place among the same
-// places, until there is a pair to take. Not seeded — only you are stuck.
-export function reshuffle(tiles, maxTries = 60) {
+// places, until there is a pair to take. Not seeded on your own — only you
+// are stuck; together, everybody shares the board, so the shuffle comes from
+// a number in the move (`rand`) and every phone shuffles it the same way.
+export function reshuffle(tiles, maxTries = 60, rand = Math.random) {
   const slots = [];
   for (let i = 0; i < tiles.length; i++) if (!tiles[i].matched) slots.push(i);
   if (slots.length < 2) return tiles;
   for (let attempt = 0; attempt < maxTries; attempt++) {
     const pool = slots.map((i) => tiles[i]);
-    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     const next = [...tiles];
     slots.forEach((idx, k) => { next[idx] = pool[k]; });
     if (findPair(next)) return next;

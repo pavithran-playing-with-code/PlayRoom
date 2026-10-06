@@ -7,6 +7,7 @@ const { verifyToken } = require("../middleware/auth");
 const { emitRoom, emitUser, tellFriends, isOnline } = require("../config/socket");
 const manor = require("../config/manorWorld");
 const together = require("../config/togetherWorld");
+const coopBoard = require("../config/coopBoard");
 
 // The match clock is server-authoritative and lives in config/matchClock.js:
 // the countdown a player sees is client-side, so it can be paused, slowed or
@@ -85,7 +86,9 @@ const MIN_TEAM_PLAYERS = MIN_PER_TEAM * 2;
 // Co-op: everyone on one side against the game itself. Only the games with a
 // side to be on — Hollow Manor and the together games (config/togetherWorld.js)
 // — and a world for more than four gets crowded.
-const COOP_GAMES = new Set([manor.GAME, ...together.COOP, "maze"]);   // maze: one maze, a key, a door (MazeRunner.jsx)
+// maze: one maze, a key, a door (MazeRunner.jsx); and the shared boards
+// (config/coopBoard.js): Memory, Mahjong, Number Rush, Pipes
+const COOP_GAMES = new Set([manor.GAME, ...together.COOP, "maze", ...coopBoard.GAMES]);
 // Carrom is played one against one or two against two — or alone against
 // the computer — so its rooms seat exactly 1, 2 or 4, and four means teams.
 const CARROM_SEATS = [1, 2, 4];

@@ -471,6 +471,8 @@ body.in-game input,body.in-game textarea{-webkit-user-select:text;user-select:te
 .oppcard{display:flex;align-items:center;gap:10px;flex:1;min-width:150px;
   padding:7px 12px;border:3px solid var(--ink);border-radius:var(--r);background:#fff;
   box-shadow:0 3px 0 var(--ink)}
+/* a teammate, in their colour (together boards) */
+.oppcard.mate{border-left:9px solid var(--mate)}
 .opp-name{font-size:.9rem}
 .opp-pts{font-size:.76rem}
 /* floats over the top of the board, so showing it never moves the board */
@@ -555,6 +557,10 @@ body.in-game input,body.in-game textarea{-webkit-user-select:text;user-select:te
   display:flex;align-items:center;justify-content:center;user-select:none;line-height:1;
   -webkit-tap-highlight-color:transparent;
   transition:transform .16s,box-shadow .16s,background .16s}
+
+/* together: the deck you've just cleared, before the next is dealt */
+.mem-cleared .memcard{animation:memWin .55s ease-out}
+@keyframes memWin{0%{transform:scale(1)}45%{transform:scale(1.07) rotate(-2deg)}100%{transform:scale(1)}}
 
 .taprush-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
 .taptile{aspect-ratio:1;border:3px solid var(--ink);border-radius:var(--r);
@@ -866,6 +872,9 @@ input::-ms-reveal,input::-ms-clear{display:none}
 
 /* ── Rail Runner (.rr-) and Speedway (.sw-) ──────────────────────────────────
    The whole board takes swipes / holds, so it never scrolls under a thumb. */
+/* Pipes together: a pipe a friend just turned */
+.pp-touch{pointer-events:none;animation:ppTouch .6s ease-out forwards}
+@keyframes ppTouch{0%{opacity:1}70%{opacity:.9}100%{opacity:0}}
 .rh-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;touch-action:none;
   user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .rh-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}

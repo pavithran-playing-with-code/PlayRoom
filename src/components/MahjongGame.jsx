@@ -4,10 +4,19 @@
 // means nothing on top and its left or right side open — and clear the board
 // before the clock stops. The board itself (where tiles sit, which are free,
 // a deal that can always be cleared) is games/mahjongBoard.js.
-import React, { useCallback, useEffect, useRef, useState } from "react";
+//
+// Together (a co-op room) it's one stack for the whole side: each of you
+// picks a tile, lifted and ringed in your colour, and a free tile with the
+// same picture as anybody's pick takes the pair. The rules are coopBoards.js
+// (mahjongRules); the moves go through the server in one order
+// (useCoopBoard), so every phone shows the same stack.
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./games/GameFrame";
 import GameOver from "./games/GameOver";
 import useGameEngine from "./games/useGameEngine";
+import useCoopBoard, { useShows } from "./games/useCoopBoard";
+import { mahjongRules, GOAL, MJ_MATCH, MJ_MISS, MJ_HINT, MJ_SHUFFLE } from "./games/coopBoards";
+import { team, plural } from "./games/coopTeam";
 import { confetti } from "./ui/FunLayer";
 import { SLOTS, DRAW_ORDER, TOTAL_PAIRS, BOARD_W, BOARD_H, deal, isFree, findPair, reshuffle } from "./games/mahjongBoard";
 
@@ -78,8 +87,10 @@ function layout(w, h) {
 // ── Main component ────────────────────────────────────────────────────────────
 export default function MahjongGame({
   roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 300, startedAt, serverNow,
-  isSpectator = false, spectatorState = null, spectatorWatching = null,
+  isSpectator = false, spectatorState = null, spectatorWatching = null, mode,
 }) {
+  const coop = mode === "coop" && !!roomCode;
+  const myId = Number(currentUser?.id);
   // The board lives in a ref as well as state: two taps in the same tick must
   // each see the other's result (see MemoryGame.jsx for the bug this avoids).
   const live = useRef(null);
@@ -99,13 +110,26 @@ export default function MahjongGame({
   const [msg, setMsg] = useState(null);
   const msgTimer = useRef(null);
 
+  // together: one stack for the side
+  const R = useMemo(() => mahjongRules(seed, TILE_TYPES), [seed]);
+  const cb = useCoopBoard({ on: coop, roomCode, isSpectator, myId, rules: R.rules, init: R.init });
+  const T = useMemo(() => team(players, myId), [players, myId]);
+  const agreedRef = useRef(cb.agreed);
+  agreedRef.current = cb.agreed;
+
   const eng = useGameEngine({
     roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
-    extraState: () => ({
-      pairs_matched: live.current.total,
-      game_state: JSON.stringify({ matched: matchedIndices(live.current.tiles) }),
-    }),
+    extraState: () => (coop
+      ? { pairs_matched: agreedRef.current.boards }
+      : {
+          pairs_matched: live.current.total,
+          game_state: JSON.stringify({ matched: matchedIndices(live.current.tiles) }),
+        }),
   });
+
+  // together: the side's score is everybody's
+  const { setScore } = eng;
+  useEffect(() => { if (coop && !isSpectator && cb.ready) setScore(cb.agreed.score); }, [coop, isSpectator, cb.ready, cb.agreed.score, setScore]);
 
   const showMsg = useCallback((text, type = "info") => {
     setMsg({ text, type });
@@ -116,12 +140,12 @@ export default function MahjongGame({
 
   // Spectator: rebuild tile.matched from the watched player's state.
   useEffect(() => {
-    if (!isSpectator || !spectatorState) return;
+    if (coop || !isSpectator || !spectatorState) return;
     const matched = new Set((spectatorState.matched || []).map(Number));
     const s = live.current;
     s.tiles = s.tiles.map((t, i) => ({ ...t, matched: matched.has(i) }));
     setTiles(s.tiles);
-  }, [isSpectator, spectatorState]);
+  }, [coop, isSpectator, spectatorState]);
 
   // A fresh board, seeded off the board number so everyone in the room who
   // gets this far plays the same one.
@@ -152,7 +176,7 @@ export default function MahjongGame({
   // Rescue a deadlocked board. reshuffle() only ever returns a board with a
   // legal move, so one pass is enough.
   useEffect(() => {
-    if (eng.gameOver || isSpectator || pairs >= TOTAL_PAIRS) return undefined;
+    if (coop || eng.gameOver || isSpectator || pairs >= TOTAL_PAIRS) return undefined;
     const t = setTimeout(() => {
       const s = live.current;
       if (findPair(s.tiles)) return;
@@ -162,10 +186,54 @@ export default function MahjongGame({
       showMsg("⚡ No pairs left, so the board was reshuffled", "info");
     }, 400);
     return () => clearTimeout(t);
-  }, [tiles, eng.gameOver, isSpectator, pairs, showMsg]);
+  }, [coop, tiles, eng.gameOver, isSpectator, pairs, showMsg]);
+
+  // ── together: the little shows ────────────────────────────────────────────
+  // A cleared stack stays empty a moment, the next one dealt after it.
+  const [cleared, setCleared] = useState(false);
+  const lastTap = useRef(null);               // where my last tap was, for the confetti
+  const v = cb.view;
+  useEffect(() => { setHintIdx([]); }, [v.b]);
+  useShows(cb.ready, v.ev, (e) => {
+    const mine = e.u === myId;
+    if (e.k === "pair") {
+      if (mine) {
+        const r = lastTap.current;
+        confetti(r ? r.x : undefined, r ? r.y : undefined, { count: 16, emojis: [e.e, "✨"] });
+        showMsg(e.with && e.with !== myId ? `✓ Match with ${T.nameOf(e.with)}'s tile! +${MJ_MATCH}` : `✓ Match! +${MJ_MATCH}`, "success");
+      } else showMsg(e.with === myId ? `🎉 ${T.nameOf(e.u)} took your tile's pair!` : `🎉 ${T.nameOf(e.u)} took a pair`, "success");
+      setHintIdx([]);
+    } else if (e.k === "miss") {
+      if (mine) showMsg(`✗ Not a match (-${MJ_MISS})`, "error");
+    } else if (e.k === "stuck") {
+      showMsg("⚡ No pairs left, so the stack was shuffled", "info");
+      setHintIdx([]);
+    } else if (e.k === "shuffle") {
+      showMsg(mine ? `🔀 Shuffled (-${MJ_SHUFFLE})` : `🔀 ${T.nameOf(e.u)} shuffled the stack`, "info");
+      setHintIdx([]);
+    } else if (e.k === "clear") {
+      setCleared(true);
+      clearTimeout(boardTimer.current);
+      boardTimer.current = setTimeout(() => setCleared(false), NEXT_BOARD_MS);
+      confetti(undefined, undefined, { count: 60, emojis: ["🀄", "🎉", "✨"] });
+      showMsg("🎉 Stack cleared together!", "success");
+    }
+  });
 
   function clickTile(idx, ev) {
     if (isSpectator || eng.gameOver) return;
+    if (coop) {
+      if (cleared) return;
+      const t = v.tiles[idx];
+      if (!t || t.matched) return;
+      if (!isFree(v.tiles, idx)) { showMsg("Stuck — a free tile has nothing on top and an open side", "error"); return; }
+      const r = ev?.currentTarget?.getBoundingClientRect?.();
+      lastTap.current = r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
+      setHintIdx([]);
+      cb.send({ t: "tap", b: v.b, i: idx });
+      eng.addMove();
+      return;
+    }
     const s = live.current;
     const tile = s.tiles[idx];
     if (!tile || tile.matched) return;
@@ -212,6 +280,15 @@ export default function MahjongGame({
 
   function hint() {
     if (isSpectator || eng.gameOver) return;
+    if (coop) {
+      if (cleared) return;
+      const pr = findPair(v.tiles);
+      if (!pr) return;
+      setHintIdx(pr);
+      cb.send({ t: "hint", b: v.b });
+      showMsg(`💡 Here's a pair (-${MJ_HINT})`, "info");
+      return;
+    }
     const pair = findPair(live.current.tiles);
     if (pair) {
       setHintIdx(pair);
@@ -227,6 +304,11 @@ export default function MahjongGame({
 
   function shuffle() {
     if (isSpectator || eng.gameOver) return;
+    if (coop) {
+      if (cleared) return;
+      cb.send({ t: "shuf", b: v.b, r: 1 + Math.floor(Math.random() * 2e9) });
+      return;
+    }
     const next = reshuffle(live.current.tiles);
     if (next === live.current.tiles) { showMsg("Nothing left to shuffle!", "error"); return; }
     applyShuffle(next);
@@ -234,7 +316,20 @@ export default function MahjongGame({
     showMsg(`🔀 Shuffled (${SHUFFLE_COST})`, "info");
   }
 
-  const stats = isSpectator
+  // What to draw: on your own, your stack; together, the side's — every
+  // pick lifted, ringed in its picker's colour (mine in yellow, as always).
+  const drawTiles = coop ? (cleared ? [] : v.tiles) : tiles;
+  const picks = {};
+  if (coop) for (const [u, i] of Object.entries(v.sel)) if (Number(u) !== myId) picks[i] = Number(u);
+  const mySel = coop ? (v.sel[String(myId)] ?? null) : selected;
+
+  const stats = coop
+    ? [
+        { label: "Score", value: v.score.toLocaleString() },
+        { label: "Pairs", value: `${v.pairs}/${TOTAL_PAIRS}` },
+        { label: "Goal", value: v.boards >= GOAL.mahjong ? "✓" : `${v.boards}/${GOAL.mahjong}` },
+      ]
+    : isSpectator
     ? [
         { label: "Score", value: (spectatorWatching?.score ?? 0).toLocaleString() },
         { label: "Pairs", value: `${spectatorWatching?.pairs_matched ?? 0}/${TOTAL_PAIRS}` },
@@ -250,10 +345,10 @@ export default function MahjongGame({
     <>
       <GameFrame
         gameName="Mahjong Solitaire" badge="🀄 MAHJONG"
-        isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
-        stats={stats}
+        isSpectator={isSpectator} spectatorName={coop ? "the team" : spectatorWatching?.username}
+        stats={coop && isSpectator ? [stats[0], stats[stats.length - 1]] : stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
-        opponents={Object.values(eng.opponents)}
+        opponents={coop ? T.strip(v.by, (n) => plural(n, "pair")) : Object.values(eng.opponents)}
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
@@ -270,12 +365,13 @@ export default function MahjongGame({
           return (
             <div className="mj-felt" style={{ width: w, height: h }}>
               {DRAW_ORDER.map((idx) => {
-                const tile = tiles[idx];
+                const tile = drawTiles[idx];
                 if (!tile || tile.matched) return null;
                 const at = SLOTS[idx];
-                const free = isFree(tiles, idx);
-                const isSel = selected === idx, isHint = hintIdx.includes(idx);
-                const up = isSel ? lift : isHint ? Math.round(lift / 2) : 0;
+                const free = isFree(drawTiles, idx);
+                const isSel = mySel === idx, isHint = hintIdx.includes(idx);
+                const mate = picks[idx] !== undefined ? T.colourOf(picks[idx]) : null;
+                const up = isSel || mate ? lift : isHint ? Math.round(lift / 2) : 0;
                 return (
                   <button key={idx} type="button" onClick={(ev) => clickTile(idx, ev)}
                     className={`mj-tile${isSel ? " sel" : ""}${isHint ? " hint" : ""}${free ? "" : " stuck"}`}
@@ -285,7 +381,7 @@ export default function MahjongGame({
                       top: L.oy + (at.y / 2) * L.th - at.z * L.d - up,
                       width: L.tw, height: L.th, fontSize: Math.round(L.tw * 0.6),
                       borderRadius: Math.max(6, Math.round(L.tw * 0.14)),
-                      boxShadow: `${L.d}px ${L.d}px 0 #c9b385, ${L.d}px ${L.d}px 0 2px var(--ink)${isSel ? ", 0 0 0 4px var(--sun)" : ""}`,
+                      boxShadow: `${L.d}px ${L.d}px 0 #c9b385, ${L.d}px ${L.d}px 0 2px var(--ink)${isSel ? ", 0 0 0 4px var(--sun)" : mate ? `, 0 0 0 4px ${mate}` : ""}`,
                     }}>
                     <span>{tile.e}</span>
                   </button>
@@ -296,10 +392,11 @@ export default function MahjongGame({
         }}
       </GameFrame>
 
-      {eng.gameOver && !isSpectator && (
-        <GameOver eng={eng} me={currentUser}
-          extra={`Pairs matched: ${live.current.total}${board > 1 ? ` · Boards cleared: ${board - 1}` : ""}`} />
-      )}
+      {eng.gameOver && !isSpectator && (coop
+        ? <GameOver eng={eng} me={currentUser} extra={plural(cb.agreed.boards, "stack") + " cleared"}
+            together={{ reached: cb.agreed.boards >= GOAL.mahjong, goal: "clear the stack", unit: "pairs", mates: T.all(cb.agreed.by) }} />
+        : <GameOver eng={eng} me={currentUser}
+            extra={`Pairs matched: ${live.current.total}${board > 1 ? ` · Boards cleared: ${board - 1}` : ""}`} />)}
     </>
   );
 }

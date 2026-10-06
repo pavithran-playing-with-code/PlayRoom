@@ -15,7 +15,10 @@ const TEAM_NAMES = ["Red", "Yellow", "Blue", "Green"];
 const TEAM_COLOURS = ["var(--coral)", "var(--sun)", "var(--sky)", "var(--mint)"];
 
 export default function GameOver(props) {
-  const { eng, me, onPlayAgain, extra = null } = props;
+  // together: { reached, goal, unit?, mates?: [{ user_id, username, avatar, n, col, you }] }
+  // (no unit: no "who did what" list)
+  // — played on one side, so no winner among you: the team made its goal or not
+  const { eng, me, onPlayAgain, extra = null, together = null } = props;
   const fromEng = eng ? {
     score: eng.score, won: eng.won, draw: eng.draw, rank: eng.rank,
     finished: eng.finished, closed: eng.closed, isOnline: eng.isOnline,
@@ -36,7 +39,7 @@ export default function GameOver(props) {
 
   const [leaving, setLeaving] = useState(false);
   const [again, setAgain] = useState(null);             // null | "busy" | an error message
-  const multi = isOnline && opponents.length > 0;
+  const multi = isOnline && opponents.length > 0 && !together;
   // Play again: the room page's (so every game has it), or a caller's own.
   const ctx = usePlayAgain();
   const rematch = ctx && ctx.rematch && Number(ctx.rematch.byId) !== Number(me?.id) ? ctx.rematch : null;
@@ -57,7 +60,7 @@ export default function GameOver(props) {
   const teamDraw = !!(sides && myTeam && myTeam.total === sides[0].total && sides[0].total === sides[1].total);
   const iWon = sides ? teamWon : won;
 
-  const celebrate = !closed && (iWon || (!sides && finished));
+  const celebrate = !closed && (together ? together.reached : (iWon || (!sides && finished)));
 
   // Party on the way in — but only if there's something to celebrate.
   useEffect(() => {
@@ -70,6 +73,7 @@ export default function GameOver(props) {
   }, [celebrate]);
 
   const headline = closed ? "🚪 Match closed"
+    : together ? (together.reached ? "🎉 You did it together!" : "⏰ Time's up!")
     : sides
       ? (teamWon ? `🏆 ${TEAM_NAMES[(myTeam.team - 1) % TEAM_NAMES.length]} wins!`
         : teamDraw ? "🤝 It's a draw!"
@@ -82,6 +86,7 @@ export default function GameOver(props) {
       : (finished ? "🎉 Cleared it!" : "⏰ Time's up!");
 
   const icon = closed ? "🚪"
+    : together ? (together.reached ? "🏆" : "🤝")
     : sides ? (teamWon ? "🏆" : teamDraw ? "🤝" : "⚔️")
     : multi ? (won ? "🏆" : draw ? "🤝" : finished ? "🎉" : "🎮")
     : finished ? "🎉" : "⏰";
@@ -110,6 +115,27 @@ export default function GameOver(props) {
           Score: <strong>{Number(score).toLocaleString()}</strong>
           {extra ? <> · {extra}</> : null}
         </p>
+
+        {together && (
+          <div className="stack" style={{ gap: 8, marginBottom: 18, textAlign: "left" }}>
+            <div className={`chip${together.reached ? " c-lime" : ""}`} style={{ alignSelf: "center", fontWeight: 800 }}>
+              {together.reached ? "✓" : "✗"} Team goal: {together.goal}
+            </div>
+            {together.unit && <div className="muted eyebrow">Who did what</div>}
+            {together.unit && [...together.mates].sort((a, b) => b.n - a.n).map((p) => (
+              <div key={p.user_id} className="row" style={{
+                gap: 12, padding: "8px 12px", borderRadius: "var(--r)", border: "3px solid var(--ink)",
+                borderLeft: `10px solid ${p.col}`, background: p.you ? "var(--lime)" : "#fff",
+              }}>
+                <Avatar emoji={p.avatar} size={30} seed={p.username} />
+                <span style={{ flex: 1, minWidth: 0 }} className="truncate">
+                  {p.username}{p.you && <span className="muted"> (you)</span>}
+                </span>
+                <strong>{p.n} {together.unit}</strong>
+              </div>
+            ))}
+          </div>
+        )}
 
         {sides && (
           <div className="stack" style={{ gap: 8, marginBottom: 18, textAlign: "left" }}>

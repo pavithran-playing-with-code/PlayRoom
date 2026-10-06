@@ -20,9 +20,6 @@ const SOUND_KEY = "piano.sound";
 // The songs and their levels live in pianoSongs.js; the room's seed picks one
 // (the one chosen in the lobby). Every tile carries its own note.
 
-// Backgrounds that change every 50 tiles: [top, bottom].
-const BGS = [["#FFF6E6", "#FFE6C4"], ["#E8FFF8", "#C4F1E6"], ["#F4EBFF", "#DCC8FA"],
-  ["#E6F6FF", "#C2E6FA"], ["#FFEFE6", "#FFD3BA"], ["#FFEAF4", "#FFCCE3"]];
 const NOTE_COLS = ["#9B5DE5", "#4CC9F0", "#FF8FC7", "#3DD6C0", "#FFA36C"];
 
 // ── sound: a small piano made of oscillators ─────────────────────────────────
@@ -92,192 +89,105 @@ function makePiano() {
   return { note, buzz, close: () => { try { ctx && ctx.close(); } catch { /* gone */ } } };
 }
 
-// ── drawing ──────────────────────────────────────────────────────────────────
-function rounded(ctx, x, y, w, h, r) {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-}
-
-function mix(a, b, k) {
-  const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const [x, y] = [p(a), p(b)];
-  return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * k)).join(",")})`;
-}
-
 function drawScene(ctx, s, W, H, fx, now, tune) {
-  const rowH = H / VISIBLE, colW = W / COLS, pad = 3;
+  const rowH = H / VISIBLE, colW = W / COLS;
 
-  // background, easing from one level's colours to the next
-  const lv = Math.floor(fx.bg), k = fx.bg - lv;
-  const a = BGS[lv % BGS.length], b = BGS[(lv + 1) % BGS.length];
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, mix(a[0], b[0], k));
-  g.addColorStop(1, mix(a[1], b[1], k));
-  ctx.fillStyle = g;
+  // The board as the original has it: white, thin grey lines, the rows
+  // rolling down; sharp black tiles edge to edge; played ones turn pale grey;
+  // the count of tiles played big and red at the top.
+  ctx.fillStyle = "#FFFFFF";
   ctx.fillRect(0, 0, W, H);
-
-  // the rows roll by: faint lines so the board feels like it moves
-  ctx.strokeStyle = "rgba(46,33,64,.07)";
+  ctx.strokeStyle = "#E3E3E3";
   ctx.lineWidth = 1;
   for (let r = Math.floor(s.pos); r <= s.pos + VISIBLE + 1; r++) {
-    const y = Math.round(H - (r + 0.5 - s.pos) * rowH) + 0.5;
+    const y = Math.round(H - (r - s.pos) * rowH) + 0.5;
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
   }
-  ctx.strokeStyle = "rgba(46,33,64,.16)";
+  ctx.strokeStyle = "#CFCFCF";
   for (let c = 1; c < COLS; c++) {
     const x = Math.round(c * colW) + 0.5;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
   }
-
-  // a column lights up under a finger
-  for (const p of fx.press) {
-    const al = Math.max(0, 1 - p.t / 0.3) * 0.18;
-    ctx.fillStyle = `rgba(155,93,229,${al})`;
-    ctx.fillRect(p.col * colW, 0, colW, H);
-  }
+  const cell = (col, top, h) => [Math.round(col * colW) + 1, Math.round(top) + 1, Math.round(colW) - 1, Math.round(h) - 1];
 
   for (const t of visible(s)) {
-    const x = t.col * colW + pad, w = colW - pad * 2;
-    const y = H - (t.y + t.len - s.pos) * rowH + pad, h = t.len * rowH - pad * 2;
+    const top = H - (t.y + t.len - s.pos) * rowH, h = t.len * rowH;
+    const [x, y, w, hh] = cell(t.col, top, h);
     const since = s.t - t.at;
     if (t.missed) {
-      const blink = since < 0.8 ? 0.55 + 0.45 * Math.abs(Math.sin(since * 14)) : 0.5;
-      ctx.fillStyle = `rgba(255,107,107,${blink})`;
-      rounded(ctx, x, y, w, h, 12);
-      ctx.fill();
+      // the one you missed, blinking red
+      const on = since > 0.9 || Math.floor(since * 8) % 2 === 0;
+      ctx.fillStyle = on ? "#F2484E" : "#111111";
+      ctx.fillRect(x, y, w, hh);
       continue;
     }
     const holding = t.i === s.hold;
     if (t.done && !holding) {
-      // played: the dark sinks away into a pale tile
-      const q = Math.min(1, since / 0.22);
-      ctx.fillStyle = "rgba(46,33,64,.10)";
-      rounded(ctx, x, y, w, h, 12);
-      ctx.fill();
+      // played: pale grey, and the blue of a long one held fades with it
+      const q = Math.min(1, since / 0.12);
+      const grey = Math.round(17 + (226 - 17) * q);
+      ctx.fillStyle = `rgb(${grey},${grey},${grey})`;
+      ctx.fillRect(x, y, w, hh);
       if (t.len > 1 && t.held > 0) {
-        ctx.fillStyle = `rgba(155,93,229,${0.35 * (1 - q * 0.5)})`;
-        rounded(ctx, x, y + h * (1 - t.held), w, h * t.held, 12);
-        ctx.fill();
-      }
-      if (q < 1) {
-        const sw = w * (1 - q), sh = h * (1 - q);
-        ctx.fillStyle = `rgba(46,33,64,${0.9 * (1 - q)})`;
-        rounded(ctx, x + (w - sw) / 2, y + (h - sh) / 2, sw, sh, 12 * (1 - q));
-        ctx.fill();
+        ctx.fillStyle = "rgba(86,178,245,.35)";
+        ctx.fillRect(x, y + hh * (1 - t.held), w, hh * t.held);
       }
       continue;
     }
-    // a black key, lit from the top
-    const kg = ctx.createLinearGradient(0, y, 0, y + h);
-    kg.addColorStop(0, "#4A3868");
-    kg.addColorStop(Math.min(0.5, 30 / h), "#2E2140");
-    kg.addColorStop(1, "#160F22");
-    ctx.fillStyle = kg;
-    rounded(ctx, x, y, w, h, 12);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,.13)";
-    rounded(ctx, x + 5, y + 4, w - 10, Math.min(10, h * 0.1), 5);
-    ctx.fill();
-
+    ctx.fillStyle = "#111111";
+    ctx.fillRect(x, y, w, hh);
     if (t.len > 1) {
-      const cx = x + w / 2;
-      // the track to hold along, and how far you've got
-      ctx.strokeStyle = "rgba(255,255,255,.22)";
-      ctx.lineWidth = 4;
-      ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(cx, y + h - rowH * 0.45); ctx.lineTo(cx, y + 18); ctx.stroke();
+      // a long tile: a dot at the bottom and a line up it; held, it fills
+      // with blue from the bottom and the dot rides the top of the blue
+      const cx = x + w / 2, fh = holding ? hh * t.held : 0;
+      ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 3; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(cx, y + hh - rowH * 0.5); ctx.lineTo(cx, y + rowH * 0.25); ctx.stroke();
       if (holding) {
-        const fh = h * t.held;
-        const fg = ctx.createLinearGradient(0, y + h, 0, y + h - fh);
-        fg.addColorStop(0, "#9B5DE5");
-        fg.addColorStop(1, "#4CC9F0");
+        const fg = ctx.createLinearGradient(0, y + hh, 0, y + hh - fh);
+        fg.addColorStop(0, "#1E88E5"); fg.addColorStop(1, "#7FD3FF");
         ctx.fillStyle = fg;
-        rounded(ctx, x, y + h - fh, w, fh, 12);
-        ctx.fill();
-        ctx.save();
-        ctx.shadowColor = "#4CC9F0";
-        ctx.shadowBlur = 22;
-        ctx.fillStyle = "#FFFFFF";
-        ctx.beginPath(); ctx.arc(cx, y + h - fh, 9 + Math.sin(now * 18) * 1.5, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-      } else {
-        ctx.strokeStyle = "rgba(255,255,255,.7)";
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(cx, y + h - rowH * 0.45, 11, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillRect(x, y + hh - fh, w, fh);
       }
-      ctx.fillStyle = "rgba(255,255,255,.55)";
-      ctx.font = "700 16px Fredoka, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("♫", cx, y + 16);
+      ctx.save();
+      if (holding) { ctx.shadowColor = "#7FD3FF"; ctx.shadowBlur = 18; }
+      ctx.fillStyle = holding ? "#FFFFFF" : "rgba(255,255,255,.75)";
+      ctx.beginPath(); ctx.arc(cx, holding ? y + hh - fh : y + hh - rowH * 0.5, holding ? 9 : 7, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    if (t.twin || (s.tiles[t.i + 1] && s.tiles[t.i + 1].twin && s.tiles[t.i + 1].y === t.y)) {
+      // a chord: both its tiles marked, so you know to tap both
+      ctx.fillStyle = "rgba(255,255,255,.22)";
+      ctx.fillRect(x, y + hh - 6, w, 3);
     }
     if (t.i === 0 && !s.started) {
-      const cx = x + w / 2, cy = y + h / 2;
-      const pulse = 1 + Math.sin(now * 5) * 0.06;
       ctx.fillStyle = "#FFFFFF";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = `800 ${Math.round(Math.min(22, w * 0.24) * pulse)}px Fredoka, sans-serif`;
-      ctx.fillText("START", cx, cy);
+      ctx.font = `700 ${Math.round(Math.min(24, w * 0.24) * (1 + Math.sin(now * 5) * 0.05))}px system-ui, -apple-system, sans-serif`;
+      ctx.fillText("START", x + w / 2, y + hh / 2);
       ctx.textBaseline = "alphabetic";
     }
   }
 
-  // a tap on white
+  // a tap on white: that square blinks red
   for (const wr of fx.wrong) {
-    const al = Math.max(0, 1 - wr.t / 0.6);
-    const yc = H - (wr.yRow - s.pos) * rowH;
-    ctx.fillStyle = `rgba(255,107,107,${0.85 * al})`;
-    rounded(ctx, wr.col * colW + pad, yc - rowH / 2 + pad, colW - pad * 2, rowH - pad * 2, 12);
-    ctx.fill();
-    ctx.strokeStyle = `rgba(255,255,255,${al})`;
-    ctx.lineWidth = 4;
-    const cx = wr.col * colW + colW / 2, d = Math.min(colW, rowH) * 0.16;
-    ctx.beginPath(); ctx.moveTo(cx - d, yc - d); ctx.lineTo(cx + d, yc + d); ctx.moveTo(cx + d, yc - d); ctx.lineTo(cx - d, yc + d); ctx.stroke();
+    if (wr.t > 0.9) continue;
+    const on = Math.floor(wr.t * 8) % 2 === 0;
+    if (!on) continue;
+    const [x, y, w, hh] = cell(wr.col, H - (Math.floor(wr.yRow) + 1 - s.pos) * rowH, rowH);
+    ctx.fillStyle = "#F2484E";
+    ctx.fillRect(x, y, w, hh);
   }
 
-  // ripples where a tile was played
-  for (const r of fx.ripples) {
-    const q = r.t / 0.45;
-    ctx.strokeStyle = `rgba(255,255,255,${0.9 * (1 - q)})`;
-    ctx.lineWidth = 4 * (1 - q) + 1;
-    ctx.beginPath(); ctx.arc(r.x, r.y, 8 + q * colW * 0.75, 0, Math.PI * 2); ctx.stroke();
-  }
-
-  // notes floating up
-  ctx.textAlign = "center";
-  for (const n of fx.notes) {
-    const q = n.t / n.life;
-    ctx.globalAlpha = 1 - q;
-    ctx.fillStyle = n.c;
-    ctx.font = `800 ${Math.round(n.size)}px Fredoka, sans-serif`;
-    ctx.fillText(n.ch, n.x + Math.sin(n.t * 6 + n.ph) * 8, n.y - n.t * 110);
-  }
-  ctx.globalAlpha = 1;
-
-  // the combo, big and soft over the top of the board
-  if (s.combo >= 5) {
-    const size = Math.round(Math.min(56, W * 0.15) * (1 + fx.pulse * 0.25));
-    ctx.font = `800 ${size}px Fredoka, sans-serif`;
+  // the count of tiles played, big and red, as the original shows it
+  if (s.started) {
+    ctx.font = `600 ${Math.round(Math.min(64, W * 0.17))}px system-ui, -apple-system, sans-serif`;
     ctx.textAlign = "center";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = "#2E2140";
-    ctx.fillStyle = "#FFC53D";
-    ctx.globalAlpha = 0.92;
-    ctx.strokeText(String(s.combo), W / 2, H * 0.15);
-    ctx.fillText(String(s.combo), W / 2, H * 0.15);
-    ctx.font = "800 13px Fredoka, sans-serif";
     ctx.lineWidth = 4;
-    ctx.strokeText("COMBO", W / 2, H * 0.15 + 18);
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillText("COMBO", W / 2, H * 0.15 + 18);
-    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "rgba(255,255,255,.9)";
+    ctx.fillStyle = "#F2484E";
+    ctx.strokeText(String(s.hits), W / 2, H * 0.12);
+    ctx.fillText(String(s.hits), W / 2, H * 0.12);
   }
 
   // before the start: which song it is
@@ -510,7 +420,7 @@ export default function PianoTiles(props) {
           const ch = Math.max(200, h - 24), cw = Math.min(w, Math.round(ch * 0.7));
           size.current = { w: cw, h: ch };
           return (
-            <div className="pt-pad" style={{ width: w, height: h }} onContextMenu={(e) => e.preventDefault()}>
+            <div className="pt-pad" data-no-fun style={{ width: w, height: h }} onContextMenu={(e) => e.preventDefault()}>
               <canvas ref={canvasRef} className="pt-canvas" style={{ width: cw, height: ch }}
                 onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={onUp}
                 role="img" aria-label={`Piano Tiles: ${tune.name}. Tap the black tiles, lowest first`} />

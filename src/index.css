@@ -489,6 +489,12 @@ body.in-game input,body.in-game textarea{-webkit-user-select:text;user-select:te
 .press.pick{position:relative}
 .coop-badge{position:absolute;top:-8px;right:-8px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
   font-size:.95rem;background:var(--grape);border:2.5px solid var(--ink);box-shadow:0 2px 0 var(--ink);pointer-events:none}
+.cr-clock{font-weight:900;font-size:1rem;padding:4px 10px;border-radius:999px;border:2.5px solid var(--ink);background:#fff;flex:none}
+.cr-clock.low{background:var(--coral);color:#fff;animation:hmPulse .5s infinite alternate}
+.press.cr-shoot{position:relative;overflow:hidden;min-width:150px;min-height:56px;font-weight:900;touch-action:none;--pow:0}
+.press.cr-shoot .cr-pow{position:absolute;left:0;top:0;bottom:0;width:calc(var(--pow) * 100%);
+  background:linear-gradient(90deg,#8FDB5C,#FFC53D 55%,#FF6B6B);pointer-events:none}
+.press.cr-shoot span{position:relative}
 .press.gb-help{width:36px;height:36px;padding:0;border-radius:50%;font-weight:900;font-size:1.05rem;flex:none}
 /* how to play: the card, in the lobby, the waiting room and over a game */
 .howto-t{font-family:Fredoka,sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:6px}
@@ -963,8 +969,8 @@ input::-ms-reveal,input::-ms-clear{display:none}
   touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .cr-canvas{border-radius:16px;box-shadow:0 6px 0 var(--ink);border:3px solid var(--ink);touch-action:none;-webkit-tap-highlight-color:transparent}
 .cr-help{font-size:.78rem;text-align:center}
-.cr-controls{display:flex;align-items:center;gap:12px;width:100%;max-width:440px;padding:0 6px}
-.cr-slide{flex:1;display:flex;align-items:center;gap:10px;font-weight:800;font-size:.9rem}
+.cr-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 12px;width:100%;max-width:440px;padding:0 6px}
+.cr-slide{flex:1 1 100%;display:flex;align-items:center;gap:10px;font-weight:800;font-size:.9rem}
 .cr-slide input{flex:1;height:34px;accent-color:var(--brick);touch-action:pan-x}
 .cr-wait{flex:1;text-align:center;font-size:.92rem}
 .press.cr-snd{padding:8px 14px;--lift:3px}

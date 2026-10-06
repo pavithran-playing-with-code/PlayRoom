@@ -159,7 +159,7 @@ export const HOW_TO = {
   carrom: {
     name: "Carrom",
     goal: "Pocket all your coins first.",
-    steps: ["Drag the striker along your line, pull back, and let go to shoot.", "Pocket your colour and you go again.", "Pocket the red queen, then one of yours straight after to keep her.", "Pocketing the striker is a foul."],
+    steps: ["1 · Slide the striker along your line (drag it, or the slider).", "2 · Touch the board where you want it to go — an arrow shows the line.", "3 · Hold 🎯 Shoot: the power goes up and down — let go to shoot. 30 seconds a turn.", "Pocket your colour and you go again. Pocket the red queen, then one of yours straight after to keep her.", "Pocketing the striker is a foul."],
     tip: "Aim to send coins into the corner pockets, not straight at them.",
   },
   manor: {

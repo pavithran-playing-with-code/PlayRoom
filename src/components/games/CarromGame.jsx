@@ -6,8 +6,11 @@
 // The server runs the board (config/togetherWorld.js, rules and physics in
 // together/carromCore.mjs): it works out every shot and sends it as frames,
 // which this phone plays back. The board is turned so your baseline is at
-// the bottom. On your turn: drag the striker (or the slider) along your line,
-// then pull back from it — away from where you want it to go — and let go.
+// the bottom. On your turn: slide the striker along your line (drag it, or
+// the slider), touch the board where you want it to go — an arrow shows the
+// line — then hold 🎯 Shoot: the power rises and falls; let go to shoot.
+// (Or the old way: pull back from the striker, away from where you want it
+// to go, and let go.) 30 seconds a turn, counting down on screen.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import TogetherResults from "../together/TogetherResults";
@@ -169,7 +172,7 @@ export default function CarromGame(props) {
   const canvasRef = useRef(null);
   const size = useRef({ B: 360 });
   const play = useRef(null);                 // the shot being played back
-  const me = useRef({ u: 0.5, aim: null, drag: null });
+  const me = useRef({ u: 0.5, aim: null, drag: null, charge: null });
   const sentAim = useRef(0);
   const [, force] = useState(0);
   const [hud, setHud] = useState({ left: durationSeconds, v: null });
@@ -259,9 +262,23 @@ export default function CarromGame(props) {
     const L = tg.live.current, seat = L.world.seats[L.view.tn];
     const [vx, vy] = viewPoint(e);
     const [sx, sy] = toView(seat.pos, ...strikerAt(seat.pos, me.current.u));
-    const onStriker = Math.hypot(vx - sx, vy - sy) < R_STRIKER * 2.2;
-    me.current.drag = { id: e.pointerId, mode: onStriker ? "move" : "aim" };
-    if (!onStriker) aimAt(vx, vy);
+    const onStriker = Math.hypot(vx - sx, vy - sy) < R_STRIKER * 2.6;
+    // ahead of the striker: point where it should go; behind it: pull back
+    const ahead = vy < sy - R_STRIKER * 1.2;
+    const mode = onStriker ? "move" : ahead ? "point" : "aim";
+    me.current.drag = { id: e.pointerId, mode };
+    if (mode === "point") pointAt(vx, vy);
+    else if (mode === "aim") aimAt(vx, vy);
+  };
+  // aim by pointing: the striker goes towards the finger; Shoot sets the power
+  const pointAt = (vx, vy) => {
+    const L = tg.live.current, seat = L.world.seats[L.view.tn], m = me.current;
+    const [sx, sy] = toView(seat.pos, ...strikerAt(seat.pos, m.u));
+    const dx = vx - sx, dy = vy - sy, d = Math.hypot(dx, dy) || 1;
+    if (dy / d > -0.05) return;                                   // never backwards
+    const [bx, by] = dirToBoard(seat.pos, dx / d, dy / d);
+    m.aim = { ang: Math.atan2(by, bx), pow: m.charge ? m.aim?.pow || 0 : 0.35, point: true, back: false };
+    sendAim();
   };
   const aimAt = (vx, vy) => {
     const L = tg.live.current, seat = L.world.seats[L.view.tn], m = me.current;
@@ -278,6 +295,7 @@ export default function CarromGame(props) {
     if (!m.drag || m.drag.id !== e.pointerId || !myTurn()) return;
     const [vx, vy] = viewPoint(e);
     if (m.drag.mode === "move") { m.u = Math.max(U_MIN, Math.min(U_MAX, vx)); sendAim(); }
+    else if (m.drag.mode === "point") pointAt(vx, vy);
     else aimAt(vx, vy);
   };
   const onUp = (e) => {
@@ -285,6 +303,7 @@ export default function CarromGame(props) {
     if (!m.drag || m.drag.id !== e.pointerId) return;
     const mode = m.drag.mode;
     m.drag = null;
+    if (mode === "point" || (mode === "move" && m.aim && m.aim.point)) { sendAim(true); return; }   // the aim stays: now hold Shoot
     if (mode === "aim" && m.aim && myTurn()) {
       if (m.aim.pow > 0.04 && !m.aim.back) tg.send("shoot", { u: m.u, ang: m.aim.ang, pow: m.aim.pow });
       else if (m.aim.back) flash("Pull back towards yourself, then let go", "info");
@@ -293,11 +312,39 @@ export default function CarromGame(props) {
     sendAim(true);
   };
 
+  // 🎯 Shoot: hold it and the power rises and falls; let go to shoot. No aim
+  // yet? Straight up the board.
+  const shootRef = useRef(null);
+  const chargeDown = (e) => {
+    e.preventDefault();
+    if (!myTurn()) return;
+    const L = tg.live.current, seat = L.world.seats[L.view.tn], m = me.current;
+    if (!m.aim || !m.aim.point) { const [bx, by] = dirToBoard(seat.pos, 0, -1); m.aim = { ang: Math.atan2(by, bx), pow: 0, point: true, back: false }; }
+    m.charge = { t0: performance.now() };
+  };
+  const chargeUp = () => {
+    const m = me.current;
+    if (!m.charge) return;
+    m.charge = null;
+    if (m.aim && myTurn()) tg.send("shoot", { u: m.u, ang: m.aim.ang, pow: Math.max(0.08, m.aim.pow) });
+    m.aim = null;
+    if (shootRef.current) shootRef.current.style.setProperty("--pow", "0");
+    sendAim(true);
+  };
+
   // ── the loop ───────────────────────────────────────────────────────────────
   const { live: tgLive } = tg;
   useEffect(() => {
     let raf, lastHud = 0;
     const frame = (ts) => {
+      // holding Shoot: the power rises and falls, 0 → 1 → 0 every 2.2 s
+      const m0 = me.current;
+      if (m0.charge && m0.aim) {
+        const q = ((ts - m0.charge.t0) / 1100) % 2;
+        m0.aim.pow = q < 1 ? q : 2 - q;
+        if (shootRef.current) shootRef.current.style.setProperty("--pow", m0.aim.pow.toFixed(3));
+        sendAim();
+      }
       raf = requestAnimationFrame(frame);
       const L = tgLive.current, c = canvasRef.current;
       if (!L || !c) return;
@@ -394,11 +441,18 @@ export default function CarromGame(props) {
   const controls = !isSpectator ? (
     <div className="cr-controls">
       {mineNow ? (
-        <label className="cr-slide">
-          <span>Striker</span>
-          <input type="range" min={U_MIN} max={U_MAX} step={0.002} value={me.current.u}
-            onChange={(e) => { me.current.u = Number(e.target.value); sendAim(); force((n) => n + 1); }} aria-label="Move the striker along your line" />
-        </label>
+        <>
+          <label className="cr-slide">
+            <span>1 · Slide</span>
+            <input type="range" min={U_MIN} max={U_MAX} step={0.002} value={me.current.u}
+              onChange={(e) => { me.current.u = Number(e.target.value); sendAim(); force((n) => n + 1); }} aria-label="Move the striker along your line" />
+          </label>
+          <span className={`cr-clock${v.tl < 8 ? " low" : ""}`} aria-label="Seconds left this turn">⏱ {Math.ceil(v.tl)}</span>
+          <button ref={shootRef} className="press p-sun cr-shoot" onPointerDown={chargeDown} onPointerUp={chargeUp} onPointerCancel={chargeUp} onPointerLeave={chargeUp}
+            aria-label="Hold to set the power, let go to shoot">
+            <i className="cr-pow" aria-hidden="true" /><span>🎯 Hold to shoot</span>
+          </button>
+        </>
       ) : (
         <span className="cr-wait muted">{v && v.ph === "aim" ? `${nameOf(seats[v.tn]?.id)} ${seats[v.tn]?.id === "cpu" ? "is thinking…" : "is aiming…"}` : v && v.ph === "moving" ? "…" : ""}</span>
       )}
@@ -426,7 +480,7 @@ export default function CarromGame(props) {
               <canvas ref={canvasRef} className="cr-canvas" style={{ width: B, height: B, display: tg.ready ? "block" : "none" }}
                 onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
                 role="img" aria-label="Carrom board. On your turn drag the striker along your line, then pull back from it and let go" />
-              {tg.ready && <div className="cr-help muted">{mySide === undefined ? "" : `You play ${mySide === 0 ? "⚪ white" : "⚫ black"} · drag the striker, pull back to shoot`}</div>}
+              {tg.ready && <div className="cr-help muted">{mySide === undefined ? "" : `You play ${mySide === 0 ? "⚪ white" : "⚫ black"} · 1 slide the striker · 2 touch where to aim · 3 hold 🎯 Shoot, let go`}</div>}
               {showLevel && (
                 <div className="cr-level pop" role="dialog" aria-label="How good should the computer be?">
                   <h3>🤖 How good is the computer?</h3>

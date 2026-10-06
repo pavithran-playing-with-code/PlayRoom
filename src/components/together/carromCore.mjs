@@ -39,7 +39,7 @@ export const FRICTION = 1.5;          // slowing, board widths a second a second
 export const DRAG = 0.35;             // and a little more the faster it goes
 export const WALL_E = 0.72, BALL_E = 0.9;
 export const M_COIN = 1, M_STRIKER = 1.7;
-export const TURN_S = 20;
+export const TURN_S = 30;                   // a turn: time to place the striker, aim and shoot
 export const FPS = 30;
 const DT = 1 / 240;
 const MAX_SHOT_S = 7;

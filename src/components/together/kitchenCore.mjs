@@ -73,11 +73,22 @@ export function canAt(x, y) {
 }
 
 // Move a chef by (dx, dy), sliding along counters rather than stopping dead.
+// Walking into the corner of a counter, a chef that's nearly lined up with
+// the gap is eased into it, rather than catching on the edge.
 export function slide(x, y, dx, dy) {
   let nx = x, ny = y;
   if (canAt(x + dx, y)) nx = x + dx;
-  if (canAt(nx, y + dy)) ny = y + dy;
+  else if (dx && Math.abs(dy) <= Math.abs(dx) * 0.5) ny = ease(x + dx, y, (cy) => canAt(x + dx, cy), Math.abs(dx));
+  if (canAt(nx, ny + dy)) ny = ny + dy;
+  else if (dy && Math.abs(dx) <= Math.abs(dy) * 0.5) nx = ease(y + dy, nx, (cx) => canAt(cx, ny + dy), Math.abs(dy));
   return [nx, ny];
+}
+// nudge `c` (across the way you're going) towards the middle of its tile, if
+// the way ahead is open from there and you're within 0.35 of it
+function ease(_, c, openAt, step) {
+  const mid = Math.floor(c) + 0.5, off = mid - c;
+  if (Math.abs(off) > 0.35 || Math.abs(off) < 1e-6 || !openAt(mid)) return c;
+  return c + Math.sign(off) * Math.min(Math.abs(off), step);
 }
 
 // The counter a chef is facing: the tile next to them in the direction they
@@ -317,8 +328,29 @@ export function report(s, pid, m, nowMs) {
 }
 
 export function act(s, pid, m) {
-  if (m && m.a === "use") return use(s, pid, m.x, m.y);
+  if (m && m.a === "use") return m.near ? applyNear(s, pid, m.x, m.y) : use(s, pid, m.x, m.y);
   return { ok: false };
+}
+
+// Use, from the button: the counter you face if that does something, else
+// whatever in reach does — nearest first, the working counters (crates,
+// boards, stoves, plates, the window) before a bare counter. The bin only
+// when you face it: Use near it must never throw a dish away. So walking up
+// to the right counter is enough; which way you're facing doesn't matter.
+const PICK = { window: 0, stove: 1, board: 1, crate: 2, plates: 2, counter: 4 };
+export function applyNear(s, pid, tx, ty) {
+  const p = s.players.get(Number(pid));
+  if (!p || p.left) return { ok: false };
+  const faced = Number.isFinite(Number(tx)) && Number.isFinite(Number(ty)) ? use(s, pid, tx, ty) : null;
+  if (faced && faced.ok) return { ...faced, x: Math.floor(tx), y: Math.floor(ty) };
+  const near = s.tiles
+    .filter((t) => t.c in PICK && !(t.x === Math.floor(tx) && t.y === Math.floor(ty)) && Math.hypot(t.x + 0.5 - p.x, t.y + 0.5 - p.y) <= REACH)
+    .sort((a, b) => PICK[a.c] - PICK[b.c] || Math.hypot(a.x + 0.5 - p.x, a.y + 0.5 - p.y) - Math.hypot(b.x + 0.5 - p.x, b.y + 0.5 - p.y));
+  for (const t of near) {
+    const r = use(s, pid, t.x, t.y);           // a refusal changes nothing, so trying is safe
+    if (r.ok) return { ...r, x: t.x, y: t.y };
+  }
+  return faced || { ok: false, why: "empty" };
 }
 
 export function removePlayer(s, pid) {

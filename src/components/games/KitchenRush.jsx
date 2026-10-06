@@ -65,6 +65,17 @@ function drawItem(ctx, it, cx, cy, T) {
     ctx.beginPath(); ctx.ellipse(cx, cy, T * 0.36, T * 0.3, 0, 0, TAU); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = "rgba(46,33,64,.18)";
     ctx.beginPath(); ctx.ellipse(cx, cy, T * 0.25, T * 0.2, 0, 0, TAU); ctx.stroke();
+    // all a recipe's parts on it: it's that dish now (a cheese or a lettuce
+    // leaf tucked beside it says which burger)
+    const dish = Object.values(RECIPES).find((r) => r.parts.join() === [...it.on].sort().join());
+    if (dish) {
+      ctx.fillStyle = "rgba(255,230,140,.55)";
+      ctx.beginPath(); ctx.ellipse(cx, cy, T * 0.34, T * 0.28, 0, 0, TAU); ctx.fill();
+      emoji(ctx, dish.icon, cx, cy - T * 0.03, T * 0.5);
+      if (it.on.includes("cheese") && dish.icon === "🍔") emoji(ctx, "🧀", cx + T * 0.22, cy + T * 0.14, T * 0.2);
+      if (it.on.includes("lettuce") && dish.icon === "🍔") emoji(ctx, "🥬", cx - T * 0.22, cy + T * 0.14, T * 0.2);
+      return;
+    }
     const n = it.on.length;
     it.on.forEach((k, i) => {
       const a = n === 1 ? 0 : (i / n) * TAU - Math.PI / 2, d = n === 1 ? 0 : T * 0.13;
@@ -307,10 +318,14 @@ export default function KitchenRush(props) {
     fx.current.ring = { x: t.x, y: t.y, at: performance.now() / 1000 };
     tg.send("use", { x: t.x, y: t.y });
   };
+  // the Use button: the counter you face, or whatever in reach does something
+  // (the server picks: kitchenCore.applyNear) — you only have to be near it
   const pressUse = () => {
     const m = me.current;
     if (!m || tg.over) return;
-    applyAt(facingTile(m.x, m.y, m.fx, m.fy));
+    const t = facingTile(m.x, m.y, m.fx, m.fy);
+    if (t) fx.current.ring = { x: t.x, y: t.y, at: performance.now() / 1000 };
+    tg.send("use", { x: t ? t.x : null, y: t ? t.y : null, near: 1 });
   };
 
   useEffect(() => {

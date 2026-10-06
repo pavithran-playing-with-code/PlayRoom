@@ -262,5 +262,27 @@ function run(seed, cooks, secs) {
   check("what travels is small", JSON.stringify(v).length < 2000, `${JSON.stringify(v).length} bytes`);
 }
 
+// ── Use: near is enough ──────────────────────────────────────────────────────
+{
+  const s4 = k.createSide(5, { players: [1], durMs: 120000 }), q = s4.players.get(1);
+  const [bx, by] = BOARDS[0];
+  // beside the board, facing nothing in particular, holding a lettuce
+  q.x = bx + 0.5; q.y = by + 1.5; q.hold = { k: "lettuce", s: "raw", p: 0 };
+  const r = k.act(s4, 1, { a: "use", x: null, y: null, near: 1 });
+  check("Use beside a board, not facing it: the lettuce goes on the board and chopping starts", r.ok && s4.at.get(by * k.W + bx).item?.k === "lettuce" && q.chop !== null, JSON.stringify(r));
+  // facing a bare counter with a finished salad, the window in reach: it's served, not left on the counter
+  const [wx, wy] = WINDOW;
+  q.x = wx + 1.5; q.y = wy + 0.5; q.chop = null; q.hold = { k: "plate", s: "", p: 0, on: ["lettuce", "tomato"] };
+  s4.orders = [{ id: 7, r: "salad", until: s4.t + 50, life: 60 }];
+  const before = s4.score;
+  const r2 = k.act(s4, 1, { a: "use", x: wx + 1, y: wy - 1, near: 1 });
+  check("a salad in hand, the window in reach: Use serves it", r2.ok && s4.score > before && !q.hold, JSON.stringify(r2));
+  // the bin is never picked for you
+  const bin = find("X")[0];
+  q.x = bin[0] - 0.5; q.y = bin[1] + 0.5; q.hold = { k: "plate", s: "", p: 0, on: ["bun", "meat"] };
+  k.act(s4, 1, { a: "use", x: null, y: null, near: 1 });
+  check("…but Use near the bin never throws a dish away", q.hold && q.hold.on.length === 2);
+}
+
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

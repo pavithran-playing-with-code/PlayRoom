@@ -18,6 +18,10 @@
 // The rules are driftSim.js. This file draws, plays the sounds and reads keys
 // (W/↑ go, S/↓ brake, A D/← → steer, Shift/Space drift) and thumbs (◀ ▶ on
 // the left, BRK and DRIFT on the right; the pedal's down by itself).
+//
+// A landscape game (GameFrame): on a phone held upright the frame is drawn
+// turned, and the thumb buttons float over the bottom corners of the track
+// like a phone racing game — so the map sits top right, out of their way.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
@@ -229,8 +233,8 @@ function drawHud(ctx, w, h, S) {
   else { ctx.fillStyle = col; ctx.fillRect(bx, by + 4 * s, bw * clamp(car.charge / 3.2, 0, 1), 10 * s); }
   ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 1; ctx.strokeRect(bx, by + 4 * s, bw, 10 * s);
   // the map
-  const mm = Math.min(150 * s, w * 0.3), bb = T.bb, k = Math.min((mm - 16) / (bb.x1 - bb.x0), (mm - 16) / (bb.y1 - bb.y0));
-  const mw = (bb.x1 - bb.x0) * k + 16, mh = (bb.y1 - bb.y0) * k + 16, mx = w - pad - mw, my = h - pad - mh;
+  const mm = Math.min(150 * s, w * 0.3, h * 0.42), bb = T.bb, k = Math.min((mm - 16) / (bb.x1 - bb.x0), (mm - 16) / (bb.y1 - bb.y0));
+  const mw = (bb.x1 - bb.x0) * k + 16, mh = (bb.y1 - bb.y0) * k + 16, mx = w - pad - mw, my = S.mapTop ? pad + 100 * s : h - pad - mh;
   ctx.fillStyle = "rgba(8,10,16,.6)"; ctx.fillRect(mx, my, mw, mh);
   ctx.save(); ctx.translate(mx + 8, my + 8); ctx.scale(k, k); ctx.translate(-bb.x0, -bb.y0);
   ctx.lineJoin = "round"; ctx.strokeStyle = "rgba(255,255,255,.4)"; ctx.lineWidth = 7 / k; ctx.stroke(S.path);
@@ -301,8 +305,10 @@ export default function Speedway(props) {
   }
   const remote = useRef(new Map());                   // user id -> drawn car, eased toward its last report
   const keys = useRef({});
-  const touch = useRef({ on: false, l: 0, r: 0, b: 0, d: 0 });
-  const [touchUi, setTouchUi] = useState(() => typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer:coarse)").matches);
+  // a phone: thumb buttons from the start, the pedal down by itself (as in Turbo Drift)
+  const coarse = typeof window !== "undefined" && !!window.matchMedia && window.matchMedia("(pointer:coarse)").matches;
+  const touch = useRef({ on: coarse, l: 0, r: 0, b: 0, d: 0 });
+  const [touchUi, setTouchUi] = useState(coarse);
   const [muted, setMuted] = useState(false);
   const audio = useRef(null);
   if (audio.current === null) audio.current = makeAudio();
@@ -552,7 +558,7 @@ export default function Speedway(props) {
         vg.addColorStop(0, "rgba(8,10,16,0)"); vg.addColorStop(1, "rgba(8,10,16,.45)");
         ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
         const count = elapsed < START_S + 1 ? clamp(elapsed, 0, 4) : null;
-        drawHud(ctx, w, h, { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace });
+        drawHud(ctx, w, h, { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop: touch.current.on });
         for (const p of conf) { ctx.fillStyle = p.col; ctx.fillRect(p.x * w, p.y * h, 7, 4); }
       }
       if (now - lastHud > 250) {
@@ -575,16 +581,13 @@ export default function Speedway(props) {
       onPointerLeave={(e) => { touch.current[k] = 0; e.currentTarget.classList.remove("on"); }}
       onContextMenu={(e) => e.preventDefault()}>{label}</button>
   );
-  const controls = !isSpectator ? (touchUi ? (
+  // thumbs: steering under the left, brake and a big drift under the right
+  const controls = !isSpectator && touchUi ? (
     <div className="sw-touch">
       <div className="sw-grp">{hold("l", "◀", "Steer left")}{hold("r", "▶", "Steer right")}</div>
-      <div className="sw-grp">{hold("b", "BRK", "Brake", " sm")}{hold("d", "DRIFT", "Drift", " sm")}</div>
+      <div className="sw-grp sw-act">{hold("b", "BRK", "Brake", " sm")}{hold("d", "DRIFT", "Drift", " sm big")}</div>
     </div>
-  ) : (
-    <div className="sw-keys">
-      <span><b>W / ↑</b> go</span><span><b>S / ↓</b> brake</span><span><b>A D / ← →</b> steer</span><span><b>Shift / Space</b> drift — let go to boost</span>
-    </div>
-  )) : null;
+  ) : null;
 
   return (
     <>
@@ -598,6 +601,7 @@ export default function Speedway(props) {
         teams={eng.teams}
         onQuit={eng.endMatch}
         controls={controls}
+        landscape
       >
         {({ w, h }) => {
           if (isSpectator) {

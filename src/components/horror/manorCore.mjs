@@ -586,8 +586,16 @@ export function stepGhost(G, env, targets, dt, rand, hustle, emit, hum = null) {
     G.lose = 0; G.rt -= dt;
     if (G.rt <= 0) { ghostTarget(G, env, seen.x | 0, seen.y | 0); G.rt = 0.25; }
   } else if (G.st === "hunt") {
-    G.lose += dt;
-    if (G.lose > 5) { G.st = "search"; G.wait = 0; G.prey = null; emit("lost", {}); }
+    // out of sight. Dark and still — light off, not in a lit room, not
+    // moving — and she loses you fast (two seconds) and wanders off;
+    // otherwise she keeps after you a while, then searches where you were.
+    const prey = targets.find((t) => t.id === G.prey);
+    const quiet = !!prey && !prey.lit && !(prey.noiseR > 0) && !prey.hid;
+    G.lose += dt * (quiet ? 2.5 : 1);
+    if (G.lose > 5) {
+      if (quiet) { G.st = "patrol"; G.prey = null; ghostPatrol(G, env, rand); emit("gaveup", { id: prey.id }); }
+      else { G.st = "search"; G.wait = 0; G.prey = null; emit("lost", {}); }
+    }
   }
   if (G.st === "patrol") {
     let heard = null, hd = Infinity;

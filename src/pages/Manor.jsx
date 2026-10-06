@@ -261,6 +261,8 @@ export default function Manor() {
           pushed out past its ring. */}
       <div className={`hm-pad${playing ? "" : " off"}`}>
         <button className={`hm-use${hud?.use ? " on" : ""}`} onPointerDown={press(doAction)}>{hud?.use || "Use"}</button>
+        <button className={`hm-light${hud?.light ? " on" : ""}`} onPointerDown={press(toggleLight)}
+          title="Your light. Off, and standing still in the dark, she loses you">{hud?.light ? "Light on" : "Light off"}</button>
       </div>
 
       {screen === "menu" && (

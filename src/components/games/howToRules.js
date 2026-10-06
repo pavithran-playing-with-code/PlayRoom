@@ -165,7 +165,7 @@ export const HOW_TO = {
   manor: {
     name: "Nana's Lullaby",
     goal: "Find the 3 keys and get out the front door.",
-    steps: ["While Nana hums, you can move.", "When the humming stops, freeze — she hears every step.", "Use: open doors, hide in beds and wardrobes, flip light switches.", "Lit rooms show you to her — but she puts the lights out when she walks in."],
+    steps: ["While Nana hums, you can move.", "When the humming stops, freeze — she hears every step.", "Use: open doors, hide in beds and wardrobes, flip light switches.", "Light: your own torch. Chased? Light off and stand still in the dark — she loses you and wanders off.", "Lit rooms show you to her — but she puts the lights out when she walks in."],
     tip: "Left thumb moves, right thumb looks. Push the stick far to run.",
   },
 };

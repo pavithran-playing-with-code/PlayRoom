@@ -1089,8 +1089,8 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* Under the right thumb: Use (doors, hiding spots) and the light, side by
    side, lifted well off the bottom edge where a phone's thumb can't reach. */
 .hm-pad{position:fixed;right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 96px);
-  z-index:4;display:grid;grid-template-columns:76px;grid-template-rows:76px;
-  grid-template-areas:"use"}
+  z-index:4;display:grid;grid-template-columns:76px 76px;grid-template-rows:76px;gap:10px;
+  grid-template-areas:"use light"}
 .hm .hm-pad button{width:76px;height:76px;border-radius:50%;padding:0;font-size:12px;background:rgba(21,18,26,.75);touch-action:none}
 .hm .hm-pad .hm-use{grid-area:use}
 .hm .hm-pad .hm-light{grid-area:light}
@@ -1188,7 +1188,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* Sideways on a phone: a short screen. Buttons in two rows of three so they
    clear the map, words kept left of the buttons, lighter headings. */
 @media (orientation: landscape) and (max-height: 520px){
-  .hm-pad{grid-template-columns:72px;grid-template-rows:72px;gap:0;
+  .hm-pad{grid-template-columns:72px 72px;grid-template-rows:72px;gap:10px;
     right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 64px)}
   .hm .hm-pad button{width:72px;height:72px;font-size:12px}
   .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
@@ -1204,7 +1204,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 }
 /* The same short-landscape layout for the drawn-sideways game: its viewport
    is still portrait, so the media query above never matches it. */
-.hm.hm-rot .hm-pad{grid-template-columns:72px;grid-template-rows:72px;gap:0;
+.hm.hm-rot .hm-pad{grid-template-columns:72px 72px;grid-template-rows:72px;gap:10px;
     right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 64px)}
 .hm.hm-rot .hm-pad button{width:72px;height:72px;font-size:12px}
 .hm.hm-rot .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);

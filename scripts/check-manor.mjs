@@ -296,6 +296,22 @@ function hall(seed = 11) {
   check("…you can switch it on again with her still in there", t.lamps[r] === 1);
 }
 
+// ── chased: light off and stand still, and she loses you ──────────────────
+{
+  const chase = (seed, lightOn) => {
+    const { s } = hall(seed);
+    s.hum.on = true; s.hum.t = 999;
+    s.G.x = s.P.x + 8; s.G.st = "hunt"; s.G.prey = 1; s.G.lose = 0; s.G.stun = 0;
+    if (s.P.light !== lightOn) toggleLight(s);
+    run(s, 2.3);
+    return s;
+  };
+  const dark = chase(85, false);
+  check("chased, light off, standing still in the dark: she loses you and wanders off", dark.G.st === "patrol" && dark.G.prey === null && dark.mode === "play", dark.G.st);
+  const lit = chase(85, true);
+  check("…with your light on, she's still after you", lit.G.st === "hunt", lit.G.st);
+}
+
 // ── a moment's grace when the door locks ─────────────────────────────────────
 {
   const s = newNight(97, 1); begin(s);

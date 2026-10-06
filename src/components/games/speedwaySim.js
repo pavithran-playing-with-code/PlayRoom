@@ -21,16 +21,15 @@ export const OFF_ROAD_LIMIT = MAX_SPEED / 4;
 export const CENTRIFUGAL = 0.3;
 export const START_S = 3;                     // the countdown at the start of a match
 export const KMH = 260;                       // what MAX_SPEED reads as
-// Turbo: hold it for a burst past top speed, while the tank lasts (TURBO_S
-// of use from full). The tank starts empty and only booster pads fill it:
-// drive over one, in its lane, and it's PAD_FILL fuller. Pads never go —
-// every car can take every pad, once a lap. No turbo on the grass.
+// Turbo comes from the booster pads, by itself: drive over one, in its lane,
+// and you're off — BOOST_S of turbo, past top speed, no button to hold (a
+// thumb can't steer and hold a button at once). Over another while boosting
+// and the burst starts again. Pads never go — every car can take every pad,
+// once a lap. No turbo on the grass.
 export const TURBO_TOP = 1.35;                // top speed on turbo, × MAX_SPEED
-export const TURBO_S = 2.5;
-export const TURBO_READY = 0.01;              // anything in the tank will do
-export const PAD_FILL = 0.5;
+export const BOOST_S = 1.8;                   // seconds of turbo from a pad
 export const PAD_W = 0.34;                    // half a pad's width, across the road (-1..1)
-export const PADS = 6;                        // booster pads round a lap
+export const PADS = 8;                        // booster pads round a lap
 
 // ── the road ─────────────────────────────────────────────────────────────────
 // Built from pieces: ease into a bend (or a hill), hold it, ease out.
@@ -83,10 +82,10 @@ export const segAt = (track, d) => track.segs[Math.floor((((d % track.LAP) + tra
 export function newCar(gridSlot = 0) {
   // two abreast, rows a few segments apart, behind the line
   const row = Math.floor(gridSlot / 2), col = gridSlot % 2;
-  return { d: -row * SEG * 4, x: col ? 0.45 : -0.45, speed: 0, finishedAt: null, bump: 0, turbo: 0, boosting: false };
+  return { d: -row * SEG * 4, x: col ? 0.45 : -0.45, speed: 0, finishedAt: null, bump: 0, boostT: 0, boosting: false };
 }
 
-// One frame of your car. inp: { steer: -1..1, turbo: bool, brake: bool }, go: past the
+// One frame of your car. inp: { steer: -1..1, brake: bool }, go: past the
 // countdown. others: [{ d, x }] — cars to bump into. elapsed: the match clock.
 export function drive(track, car, inp, dt, go, others = [], elapsed = 0) {
   const raceLen = LAPS * track.LAP;
@@ -102,8 +101,8 @@ export function drive(track, car, inp, dt, go, others = [], elapsed = 0) {
   car.x += (inp.steer || 0) * dx;
   car.x -= dx * pct * seg.curve * CENTRIFUGAL;
   const onGrass = Math.abs(car.x) > 1;
-  car.boosting = !!inp.turbo && car.turbo > 0 && !onGrass && !inp.brake;
-  if (car.boosting) car.turbo = Math.max(0, car.turbo - dt / TURBO_S);
+  car.boostT = Math.max(0, (car.boostT || 0) - dt);
+  car.boosting = car.boostT > 0 && !onGrass && !inp.brake;
   const top = car.boosting ? MAX_SPEED * TURBO_TOP : MAX_SPEED;
   if (inp.brake) car.speed += BRAKE * dt;
   else if (car.speed > top) car.speed = Math.max(top, car.speed - MAX_SPEED * 0.5 * dt);   // off turbo: ease back down
@@ -125,7 +124,7 @@ export function drive(track, car, inp, dt, go, others = [], elapsed = 0) {
   const was = car.d;
   car.d += car.speed * dt;
   const boosted = padsCrossed(track, was, car.d, car.x);
-  if (boosted) car.turbo = Math.min(1, car.turbo + PAD_FILL * boosted);
+  if (boosted) car.boostT = BOOST_S;
   if (car.d >= raceLen) { car.d = raceLen; car.finishedAt = elapsed; }
   return { bumped, boosted: boosted > 0 };
 }

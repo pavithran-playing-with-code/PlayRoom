@@ -4,9 +4,9 @@
 // You see their cars ahead of you (and pass them), with their names over
 // them; on your own, three computer cars race you. The pedal is always down:
 // steer by tilting the phone like a wheel, by holding either side of the
-// road, with the buttons, or the arrow keys. Turbo comes from the glowing
-// booster pads on the road — drive over one in its lane and your tank fills;
-// hold Turbo (or up / space) for a burst past top speed. Pads never go, so
+// road, with ◀ ▶ (one under each thumb), or the arrow keys. Turbo comes from
+// the glowing booster pads on the road — drive over one in its lane and you
+// burst past top speed by yourself, no button to hold. Pads never go, so
 // everyone can take them. A map in the corner shows where every car is.
 // Stay on the tarmac — the grass is slow, and turbo won't work there — and
 // don't drive into the back of anyone. A landscape game (GameFrame).
@@ -27,7 +27,7 @@ import { useSocket } from "../../utils/SocketContext";
 import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
 import {
   buildTrack, newCar, drive, newBots, driveBot, segAt, lapOf, kmh, raceScore, placeOf,
-  SEG, ROAD_W, LAPS, MAX_SPEED, START_S, PAD_W,
+  SEG, ROAD_W, LAPS, MAX_SPEED, START_S, PAD_W, BOOST_S,
 } from "./speedwaySim.js";
 
 const DRAW = 180;                                     // segments drawn ahead
@@ -336,20 +336,23 @@ function render(ctx, W, H, track, me, cars, t, skyOff) {
   drawCar(ctx, W / 2 + (me.steerShow || 0) * W * 0.01, H - H * 0.04 + bounce, Math.min(W * 0.32, H * 0.38), me.color, steerTilt,
     { spin: me.d / 400, boosting: me.boosting, braking: me.braking, t });
 
-  // the turbo tank, top left (the steering buttons sit bottom left)
+  // the boost, top left: how much of the burst is left, while it lasts
   const tw = Math.min(140, W * 0.3), tx = 14, ty = 26;
-  ctx.fillStyle = "rgba(20,15,30,.55)";
-  ctx.fillRect(tx - 3, ty - 3, tw + 6, 14);
-  const ready = me.turbo > 0;
-  const tg = ctx.createLinearGradient(tx, 0, tx + tw, 0);
-  tg.addColorStop(0, ready ? "#ffb02e" : "#7a6a55");
-  tg.addColorStop(1, ready ? "#ff4d3d" : "#5e5246");
-  ctx.fillStyle = tg;
-  ctx.fillRect(tx, ty, tw * (me.turbo ?? 1), 8);
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 10px system-ui, sans-serif";
+  ctx.font = "bold 11px system-ui, sans-serif";
   ctx.textAlign = "left";
-  ctx.fillText(me.boosting ? "TURBO!" : ready ? "TURBO" : "drive over a pad for turbo", tx, ty - 6);
+  if ((me.boostT || 0) > 0) {
+    ctx.fillStyle = "rgba(20,15,30,.55)";
+    ctx.fillRect(tx - 3, ty - 3, tw + 6, 14);
+    const tg = ctx.createLinearGradient(tx, 0, tx + tw, 0);
+    tg.addColorStop(0, "#ffb02e"); tg.addColorStop(1, "#ff4d3d");
+    ctx.fillStyle = tg;
+    ctx.fillRect(tx, ty, tw * Math.min(1, me.boostT / BOOST_S), 8);
+    ctx.fillStyle = "#fff";
+    ctx.fillText("⚡ BOOST!", tx, ty - 6);
+  } else {
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    ctx.fillText("⚡ drive over the pads to boost", tx, ty + 4);
+  }
 
   drawMap(ctx, W, H, track, me, cars);
 }
@@ -425,7 +428,7 @@ export default function Speedway(props) {
   const bots = useRef(null);
   if (bots.current === null) bots.current = solo ? newBots(seed, 3, 1) : [];
   const remote = useRef(new Map());                   // user id -> { d, x, s, f, at }
-  const input = useRef({ left: false, right: false, turbo: false, brake: false });
+  const input = useRef({ left: false, right: false, brake: false });
   // A landscape game: on a phone held upright GameFrame draws it turned, and
   // a touch's position is turned back before it's read.
   const rotated = useUprightTouch();
@@ -490,7 +493,6 @@ export default function Speedway(props) {
       if (k === "ArrowLeft" || k === "a") input.current.left = v;
       else if (k === "ArrowRight" || k === "d") input.current.right = v;
       else if (k === "ArrowDown" || k === "s") input.current.brake = v;
-      else if (k === "ArrowUp" || k === "w" || k === " ") input.current.turbo = v;
       else return;
       e.preventDefault();
     };
@@ -539,9 +541,9 @@ export default function Speedway(props) {
         const steer = left || right ? (left ? -1 : 0) + (right ? 1 : 0) : tilt.current.on ? tilt.current.steer : 0;
         car.steerShow += (steer - (car.steerShow || 0)) * Math.min(1, dt * 10);
         car.braking = input.current.brake;
-        const out = drive(track, car, { steer, turbo: input.current.turbo, brake: input.current.brake }, dt, go, others, elapsed);
+        const out = drive(track, car, { steer, brake: input.current.brake }, dt, go, others, elapsed);
         if (out.bumped) { flash("Bump!", "error", 600); shake.current = 10; }
-        if (out.boosted) flash("⚡ Turbo! Hold the button", "success", 1100);
+        if (out.boosted) { flash("⚡ Boost!", "success", 900); shake.current = Math.max(shake.current, 4); }
         // dust off the grass, from behind the wheels
         const { w: cw0, h: ch0 } = size.current;
         if (Math.abs(car.x) > 1 && car.speed > 500) {
@@ -565,7 +567,7 @@ export default function Speedway(props) {
       if (car.finishedAt !== null && said < 0) { said = place; flash(`Finished ${PLACE[place] || place + "th"}!`, "success", 3000); }
       if (now - lastHud > 120) {
         lastHud = now;
-        setHud({ place, of: all.length, lap: lapOf(track, car.d), speed: kmh(car), count: Math.max(0, START_S - elapsed), since: elapsed - START_S, finished: car.finishedAt, turbo: car.turbo, boosting: car.boosting });
+        setHud({ place, of: all.length, lap: lapOf(track, car.d), speed: kmh(car), count: Math.max(0, START_S - elapsed), since: elapsed - START_S, finished: car.finishedAt, boosting: car.boosting });
       }
       const c = canvasRef.current;
       if (c) {
@@ -595,11 +597,12 @@ export default function Speedway(props) {
   );
   const controls = !isSpectator ? (
     <div className="sw-controls">
-      <div className="sw-steer">{hold("left", "◀", "Steer left")}{hold("right", "▶", "Steer right")}</div>
+      {/* one thumb each side: ◀ under the left, ▶ under the right */}
+      <div className="sw-steer">{hold("left", "◀", "Steer left")}</div>
       <div className="sw-right">
         <button className={`press sm sw-tilt${tiltOn ? " p-sun" : " p-white"}`} aria-pressed={tiltOn}
           onClick={() => { askTilt(); tilt.current.on = !tilt.current.on; setTiltOn(tilt.current.on); }}>📱 Tilt {tiltOn ? "on" : "off"}</button>
-        {hold("turbo", "🔥 Turbo", "Turbo")}
+        {hold("right", "▶", "Steer right")}
       </div>
     </div>
   ) : null;

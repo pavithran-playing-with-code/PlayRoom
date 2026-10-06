@@ -486,6 +486,9 @@ body.in-game input,body.in-game textarea{-webkit-user-select:text;user-select:te
 /* A landscape game: the controls float in the bottom corners, under the
    thumbs, and the board takes the whole height between them. Drawn turned a
    quarter (.rot) when the phone is held upright — turn the phone. */
+.press.pick{position:relative}
+.coop-badge{position:absolute;top:-8px;right:-8px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
+  font-size:.95rem;background:var(--grape);border:2.5px solid var(--ink);box-shadow:0 2px 0 var(--ink);pointer-events:none}
 .press.gb-help{width:36px;height:36px;padding:0;border-radius:50%;font-weight:900;font-size:1.05rem;flex:none}
 /* how to play: the card, in the lobby, the waiting room and over a game */
 .howto-t{font-family:Fredoka,sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:6px}
@@ -981,7 +984,8 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .sw-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;width:100%}
 .sw-steer,.sw-right{display:flex;align-items:flex-end;gap:10px}
 .gameshell.land .press.sw-btn{min-width:74px;min-height:62px;font-size:1.3rem}
-.gameshell.land .sw-right .press.sw-btn{min-width:110px;min-height:76px}
+.gameshell.land .press.sw-btn{min-width:96px;min-height:76px;font-size:1.6rem}
+.gameshell.land .sw-right{flex-direction:column;align-items:flex-end;gap:8px}
 .press.sw-tilt{font-size:.8rem;padding:6px 10px}
 .sw-stage{position:relative}
 .sw-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font:900 4.5rem/1 Fredoka,Nunito,sans-serif;

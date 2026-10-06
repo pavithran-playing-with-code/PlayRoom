@@ -177,9 +177,11 @@ export default function Lobby() {
                   style={{ flexDirection: "column", gap: 6, padding: "14px 8px", background: g.col, borderRadius: 20 }}>
                   <span style={{ fontSize: "1.9rem", lineHeight: 1 }}><GameIcon slug={g.slug} icon={g.icon} /></span>
                   <span style={{ fontSize: ".82rem", textAlign: "center", lineHeight: 1.15 }}>{g.name}</span>
+                  {g.coopMax > 0 && <span className="coop-badge" title="Can be played together, on one side">🤝</span>}
                 </button>
               ))}
             </div>
+            <p className="muted" style={{ fontSize: ".82rem", margin: "-12px 0 18px" }}>🤝 = you can also play it together with friends, on one side</p>
 
             <div className={label} style={stepLabel}>2 · Clock</div>
             <div className="durrow">

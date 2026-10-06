@@ -111,7 +111,7 @@ export const HOW_TO = {
   speedway: {
     name: "Speedway",
     goal: "Win the 3-lap race.",
-    steps: ["Tilt the phone like a wheel, hold either side of the road, or use ◀ ▶ to steer.", "Drive over the glowing ⚡ pads to fill your turbo.", "Hold 🔥 Turbo for a burst of speed.", "The map in the corner shows where every car is."],
+    steps: ["Tilt the phone like a wheel, hold either side of the road, or use ◀ ▶ to steer.", "Drive over a glowing ⚡ pad and you boost by yourself — no button.", "The map in the corner shows where every car is."],
     tip: "Stay off the grass — it's slow, and turbo won't work there.",
   },
   storm: {

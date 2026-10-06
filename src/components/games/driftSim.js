@@ -19,7 +19,11 @@
 // fx(type, …) so the rules stay pure; sounds through the events returned.
 
 export const HALF = 88, CURB = 14, RUN = 100, WALL = HALF + CURB + RUN, M = 640;
-export const MAXV = 480, GRASSV = 270;
+export const MAXV = 480, GRASSV = 300;             // grass: slow, but not so slow you can't get back
+export const GRASS_DRAG = 0.35;
+// The start: a dead straight this many points ahead of the line (~3 s from
+// standing), and some behind it for the grid, eased into the bends either end.
+export const START_AHEAD = 70, START_BEHIND = 34, START_EASE = 14;
 export const START_S = 3;                       // the countdown: cars locked until GO
 export const KMH = 0.4;                         // px/s → km/h on the speedo
 export const CAR_R = 21;
@@ -44,6 +48,31 @@ function mulberry32(a) {
 export const mkRng = (s) => mulberry32(xmur3(s)());
 
 // ── the track ────────────────────────────────────────────────────────────────
+// The start line goes where the loop is straightest, that stretch is made
+// dead straight (eased in and out), the loop is renumbered so it starts there,
+// and the whole thing is turned so the start straight runs to the right: on a
+// phone held sideways the race starts across the wide screen, road ahead.
+function straightStart(pts) {
+  const dir = (i) => { const a = pts[(i + M - 1) % M], b = pts[(i + 1) % M]; return Math.atan2(b.y - a.y, b.x - a.x); };
+  let s0 = 0, least = Infinity;
+  for (let s = 0; s < M; s += 2) {
+    let bend = 0;
+    for (let k = -START_BEHIND; k < START_AHEAD; k++) bend += Math.abs(ad(dir((s + k + 1 + M) % M), dir((s + k + M) % M)));
+    if (bend < least) { least = bend; s0 = s; }
+  }
+  const A = pts[(s0 - START_BEHIND + M) % M], B = pts[(s0 + START_AHEAD) % M], span = START_AHEAD + START_BEHIND;
+  const smooth = (x) => x * x * (3 - 2 * x);
+  const out = pts.map((p) => ({ ...p }));
+  for (let k = -START_BEHIND; k <= START_AHEAD; k++) {
+    const i = (s0 + k + M) % M, t = (k + START_BEHIND) / span;
+    const w = smooth(clamp(Math.min(k + START_BEHIND, START_AHEAD - k) / START_EASE, 0, 1));
+    out[i] = { x: pts[i].x + (A.x + (B.x - A.x) * t - pts[i].x) * w, y: pts[i].y + (A.y + (B.y - A.y) * t - pts[i].y) * w };
+  }
+  const turned = out.slice(s0).concat(out.slice(0, s0));
+  const th = -Math.atan2(turned[1].y - turned[M - 1].y, turned[1].x - turned[M - 1].x), c = Math.cos(th), sn = Math.sin(th);
+  for (let i = 0; i < M; i++) { const { x, y } = turned[i]; pts[i] = { x: x * c - y * sn, y: x * sn + y * c }; }
+}
+
 const cache = new Map();
 export function buildTrack(code) {
   if (cache.has(code)) return cache.get(code);
@@ -69,6 +98,7 @@ export function buildTrack(code) {
       const f = (d - cum[j]) / (cum[j + 1] - cum[j]), a = raw[j], b = raw[(j + 1) % K];
       pts.push({ x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f });
     }
+    straightStart(pts);
     const ang = [], turn = [];
     for (let i = 0; i < M; i++) { const a = pts[(i + M - 1) % M], b = pts[(i + 1) % M]; ang.push(Math.atan2(b.y - a.y, b.x - a.x)); }
     let maxT = 0;
@@ -140,7 +170,7 @@ export function stepCar(T, c, inp, dt, fx = () => {}) {
   if (inp.brk) { f -= (f > 5 ? 1300 : 420) * dt; if (f < -160) f = -160; }
   if (!inp.thr && !inp.brk) f -= f * 0.7 * dt;
   f -= f * 0.18 * dt;
-  if (grass) f -= f * 1.1 * dt;
+  if (grass) f -= f * GRASS_DRAG * dt;
   const sp = Math.abs(f);
   const want = inp.dr && f > 200 && (c.drifting || Math.abs(c.steer) > 0.3);
   if (want) { c.drifting = true; c.charge += dt * (0.9 + Math.abs(c.steer) * 0.6); }

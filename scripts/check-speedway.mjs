@@ -28,6 +28,22 @@ for (let s = 1; s <= 40; s++) { const t = buildTrack(trackCode(s * 9973)); if (t
 check("tracks come out gentle and never touch themselves", good === 40, `${good}/40, most retries ${worst}`);
 check(`${M} evenly spaced points round a closed loop`, T.P.length === M && Math.abs(Math.hypot(T.P[0].x - T.P[M - 1].x, T.P[0].y - T.P[M - 1].y) - T.ds) < T.ds * 0.05);
 check("seven boost pads or so, on the road", T.pads.length >= 5 && T.pads.length <= 7 && T.pads.every((p) => Math.abs(p.lane) <= 45));
+{
+  let worstBend = 0, worstHead = 0, shortest = 1e9;
+  for (let s = 1; s <= 40; s++) {
+    const t = buildTrack(trackCode(s * 9973));
+    let bend = 0;
+    for (let i = 1; i <= 56; i++) bend += Math.abs(m.ad(t.ANG[i], t.ANG[i - 1]));
+    worstBend = Math.max(worstBend, bend); worstHead = Math.max(worstHead, Math.abs(t.ANG[0])); shortest = Math.min(shortest, 56 * t.ds);
+  }
+  check("every track starts on a dead straight (~3 s) before the first bend", worstBend < 0.05 && shortest > 700, `at most ${(worstBend * 57.3).toFixed(1)}° of bend over the first ${Math.round(shortest)}px`);
+  check("…heading right, across the wide screen", worstHead < 0.01);
+  // a car flat out from the grid, no steering, stays on the road for 3 s
+  const c = makeCar(T, 0);
+  let off = 0;
+  for (let t = 0; t < 3; t += dt) { stepCar(T, c, { thr: 1, brk: 0, str: 0, dr: 0 }, dt); trackUpdate(T, c); off = Math.max(off, Math.abs(c.off)); }
+  check("from the grid, flat out with no steering: still on the tarmac after 3 s", off < HALF, `${off.toFixed(0)}px off centre`);
+}
 check("trees stay off the road", T.trees.every((tr) => T.P.every((p, i) => i % 4 || Math.hypot(tr.x - p.x, tr.y - p.y) > WALL)));
 
 // ── the car ──────────────────────────────────────────────────────────────────
@@ -43,7 +59,7 @@ function drive(car, inp, secs, onTrack = true) {
   const g = makeCar(T, 0); g.off = HALF + CURB + 30;
   let gv = 0;
   for (let t = 0; t < 6; t += dt) { stepCar(T, g, { thr: 1, brk: 0, str: 0, dr: 0 }, dt); g.off = HALF + CURB + 30; gv = Math.hypot(g.vx, g.vy); }
-  check("on the grass: much slower, under the 270 cap", gv <= GRASSV && gv < 0.5 * 423, gv.toFixed(0));
+  check("on the grass: slower than the road, but quick enough to get back", gv <= GRASSV && gv < 0.65 * 423 && gv > 200, gv.toFixed(0));
   const r = makeCar(T, 0);
   const rv = drive(r, { thr: 0, brk: 1, str: 0, dr: 0 }, 3, false);
   check("reversing is capped at 160", rv <= 161, rv.toFixed(0));

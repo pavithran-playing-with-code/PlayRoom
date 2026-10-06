@@ -8,11 +8,18 @@
 // clock decides it; a crash slows you right down but takes nothing away.
 // The rules are runnerSim.js; this file draws it, in perspective from just
 // behind and above the runner, and reads the thumbs.
-import React, { useEffect, useRef, useState } from "react";
+//
+// Together (a co-op room): your friends run beside you, see-through. A crash
+// knocks you down for a few seconds unless a friend grabs a ❤️ — then
+// everyone who's down is back up (runTogether.js). The side's points add up.
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
-import { newRun, step, steer, jump, slide, sliding, score, LANE_W, LOW, HIGH, TRAIN, BASE_SPEED, MAX_SPEED } from "./runnerSim.js";
+import useRunTogether from "./useRunTogether";
+import { DOWN_S, HEART_PTS, teamGoal, hearts, heartsBetween } from "./runTogether";
+import { team } from "./coopTeam";
+import { newRun, step, steer, jump, slide, sliding, score, LANE_W, LOW, HIGH, TRAIN, BASE_SPEED, MAX_SPEED, SAFE_S } from "./runnerSim.js";
 
 const SWIPE_PX = 26;
 const CAM_BACK = 5.2, CAM_H = 3.1;           // metres behind and above the runner
@@ -51,7 +58,7 @@ function box(ctx, v, x0, x1, y0, y1, z0, z1, front, side, top) {
   return { a, b, c, d };
 }
 
-function drawScene(ctx, s, W, H, t) {
+function drawScene(ctx, s, W, H, t, tg) {
   const v = makeView(W, H, s);
   const { P, HZ } = v;
   // sky and skyline
@@ -125,6 +132,34 @@ function drawScene(ctx, s, W, H, t) {
     if (o.kind === "coin" && o.got) continue;
     if (o.hit) continue;                                    // what you crashed into bursts apart (see drawFx)
     things.push({ z: o.z, draw: () => drawItem(ctx, v, o, t) });
+  }
+  // together: hearts over the middle lane, and friends running beside you
+  if (tg) {
+    for (const at of tg.hearts) {
+      if (at < zNear || at > zFar) continue;
+      things.push({ z: at, draw: () => {
+        const [hx, hy, dz] = P(0, 1.7 + Math.sin(t * 4 + at) * 0.12, at);
+        ctx.font = `${Math.max(10, Math.round((0.9 * v.F) / dz))}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("❤️", hx, hy);
+      } });
+    }
+    for (const m of tg.mates) {
+      if (m.d < zNear + 0.4 || m.d > zFar) continue;
+      const ghost = { x: m.l, y: m.y, z: m.d, stunT: m.dn ? 1 : 0, safeT: 0, speed: m.v || BASE_SPEED, slideT: 0, landT: 0 };
+      things.push({ z: m.d, draw: () => {
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        drawRunner(ctx, v, ghost, t);
+        ctx.restore();
+        const [nx, ny, dz] = P(m.l * LANE_W, m.y + 2.3, m.d);
+        ctx.font = `600 ${Math.max(9, Math.min(14, Math.round((0.5 * v.F) / dz)))}px Fredoka, Nunito, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.fillStyle = m.col;
+        ctx.fillText(m.dn ? `💤 ${m.name}` : m.name, nx, ny);
+      } });
+    }
   }
   things.push({ z: s.z, runner: true, draw: () => drawRunner(ctx, v, s, t) });
   things.sort((a, b) => b.z - a.z || (a.runner ? 1 : -1));
@@ -380,11 +415,32 @@ function drawFx(ctx, fx, W, H, s, t) {
 // ── the game ─────────────────────────────────────────────────────────────────
 export default function RailRunner(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null, mode } = props;
+  const coop = mode === "coop" && !!roomCode;
+  const myId = Number(currentUser?.id);
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const { addScore } = eng;
   const sim = useRef(null);
   if (sim.current === null) sim.current = newRun(seed);
+
+  // together: friends beside you, hearts to save each other
+  const T = useMemo(() => team(players, myId), [players, myId]);
+  const Tref = useRef(T);
+  Tref.current = T;
+  const heartAt = useMemo(() => hearts(seed, "runner"), [seed]);
+  const tg = useRef({ down: false, h: 0, got: new Set(), bonus: 0 });
+  const [down, setDown] = useState(false);
+  const { tell, mates } = useRunTogether({ on: coop, roomCode, isSpectator, myId, onRevive: (id) => {
+    const s = sim.current;
+    if (!tg.current.down) return;
+    s.stunT = 0;
+    s.safeT = SAFE_S;
+    s.speed = BASE_SPEED;
+    tg.current.down = false;
+    setDown(false);
+    sayRef.current(`❤️ ${Tref.current.nameOf(id)} saved you!`, "success");
+  } });
+  const sayRef = useRef(null);
   const canvasRef = useRef(null);
   const size = useRef({ w: 300, h: 400 });
   const overRef = useRef(false);
@@ -397,6 +453,12 @@ export default function RailRunner(props) {
     setMsg({ text, type });
     timers.current.push(setTimeout(() => setMsg(null), 700));
   };
+  const say = useCallback((text, type) => {
+    const m = { text, type };
+    setMsg(m);
+    timers.current.push(setTimeout(() => setMsg((x) => (x === m ? null : x)), 1400));
+  }, []);
+  sayRef.current = say;
 
   const act = (what) => {
     if (overRef.current || isSpectator) return;
@@ -445,9 +507,33 @@ export default function RailRunner(props) {
       last = now;
       const s = sim.current;
       if (!overRef.current) {
+        const z0 = s.z;
         const out = step(s, dt);
-        if (out.crashed) {
+        const T0 = tg.current;
+        if (coop) {
+          if (out.crashed) {
+            s.stunT = DOWN_S;
+            s.safeT = DOWN_S + SAFE_S;
+            T0.down = true;
+            setDown(true);
+          } else if (T0.down && s.stunT <= 0) { T0.down = false; setDown(false); }
+          // a heart passed while on your feet is yours: everybody down gets up
+          if (!T0.down && s.stunT <= 0) {
+            for (const { k } of heartsBetween(heartAt, z0, s.z)) {
+              if (T0.got.has(k)) continue;
+              T0.got.add(k);
+              T0.h += 1;
+              T0.bonus += HEART_PTS.runner;
+              const anyDown = mates().some((m) => m.dn);
+              say(anyDown ? "❤️ You saved your friends!" : `❤️ +${HEART_PTS.runner}`, "success");
+            }
+          }
+          tell({ d: s.z, v: s.speed, y: s.y, l: s.x, dn: T0.down, h: T0.h });
+        }
+        if (out.crashed && !coop) {
           flash("Ouch! Keep running!", "error");
+        }
+        if (out.crashed) {
           // whatever you hit bursts into pieces and is gone, so it doesn't fill the screen
           const { w: W1, h: H1 } = size.current, v1 = makeView(W1, H1, s);
           const [bx, by] = v1.P(s.x * LANE_W, 1.0, s.z + 0.8);
@@ -477,7 +563,7 @@ export default function RailRunner(props) {
           const [lx, ly] = v.P(s.x * LANE_W, 0, s.z - 0.2);
           fx.dust.push({ x: lx + (Math.random() - 0.5) * 14, y: ly, r: 2 + Math.random() * 3, life: 0.35, max: 0.35 });
         }
-        const target = score(s);
+        const target = score(s) + tg.current.bonus;
         if (target !== pushed) { addScore(target - pushed); pushed = target; }
         if (now - lastHud > 150) { lastHud = now; setHud({ dist: Math.floor(s.z), coins: s.coins, crashes: s.crashes }); }
       }
@@ -498,16 +584,32 @@ export default function RailRunner(props) {
         if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
         const ctx = c.getContext("2d");
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawScene(ctx, s, w, h, now / 1000);
+        const T1 = tg.current;
+        const extra = coop ? {
+          hearts: heartsBetween(heartAt, s.z - 6, s.z + FAR).filter((x) => !T1.got.has(x.k)).map((x) => x.at),
+          mates: mates().map((m) => ({ ...m, col: Tref.current.colourOf(m.id), name: Tref.current.nameOf(m.id) })),
+        } : null;
+        drawScene(ctx, s, w, h, now / 1000, extra);
         drawFx(ctx, fx, w, h, s, now / 1000);
       }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [isSpectator, addScore]);
+  }, [isSpectator, addScore, coop, heartAt, tell, mates, say]);
 
-  const stats = [
+  // together: the side's points, against the team goal
+  const oppList = Object.values(eng.opponents);
+  const seats = (players || []).filter((p) => !p.is_spectator);
+  const goal = teamGoal("runner", durationSeconds, seats.length);
+  const teamTotal = eng.score + oppList.reduce((t, o) => t + (Number(o.score) || 0), 0);
+  const scores = { [myId]: eng.score };
+  for (const o of oppList) scores[o.user_id] = Number(o.score) || 0;
+  const stats = coop
+    ? [{ label: "Team", value: teamTotal.toLocaleString() },
+       { label: "Goal", value: teamTotal >= goal ? "✓" : goal.toLocaleString() },
+       { label: "You", value: eng.score.toLocaleString() }]
+    : [
     { label: "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
     { label: "Distance", value: `${hud.dist}m` },
     { label: "Coins", value: hud.coins },
@@ -526,9 +628,9 @@ export default function RailRunner(props) {
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
-        opponents={Object.values(eng.opponents)}
+        opponents={coop ? T.strip(scores, (n) => `${n.toLocaleString()} pts`) : oppList}
         teams={eng.teams}
-        message={msg}
+        message={down ? { text: "💤 Down — a friend's ❤️ gets you up", type: "info" } : msg}
         onQuit={eng.endMatch}
         controls={controls}
       >
@@ -550,7 +652,9 @@ export default function RailRunner(props) {
         }}
       </GameFrame>
       {eng.gameOver && !isSpectator && (
-        <GameOver eng={eng} me={currentUser} extra={`Distance: ${hud.dist}m · Coins: ${hud.coins}${hud.crashes ? ` · Crashes: ${hud.crashes}` : ""}`} />
+        <GameOver eng={eng} me={currentUser}
+          extra={coop ? `Team: ${teamTotal.toLocaleString()} pts` : `Distance: ${hud.dist}m · Coins: ${hud.coins}${hud.crashes ? ` · Crashes: ${hud.crashes}` : ""}`}
+          together={coop ? { reached: teamTotal >= goal, goal: `${goal.toLocaleString()} points`, unit: "pts", mates: T.all(scores) } : null} />
       )}
     </>
   );

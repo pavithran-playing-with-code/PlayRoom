@@ -7,14 +7,15 @@
 // late the server's answers come back.
 import { createRequire } from "module";
 import { newLog, take, propose, view, differs, restart } from "../src/components/games/coopLog.js";
-import { GOAL, memoryRules, mahjongRules, numbersRules, pipesRules, MEM_PAIR, MJ_MISS } from "../src/components/games/coopBoards.js";
+import { GOAL, memoryRules, mahjongRules, numbersRules, pipesRules, wordRules, wordGoal, MEM_PAIR, MJ_MISS } from "../src/components/games/coopBoards.js";
+import { teamGoal, hearts, heartsBetween, PACE } from "../src/components/games/runTogether.js";
 import { buildCards, TOTAL_PAIRS } from "../src/components/games/memoryDeck.js";
 import { isFree, findPair, SLOTS } from "../src/components/games/mahjongBoard.js";
 import { makeBoard as gridOf } from "../src/components/games/numberBoard.js";
 import { makeBoard as pipesOf, currentMasks, isSolved } from "../src/components/games/pipesBoard.js";
 
 const require = createRequire(import.meta.url);
-const { COOP_GOAL, resultsFor } = require("../config/matchResult.js");
+const { COOP_GOAL, COOP_PACE, teamGoal: serverTeamGoal, wordGoal: serverWordGoal, resultsFor } = require("../config/matchResult.js");
 
 let fails = 0;
 const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`); };
@@ -228,6 +229,50 @@ fuzz("pipes", pr, (s, rand) => ({ t: "turn", b: s.b, i: Math.floor(rand() * pr.b
   check("result: Maze Runner together still wins on one door", r3.get(1) === "win");
   const r4 = resultsFor({ mode: "free", game_slug: "memory" }, [{ user_id: 1, score: 9, pairs_matched: 1 }, { user_id: 2, score: 5, pairs_matched: 1 }]);
   check("result: against each other is unchanged", r4.get(1) === "win" && r4.get(2) === "loss");
+}
+
+// ── Word Rush ────────────────────────────────────────────────────────────────
+{
+  const R = wordRules();
+  let s = freeze(R.init);
+  s = freeze(play(R, s, 1, { t: "take" }));
+  s = freeze(play(R, s, 2, { t: "take" }));
+  check("words: two people take a word each — different words", s.taken["1"] === 0 && s.taken["2"] === 1);
+  check("words: taking again changes nothing", play(R, s, 1, { t: "take" }) === s);
+  check("words: solving somebody else's word does nothing", play(R, s, 2, { t: "solve", i: 0 }) === s);
+  s = freeze(play(R, s, 1, { t: "solve", i: 0 }));
+  check("words: solving yours scores, counts, and hands you the next word nobody has had", s.score === 16 && s.solved === 1 && s.taken["1"] === 2 && s.boards === 1);
+  check("words: the same word solved twice counts once", play(R, s, 1, { t: "solve", i: 0 }) === s);
+  s = freeze(play(R, s, 2, { t: "skip", i: 1 }));
+  check("words: giving up costs 4 and hands over the next", s.score === 12 && s.taken["2"] === 3 && s.solved === 1);
+  const fin = fuzz("words", R, (st, rand) => (rand() < 0.15 ? { t: "take" } : { t: rand() < 0.8 ? "solve" : "skip", i: Math.floor(rand() * 6) }), 800);
+  const given = Object.values(fin.taken);
+  check("words: after all that, nobody shares a word", new Set(given).size === given.length, JSON.stringify(fin.taken));
+}
+
+// ── running together ────────────────────────────────────────────────────────
+for (const slug of ["runner", "dino", "flappy"]) {
+  check(`${slug}: pace is the same on both ends`, COOP_PACE[slug] === PACE[slug]);
+  let ok = true;
+  for (const secs of [120, 180, 300]) for (const n of [2, 3, 4]) if (teamGoal(slug, secs, n) !== serverTeamGoal(slug, secs, n)) ok = false;
+  check(`${slug}: team goal the same on both ends`, ok, `2 players, 2 min: ${teamGoal(slug, 120, 2)}`);
+  const far = slug === "flappy" ? 200 : 20000;
+  const la = heartsBetween(hearts(SEED, slug), 0, far).map((x) => x.at);
+  const lb = heartsBetween(hearts(SEED, slug), 0, far).map((x) => x.at);
+  check(`${slug}: hearts in the same places for everyone`, la.length > 3 && same(la, lb), la.slice(0, 4).map((x) => Math.round(x)).join(", "));
+  check(`${slug}: hearts in order, spread out`, la.every((x, i) => i === 0 || x > la[i - 1]));
+}
+{
+  let ok = true;
+  for (const secs of [120, 180, 300]) for (const n of [2, 3, 4]) if (wordGoal(secs, n) !== serverWordGoal(secs, n)) ok = false;
+  check("words: goal the same on both ends", ok, `2 players, 2 min: ${wordGoal(120, 2)} words`);
+  const room = (slug, secs) => ({ mode: "coop", game_slug: slug, duration_seconds: secs });
+  const g = teamGoal("dino", 120, 2);
+  const w = resultsFor(room("dino", 120), [{ user_id: 1, score: g / 2 }, { user_id: 2, score: g / 2 }]);
+  const l = resultsFor(room("dino", 120), [{ user_id: 1, score: g / 2 }, { user_id: 2, score: g / 2 - 10 }]);
+  check("result: runners together win on the points added up", w.get(1) === "win" && w.get(2) === "win" && l.get(1) === "loss" && l.get(2) === "loss");
+  const ww = resultsFor(room("wordrush", 120), [{ user_id: 1, score: 1, pairs_matched: wordGoal(120, 2) }, { user_id: 2, score: 1, pairs_matched: wordGoal(120, 2) }]);
+  check("result: Word Rush together wins on words solved", ww.get(1) === "win" && ww.get(2) === "win");
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASS");

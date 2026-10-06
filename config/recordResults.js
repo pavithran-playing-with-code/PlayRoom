@@ -22,7 +22,7 @@ const { cap, resultsFor } = require("./matchResult");
 // Rows already present are left alone, so this stays safe to call repeatedly.
 async function recordResults(roomId) {
   const [[room]] = await db.execute(
-    `SELECT r.id, r.mode, gt.slug AS game_slug
+    `SELECT r.id, r.mode, r.duration_seconds, gt.slug AS game_slug
        FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id
       WHERE r.id = ?`, [roomId]);
   if (!room) return [];

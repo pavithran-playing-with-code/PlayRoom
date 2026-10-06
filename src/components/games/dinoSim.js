@@ -5,7 +5,7 @@
 // World units: the screen is VIEW_W units across for every player (a wider
 // screen gets a bigger picture, not a longer look ahead). Heights are measured
 // up from the ground.
-import { seededRand } from "./seededRand";
+import { seededRand } from "./seededRand.js";
 
 export const VIEW_W = 520;
 export const DINO_X = 64;            // where the dino stands, from the left edge

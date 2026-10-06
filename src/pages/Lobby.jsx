@@ -40,6 +40,7 @@ export default function Lobby() {
   const [params, setParams] = useSearchParams();
   const game = GAME_MAP[params.get("game")] ? params.get("game") : GAMES[0].slug;
   const setGame = (slug) => setParams({ game: slug }, { replace: true });
+  const [onlyTogether, setOnlyTogether] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [duration, setDuration] = useState(120);
   const [isPrivate, setIsPrivate] = useState(false);
@@ -169,19 +170,32 @@ export default function Lobby() {
           <div className="pop" style={{ padding: 26 }}>
             <h2 style={{ fontSize: "1.5rem", marginBottom: 18 }}>✨ Start a match</h2>
 
-            <div className={label} style={stepLabel}>1 · Game</div>
+            {/* Which games can be played together is there when you ask for
+                it — a toggle that narrows the list — not a badge on every tile. */}
+            <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <div className={label} style={stepLabel}>1 · Game</div>
+              <button type="button" className={`chip lb-together${onlyTogether ? " on" : ""}`} aria-pressed={onlyTogether}
+                onClick={() => {
+                  const on = !onlyTogether;
+                  setOnlyTogether(on);
+                  if (on && !(selected.coopMax > 0)) setGame(GAMES.find((g) => g.coopMax > 0).slug);
+                }}>
+                🤝 Together{onlyTogether ? " ✓" : ""}
+              </button>
+            </div>
             <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 12, marginBottom: 22 }}>
-              {GAMES.map((g) => (
+              {GAMES.filter((g) => !onlyTogether || g.coopMax > 0).map((g) => (
                 <button key={g.slug} className="press pick" data-game={g.slug}
                   aria-pressed={g.slug === game} onClick={() => setGame(g.slug)}
                   style={{ flexDirection: "column", gap: 6, padding: "14px 8px", background: g.col, borderRadius: 20 }}>
                   <span style={{ fontSize: "1.9rem", lineHeight: 1 }}><GameIcon slug={g.slug} icon={g.icon} /></span>
                   <span style={{ fontSize: ".82rem", textAlign: "center", lineHeight: 1.15 }}>{g.name}</span>
-                  {g.coopMax > 0 && <span className="coop-badge" title="Can be played together, on one side">🤝</span>}
                 </button>
               ))}
             </div>
-            <p className="muted" style={{ fontSize: ".82rem", margin: "-12px 0 18px" }}>🤝 = you can also play it together with friends, on one side</p>
+            {onlyTogether && (
+              <p className="muted" style={{ fontSize: ".82rem", margin: "-12px 0 18px" }}>Games you can play on one side with friends.</p>
+            )}
 
             <div className={label} style={stepLabel}>2 · Clock</div>
             <div className="durrow">

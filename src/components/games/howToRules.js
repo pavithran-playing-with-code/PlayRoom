@@ -40,7 +40,7 @@ export const HOW_TO = {
   wordrush: {
     name: "Word Rush",
     goal: "Unscramble as many words as you can.",
-    steps: ["Tap the letters in the right order to spell the word.", "Tap a letter in your answer to take it back, or ⌫ Undo.", "A finished word checks itself."],
+    steps: ["Tap the letters in the right order to spell the word.", "Tap a letter in your answer to take it back, or ⌫ Undo.", "A finished word checks itself.", "Together: each of you has your own word from one pile — solve enough as a team."],
     tip: "Look for the first letter and common endings like -ing, -er, -ed.",
   },
   arrows: {
@@ -58,7 +58,7 @@ export const HOW_TO = {
   dino: {
     name: "Dino Dash",
     goal: "Run as far as you can.",
-    steps: ["Tap (or ▲) to jump the cacti.", "Hold Duck (or ▼) to get under the birds.", "A crash knocks you back to slow and costs a few points — keep running."],
+    steps: ["Tap (or ▲) to jump the cacti.", "Hold Duck (or ▼) to get under the birds.", "A crash knocks you back to slow and costs a few points — keep running.", "Together: a crash knocks you down — a friend grabbing a ❤️ gets you up."],
     tip: "The faster you get, the earlier you need to jump.",
   },
   numbers: {
@@ -82,7 +82,7 @@ export const HOW_TO = {
   flappy: {
     name: "Flappy Dash",
     goal: "Fly through as many gaps as you can.",
-    steps: ["Tap to flap — let go and you fall.", "Each gap you get through is 10 points.", "A crash costs 10 and dazes you, then you fly on."],
+    steps: ["Tap to flap — let go and you fall.", "Each gap you get through is 10 points.", "A crash costs 10 and dazes you, then you fly on.", "Together: a crash knocks you down — a friend flying through a ❤️ gets you up."],
     tip: "Small, steady taps beat big panicky ones.",
   },
   slide: {
@@ -106,7 +106,7 @@ export const HOW_TO = {
   runner: {
     name: "Rail Runner",
     goal: "Run as far as you can and grab coins.",
-    steps: ["Swipe ◀ ▶ to change lane.", "Swipe ▲ to jump barriers, ▼ to slide under bars.", "Swerve round the trains — you can't jump them."],
+    steps: ["Swipe ◀ ▶ to change lane.", "Swipe ▲ to jump barriers, ▼ to slide under bars.", "Swerve round the trains — you can't jump them.", "Together: a crash knocks you down — a friend grabbing a ❤️ gets you up."],
     tip: "Your score is metres run + 10 for every coin. A crash slows you right down.",
   },
   speedway: {

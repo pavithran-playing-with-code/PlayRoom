@@ -489,8 +489,8 @@ body.in-game input,body.in-game textarea{-webkit-user-select:text;user-select:te
    thumbs, and the board takes the whole height between them. Drawn turned a
    quarter (.rot) when the phone is held upright — turn the phone. */
 .press.pick{position:relative}
-.coop-badge{position:absolute;top:-8px;right:-8px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;
-  font-size:.95rem;background:var(--grape);border:2.5px solid var(--ink);box-shadow:0 2px 0 var(--ink);pointer-events:none}
+.chip.lb-together{cursor:pointer;background:#fff;margin-bottom:10px;font-size:.8rem}
+.chip.lb-together.on{background:var(--grape);color:#fff}
 .cr-clock{font-weight:900;font-size:1rem;padding:4px 10px;border-radius:999px;border:2.5px solid var(--ink);background:#fff;flex:none}
 .cr-clock.low{background:var(--coral);color:#fff;animation:hmPulse .5s infinite alternate}
 .press.cr-shoot{position:relative;overflow:hidden;min-width:150px;min-height:56px;font-weight:900;touch-action:none;--pow:0}

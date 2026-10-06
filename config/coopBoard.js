@@ -26,7 +26,7 @@
 const db = require("./db");
 const { roomChannel } = require("./socket");
 
-const GAMES = new Set(["memory", "mahjong", "numbers", "pipes"]);
+const GAMES = new Set(["memory", "mahjong", "numbers", "pipes", "wordrush"]);
 const CODE_RE = /^[A-Z0-9]{4,8}$/;
 const MAX_MOVE = 200;            // characters of JSON: a move is a tap
 const MAX_ACTS = 20000;          // a long match on a busy board is ~2,000

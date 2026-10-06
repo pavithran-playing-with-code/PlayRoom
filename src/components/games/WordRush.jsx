@@ -5,11 +5,20 @@
 //
 // Letter tiles, not a text box: on a phone a text box brings up the keyboard,
 // which covers half the game and makes the page scroll.
+//
+// Together (a co-op room): one pile of words for the side. Each of you has
+// your own word; solve it or give it up and the next one nobody has had is
+// yours. Which word is whose goes through the server in one order
+// (useCoopBoard, coopBoards.js: wordRules), so two people never get the same
+// one. The letters you tap are your own business and never leave the phone.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
+import useCoopBoard from "./useCoopBoard";
+import { wordRules, wordGoal } from "./coopBoards";
+import { team, plural } from "./coopTeam";
 import { seededRand, shuffleInPlace } from "./seededRand";
 
 const WORDS = [
@@ -37,7 +46,9 @@ function buildRound(seed) {
 export default function WordRush(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
     startedAt, serverNow, isSpectator = false, spectatorWatching = null,
-    spectatorState = null } = props;
+    spectatorState = null, mode } = props;
+  const coop = mode === "coop" && !!roomCode;
+  const myId = Number(currentUser?.id);
 
   const round = useMemo(() => buildRound(seed), [seed]);
 
@@ -57,8 +68,22 @@ export default function WordRush(props) {
     },
   });
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
-    extraState: spectate.extraState });
+  // together: whose word is whose, for the side
+  const R = useMemo(() => wordRules(), []);
+  const cb = useCoopBoard({ on: coop, roomCode, isSpectator, myId, rules: R.rules, init: R.init });
+  const T = useMemo(() => team(players, myId), [players, myId]);
+  const agreedRef = useRef(cb.agreed);
+  agreedRef.current = cb.agreed;
+  const seatCount = (players || []).filter((p) => !p.is_spectator).length;
+  const goal = wordGoal(durationSeconds, seatCount);
+  const soloState = spectate.extraState;
+
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
+    extraState: coop ? () => ({ pairs_matched: agreedRef.current.solved }) : soloState });
+
+  // together: the side's score is everybody's
+  const { setScore } = eng;
+  useEffect(() => { if (coop && !isSpectator && cb.ready) setScore(cb.agreed.score); }, [coop, isSpectator, cb.ready, cb.agreed.score, setScore]);
 
   const [idx, setIdx] = useState(0);
   const [picked, setPicked] = useState([]);
@@ -72,11 +97,42 @@ export default function WordRush(props) {
   }, []);
   const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
 
+  // together: my word is the one the server agrees is mine — not a guess,
+  // so it never changes under my fingers. Until then, ask for one.
+  const mine = coop ? cb.agreed.taken[String(myId)] : undefined;
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!coop || isSpectator || !cb.ready || mine !== undefined || asked.current) return;
+    asked.current = true;
+    cb.send({ t: "take" });
+  }, [coop, isSpectator, cb.ready, mine, cb]);
+  // a new word of mine: fresh letters
+  useEffect(() => {
+    if (!coop || mine === undefined) return;
+    const s = live.current;
+    s.idx = mine;
+    s.picked = [];
+    s.lock = false;
+    setIdx(mine);
+    setPicked([]);
+    setRevealed(null);
+  }, [coop, mine]);
+
   const cur = round[idx % round.length];
-  const canPlay = !eng.gameOver && !isSpectator;
+  const waiting = coop && mine === undefined;
+  const canPlay = !eng.gameOver && !isSpectator && !waiting;
 
   function nextWord(delta, kind) {
     const s = live.current;
+    if (coop) {
+      // the server hands out the next word; until it does, the letters wait
+      cb.send({ t: kind === "good" ? "solve" : "skip", i: s.idx });
+      eng.addMove();
+      s.lock = true;
+      setFlash(kind);
+      later(() => setFlash((f) => (f === kind ? null : f)), 220);
+      return;
+    }
     eng.addScore(delta);
     eng.addMove();
     s.idx += 1;
@@ -159,9 +215,13 @@ export default function WordRush(props) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const oppList = Object.values(eng.opponents);
+  const v = cb.view;
+  const oppList = coop ? T.strip(v.by, (n) => plural(n, "word")) : Object.values(eng.opponents);
   const specScore = spectatorWatching?.score ?? 0;
-  const stats = isSpectator
+  const stats = coop
+    ? [{ label: "Score", value: v.score.toLocaleString() },
+       { label: "Words", value: v.solved >= goal ? "✓" : `${v.solved}/${goal}` }]
+    : isSpectator
     ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
     : [{ label: "Score", value: eng.score.toLocaleString() }, { label: "Solved", value: solved }];
 
@@ -173,7 +233,7 @@ export default function WordRush(props) {
     <>
       <GameFrame
         gameName="Word Rush" badge="🔤 WORD RUSH"
-        isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
+        isSpectator={isSpectator} spectatorName={coop ? "the team" : spectatorWatching?.username}
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={oppList}
@@ -187,6 +247,8 @@ export default function WordRush(props) {
         ) : null}
       >
         {({ w, h }) => {
+          if (coop && isSpectator) return <div className="muted">👀 The team has solved {plural(v.solved, "word")} of {goal}.</div>;
+          if (waiting) return <div className="muted">Getting your first word…</div>;
           const n = cur.word.length;
           const W = Math.min(w, 460);
           const gap = 8;
@@ -194,7 +256,7 @@ export default function WordRush(props) {
           const tall = Math.round(tile * 1.1);
           return (
             <div style={{ width: W, textAlign: "center" }}>
-              <div className="muted eyebrow" style={{ textAlign: "center" }}>Tap the letters in order</div>
+              <div className="muted eyebrow" style={{ textAlign: "center" }}>{coop ? "Your word — friends have their own" : "Tap the letters in order"}</div>
 
               {/* the answer you're building — tap a letter to take it back */}
               <div className="wr-row" style={{ gap, marginBottom: Math.round(tile * 0.45) }}>
@@ -231,7 +293,10 @@ export default function WordRush(props) {
         }}
       </GameFrame>
 
-      {eng.gameOver && !isSpectator && <GameOver eng={eng} me={currentUser} />}
+      {eng.gameOver && !isSpectator && (coop
+        ? <GameOver eng={eng} me={currentUser} extra={`Words solved: ${cb.agreed.solved}`}
+            together={{ reached: cb.agreed.solved >= goal, goal: `solve ${goal} words`, unit: "words", mates: T.all(cb.agreed.by) }} />
+        : <GameOver eng={eng} me={currentUser} />)}
     </>
   );
 }

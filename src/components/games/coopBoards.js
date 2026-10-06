@@ -225,3 +225,40 @@ export function pipesRules(seed) {
   }
   return { init, rules, board };
 }
+
+// ── Word Rush ────────────────────────────────────────────────────────────────
+// One pile of words for the side. Each of you has your own word to
+// unscramble ("take" one to start); solve it or give it up and you get the
+// next word nobody has had — two people never get the same one. The goal
+// grows with the clock and the side: 3 words a minute each.
+export const WORD_SOLVE = 16;
+export const WORD_SKIP = 4;
+export const wordGoal = (secs, n) => Math.max(4, Math.round((3 * (Number(secs) || 120) * Math.max(1, n)) / 60));
+
+export function wordRules() {
+  const init = { ...blank(1), next: 0, taken: {}, solved: 0 };
+  function rules(st, { u, a, c }) {
+    if (!a) return st;
+    const me = String(u);
+    if (a.t === "take") {
+      if (st.taken[me] !== undefined) return st;
+      return { ...st, taken: { ...st.taken, [me]: st.next }, next: st.next + 1 };
+    }
+    if (a.t !== "solve" && a.t !== "skip") return st;
+    const i = int(a.i);
+    if (st.taken[me] !== i) return st;                       // not the word you have
+    const s = { ...st, taken: { ...st.taken, [me]: st.next }, next: st.next + 1 };
+    if (a.t === "solve") {
+      s.score += WORD_SOLVE;
+      s.solved += 1;
+      s.boards = s.solved;
+      credit(s, u);
+      said(s, c, { k: "solved", u, i });
+    } else {
+      lose(s, WORD_SKIP);
+      said(s, c, { k: "skip", u, i });
+    }
+    return s;
+  }
+  return { init, rules };
+}

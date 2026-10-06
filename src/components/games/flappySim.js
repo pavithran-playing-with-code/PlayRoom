@@ -4,7 +4,7 @@
 //
 // Everyone sees the same slice of the world (VIEW_W wide), and the pipes come
 // from the room's seed, so a room all flies the same course.
-import { seededRand } from "./seededRand";
+import { seededRand } from "./seededRand.js";
 
 export const VIEW_W = 320;
 export const VIEW_H = 460;

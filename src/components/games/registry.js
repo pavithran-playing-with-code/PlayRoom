@@ -76,6 +76,9 @@ export const GAMES = [
     slug: "wordrush", name: "Word Rush", icon: "🔤",
     blurb: "Unscramble as many words as you can before time runs out.",
     minPlayers: 1, maxPlayers: 8, tag: "Word", col: "var(--lime)",
+    coopMax: 4,
+    coopLabel: "one pile of words — solve them together",
+    coopNote: "One pile of words for all of you — each of you works on your own word. Solve enough together to reach the goal.",
     Component: WordRush,
   },
   {
@@ -94,6 +97,9 @@ export const GAMES = [
     slug: "dino", name: "Dino Dash", icon: "🦖",
     blurb: "Jump the cacti, duck the birds. Crash and you're back to slow, so keep running.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--leaf)",
+    coopMax: 4,
+    coopLabel: "run side by side — save each other with ❤️",
+    coopNote: "Run the same course side by side. A crash knocks you down — a friend's ❤️ gets you up. Your points add up to the team's.",
     Component: DinoDash,
   },
   {
@@ -124,6 +130,9 @@ export const GAMES = [
     slug: "flappy", name: "Flappy Dash", icon: "🐤",
     blurb: "Tap to flap. Squeeze through the pipes and try not to meet one.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--chick)",
+    coopMax: 4,
+    coopLabel: "fly side by side — save each other with ❤️",
+    coopNote: "Run the same course side by side. A crash knocks you down — a friend's ❤️ gets you up. Your points add up to the team's.",
     Component: FlappyDash,
   },
   {
@@ -150,6 +159,9 @@ export const GAMES = [
     slug: "runner", name: "Rail Runner", icon: "🏃",
     blurb: "Run the rails: jump the barriers, slide under the bars, dodge the trains.",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--coral)",
+    coopMax: 4,
+    coopLabel: "run side by side — save each other with ❤️",
+    coopNote: "Run the same course side by side. A crash knocks you down — a friend's ❤️ gets you up. Your points add up to the team's.",
     Component: RailRunner,
   },
   {

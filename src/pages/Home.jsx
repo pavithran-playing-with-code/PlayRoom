@@ -81,10 +81,7 @@ export default function Home() {
                   <h3>{g.name}</h3>
                   <p>{g.blurb}</p>
                   <span className="row" style={{ justifyContent: "space-between" }}>
-                    <span className="row" style={{ gap: 6 }}>
-                      <span className="chip c-sun">{g.tag}</span>
-                      {g.coopMax > 0 && <span className="chip c-grape" title="Can be played together, on one side">🤝 Together</span>}
-                    </span>
+                    <span className="chip c-sun">{g.tag}</span>
                     <span className="muted" style={{ fontSize: ".82rem" }}>
                       👥 {g.minPlayers === g.maxPlayers ? g.maxPlayers : `${g.minPlayers}–${g.maxPlayers}`}
                     </span>

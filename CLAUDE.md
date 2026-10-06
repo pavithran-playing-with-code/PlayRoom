@@ -151,7 +151,13 @@ There is no test runner. What works:
   own moves shown at once and rebased when the server's order comes back.
   Rules must be pure — no clock, no `Math.random`, never mutate the state.
   `scripts/check-coop.mjs` proves crossed moves from three phones converge.
-  A side wins by reaching `COOP_GOAL` in `config/matchResult.js`.
+  A side wins by reaching `COOP_GOAL` in `config/matchResult.js`. Word Rush
+  together uses the same log (who has which word).
+- **Rail Runner, Dino Dash and Flappy Dash together** relay positions
+  (`run:pos`, `useRunTogether.js`): friends drawn as ghosts, a crash is "down"
+  until a friend grabs a seeded ❤️ (`runTogether.js`). The side wins on its
+  points added up against `COOP_PACE` × seconds × players — keep the client
+  and server paces equal (check-coop proves it).
 - **The together games run on the server** — Kitchen Rush, Bomb Blast,
   Tower Guard, Carrom: `config/togetherWorld.js` keeps a world per side (one each,
   per team, or one for a co-op room) on the rules in

@@ -261,18 +261,27 @@ export default function BombBlast(props) {
         if (size.current.sw) { const t0 = ix; ix = iy; iy = t0; }
         m.moving = !!(ix || iy);
         if (m.moving) {
-          // four ways only: the stronger push wins
+          // four ways only: the stronger push first — and if that way is shut
+          // (a thumb pushing up-and-right along a wall), the other one, so a
+          // turn isn't a dead stop
           const horiz = Math.abs(ix) >= Math.abs(iy);
-          const ddx = horiz ? Math.sign(ix) : 0, ddy = horiz ? 0 : Math.sign(iy);
           const mine = v.p.find((p) => p[0] === myId);
           const speed = mine ? mine[6] : 3.2;
+          // a bomb's tile only while you're still on it: step off and it's
+          // shut, whatever the server's last word on who's standing there
           const open = (tx, ty) => {
             if (!inside(tx, ty) || Number(grid[ty * W + tx]) !== FLOOR) return false;
-            const b = bombs.get(ty * W + tx);
-            return !b || b[4].includes(myId) || (Math.floor(m.x) === tx && Math.floor(m.y) === ty);
+            return !bombs.get(ty * W + tx) || (Math.floor(m.x) === tx && Math.floor(m.y) === ty);
           };
-          moveBody(open, m, ddx, ddy, speed * dt);
-          m.fx = ddx; m.fy = ddy;
+          const tries = [[horiz ? Math.sign(ix) : 0, horiz ? 0 : Math.sign(iy)]];
+          const minor = horiz ? iy : ix, major = horiz ? ix : iy;
+          if (Math.abs(minor) > Math.abs(major) * 0.35) tries.push([horiz ? 0 : Math.sign(ix), horiz ? Math.sign(iy) : 0]);
+          for (const [ddx, ddy] of tries) {
+            const x0 = m.x, y0 = m.y;
+            moveBody(open, m, ddx, ddy, speed * dt);
+            m.fx = ddx; m.fy = ddy;
+            if (Math.hypot(m.x - x0, m.y - y0) > 1e-4) break;
+          }
         }
         const now = Date.now();
         if (now - sentAt.current >= (m.moving ? REPORT_MS : 300)) {

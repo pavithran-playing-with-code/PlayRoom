@@ -224,5 +224,26 @@ function botMatch(level, seeds, secs = 60) {
   check("rounds keep coming", hard.rounds >= 6);
 }
 
+// ── where people start ───────────────────────────────────────────────────────
+{
+  const at = (mode, sides) => {
+    const players = sides.flatMap((x) => x.members);
+    const s = B.createSide(42, { players, sides, durMs: 180000, mode });
+    if (s.phase === "level") B.act(s, players[0], { a: "level", lvl: "easy" });
+    return s;
+  };
+  const co = at("coop", [{ key: "all", members: [1, 2] }]);
+  const [a, b] = [co.bodies.find((x) => x.id === 1), co.bodies.find((x) => x.id === 2)];
+  check("together: friends start side by side, not at either end", Math.hypot(a.x - b.x, a.y - b.y) <= 2.01, `${a.x},${a.y} and ${b.x},${b.y}`);
+  check("…on open floor", [a, b].every((q) => co.g[Math.floor(q.y) * B.W + Math.floor(q.x)] === B.FLOOR));
+  const bots = co.bodies.filter((x) => x.cpu);
+  check("…and the computer bombers start away from them", bots.every((q) => Math.hypot(q.x - a.x, q.y - a.y) > 6));
+  const tm = at("teams", [{ key: "t1", members: [1, 3] }, { key: "t2", members: [2, 4] }]);
+  const p = (id) => tm.bodies.find((x) => x.id === id);
+  check("teams: partners start together, the other team in another corner", Math.hypot(p(1).x - p(3).x, p(1).y - p(3).y) <= 2.01 && Math.hypot(p(2).x - p(4).x, p(2).y - p(4).y) <= 2.01 && Math.hypot(p(1).x - p(2).x, p(1).y - p(2).y) > 6);
+  const vs = at("free", [{ key: "a", members: [1] }, { key: "b", members: [2] }]);
+  check("against each other: opposite corners, as before", Math.hypot(vs.bodies[0].x - vs.bodies[1].x, vs.bodies[0].y - vs.bodies[1].y) > 9);
+}
+
 console.log(fails ? `\n${fails} failed` : "\nall passed");
 process.exit(fails ? 1 : 0);

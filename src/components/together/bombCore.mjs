@@ -145,15 +145,29 @@ export function createSide(seed, { players, sides, durMs, mode }) {
   return s;
 }
 
+// Where each bomber starts. Against each other: a corner each, opposite
+// corners first. Together or in teams: a side's people start side by side
+// in their side's corner — friends begin as one, not at either end.
+export function startSpots(bodies, mode) {
+  if (mode !== "coop" && mode !== "teams") return bodies.map((_, i) => SPAWNS[i % SPAWNS.length]);
+  const sides = [...new Set(bodies.map((b) => b.side))];
+  const seen = new Map();
+  return bodies.map((b) => {
+    const c = SPAWNS[sides.indexOf(b.side) % SPAWNS.length], j = seen.get(b.side) || 0;
+    seen.set(b.side, j + 1);
+    const dir = c[0] < W / 2 ? 1 : -1;
+    return [c[0] + dir * 2 * j, c[1]];          // two along the row: every other tile is open
+  });
+}
+
 function newRound(s) {
   s.round++;
-  const spawns = SPAWNS.slice(0, Math.max(2, s.bodies.length));
+  const spawns = startSpots(s.bodies, s.mode);
   const a = buildArena(s.seed, s.round, spawns);
   s.g = a.g; s.hidden = a.hidden; s.pow = new Map(); s.bombs = []; s.fire = new Map();
   s.rt = 0; s.shrinkI = 0; s.shrinkT = 0;
-  // spread the bombers: opposite corners first
   s.bodies.forEach((b, i) => {
-    const [x, y] = spawns[i % spawns.length];
+    const [x, y] = spawns[i];
     Object.assign(b, { x: x + 0.5, y: y + 0.5, alive: !s.gone.has(b.id), max: START_BOMBS, range: START_RANGE, speed: SPEED, at: 0, off: 0, path: null, think: 0.6 });
   });
   s.phase = "play";

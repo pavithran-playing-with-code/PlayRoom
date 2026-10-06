@@ -309,8 +309,8 @@ export default function Lobby() {
               </div>
             )}
 
-            {/* How to play it, before you start — a solo run goes straight in */}
-            <details className="howto-box" open>
+            {/* How to play it, before you start — folded away until asked for */}
+            <details className="howto-box">
               <summary>📖 How to play {selected.name}</summary>
               <HowTo game={selected.slug} title={false} />
             </details>

@@ -761,9 +761,10 @@ function Room() {
             </div>
           )}
           {status === "waiting" && room?.game_slug && (
-            <div className="note howto-note" style={{ marginTop: 20 }}>
-              <HowTo game={room.game_slug} />
-            </div>
+            <details className="howto-box" style={{ marginTop: 20 }}>
+              <summary>📖 How to play {GAME_MAP[room.game_slug]?.name || "this game"}</summary>
+              <HowTo game={room.game_slug} title={false} />
+            </details>
           )}
 
           {/* Chat — hidden in a solo run; there's nobody to talk to. */}

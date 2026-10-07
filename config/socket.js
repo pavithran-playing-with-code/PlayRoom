@@ -172,6 +172,24 @@ function initSocket(httpServer) {
       });
     });
 
+    // Sunshard Islands: where my explorer is and what they're doing — so
+    // everyone draws everyone on the same islands — plus my shards (a bit
+    // each: together, any of us taking one counts for all), gems, how far
+    // along I am and whether I'm home. Relayed only; the score sync decides.
+    socket.on("isl:pos", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const n = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
+      socket.to(roomChannel(code)).emit("isl:pos", {
+        user_id: uid,
+        x: n(msg.x, -1e4, 1e4), y: n(msg.y, -1e3, 1e4), z: n(msg.z, -1e4, 1e4), f: n(msg.f, -100, 100),
+        vx: n(msg.vx, -60, 60), vy: n(msg.vy, -60, 60), vz: n(msg.vz, -60, 60),
+        g: msg.g ? 1 : 0, gl: msg.gl ? 1 : 0, a: msg.a ? 1 : 0, iv: msg.iv ? 1 : 0, hp: Math.floor(n(msg.hp, 0, 3)),
+        sh: Math.floor(n(msg.sh, 0, 31)), gm: Math.floor(n(msg.gm, 0, 999)), p: Math.floor(n(msg.p, 0, 999)),
+        fin: msg.fin === null || msg.fin === undefined ? null : n(msg.fin, 0, 1e4),
+      });
+    });
+
     socket.on("disconnect", () => {
       const set = online.get(uid);
       if (!set) return;

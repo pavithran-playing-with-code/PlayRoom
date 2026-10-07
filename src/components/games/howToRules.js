@@ -109,6 +109,12 @@ export const HOW_TO = {
     steps: ["Swipe ◀ ▶ to change lane.", "Swipe ▲ to jump barriers, ▼ to slide under bars.", "Swerve round the trains — you can't jump them.", "Together: a crash knocks you down — a friend grabbing a ❤️ gets you up."],
     tip: "Your score is metres run + 10 for every coin. A crash slows you right down.",
   },
+  sunshard: {
+    name: "Sunshard Islands",
+    goal: "Hop across the floating islands, grab all 5 Sunshards and light the Sky Temple.",
+    steps: ["Joystick (or W A S D) to run. JUMP — and again in the air to double-jump. Hold JUMP after the double jump to glide.", "SPIN (or F) knocks out slimes — or land on them. Touching one costs a heart.", "Follow the golden arrow and the light beams. Blue rings move, cracked stones crumble, red mushrooms bounce you, wind vents lift you.", "Falling is fine: you're back at the last flag. Together: any of you can take a shard for everyone."],
+    tip: "Drag the screen to turn the camera. First to light the temple wins.",
+  },
   speedway: {
     name: "Speedway",
     goal: "Win the race — 3 laps, 5 on a 3–4 minute clock, 8 on 5 minutes.",

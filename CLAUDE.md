@@ -174,6 +174,11 @@ There is no test runner. What works:
   everyone else's car is eased toward that and drawn with the same effects.
   Laps follow the room clock (`lapsFor`). The score sync still decides the
   result.
+- **Sunshard Islands** is a 3D platformer (three.js r128, a lazy chunk):
+  islands from `sunshardWorld.js`, rules in `sunshardSim.js`, drawing in
+  `sunshardScene.js`. Each phone relays its explorer (`isl:pos`); together,
+  the shard bits are unioned and one of you home wins for all.
+  `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

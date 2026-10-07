@@ -1326,3 +1326,59 @@ input::-ms-reveal,input::-ms-clear{display:none}
   padding:6px 12px;background:rgba(15,20,27,.78);border:2px solid #2a3442;color:#f4efe6;text-align:center;
   font:500 15px/1.2 'Barlow Condensed','Arial Narrow',Arial,sans-serif;pointer-events:none}
 .sw-hint b{color:#ffc83d;font-weight:700}
+
+/* ── Sunshard Islands (.ss-): a 3D island hop, full screen and sideways ───── */
+.ss-stage{position:relative;overflow:hidden;background:linear-gradient(#7cc8f5,#cfeaf7);touch-action:none;
+  font-family:'Fredoka','Baloo 2','Trebuchet MS',system-ui,sans-serif;color:#fff}
+.ss-canvas{display:block;position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.ss-loading{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;font-weight:700;font-size:20px;
+  color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.3)}
+.ss-hud{position:absolute;inset:0;pointer-events:none;
+  padding:calc(env(safe-area-inset-top,0px) + 8px) calc(env(safe-area-inset-right,0px) + 12px) 8px calc(env(safe-area-inset-left,0px) + 12px)}
+.ss-hud *{text-shadow:0 2px 0 rgba(0,0,0,.28)}
+.ss-hearts{position:absolute;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 8px);display:flex;gap:2px;font-size:26px;line-height:1}
+.ss-hearts i{font-style:normal;color:#ff5a6e;-webkit-text-stroke:2px #fff;transition:transform .2s,opacity .2s}
+.ss-hearts i.off{opacity:.25;transform:scale(.8);color:#333}
+.ss-mid{position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 50px);transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;gap:4px}
+.ss-shards{display:flex;gap:5px}
+.ss-shards i{width:16px;height:22px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);background:rgba(255,255,255,.3);
+  transition:background .3s,transform .3s}
+.ss-shards i.on{background:var(--c);transform:scale(1.15);filter:drop-shadow(0 0 6px var(--c))}
+.ss-compass{display:flex;align-items:center;gap:6px;padding:3px 12px 3px 4px;border-radius:999px;background:rgba(20,30,60,.38);
+  font-weight:700;font-size:14px;white-space:nowrap}
+.ss-arrow{width:24px;height:24px;border-radius:50%;background:rgba(255,226,138,.25);display:grid;place-items:center}
+.ss-arrow b{width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:13px solid #ffe28a}
+.ss-stats{position:absolute;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 8px);
+  text-align:right;font-weight:700;font-size:15px;line-height:1.1}
+.ss-gemn{font-size:22px;color:#ffe066}
+.ss-stats small{display:block;font-size:12px;opacity:.9}
+.ss-rank{position:absolute;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 54px);
+  margin:0;padding:4px 8px;list-style:none;border-radius:12px;background:rgba(20,30,60,.38);font-size:12px;font-weight:700;min-width:100px}
+.ss-rank li{display:flex;gap:5px;align-items:center;line-height:1.35}
+.ss-rank li.me{color:#ffe28a}
+.ss-rank b{width:12px;text-align:center}
+.ss-rank span{flex:1;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ss-rank em{font-style:normal;opacity:.9}
+.ss-banner{position:absolute;left:50%;top:30%;transform:translateX(-50%);text-align:center;white-space:nowrap;
+  font-weight:800;font-size:clamp(26px,6vh,44px);letter-spacing:.02em;animation:ss-in 2.5s ease both}
+.ss-banner small{display:block;font-size:.42em;font-weight:600;opacity:.95}
+@keyframes ss-in{0%{opacity:0;transform:translateX(-50%) scale(.7)}12%{opacity:1;transform:translateX(-50%) scale(1.05)}
+  20%{transform:translateX(-50%) scale(1)}80%{opacity:1}100%{opacity:0}}
+.ss-toast{position:absolute;left:50%;bottom:22%;transform:translateX(-50%);padding:6px 14px;border-radius:999px;
+  background:rgba(20,30,60,.55);font-weight:700;font-size:15px;white-space:nowrap}
+.ss-flash{position:absolute;inset:0;opacity:0}
+.ss-flash.on{animation:ss-hurt .45s ease}
+@keyframes ss-hurt{0%{opacity:.55;background:radial-gradient(transparent 40%,#ff3b3b)}100%{opacity:0}}
+.ss-count{position:absolute;inset:0;display:grid;place-items:center;font-weight:800;font-size:clamp(56px,18vh,120px);color:#ffe28a}
+.ss-done{position:absolute;left:50%;top:44%;transform:translateX(-50%);padding:8px 16px;border-radius:16px;background:rgba(20,30,60,.55);
+  font-weight:700;font-size:17px;white-space:nowrap}
+.ss-stick{position:absolute;left:calc(env(safe-area-inset-left,0px) + 22px);bottom:20px;width:120px;height:120px;border-radius:50%;
+  background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.45);touch-action:none;display:grid;place-items:center}
+.ss-knob{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 3px 0 rgba(0,0,0,.2);pointer-events:none}
+.ss-btn{position:absolute;border-radius:50%;border:3px solid rgba(255,255,255,.8);color:#fff;font:800 15px 'Fredoka','Baloo 2',system-ui,sans-serif;
+  touch-action:none;box-shadow:0 4px 0 rgba(0,0,0,.25);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.ss-btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.25)}
+.ss-jump{right:calc(env(safe-area-inset-right,0px) + 22px);bottom:22px;width:84px;height:84px;background:rgba(255,170,60,.82)}
+.ss-spin{right:calc(env(safe-area-inset-right,0px) + 118px);bottom:30px;width:64px;height:64px;background:rgba(120,140,255,.78);font-size:13px}
+.ss-stage:not(.touch) .ss-toast{bottom:12%}

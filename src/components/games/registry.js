@@ -27,6 +27,7 @@ import KitchenRush from "./KitchenRush";
 import BombBlast from "./BombBlast";
 import TowerGuard from "./TowerGuard";
 import CarromGame from "./CarromGame";
+import SunshardIslands from "./SunshardIslands";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -42,6 +43,15 @@ import CarromGame from "./CarromGame";
 //                    with its button and its line; four seats means teams
 //   coopNote         what the waiting room says to a together room
 export const GAMES = [
+  {
+    slug: "sunshard", name: "Sunshard Islands", icon: "🏝️",
+    blurb: "A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.",
+    minPlayers: 1, maxPlayers: 8, tag: "Adventure", col: "var(--sky)",
+    coopMax: 4, defaultDuration: 300,
+    coopLabel: "one shard count — light the temple together",
+    coopNote: "One shard count for all of you: any of you can take a Sunshard for everyone, and when one of you gets home, you all win.",
+    Component: SunshardIslands,
+  },
   {
     slug: "mahjong", name: "Mahjong Solitaire", icon: "🀄",
     blurb: "Match free tiles and clear the board before the clock stops.",

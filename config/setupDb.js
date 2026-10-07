@@ -259,6 +259,7 @@ const GAME_SEED = [
   { slug: "bomb",      name: "Bomb Blast",        description: "Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.", min: 1, max: 4, icon: "💣", active: 1 },
   { slug: "tower",     name: "Tower Guard",       description: "Build towers along the road and keep the monsters off your castle. Together, defend one castle.", min: 1, max: 8, icon: "🏰", active: 1 },
   { slug: "carrom",    name: "Carrom",            description: "Flick the striker, pocket your colour, cover the queen. Against the computer, 1 v 1, or 2 v 2.", min: 1, max: 4, icon: "⚫⚪", active: 1 },
+  { slug: "sunshard",  name: "Sunshard Islands",  description: "A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.", min: 1, max: 8, icon: "🏝️", active: 1 },
   { slug: "manor",     name: "Nana's Lullaby",    description: "Nana hums as she walks the halls. Find the three keys — and when the humming stops, freeze.", min: 1, max: 8, icon: "👵", active: 1 },
 ];
 

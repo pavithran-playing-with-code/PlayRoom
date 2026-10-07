@@ -2,7 +2,7 @@
   "name": "playroom",
   "version": "1.0.0",
   "private": true,
-  "description": "PlayRoom \u2014 Multi-Game Platform (React + Express + MySQL)",
+  "description": "PlayRoom — Multi-Game Platform (React + Express + MySQL)",
   "main": "server.js",
   "scripts": {
     "start": "cross-env PORT=3333 react-scripts start",
@@ -32,6 +32,7 @@
     "react-scripts": "5.0.1",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
+    "three": "0.128.0",
     "uuid": "^9.0.0"
   },
   "devDependencies": {

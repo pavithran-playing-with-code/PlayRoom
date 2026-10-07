@@ -89,7 +89,7 @@ const MIN_TEAM_PLAYERS = MIN_PER_TEAM * 2;
 // maze: one maze, a key, a door (MazeRunner.jsx); and the shared boards
 // (config/coopBoard.js): Memory, Mahjong, Number Rush, Pipes, Word Rush; and
 // the runners, side by side with hearts to save each other (runTogether.js)
-const COOP_GAMES = new Set([manor.GAME, ...together.COOP, "maze", ...coopBoard.GAMES, "runner", "dino", "flappy"]);
+const COOP_GAMES = new Set([manor.GAME, ...together.COOP, "maze", ...coopBoard.GAMES, "runner", "dino", "flappy", "sunshard"]);
 // Carrom is played one against one or two against two — or alone against
 // the computer — so its rooms seat exactly 1, 2 or 4, and four means teams.
 const CARROM_SEATS = [1, 2, 4];

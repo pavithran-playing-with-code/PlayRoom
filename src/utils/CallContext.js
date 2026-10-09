@@ -424,9 +424,11 @@ export function CallProvider({ children }) {
   const share = useCallback(async () => {
     if (screenRef.current) return stopShare();
     if (!canShareScreen()) {
-      return say(/iPhone|iPad|iPod/.test(navigator.userAgent)
-        ? "iPhone browsers don't let websites share the screen — share from a computer or an Android phone"
-        : "This browser can't share the screen — try Chrome on a computer or Android");
+      // phone browsers (Chrome on Android, Safari on iPhone) don't let a
+      // website capture the screen — only installed apps can
+      return say(/Android|iPhone|iPad|iPod|Mobile/.test(navigator.userAgent)
+        ? "Phones can't share their screen from a browser — share from a computer, and watch here"
+        : "This browser can't share the screen — try Chrome or Edge");
     }
     let scr;
     try { scr = await navigator.mediaDevices.getDisplayMedia(SCREEN); }

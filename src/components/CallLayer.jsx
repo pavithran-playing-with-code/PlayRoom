@@ -163,6 +163,7 @@ export default function CallLayer() {
                 <div className="call-share-tag">🖥️ {sharer.name}'s screen</div>
                 <button type="button" className="call-big" onClick={big} aria-label="Full screen">⛶</button>
               </div>
+              {/* everyone's face beside the screen — theirs and mine — like Discord */}
               <div className="call-strip">
                 {others.map((m) => {
                   const p = peers[m.id] || {};
@@ -170,9 +171,14 @@ export default function CallLayer() {
                   return (
                     <div className="call-mini-tile" key={m.id} title={m.name}>
                       {v ? <Vid stream={p.stream} className="call-full" /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
+                      <span className="call-mini-name">{m.name}{p.mic === false ? " 🔇" : ""}</span>
                     </div>
                   );
                 })}
+                <div className="call-mini-tile me" title="You">
+                  {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <span className="call-emoji">🙂</span>}
+                  <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
+                </div>
               </div>
             </>
           ) : (
@@ -275,12 +281,16 @@ export default function CallLayer() {
         <div className="call-bubble" style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
           onPointerDown={bubbleDown} onPointerMove={bubbleMove} onPointerUp={bubbleUp} onPointerCancel={() => { drag.current = null; }}
           role="button" aria-label="Open the call">
-          {shown
-            ? <Vid stream={shown} className="call-fit" />
-            : others[0] && peers[others[0].id]?.stream && peers[others[0].id]?.cam !== false
-            ? <Vid stream={peers[others[0].id].stream} className="call-full" />
-            : <Face avatar={avatarOf(others[0]?.id || call.first?.id)} />}
-          <div className="call-bubble-tag">{call.phase === "active" ? clock(now - (call.startedAt || now)) : "Calling…"}{mic ? "" : " 🔇"}</div>
+          {/* their face above, mine below */}
+          <div className="call-bubble-half">
+            {others[0] && peers[others[0].id]?.stream && peers[others[0].id]?.cam !== false && peers[others[0].id].stream.getVideoTracks().length > 0
+              ? <Vid stream={peers[others[0].id].stream} className="call-full" />
+              : <span className="call-emoji">{avatarOf(others[0]?.id || call.first?.id) || "🙂"}</span>}
+          </div>
+          <div className="call-bubble-half me">
+            {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <span className="call-emoji">🙂</span>}
+          </div>
+          <div className="call-bubble-tag">{shown ? "🖥️ " : ""}{call.phase === "active" ? clock(now - (call.startedAt || now)) : "Calling…"}{mic ? "" : " 🔇"}</div>
         </div>
       )}
     </>

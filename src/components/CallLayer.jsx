@@ -10,6 +10,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useCall as useCallCtx, CALL_MAX } from "../utils/CallContext";
 import { usePresence } from "../utils/PresenceContext";
+import { canDocPip, openPip, updatePip, closePip } from "../utils/callPip";
+
+// Where the floating call window (callPip.js) can be used, a video's own
+// picture-in-picture is turned off: it can only show one face.
+const NO_VIDEO_PIP = canDocPip();
 
 const two = (n) => String(n).padStart(2, "0");
 const clock = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${two(s % 60)}`; };
@@ -25,7 +30,7 @@ function Vid({ stream, mirror = false, className = "" }) {
     if (v.srcObject !== stream) v.srcObject = stream || null;
     if (stream) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
   }, [stream]);
-  return <video ref={ref} className={`${className}${mirror ? " mirror" : ""}`} autoPlay playsInline muted />;
+  return <video ref={ref} className={`${className}${mirror ? " mirror" : ""}`} autoPlay playsInline muted disablePictureInPicture={NO_VIDEO_PIP} />;
 }
 
 // A friend's voice. If the browser won't start sound without a tap, says so.
@@ -128,6 +133,36 @@ export default function CallLayer() {
   };
   const canAdd = friends.filter((f) => f.online && !call?.members.some((m) => m.id === Number(f.id)) && !call?.invited.includes(Number(f.id)));
   const needTap = React.useCallback(() => setTapForSound(true), []);
+
+  // ── the floating window: their faces left, mine right ──
+  const pipState = {
+    mic,
+    people: [
+      ...others.map((m) => {
+        const p = peers[m.id] || {};
+        return { key: String(m.id), name: m.name, stream: p.stream, avatar: avatarOf(m.id), muted: p.mic === false,
+          showVideo: !!p.stream && p.cam !== false && p.stream.getVideoTracks().length > 0 };
+      }),
+      { key: "me", name: "You", stream: local, avatar: "🙂", muted: !mic, mirror: facing === "user",
+        showVideo: !!local && cam && local.getVideoTracks().length > 0 },
+    ],
+  };
+  const pipRef = useRef(pipState);
+  pipRef.current = pipState;
+  const pipOn = useRef({});
+  pipOn.current = { onMic: C.toggleMic, onHangUp: C.hangUp, onBack: () => C.setExpanded(true) };
+  const popOut = React.useCallback(() => openPip(pipRef.current, {
+    onMic: () => pipOn.current.onMic(), onHangUp: () => pipOn.current.onHangUp(), onBack: () => pipOn.current.onBack(),
+  }), []);
+  useEffect(() => { updatePip(pipRef.current); });                    // keep it current, every render
+  const active = !!call && call.phase === "active";
+  useEffect(() => {
+    if (!active) { closePip(); return undefined; }
+    // switching tabs mid-call: Chrome opens our window, not a one-face video
+    if (!canDocPip() || !navigator.mediaSession) return undefined;
+    try { navigator.mediaSession.setActionHandler("enterpictureinpicture", popOut); } catch { /* not this browser */ }
+    return () => { try { navigator.mediaSession.setActionHandler("enterpictureinpicture", null); } catch { /* fine */ } };
+  }, [active, popOut]);
   const ringing = ring && (!call || call.id !== ring.callId);
 
   return (
@@ -234,7 +269,14 @@ export default function CallLayer() {
           )}
 
           <div className="call-top">
-            <button type="button" className="call-mini" onClick={() => C.setExpanded(false)} aria-label="Shrink the call">⌄</button>
+            <button type="button" className="call-mini" onClick={() => C.setExpanded(false)} aria-label="Shrink the call">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            {active && canDocPip() && (
+              <button type="button" className="call-mini" onClick={popOut} aria-label="Float the call over other tabs" title="Float the call over other tabs">
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="#fff" strokeWidth="2.4" /><rect x="12" y="11" width="7" height="6" rx="1" fill="#fff" /></svg>
+              </button>
+            )}
             {call.phase === "active" && <div className="call-time">{seats === 1 ? others[0].name + " · " : `${call.members.length} in the call · `}{clock(now - (call.startedAt || now))}</div>}
           </div>
 

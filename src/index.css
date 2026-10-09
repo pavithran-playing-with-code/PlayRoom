@@ -1419,7 +1419,8 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-top{position:absolute;z-index:3;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);
   display:flex;align-items:center;gap:10px}
 .call-mini{width:44px;height:44px;border-radius:50%;border:3px solid #fff;background:rgba(0,0,0,.4);color:#fff;
-  font:900 22px/1 Nunito,system-ui,sans-serif;cursor:pointer}
+  display:grid;place-items:center;padding:0;cursor:pointer}
+.call-mini svg{display:block}
 .call-time{padding:5px 12px;border-radius:999px;background:rgba(0,0,0,.45);font-weight:800;font-size:14px;max-width:46vw;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .call-bar{position:absolute;z-index:3;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);

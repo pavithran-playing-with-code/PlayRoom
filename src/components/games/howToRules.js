@@ -112,7 +112,7 @@ export const HOW_TO = {
   sunshard: {
     name: "Sunshard Islands",
     goal: "Hop across the floating islands, grab all 5 Sunshards and light the Sky Temple.",
-    steps: ["Joystick (or W A S D) to run. JUMP — and again in the air to double-jump. Hold JUMP after the double jump to glide.", "SPIN (or F) knocks out slimes — or land on them. Touching one costs a heart.", "Follow the golden arrow and the light beams. Blue rings move, cracked stones crumble, red mushrooms bounce you, wind vents lift you.", "Falling is fine: you're back at the last flag. Together: any of you can take a shard for everyone."],
+    steps: ["Joystick (or W A S D) to run. JUMP — and again in the air to double-jump. Hold JUMP after the double jump to glide.", "SPIN (or F) knocks out slimes — or land on them. Touching one costs a heart.", "Follow the golden arrow and the light beams. Blue rings move, cracked stones crumble, red mushrooms bounce you, wind vents lift you.", "Falling is fine: you're back at the last flag. Together: any of you can take a shard for everyone — and you're tied tail to tail, so stick close or the rope snaps."],
     tip: "Drag the screen to turn the camera. First to light the temple wins.",
   },
   speedway: {

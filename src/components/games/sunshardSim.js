@@ -257,3 +257,57 @@ export function score(S, W, team = null) {
   if (S.finished) s += 10000 + Math.max(0, Math.round(S.finishLeft || 0)) * 10;
   return Math.min(25000, s);
 }
+
+// ── tied together (a together room) ─────────────────────────────────────────
+// Friends are tied tail to tail in seat order, a conga line: two of you share
+// one rope, and in a bigger side the ones in the middle have a tail each way.
+// Each phone holds only its own explorer back, so it works over a relay.
+//   • on the ground you can't walk further than LEASH from a friend — you
+//     tug at each other. Only the step away is undone, never a pull toward
+//     them, so a rope can't drag anyone off an edge.
+//   • in the air, or on a moving ring, it never holds you: a rope must not
+//     stop a jump halfway across a gap.
+//   • it snaps if one of you is far off (fell back to a flag) or after
+//     TAUT_S of pulling (so a friend standing still can't trap you), and
+//     ties itself again when you're close.
+export const LEASH = 9, ROPE_SNAP = 16, TAUT_S = 3;
+export const tiedTo = (ids, me) => {
+  // the friends tied to me: my neighbours in seat order
+  const i = ids.indexOf(me);
+  return i < 0 ? [] : [ids[i - 1], ids[i + 1]].filter((x) => x !== undefined);
+};
+// anchors: [{ id, x, y, z }] — where the friends tied to me are; bx, bz:
+// where I was before this step. Returns events: tie / snap.
+export function tether(S, W, anchors, bx, bz, dt) {
+  const P = S.pl, ev = [];
+  if (!S.ropes) S.ropes = new Map();
+  const riding = P.gp !== null && W.plats[P.gp] && W.plats[P.gp].kind === "mover";
+  for (const a of anchors) {
+    let r = S.ropes.get(a.id);
+    if (!r) { r = { on: false, taut: 0 }; S.ropes.set(a.id, r); }
+    const dx = P.x - a.x, dz = P.z - a.z, d = Math.hypot(dx, dz), d3 = Math.hypot(d, P.y - a.y);
+    if (!r.on) {
+      if (d3 < LEASH - 1) { r.on = true; r.taut = 0; ev.push({ k: "tie", id: a.id }); }
+      continue;
+    }
+    if (d3 > ROPE_SNAP || r.taut > TAUT_S) { r.on = false; r.taut = 0; ev.push({ k: "snap", id: a.id }); continue; }
+    let pulled = false;
+    if (d > LEASH && P.onG && !riding) {
+      const keep = Math.max(LEASH, Math.hypot(bx - a.x, bz - a.z));
+      if (d > keep + 1e-6) {
+        const ux = dx / d, uz = dz / d;
+        P.x = a.x + ux * keep; P.z = a.z + uz * keep;
+        const out = P.vx * ux + P.vz * uz;
+        if (out > 0) { P.vx -= out * ux; P.vz -= out * uz; }
+        pulled = true;
+      }
+    }
+    r.taut = pulled ? r.taut + dt : Math.max(0, r.taut - dt * 2);
+  }
+  return ev;
+}
+// how tight each rope of mine is, 0 slack .. 1 taut; null when snapped
+export function ropeState(S, id) {
+  const r = S.ropes && S.ropes.get(id);
+  return r && r.on ? r : null;
+}

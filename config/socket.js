@@ -175,7 +175,8 @@ function initSocket(httpServer) {
     // Sunshard Islands: where my explorer is and what they're doing — so
     // everyone draws everyone on the same islands — plus my shards (a bit
     // each: together, any of us taking one counts for all), gems, how far
-    // along I am and whether I'm home. Relayed only; the score sync decides.
+    // along I am and whether I'm home, and (together) which of my ropes are
+    // tied. Relayed only; the score sync decides.
     socket.on("isl:pos", (msg) => {
       const code = msg && msg.code;
       if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
@@ -186,6 +187,7 @@ function initSocket(httpServer) {
         vx: n(msg.vx, -60, 60), vy: n(msg.vy, -60, 60), vz: n(msg.vz, -60, 60),
         g: msg.g ? 1 : 0, gl: msg.gl ? 1 : 0, a: msg.a ? 1 : 0, iv: msg.iv ? 1 : 0, hp: Math.floor(n(msg.hp, 0, 3)),
         sh: Math.floor(n(msg.sh, 0, 31)), gm: Math.floor(n(msg.gm, 0, 999)), p: Math.floor(n(msg.p, 0, 999)),
+        rp: Math.floor(n(msg.rp, 0, 3)),             // together: my ropes tied, to the one before me (1) / after (2)
         fin: msg.fin === null || msg.fin === undefined ? null : n(msg.fin, 0, 1e4),
       });
     });

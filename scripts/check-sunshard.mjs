@@ -15,7 +15,7 @@ const src = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src",
 const Wm = await import(pathToFileURL(path.join(src, "sunshardWorld.js")).href);
 const Sm = await import(pathToFileURL(path.join(src, "sunshardSim.js")).href);
 const { buildWorld, levelCode, SHARDS, ZONES } = Wm;
-const { newRun, step, pressJump, releaseJump, spin, score, RUN, JUMP, GRAVITY } = Sm;
+const { newRun, step, pressJump, releaseJump, spin, score, RUN, JUMP, GRAVITY, tether, tiedTo, LEASH, TAUT_S } = Sm;
 
 let fails = 0;
 const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`); };
@@ -87,7 +87,7 @@ check("no platform sits inside another", overlaps === 0, `${overlaps}`);
 }
 
 // ── a bot plays it ───────────────────────────────────────────────────────────
-function bot(Wb, team = null, maxS = 900) {
+function bot(Wb, team = null, maxS = 900, rope = null) {
   const S = newRun(Wb);
   const P = S.pl;
   let last = 0, doubled = false, lastJumpT = -1, t = 0, wait = 0, traced = 0;
@@ -162,6 +162,7 @@ function bot(Wb, team = null, maxS = 900) {
       console.log(`      t ${t.toFixed(2)} onG ${P.onG ? 1 : 0} y ${(P.y - tq.y).toFixed(2)} vs target top, ${Math.hypot(P.x - tq.x, P.z - tq.z).toFixed(2)} m from its middle (r ${tgt.r.toFixed(1)}), ${Math.hypot(P.x - cq.x, P.z - cq.z).toFixed(2)} from the mushroom, vy ${P.vy.toFixed(1)} jumps ${P.jumps} held ${S.jumpHeld ? 1 : 0} m ${mx.toFixed(2)},${mz.toFixed(2)}`);
     }
     const ev = step(S, Wb, { mx, mz }, dt, team);
+    if (rope) ev.push(...tether(S, Wb, rope, preX, preZ, dt));
     for (const e of ev) if ((e.k === "on" || e.k === "spring") && pathOf(e.i ?? -1) >= 0) last = pathOf(e.i);   // landed, or bounced off a mushroom
     if (ev.some((e) => e.k === "spring")) { doubled = false; releaseJump(S); }       // a fresh flight
     // caught by a vent's updraft on the way in: that's the vent reached
@@ -207,6 +208,58 @@ check(`a simple bot gets through every jump, takes all 5 shards, opens the gate 
   S.finished = true; S.finishLeft = 60;
   const c = score(S, W);
   check("score: further and more shards scores more; finishing beats any progress", b > a && c > 10000 && c > b && c <= 25000, `${a} / ${b} / ${c}`);
+}
+
+// ── tied together ────────────────────────────────────────────────────────────
+{
+  check("a conga line: the ends have one tail, the middle two", JSON.stringify([tiedTo([3, 5, 9, 12], 3), tiedTo([3, 5, 9, 12], 9), tiedTo([3, 5], 5), tiedTo([4], 4)]) === "[[5],[5,12],[3],[]]");
+  // on the hub, a friend standing still on the far side; I walk away from them
+  const S = newRun(W), P = S.pl, hub = W.plats[W.path[0]];
+  const friend = [{ id: 2, x: hub.x - 6, y: hub.y, z: hub.z }];
+  Object.assign(P, { x: hub.x - 1, z: hub.z, y: hub.y + 0.1 });
+  const run = (secs, inp, who = friend) => {
+    const evs = [];
+    for (let t = 0; t < secs; t += dt) { const bx = P.x, bz = P.z; evs.push(...step(S, W, inp, dt), ...tether(S, W, who, bx, bz, dt)); }
+    return evs;
+  };
+  const e0 = run(0.3, { mx: 0, mz: 0 });
+  check("close by at the start: tied", e0.some((e) => e.k === "tie"));
+  run(1.2, { mx: 1, mz: 0 });
+  const held = Math.hypot(P.x - friend[0].x, P.z - friend[0].z);
+  check("walking away on the ground: held at the end of the rope", held <= LEASH + 0.01 && P.onG, `${held.toFixed(2)} m, leash ${LEASH}`);
+  run(0.5, { mx: 0, mz: 1 });
+  check("...but free to walk round them", Math.hypot(P.x - friend[0].x, P.z - friend[0].z) <= LEASH + 0.01 && P.z > hub.z + 2);
+  const e1 = run(TAUT_S + 0.5, { mx: 1, mz: 0 });
+  check("pulling against a friend who won't come: the rope snaps", e1.some((e) => e.k === "snap"));
+  const e2 = run(0.15, { mx: 1, mz: 0 });
+  check("...and then you walk on", Math.hypot(P.x - friend[0].x, P.z - friend[0].z) > LEASH + 0.3 && !e2.some((e) => e.k === "tie"));
+  // back to them: ties again
+  Object.assign(P, { x: hub.x - 2, z: hub.z, y: hub.y + 0.1, vx: 0, vz: 0, vy: 0 });
+  const e3 = run(0.2, { mx: 0, mz: 0 });
+  check("close again: tied again", e3.some((e) => e.k === "tie"));
+  // at the end of the rope, jumping away: the rope never stops a jump
+  Object.assign(P, { x: friend[0].x + LEASH - 0.05, z: hub.z, vx: RUN, vz: 0 });
+  pressJump(S);
+  const x0 = P.x;
+  run(0.25, { mx: 1, mz: 0 });
+  check("in the air the rope doesn't hold you", !P.onG && P.x - x0 > 1.2, `${(P.x - x0).toFixed(2)} m in the air`);
+  // a friend who fell back to a flag, far off: snapped, not dragged
+  const S2 = newRun(W);
+  Object.assign(S2.pl, { x: hub.x, z: hub.z, y: hub.y + 0.1 });
+  const near = [{ id: 7, x: hub.x + 2, y: hub.y, z: hub.z }], far = [{ id: 7, x: hub.x + 40, y: hub.y - 20, z: hub.z }];
+  tether(S2, W, near, S2.pl.x, S2.pl.z, dt);
+  const e4 = tether(S2, W, far, S2.pl.x, S2.pl.z, dt);
+  check("a friend far off (back at a flag): the rope snaps, nobody is dragged", e4.some((e) => e.k === "snap") && S2.pl.x === hub.x);
+  // tied to a friend who never leaves the hub: you still get home
+  const lv = Math.min(N, 12);
+  let ok = 0, slow = 0;
+  for (let sd = 1; sd <= lv; sd++) {
+    const w = buildWorld(levelCode(sd)), h = w.plats[w.path[0]];
+    const r = bot(w, null, 900, [{ id: 2, x: h.x, y: h.y, z: h.z }]);
+    if (r.S.finished) ok++;
+    slow = Math.max(slow, r.t);
+  }
+  check(`tied to a friend who never moves, the bot still gets home (${lv} levels)`, ok === lv, `${ok}/${lv}, slowest ${Math.round(slow)}s`);
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");

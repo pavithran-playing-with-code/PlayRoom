@@ -44,15 +44,6 @@ import SunshardIslands from "./SunshardIslands";
 //   coopNote         what the waiting room says to a together room
 export const GAMES = [
   {
-    slug: "sunshard", name: "Sunshard Islands", icon: "🏝️",
-    blurb: "A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.",
-    minPlayers: 1, maxPlayers: 8, tag: "Adventure", col: "var(--sky)",
-    coopMax: 4, defaultDuration: 300,
-    coopLabel: "one shard count — light the temple together",
-    coopNote: "One shard count for all of you: any of you can take a Sunshard for everyone, and when one of you gets home, you all win.",
-    Component: SunshardIslands,
-  },
-  {
     slug: "mahjong", name: "Mahjong Solitaire", icon: "🀄",
     blurb: "Match free tiles and clear the board before the clock stops.",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--sun)",
@@ -254,6 +245,15 @@ export const GAMES = [
     coopLabel: "everyone gets out, or nobody does",
     coopNote: "You're all on one side: find every key and get out the front door together. When the humming stops — freeze.",
     Component: ManorGame,
+  },
+  {
+    slug: "sunshard", name: "Sunshard Islands", icon: "🏝️",
+    blurb: "A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.",
+    minPlayers: 1, maxPlayers: 8, tag: "Adventure", col: "var(--sky)",
+    coopMax: 4, defaultDuration: 300,
+    coopLabel: "one shard count — light the temple together",
+    coopNote: "One shard count for all of you: any of you can take a Sunshard for everyone, and when one of you gets home, you all win. You're tied tail to tail — wander off and you tug each other back.",
+    Component: SunshardIslands,
   },
 ];
 

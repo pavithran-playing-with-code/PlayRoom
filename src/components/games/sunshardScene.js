@@ -5,7 +5,10 @@
 // 10-sided cylinders and cones, soft shadows from one sun that follows you.
 //
 // createScene(THREE, W, opts) -> { canvas, resize, frame, fx, dispose }
-//   frame({ S, team, remotes, yaw, pitch, dt, T })  draw one frame
+//   frame({ S, team, remotes, ropes, yaw, pitch, dt, T })  draw one frame
+//     ropes: [{ a, b, on, len, ca, cb }] — together, tail to tail ("me" or an
+//     id at each end); tied, it sags with slack and goes straight when taut;
+//     snapped, a short tail dangles from each of you
 //   fx.burst / fx.ring                               effects, from the events
 import { ZONES, PAL0, TAU, clamp, lerp } from "./sunshardWorld.js";
 
@@ -157,7 +160,7 @@ export function createScene(THREE, W, opts = {}) {
   for (const f of W.flowers) {
     const g = new THREE.Group();
     const s = new THREE.Mesh(G("stem", () => new THREE.CylinderGeometry(0.02, 0.02, 0.3, 4)), M(0x3a9a44)); s.position.y = 0.15;
-    const h = new THREE.Mesh(G("bud", () => new THREE.SphereGeometry(0.1, 6, 5)), M(FL[f.c])); h.position.y = 0.32;
+    const h = new THREE.Mesh(G("bud", () => new THREE.SphereGeometry(0.14, 7, 5)), M(FL[f.c])); h.position.y = 0.32;
     g.add(s, h); g.position.set(f.x, 0, f.z); world.add(g);
   }
   // gems: the level's, plus a pool for the ones slimes drop
@@ -293,6 +296,7 @@ export function createScene(THREE, W, opts = {}) {
   // one explorer, posed from where it is and what it's doing
   function pose(h, st, dt, T, platsLive) {
     h.hero.position.set(st.x, st.y, st.z);
+    h.face = st.face;
     h.sq = st.sq !== undefined ? st.sq : h.sq + (0 - h.sq) * Math.min(1, dt * 9);
     if (st.atk) h.hero.rotation.y += 26 * dt; else h.hero.rotation.y = st.face;
     h.phase += st.speed * dt * 1.6;
@@ -336,6 +340,45 @@ export function createScene(THREE, W, opts = {}) {
     for (const s of h.scarf) scene.remove(s);
   }
 
+  // ── ropes, tail to tail ────────────────────────────────────────────────────
+  const BEADS = 22, ropeMesh = new Map();
+  const tailAt = (h) => ({ x: h.hero.position.x - Math.sin(h.face) * 0.5, y: h.hero.position.y + 0.32, z: h.hero.position.z - Math.cos(h.face) * 0.5 });
+  function makeRope(ca, cb) {
+    const beads = [];
+    for (let i = 0; i < BEADS; i++) {
+      const b = new THREE.Mesh(G("bead", () => new THREE.SphereGeometry(0.1, 6, 5)), M(i < BEADS / 2 ? ca : cb));
+      scene.add(b); beads.push(b);
+    }
+    return { beads };
+  }
+  function drawRope(R, ha, hb, rp, T) {
+    const A = tailAt(ha), B = tailAt(hb);
+    const d = Math.hypot(B.x - A.x, B.y - A.y, B.z - A.z);
+    if (rp.on) {
+      // a rope of rp.len: the slack hangs down in the middle; taut, it's straight and hums
+      // ...but no lower than the grass under you two: slack lies on the ground
+      const sag = Math.max(0, Math.min(2.4, Math.sqrt(Math.max(0, rp.len * rp.len - d * d)) * 0.32, (A.y + B.y) / 2 - Math.min(A.y, B.y) + 0.2));
+      const taut = d > rp.len - 0.4;
+      for (let i = 0; i < BEADS; i++) {
+        const t = (i + 0.5) / BEADS, m = 4 * t * (1 - t), b = R.beads[i];
+        b.visible = true;
+        b.position.set(A.x + (B.x - A.x) * t, A.y + (B.y - A.y) * t - sag * m + (taut ? Math.sin(T * 45 + i * 1.7) * 0.05 * m : 0), A.z + (B.z - A.z) * t);
+        b.scale.setScalar(taut ? 1.15 : 1);
+      }
+    } else {
+      // snapped: a short tail hangs off each of you, swaying
+      const half = BEADS / 2;
+      for (let i = 0; i < BEADS; i++) {
+        const b = R.beads[i], end = i < half ? ha : hb, j = i < half ? i : i - half;
+        if (j > 6) { b.visible = false; continue; }
+        const at = i < half ? A : B, f = end.face, sw = Math.sin(T * 4 + j * 0.6 + (i < half ? 0 : 2)) * 0.05 * j;
+        b.visible = true; b.scale.setScalar(1);
+        b.position.set(at.x - Math.sin(f) * 0.2 * j + Math.cos(f) * sw, at.y - 0.09 * Math.pow(j, 1.25), at.z - Math.cos(f) * 0.2 * j - Math.sin(f) * sw);
+      }
+    }
+  }
+  function dropRope(R) { for (const b of R.beads) scene.remove(b); }
+
   // ── camera ─────────────────────────────────────────────────────────────────
   let camInit = false, tmpK = 0, shake = 0;
   function cameraFollow(P, yaw, pitch, dt) {
@@ -358,7 +401,7 @@ export function createScene(THREE, W, opts = {}) {
   }
 
   // ── one frame ──────────────────────────────────────────────────────────────
-  function frame({ S, team, remotes = [], yaw, pitch, dt, T }) {
+  function frame({ S, team, remotes = [], ropes = [], yaw, pitch, dt, T }) {
     const P = S.pl;
     // platforms
     for (let i = 0; i < W.plats.length; i++) {
@@ -421,6 +464,17 @@ export function createScene(THREE, W, opts = {}) {
       pose(h, r, dt, T, null);
     }
     for (const [id, h] of mates) if (!seen.has(id)) { dropHero(h); mates.delete(id); }
+    const used = new Set();
+    for (const rp of ropes) {
+      const ha = rp.a === "me" ? H : mates.get(rp.a), hb = rp.b === "me" ? H : mates.get(rp.b);
+      if (!ha || !hb) continue;
+      const key = rp.a + "~" + rp.b;
+      used.add(key);
+      let R = ropeMesh.get(key);
+      if (!R) { R = makeRope(rp.ca, rp.cb); ropeMesh.set(key, R); }
+      drawRope(R, ha, hb, rp, T);
+    }
+    for (const [k, R] of ropeMesh) if (!used.has(k)) { dropRope(R); ropeMesh.delete(k); }
     updParticles(dt); updRings(dt);
     cameraFollow(P, yaw, pitch, dt);
     renderer.render(scene, camera);

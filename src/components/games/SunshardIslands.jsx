@@ -15,7 +15,10 @@
 //   temple wins; if the clock runs out first, whoever got furthest (score).
 //   Together (a co-op room): one shard count for the side — any of you can
 //   take a shard for everyone, the gate opens at five between you, and when
-//   one of you gets home you all win.
+//   one of you gets home you all win. And you're tied tail to tail in seat
+//   order (a conga line, sunshardSim.js tether): wander off and you tug each
+//   other back; the rope snaps if one of you falls behind, and ties again
+//   when you meet up.
 //
 // The drawing is sunshardScene.js (three.js r128, loaded only when this game
 // opens). A landscape game, full screen (GameFrame bare): held upright the
@@ -28,7 +31,7 @@ import { useSocket } from "../../utils/SocketContext";
 import { useUprightTouch, toGame } from "../horror/LandscapeGate";
 import { team as teamOf, plural } from "./coopTeam";
 import { buildWorld, levelCode, ZONES, SHARDS, clamp } from "./sunshardWorld.js";
-import { newRun, step, pressJump, releaseJump, spin, respawn, score, shardsHave } from "./sunshardSim.js";
+import { newRun, step, pressJump, releaseJump, spin, respawn, score, shardsHave, tether, tiedTo, ropeState, LEASH } from "./sunshardSim.js";
 import { MATE, createScene } from "./sunshardScene";
 
 const START_S = 3;
@@ -76,6 +79,7 @@ function makeAudio() {
     shard: () => seq([523, 659, 784, 1046, 1318], 90, 0.4, 0.14),
     hurt: () => tone(240, 0.3, "sawtooth", 0.14, 70), stomp: () => tone(320, 0.16, "square", 0.1, 140), spring: () => tone(260, 0.28, "sine", 0.16, 1000),
     spin: () => tone(220, 0.2, "sawtooth", 0.07, 110), flag: () => seq([660, 880], 110, 0.25, 0.12), crumble: () => tone(90, 0.3, "sawtooth", 0.08, 40),
+    tie: () => seq([660, 990], 90, 0.2, 0.1), snap: () => tone(900, 0.25, "square", 0.09, 160),
     win: () => seq([523, 659, 784, 1046, 784, 1046, 1318], 150, 0.45, 0.15), beep: (hi) => tone(hi ? 880 : 440, hi ? 0.45 : 0.18, "square", 0.12),
   };
   return {
@@ -96,6 +100,8 @@ export default function SunshardIslands(props) {
   const T = useMemo(() => teamOf(players, myId), [players, myId]);
   const seated = useMemo(() => (players || []).filter((p) => !p.is_spectator).map((p) => ({ id: Number(p.user_id), name: p.username })).sort((a, b) => a.id - b.id), [players]);
   const mySlot = Math.max(0, seated.findIndex((p) => p.id === myId));
+  const seatedRef = useRef(seated);
+  seatedRef.current = seated;
 
   // the run lives in a ref: the loop changes it every frame
   const run = useRef(null);
@@ -282,12 +288,16 @@ export default function SunshardIslands(props) {
     // the camera starts behind you, looking at the first shard
     const s0 = W.shards[0];
     cam.current.yaw = Math.atan2(-(s0.x - S.pl.x), -(s0.z - S.pl.z));
+    const myHue = HUES[mySlot % HUES.length], tiedOnce = new Set();
     let raf, last = performance.now(), sent = 0, lastHud = 0, beeped = -1, gemStreak = 0, gemT = 0, sizeW = 0, sizeH = 0, started = false;
     const frame = (now) => {
       raf = requestAnimationFrame(frame);
       if (document.hidden) { last = now; return; }
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
+      // the first frame is stamped from before the scene was built, so it can come
+      // out negative — seconds of it on a slow phone, which ran the physics
+      // backwards and threw you off the hub at the start
+      const dt = clamp((now - last) / 1000, 0, 0.05);
+      last = Math.max(last, now);
       const el = (now - anchor.current) / 1000, go = el >= START_S;
       if (size.current.w !== sizeW || size.current.h !== sizeH) { sizeW = size.current.w; sizeH = size.current.h; scene.resize(sizeW, sizeH); }
       if (!go) { const n = Math.floor(el); if (n !== beeped && n >= 0) { beeped = n; A.sfx.beep(false); } }
@@ -304,12 +314,22 @@ export default function SunshardIslands(props) {
       const team = agreedTeam();
       // two steps a frame, on the match clock (so moving platforms agree)
       const evs = [];
+      const chain = seatedRef.current.map((p) => p.id);
+      // together: the friends tied to me, where they are now (gone quiet: not held)
+      const anchors = [];
+      if (coop) for (const id of tiedTo(chain, myId)) {
+        const r = remotes.current.get(id);
+        if (r && now - r.at < 2500) anchors.push({ id, x: r.d.x, y: r.d.y, z: r.d.z });
+      }
       for (let i = 0; i < 2; i++) {
         S.T = el - dt + (dt / 2) * i;
+        const bx = S.pl.x, bz = S.pl.z;
         evs.push(...step(S, W, inp, dt / 2, team));
+        if (anchors.length && go) evs.push(...tether(S, W, anchors, bx, bz, dt / 2));
       }
       const fx = scene.fx, P = S.pl;
       gemT -= dt; if (gemT <= 0) gemStreak = 0;
+      const tiedNew = [], tiedAgain = [];       // tied to two at once: one toast
       for (const e of evs) {
         if (e.k === "jump") { A.sfx.jump(); fx.burst(P.x, P.y + 0.1, P.z, 6, 0xffffff, 2, 0.5); }
         else if (e.k === "dbl") { A.sfx.dbl(); fx.ring(P.x, P.y + 0.1, P.z, 0xbff0ff, 2.8); }
@@ -327,6 +347,12 @@ export default function SunshardIslands(props) {
         else if (e.k === "flag") { A.sfx.flag(); say("Checkpoint saved", 1800); const f = W.flags[e.f]; fx.burst(f.x, f.y + 2, f.z, 16, 0x9dff9d, 3, 2); }
         else if (e.k === "zone") shout(e.zone < 0 ? "Sky Meadow" : ZONES[e.zone].name, e.zone < 0 ? "Your journey starts here" : `Zone ${e.zone + 1} of ${SHARDS}`);
         else if (e.k === "crumble") A.sfx.crumble();
+        else if (e.k === "tie" || e.k === "snap") {
+          const who = remotes.current.get(e.id)?.name || "your friend";
+          if (e.k === "snap") { A.sfx.snap(); fx.burst(P.x, P.y + 0.5, P.z, 10, 0xffe28a, 4, 2); say(`💥 Snap! Get back to ${who} to tie up again`, 2600); }
+          else { A.sfx.tie(); (tiedOnce.has(e.id) ? tiedAgain : tiedNew).push(who); tiedOnce.add(e.id); }
+          sent = 0;
+        }
         else if (e.k === "win") {
           S.finishLeft = Math.max(0, durationSeconds - el);
           A.sfx.win();
@@ -339,6 +365,10 @@ export default function SunshardIslands(props) {
           sent = 0;
         }
       }
+      if (tiedNew.length || tiedAgain.length) {
+        const both = (l) => l.join(" and ");
+        say(tiedNew.length ? `🪢 Tied tail to tail with ${both(tiedNew)}` : `🪢 Tied to ${both(tiedAgain)} again`, 2400);
+      }
       // together: somebody home means everybody home
       const teamDone = S.finished || (coop && [...remotes.current.values()].some((r) => r.fin != null));
       teamDoneRef.current = teamDone;
@@ -350,7 +380,22 @@ export default function SunshardIslands(props) {
         let df = r.f - d.face; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2; d.face += df * kk;
         rs.push({ id: r.id, name: r.name, col: r.col, x: d.x, y: d.y, z: d.z, face: d.face, speed: Math.hypot(r.vx, r.vz), onG: !!r.g, vy: r.vy, vx: r.vx, vz: r.vz, gliding: !!r.gl, atk: !!r.a, inv: !!r.iv });
       }
-      scene.frame({ S, team, remotes: rs, yaw: c.yaw, pitch: c.pitch, dt, T: el });
+      // the ropes, tail to tail down the line: mine from my run, a friend's
+      // to the next friend from what that friend says (rp: prev / next tied)
+      const ropes = [];
+      if (coop) {
+        const fresh = (id) => id === myId || (remotes.current.get(id) && now - remotes.current.get(id).at < 2500);
+        for (let i = 0; i + 1 < chain.length; i++) {
+          const a = chain[i], b = chain[i + 1];
+          if (!fresh(a) || !fresh(b)) continue;
+          let on;
+          if (a === myId || b === myId) on = !!ropeState(S, a === myId ? b : a);
+          else on = !!(remotes.current.get(a).rp & 2);
+          ropes.push({ a: a === myId ? "me" : a, b: b === myId ? "me" : b, on, len: LEASH,
+            ca: a === myId ? myHue : remotes.current.get(a).col, cb: b === myId ? myHue : remotes.current.get(b).col });
+        }
+      }
+      scene.frame({ S, team, remotes: rs, ropes, yaw: c.yaw, pitch: c.pitch, dt, T: el });
       // the compass: the next shard, or the temple
       const have = shardsHave(S, team);
       const next = have.size < SHARDS ? W.shards.find((s) => !have.has(s.i)) : W.temple;
@@ -365,6 +410,7 @@ export default function SunshardIslands(props) {
         const r1 = (v) => Math.round(v * 100) / 100;
         socket.emit("isl:pos", { code: roomCode, x: r1(P.x), y: r1(P.y), z: r1(P.z), f: r1(P.face), vx: r1(P.vx), vy: r1(P.vy), vz: r1(P.vz),
           g: P.onG ? 1 : 0, gl: P.gliding ? 1 : 0, a: P.atk > 0 ? 1 : 0, iv: P.inv > 0 ? 1 : 0, hp: P.hp,
+          rp: coop ? tiedTo(chain, myId).reduce((m, id) => m | (ropeState(S, id) ? (id < myId ? 1 : 2) : 0), 0) : 0,
           sh: bits(S.shards), gm: S.gemCount, p: S.maxPath, fin: S.finished ? Math.round((el - START_S) * 10) / 10 : null });
       }
       if (now - lastHud > 120) {

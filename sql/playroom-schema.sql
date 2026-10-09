@@ -258,8 +258,8 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('bomb', 'Bomb Blast', 'Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.', 1, 4, CONVERT(UNHEX('F09F92A3') USING utf8mb4), 1, 240),
   ('tower', 'Tower Guard', 'Build towers along the road and keep the monsters off your castle. Together, defend one castle.', 1, 8, CONVERT(UNHEX('F09F8FB0') USING utf8mb4), 1, 250),
   ('carrom', 'Carrom', 'Flick the striker, pocket your colour, cover the queen. Against the computer, 1 v 1, or 2 v 2.', 1, 4, CONVERT(UNHEX('E29AABE29AAA') USING utf8mb4), 1, 260),
-  ('sunshard', 'Sunshard Islands', 'A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.', 1, 8, CONVERT(UNHEX('F09F8F9DEFB88F') USING utf8mb4), 1, 270),
-  ('manor', 'Nana''s Lullaby', 'Nana hums as she walks the halls. Find the three keys — and when the humming stops, freeze.', 1, 8, CONVERT(UNHEX('F09F91B5') USING utf8mb4), 1, 280)
+  ('manor', 'Nana''s Lullaby', 'Nana hums as she walks the halls. Find the three keys — and when the humming stops, freeze.', 1, 8, CONVERT(UNHEX('F09F91B5') USING utf8mb4), 1, 270),
+  ('sunshard', 'Sunshard Islands', 'A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.', 1, 8, CONVERT(UNHEX('F09F8F9DEFB88F') USING utf8mb4), 1, 280)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
   min_players = VALUES(min_players), max_players = VALUES(max_players),

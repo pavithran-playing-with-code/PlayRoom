@@ -177,7 +177,9 @@ There is no test runner. What works:
 - **Sunshard Islands** is a 3D platformer (three.js r128, a lazy chunk):
   islands from `sunshardWorld.js`, rules in `sunshardSim.js`, drawing in
   `sunshardScene.js`. Each phone relays its explorer (`isl:pos`); together,
-  the shard bits are unioned and one of you home wins for all.
+  the shard bits are unioned, one of you home wins for all, and you're tied
+  tail to tail in seat order (`tether`: each phone holds back only its own
+  explorer, never in the air; the rope snaps and re-ties).
   `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.

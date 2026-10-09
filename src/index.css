@@ -1514,3 +1514,8 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-bubble-half.me{border-top:2px solid #fff}
 .call-bubble-half .call-emoji{width:44px;height:44px;font-size:24px}
 .call-bubble-tag{z-index:1}
+/* the corner picture is a button: tap it to swap who's big */
+button.call-me{padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;display:grid;place-items:center}
+button.call-me:disabled{cursor:default}
+button.call-me:not(:disabled):active{transform:scale(.96)}
+button.call-me .call-emoji{width:52px;height:52px;font-size:28px}

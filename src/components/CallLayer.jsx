@@ -62,6 +62,7 @@ export default function CallLayer() {
   const [now, setNow] = useState(Date.now());
   const [tapForSound, setTapForSound] = useState(false);
   const [picking, setPicking] = useState(false);   // the "add a friend" list
+  const [swapped, setSwapped] = useState(false);   // one-to-one: me big, them in the corner (tap the corner to swap, like WhatsApp)
   const { call, ring, local, peers, mic, cam, facing, notice, expanded, screen } = C;
   const shareRef = useRef(null);
   const avatarOf = (id) => friends.find((f) => Number(f.id) === Number(id))?.avatar;
@@ -76,7 +77,7 @@ export default function CallLayer() {
     const t = setTimeout(() => C.clearNotice(), 3200);
     return () => clearTimeout(t);
   }, [notice]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!call) { setTapForSound(false); setPicking(false); } }, [call]);
+  useEffect(() => { if (!call) { setTapForSound(false); setPicking(false); setSwapped(false); } }, [call]);
 
   // the bubble: drag it out of the way
   const [pos, setPos] = useState(null);
@@ -102,6 +103,10 @@ export default function CallLayer() {
   // friends still being rung into the call: a tile each, "Ringing…"
   const waiting = call && call.phase === "active" ? call.invited.map((id) => ({ id, name: call.names[id] || "Friend" })) : [];
   const seats = others.length + waiting.length;
+  // swapping big and small: a one-to-one call, nobody sharing a screen
+  const canSwap = !!call && call.phase === "active" && seats === 1 && others.length === 1 && !others.some((m) => peers[m.id]?.screen);
+  const swap = swapped && canSwap;
+  const theirVid = others[0] && peers[others[0].id]?.stream && peers[others[0].id]?.cam !== false && peers[others[0].id].stream.getVideoTracks().length > 0;
   const room = call && call.members.length + call.invited.length < CALL_MAX;
   // a friend sharing their screen (the first, if two are)
   const sharer = others.find((m) => peers[m.id]?.screen);
@@ -186,6 +191,14 @@ export default function CallLayer() {
               {others.map((m) => {
                 const p = peers[m.id] || {};
                 const showVid = p.stream && p.cam !== false && p.stream.getVideoTracks().length > 0;
+                if (swap) {
+                  // swapped: my own picture big; theirs is in the corner
+                  return (
+                    <div className="call-tile" key={m.id}>
+                      {cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <Face avatar="🙂" name="Camera off" big />}
+                    </div>
+                  );
+                }
                 return (
                   <div className="call-tile" key={m.id}>
                     {showVid && <Vid stream={p.stream} className="call-full" />}
@@ -212,9 +225,12 @@ export default function CallLayer() {
           )}
 
           {call.phase === "active" && local && (
-            <div className="call-me">
-              {cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <div className="call-me-off">📷 off</div>}
-            </div>
+            <button type="button" className="call-me" onClick={() => { if (canSwap) setSwapped((x) => !x); }}
+              aria-label={canSwap ? (swap ? "Make them big" : "Make me big") : "Your camera"} disabled={!canSwap}>
+              {swap
+                ? (theirVid ? <Vid stream={peers[others[0].id].stream} className="call-full" /> : <span className="call-emoji">{avatarOf(others[0].id) || "🙂"}</span>)
+                : cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <div className="call-me-off">📷 off</div>}
+            </button>
           )}
 
           <div className="call-top">

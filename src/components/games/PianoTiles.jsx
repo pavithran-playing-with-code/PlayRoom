@@ -333,8 +333,8 @@ export default function PianoTiles(props) {
     if (isSpectator) return undefined;
     let raf, last = performance.now(), pushed = 0, lastHud = 0;
     const frame = (now) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));   // never backwards: the first frame can be stamped early
+      last = Math.max(last, now);
       const s = sim.current, f = fx.current;
       if (!overRef.current) {
         const out = step(s, dt);

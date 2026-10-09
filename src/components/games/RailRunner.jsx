@@ -503,8 +503,8 @@ export default function RailRunner(props) {
     let raf, last = performance.now(), pushed = 0, lastHud = 0, prevY = 0, dustT = 0;
     const fx = { coins: [], pops: [], dust: [], bits: [], bump: 0 };
     const frame = (now) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));   // never backwards: the first frame can be stamped early
+      last = Math.max(last, now);
       const s = sim.current;
       if (!overRef.current) {
         const z0 = s.z;

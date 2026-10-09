@@ -173,8 +173,8 @@ export default function RoadHopper(props) {
     if (isSpectator) return undefined;
     let raf, last = performance.now(), pushed = 0, lastHud = 0, cam = -3;
     const frame = (now) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));   // never backwards: the first frame can be stamped early
+      last = Math.max(last, now);
       const h = sim.current;
       if (!overRef.current) {
         const out = step(h, dt);

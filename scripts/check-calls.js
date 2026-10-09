@@ -76,8 +76,12 @@ const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? 
   check("...from the right person (the token, not the payload)", B1.got("call:signal")[0].from === 1);
   await X.send("call:signal", { callId: r.callId, to: 2, data: { candidate: "x" } });
   check("someone outside the call can't send into it", B1.got("call:signal").length === 1);
-  await A.send("call:signal", { callId: r.callId, to: 2, data: { blob: "x".repeat(30000) } });
-  check("an oversized message is dropped", B1.got("call:signal").length === 1);
+  // a call with a screen shared sends offers of 20 KB and more (a 20 KB
+  // limit once dropped a second share's offer)
+  await A.send("call:signal", { callId: r.callId, to: 2, data: { description: { type: "offer", sdp: "x".repeat(22000) } } });
+  check("a big real offer (a screen shared) gets through", B1.got("call:signal").length === 2);
+  await A.send("call:signal", { callId: r.callId, to: 2, data: { blob: "x".repeat(120000) } });
+  check("an oversized message is dropped", B1.got("call:signal").length === 2);
 
   // ── busy ──
   check("someone on a call is busy to others", (await C.send("call:start", { to: 2 })).why === "busy");

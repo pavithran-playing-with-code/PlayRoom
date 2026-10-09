@@ -13,6 +13,12 @@
 //
 // Lives above the router, so a call carries on while you move between pages
 // or start a game; the call screen can shrink to a bubble (CallLayer).
+//
+// Sharing a screen (from a computer — phone browsers can't capture theirs)
+// adds its picture and sound as a second stream on every connection; the
+// others are told its stream id (call:media), so they know which picture is
+// the screen and which is the camera. Tuned for films: smooth motion over
+// sharp detail, a higher bitrate, and stereo sound.
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
@@ -34,6 +40,26 @@ const ENDED = { declined: "Call declined", "no-answer": "No answer", left: "Call
 // Clear voice first: the browser's echo cancelling, noise removal and level.
 const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
 const video = (facing) => ({ facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } });
+// a screen: full HD, smooth, and its sound left alone (no echo or noise
+// cancelling — that would eat the music)
+const SCREEN = {
+  video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 60 } },
+  audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2, sampleRate: 48000 },
+  systemAudio: "include", selfBrowserSurface: "exclude", surfaceSwitching: "include",
+};
+export const canShareScreen = () => typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia
+  && !(window.matchMedia && window.matchMedia("(pointer:coarse)").matches && !window.matchMedia("(hover:hover)").matches);
+// Ask the other side to send stereo, at film quality. A browser sends stereo
+// Opus only when the far side's description says it wants it, so this is
+// done to each description as it arrives.
+function stereo(desc) {
+  if (!desc || !desc.sdp) return desc;
+  const m = desc.sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/i);
+  if (!m) return desc;
+  const re = new RegExp(`a=fmtp:${m[1]} ([^\r\n]*)`);
+  const sdp = desc.sdp.replace(re, (line, params) => (/stereo=1/.test(params) ? line : `a=fmtp:${m[1]} ${params};stereo=1;sprop-stereo=1;maxaveragebitrate=128000`));
+  return { type: desc.type, sdp };
+}
 
 // ── sound: the ring and the ring-back, made here (no files) ─────────────────
 function makeTones() {
@@ -66,6 +92,33 @@ function makeTones() {
   };
 }
 
+// A screen onto one connection. The first time it gets a picture slot and a
+// sound slot of its own; stopping empties them (CallProvider stopShare), and
+// sharing again fills the same two. Adding fresh ones each time made every
+// offer bigger — a second share's no longer fit the server's limit, and
+// never arrived.
+function shareInto(P, scr) {
+  if (!P.screenTx) P.screenTx = [];
+  for (const t of scr.getTracks()) {
+    // an empty slot of the same kind from last time (the browser must be
+    // able to re-label it with the new screen's stream — not every one can)
+    const tx = P.screenTx.find((x) => x.sender.track === null && x.receiver.track.kind === t.kind);
+    if (tx && tx.sender.setStreams) {
+      try {
+        tx.sender.replaceTrack(t);
+        tx.sender.setStreams(scr);
+        tx.direction = "sendrecv";
+        continue;
+      } catch { /* a fresh slot, then */ }
+    }
+    try {
+      const snd = P.pc.addTrack(t, scr);
+      const fresh = P.pc.getTransceivers().find((x) => x.sender === snd);
+      if (fresh) P.screenTx.push(fresh);
+    } catch { /* closed */ }
+  }
+}
+
 export function CallProvider({ children }) {
   const { user } = useAuth();
   const { socket } = useSocket() || {};
@@ -81,12 +134,15 @@ export function CallProvider({ children }) {
   const [facing, setFacing] = useState("user");
   const [notice, setNotice] = useState(null);      // a short line after a call: { text, n }
   const [expanded, setExpanded] = useState(true);  // the full call screen, or the bubble
+  const [screen, setScreen] = useState(null);      // the screen I'm sharing
 
   const callRef = useRef(null); callRef.current = call;
   const localRef = useRef(null); localRef.current = local;
   const micRef = useRef(true); micRef.current = mic;
   const camRef = useRef(true); camRef.current = cam;
+  const screenRef = useRef(null); screenRef.current = screen;
   const pcs = useRef(new Map());                   // id -> { pc, polite, makingOffer, ignoreOffer, queue }
+  const streams = useRef(new Map());               // id -> { all: Map<streamId, stream>, screenId }
   const ice = useRef([]);
   const tones = useRef(null);
   if (!tones.current) tones.current = makeTones();
@@ -129,7 +185,18 @@ export function CallProvider({ children }) {
       try {
         const p = s.getParameters();
         if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-        p.encodings[0].maxBitrate = s.track.kind === "video" ? (n === 1 ? 1500000 : n === 2 ? 900000 : 600000) : 64000;
+        const isScreen = !!screenRef.current && screenRef.current.getTracks().includes(s.track);
+        if (isScreen && s.track.kind === "video") {
+          // a film: keep it moving, and give it most of the room. Every
+          // friend gets their own copy, encoded separately, so with more
+          // watching each copy is smaller — or the sharer's computer can't
+          // keep up (1080p for one, ~900p for two, ~720p for three)
+          p.encodings[0].maxBitrate = n === 1 ? 4000000 : n === 2 ? 2500000 : 1800000;
+          p.encodings[0].scaleResolutionDownBy = n === 1 ? 1 : n === 2 ? 1.2 : 1.5;
+          p.encodings[0].maxFramerate = 30;
+          p.degradationPreference = "maintain-framerate";
+        } else if (isScreen) p.encodings[0].maxBitrate = 128000;
+        else p.encodings[0].maxBitrate = s.track.kind === "video" ? (n === 1 ? 1500000 : n === 2 ? 900000 : 600000) : 64000;
         s.setParameters(p).catch(() => {});
       } catch { /* not every browser lets us */ }
     }
@@ -138,8 +205,18 @@ export function CallProvider({ children }) {
   const closePeer = useCallback((id) => {
     const P = pcs.current.get(id);
     if (P) { clearInterval(P.watch); try { P.pc.close(); } catch { /* gone */ } pcs.current.delete(id); }
+    streams.current.delete(id);
     setPeers((all) => { const n = { ...all }; delete n[id]; return n; });
   }, []);
+
+  // which of a friend's pictures is their camera, and which their screen
+  const place = useCallback((id) => {
+    const S = streams.current.get(id);
+    if (!S) return;
+    let stream = null, scr = null;
+    for (const [sid, st] of S.all) { if (sid === S.screenId) scr = st; else if (!stream) stream = st; }
+    patchPeer(id, { stream, screen: scr });
+  }, [patchPeer]);
 
   const peer = useCallback((id) => {
     let P = pcs.current.get(id);
@@ -149,9 +226,23 @@ export function CallProvider({ children }) {
     pcs.current.set(id, P);
     const s = localRef.current;
     if (s) s.getTracks().forEach((t) => { const snd = pc.addTrack(t, s); if (t.kind === "video") P.video = snd; });
+    const scr = screenRef.current;                    // sharing already: they see it too
+    if (scr) shareInto(P, scr);
+    if (!streams.current.has(id)) streams.current.set(id, { all: new Map(), screenId: null });
+    // Their pictures and sound, gathered into streams of our own, by the
+    // stream id they were sent under. Not the browser's own stream objects:
+    // when a screen's slot is reused, Chrome moves the track out of the
+    // stream it handed us, and the shared screen went blank.
     pc.ontrack = (e) => {
-      const stream = e.streams[0] || new MediaStream([e.track]);
-      patchPeer(id, { stream });
+      const S = streams.current.get(id);
+      if (!S) return;
+      const ids = e.streams.length ? e.streams.map((x) => x.id) : [`t${e.track.id}`];
+      for (const sid of ids) {
+        let own = S.all.get(sid);
+        if (!own) { own = new MediaStream(); S.all.set(sid, own); }
+        if (!own.getTracks().includes(e.track)) own.addTrack(e.track);
+      }
+      place(id);
     };
     pc.onicecandidate = (e) => { if (e.candidate) send(id, { candidate: e.candidate }); };
     pc.onnegotiationneeded = async () => {
@@ -164,7 +255,12 @@ export function CallProvider({ children }) {
     };
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
-      if (st === "connected") { patchPeer(id, { link: "ok" }); tune(pc); }
+      if (st === "connected") {
+        patchPeer(id, { link: "ok" }); tune(pc);
+        // a newcomer needs telling what's what: mic, camera, and which stream is my screen
+        const c = callRef.current;
+        if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: micRef.current, cam: camRef.current, screen: screenRef.current ? screenRef.current.id : null });
+      }
       else if (st === "disconnected") patchPeer(id, { link: "lost" });
       else if (st === "failed") { patchPeer(id, { link: "lost" }); if (!P.polite) try { pc.restartIce(); } catch { /* old browser */ } }
     };
@@ -175,7 +271,7 @@ export function CallProvider({ children }) {
     }, 12000);
     patchPeer(id, {});
     return P;
-  }, [myId, send, patchPeer, tune]);
+  }, [myId, socket, send, patchPeer, tune, place]);
 
   const onSignal = useCallback(async ({ callId, from, data }) => {
     if (!callRef.current || callRef.current.id !== callId || !data) return;
@@ -185,24 +281,26 @@ export function CallProvider({ children }) {
         const collide = data.description.type === "offer" && (P.makingOffer || pc.signalingState !== "stable");
         P.ignoreOffer = !P.polite && collide;
         if (P.ignoreOffer) return;
-        await pc.setRemoteDescription(data.description);
+        await pc.setRemoteDescription(stereo(data.description));
         for (const c of P.queue.splice(0)) await pc.addIceCandidate(c).catch(() => {});
         if (data.description.type === "offer") {
           await pc.setLocalDescription();
           send(Number(from), { description: pc.localDescription });
         }
+        if (pc.signalingState === "stable" && pc.connectionState === "connected") tune(pc);
       } else if (data.candidate) {
         if (!pc.remoteDescription) P.queue.push(data.candidate);
         else await pc.addIceCandidate(data.candidate).catch(() => {});
       }
     } catch { /* a stale message from a negotiation that was replaced */ }
-  }, [peer, send]);
+  }, [peer, send, tune]);
 
   // ── the whole call ─────────────────────────────────────────────────────────
   const finish = useCallback((reason) => {
     tones.current.stop();
     for (const id of [...pcs.current.keys()]) closePeer(id);
     stopMedia();
+    if (screenRef.current) { screenRef.current.getTracks().forEach((t) => t.stop()); screenRef.current = null; setScreen(null); }
     if (callRef.current && reason) say(ENDED[reason] || "Call ended");
     callRef.current = null;
     setCall(null); setPeers({}); setExpanded(true);
@@ -281,8 +379,37 @@ export function CallProvider({ children }) {
   // ── mic, camera, which camera ──────────────────────────────────────────────
   const tellMedia = useCallback((m, k) => {
     const c = callRef.current;
-    if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: m, cam: k });
+    if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: m, cam: k, screen: screenRef.current ? screenRef.current.id : null });
   }, [socket]);
+
+  // ── sharing my screen ──────────────────────────────────────────────────────
+  const stopShare = useCallback(() => {
+    const scr = screenRef.current;
+    if (!scr) return;
+    // empty the screen's slots but keep them, to fill again next time
+    for (const P of pcs.current.values()) {
+      for (const tx of P.screenTx || []) {
+        try { tx.sender.replaceTrack(null); tx.direction = "recvonly"; } catch { /* closed */ }
+      }
+    }
+    scr.getTracks().forEach((t) => t.stop());
+    screenRef.current = null; setScreen(null);
+    tellMedia(micRef.current, camRef.current);
+  }, [tellMedia]);
+  const share = useCallback(async () => {
+    if (screenRef.current) return stopShare();
+    if (!canShareScreen()) return say("Screen sharing works from a computer.");
+    let scr;
+    try { scr = await navigator.mediaDevices.getDisplayMedia(SCREEN); } catch { return undefined; }   // they changed their mind
+    const v = scr.getVideoTracks()[0], a = scr.getAudioTracks()[0];
+    if (v) { try { v.contentHint = "motion"; } catch { /* fine */ } v.addEventListener("ended", () => stopShare()); }
+    if (a) { try { a.contentHint = "music"; } catch { /* fine */ } }
+    screenRef.current = scr; setScreen(scr);
+    for (const P of pcs.current.values()) shareInto(P, scr);
+    tellMedia(micRef.current, camRef.current);
+    say(a ? "Sharing your screen and its sound" : "Sharing without sound — for sound, share a tab and tick “Share tab audio”");
+    return undefined;
+  }, [stopShare, tellMedia, say]);
   const toggleMic = useCallback(() => {
     const s = localRef.current; if (!s) return;
     const on = !micRef.current;
@@ -328,7 +455,16 @@ export function CallProvider({ children }) {
     };
     const onDeclined = ({ callId, id }) => { const c = callRef.current; if (c && c.id === callId && c.members.length > 1) say(`${c.names[id] || "They"} can't join right now`); };
     const onMissed = ({ callId, id }) => { const c = callRef.current; if (c && c.id === callId && c.members.length > 1) say(`${c.names[id] || "They"} didn't answer`); };
-    const onMedia = ({ callId, id, mic: m, cam: k }) => { if (callRef.current && callRef.current.id === callId) patchPeer(id, { mic: m, cam: k }); };
+    const onMedia = ({ callId, id, mic: m, cam: k, screen: sid }) => {
+      if (!callRef.current || callRef.current.id !== callId) return;
+      const S = streams.current.get(id);
+      if (S) {
+        if (S.screenId && S.screenId !== sid) S.all.delete(S.screenId);     // they stopped sharing
+        S.screenId = sid || null;
+      }
+      patchPeer(id, { mic: m, cam: k });
+      place(id);
+    };
     // the socket came back: pick the call up where it was
     const onConnect = () => {
       const c = callRef.current;
@@ -345,16 +481,16 @@ export function CallProvider({ children }) {
       socket.off("call:missed", onMissed); socket.off("call:media", onMedia); socket.off("call:signal", onSignal);
       socket.off("connect", onConnect);
     };
-  }, [socket, apply, finish, closePeer, patchPeer, onSignal, say]);
+  }, [socket, apply, finish, closePeer, patchPeer, onSignal, say, place]);
 
   // logged out, or the socket is gone for good: no call
   useEffect(() => { if (!user) { setRing(null); finish(null); } }, [user, finish]);
   useEffect(() => () => { tones.current.stop(); stopMedia(); }, [stopMedia]);
 
   const value = useMemo(() => ({
-    call, ring, local, peers, mic, cam, facing, notice, expanded, myId,
-    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, setExpanded, clearNotice: () => setNotice(null),
-  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, startCall, accept, decline, hangUp, toggleMic, toggleCam, flip]);
+    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen,
+    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, clearNotice: () => setNotice(null),
+  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

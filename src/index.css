@@ -1475,3 +1475,27 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-pick-go{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--lime);border:3px solid var(--ink)}
 .call-pick-none,.call-pick-note{text-align:center;font-weight:700;opacity:.75;padding:6px}
 .call-pick-note{font-size:13px}
+/* a shared screen: the whole of it, letterboxed, never cropped */
+.call-share{position:absolute;inset:0;bottom:calc(env(safe-area-inset-bottom,0px) + 168px);background:#000;display:grid;place-items:center}
+.call-share:fullscreen{bottom:0;inset:0}
+.call-fit{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+.call-share-tag{position:absolute;left:10px;bottom:10px;padding:3px 10px;border-radius:999px;background:rgba(0,0,0,.6);font-weight:800;font-size:13px}
+.call-share:fullscreen .call-share-tag{display:none}
+.call-big{position:absolute;right:10px;bottom:10px;width:44px;height:44px;border-radius:12px;border:3px solid #fff;
+  background:rgba(0,0,0,.5);color:#fff;font-size:22px;cursor:pointer}
+.call-strip{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 92px);height:68px;
+  display:flex;gap:8px;justify-content:center;padding:0 12px}
+.call-mini-tile{position:relative;width:62px;height:62px;border-radius:14px;overflow:hidden;border:3px solid #fff;background:#221a30;
+  display:grid;place-items:center}
+.call-mini-tile .call-emoji{width:40px;height:40px;font-size:22px;border-width:2px;box-shadow:none}
+@media (orientation:landscape){
+  /* sideways: film mode — the screen, and a slim column of buttons */
+  .call-share{bottom:0;right:calc(env(safe-area-inset-right,0px) + 68px)}
+  .call-strip{display:none}
+  .call-screen.sharing .call-bar{left:auto;right:12px;bottom:12px;flex-direction:column;width:auto}
+  .call-screen.sharing .call-bar .call-btn{width:44px;height:44px;font-size:20px}
+  .call-screen.sharing .call-me{display:none}
+}
+.call-sharing{position:absolute;z-index:4;left:50%;top:calc(env(safe-area-inset-top,0px) + 66px);transform:translateX(-50%);
+  display:flex;align-items:center;gap:10px;padding:6px 8px 6px 14px;border-radius:999px;background:rgba(0,0,0,.6);
+  font-weight:800;font-size:14px;white-space:nowrap}

@@ -190,7 +190,13 @@ There is no test runner. What works:
   dropping and coming back) with a fake socket hub. Test the phones with
   headless tabs and Chrome's `--use-fake-device-for-media-stream
   --use-fake-ui-for-media-stream`; that failure was intermittent, so run
-  it several times.
+  it several times. Screen sharing (from a computer) reuses its two slots
+  each time, so offers don't grow; receiving phones build their own
+  MediaStreams from incoming tracks, because Chrome empties its own when a
+  slot is reused. To test it, replace `getDisplayMedia` with the fake
+  camera (a canvas stops making frames in a background tab, and the real
+  desktop starves the machine), and allow tens of seconds: three tabs of
+  software video make every step slow here, not stuck.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

@@ -21,7 +21,10 @@ const MAX = 4;
 // (overridable so scripts/check-calls.js doesn't wait half a minute)
 const RING_MS = Number(process.env.CALL_RING_MS) || 35000;
 const GRACE_MS = Number(process.env.CALL_GRACE_MS) || 15000;
-const SIGNAL_MAX = 20000;          // an offer is a few KB; anything bigger isn't one
+// A description from Chrome lists every codec it has: 4-5 KB a video
+// section, and a call with a screen shared has several. 20 KB dropped a
+// second share's offer, and the share never arrived.
+const SIGNAL_MAX = 100000;
 
 const calls = new Map();           // id -> { id, members: Map<uid, {sid, name, gone}>, invited: Map<uid, {by, timer}> }
 const inCall = new Map();          // uid -> call id
@@ -173,11 +176,13 @@ function attach(io) {
       io.to(to.sid).emit("call:signal", { callId: c.id, from: uid, data: msg.data });
     });
 
-    // Mic and camera on or off, so the others can show it.
+    // Mic and camera on or off, and which of my streams is a shared screen
+    // (its id, as the phones see it), so the others can show it.
     socket.on("call:media", (msg) => {
       const c = calls.get(msg && msg.callId);
       if (!c || !c.members.has(uid)) return;
-      toMembers(c, "call:media", { callId: c.id, id: uid, mic: !!msg.mic, cam: !!msg.cam }, uid);
+      const screen = typeof msg.screen === "string" && /^[\w{}-]{1,100}$/.test(msg.screen) ? msg.screen : null;
+      toMembers(c, "call:media", { callId: c.id, id: uid, mic: !!msg.mic, cam: !!msg.cam, screen }, uid);
     });
 
     socket.on("disconnect", () => {

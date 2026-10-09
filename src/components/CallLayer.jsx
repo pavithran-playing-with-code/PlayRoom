@@ -4,9 +4,11 @@
 //   • calling them: your own camera, "Calling Ben…", Cancel
 //   • in the call: them full screen, you in a corner, the buttons
 //   • shrunk: a small picture you can drag anywhere; tap to open it again
+//   • someone sharing their screen: it takes the stage (⛶ for full screen,
+//     sideways on a phone), the cameras in a strip
 // The call itself lives in CallContext.
 import React, { useEffect, useRef, useState } from "react";
-import { useCall as useCallCtx, CALL_MAX } from "../utils/CallContext";
+import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallContext";
 import { usePresence } from "../utils/PresenceContext";
 
 const two = (n) => String(n).padStart(2, "0");
@@ -60,7 +62,8 @@ export default function CallLayer() {
   const [now, setNow] = useState(Date.now());
   const [tapForSound, setTapForSound] = useState(false);
   const [picking, setPicking] = useState(false);   // the "add a friend" list
-  const { call, ring, local, peers, mic, cam, facing, notice, expanded } = C;
+  const { call, ring, local, peers, mic, cam, facing, notice, expanded, screen } = C;
+  const shareRef = useRef(null);
   const avatarOf = (id) => friends.find((f) => Number(f.id) === Number(id))?.avatar;
 
   useEffect(() => {
@@ -100,6 +103,24 @@ export default function CallLayer() {
   const waiting = call && call.phase === "active" ? call.invited.map((id) => ({ id, name: call.names[id] || "Friend" })) : [];
   const seats = others.length + waiting.length;
   const room = call && call.members.length + call.invited.length < CALL_MAX;
+  // a friend sharing their screen (the first, if two are)
+  const sharer = others.find((m) => peers[m.id]?.screen);
+  const shown = sharer ? peers[sharer.id].screen : null;
+  const big = async () => {
+    const el = shareRef.current;
+    if (!el) return;
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+        // a film on a phone: sideways (where the phone lets a page turn it)
+        try { await window.screen.orientation.lock("landscape"); } catch { /* not on every phone */ }
+      } else {
+        const v = el.querySelector("video");
+        if (v && v.webkitEnterFullscreen) v.webkitEnterFullscreen();       // iPhone: the video itself goes full screen
+      }
+    } catch { /* stays as it is */ }
+  };
   const canAdd = friends.filter((f) => f.online && !call?.members.some((m) => m.id === Number(f.id)) && !call?.invited.includes(Number(f.id)));
   const needTap = React.useCallback(() => setTapForSound(true), []);
   const ringing = ring && (!call || call.id !== ring.callId);
@@ -108,6 +129,8 @@ export default function CallLayer() {
     <>
       {notice && !ringing && <div className="call-notice" role="status">{notice.text}</div>}
       {call && others.map((m) => peers[m.id]?.stream && <Sound key={m.id} stream={peers[m.id].stream} onNeedTap={needTap} />)}
+      {call && others.map((m) => peers[m.id]?.screen && peers[m.id].screen.getAudioTracks().length > 0
+        && <Sound key={"s" + m.id} stream={peers[m.id].screen} onNeedTap={needTap} />)}
 
       {ringing && (
         <div className="call-ring" role="dialog" aria-label={`${ring.from.name} is calling`}>
@@ -124,7 +147,7 @@ export default function CallLayer() {
       )}
 
       {call && expanded && (
-        <div className={`call-screen n${Math.max(1, seats)}`} role="dialog" aria-label="Call">
+        <div className={`call-screen n${Math.max(1, seats)}${shown ? " sharing" : ""}`} role="dialog" aria-label="Call">
           {call.phase === "outgoing" ? (
             <div className="call-stage">
               {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <Face avatar={avatarOf(call.first?.id)} big />}
@@ -133,6 +156,25 @@ export default function CallLayer() {
                 <div className="call-ring-sub">Calling…</div>
               </div>
             </div>
+          ) : shown ? (
+            <>
+              <div className="call-share" ref={shareRef} onDoubleClick={big}>
+                <Vid stream={shown} className="call-fit" />
+                <div className="call-share-tag">🖥️ {sharer.name}'s screen</div>
+                <button type="button" className="call-big" onClick={big} aria-label="Full screen">⛶</button>
+              </div>
+              <div className="call-strip">
+                {others.map((m) => {
+                  const p = peers[m.id] || {};
+                  const v = p.stream && p.cam !== false && p.stream.getVideoTracks().length > 0;
+                  return (
+                    <div className="call-mini-tile" key={m.id} title={m.name}>
+                      {v ? <Vid stream={p.stream} className="call-full" /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           ) : (
             <div className="call-grid">
               {others.map((m) => {
@@ -168,6 +210,13 @@ export default function CallLayer() {
             {call.phase === "active" && <div className="call-time">{seats === 1 ? others[0].name + " · " : `${call.members.length} in the call · `}{clock(now - (call.startedAt || now))}</div>}
           </div>
 
+          {screen && (
+            <div className="call-sharing" role="status">
+              🖥️ You're sharing your screen
+              <button type="button" className="press p-coral sm" onClick={C.share}>Stop</button>
+            </div>
+          )}
+
           {tapForSound && (
             <button type="button" className="call-tap" onClick={() => { document.querySelectorAll("audio.call-sound").forEach((a) => a.play().catch(() => {})); setTapForSound(false); }}>
               🔊 Tap to hear them
@@ -181,6 +230,10 @@ export default function CallLayer() {
                 <button type="button" className={`call-btn${cam ? "" : " off"}`} onClick={C.toggleCam} aria-label={cam ? "Camera off" : "Camera on"} aria-pressed={!cam}>{cam ? "📹" : "🚫"}</button>
                 <button type="button" className="call-btn" onClick={C.flip} aria-label="Switch camera">🔄</button>
               </>
+            )}
+            {call.phase === "active" && canShareScreen() && (
+              <button type="button" className={`call-btn${screen ? " off" : ""}`} onClick={C.share}
+                aria-label={screen ? "Stop sharing your screen" : "Share your screen"} aria-pressed={!!screen}>🖥️</button>
             )}
             {call.phase === "active" && room && (
               <button type="button" className="call-btn" onClick={() => setPicking(true)} aria-label="Add a friend to the call">➕</button>
@@ -216,7 +269,9 @@ export default function CallLayer() {
         <div className="call-bubble" style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
           onPointerDown={bubbleDown} onPointerMove={bubbleMove} onPointerUp={bubbleUp} onPointerCancel={() => { drag.current = null; }}
           role="button" aria-label="Open the call">
-          {others[0] && peers[others[0].id]?.stream && peers[others[0].id]?.cam !== false
+          {shown
+            ? <Vid stream={shown} className="call-fit" />
+            : others[0] && peers[others[0].id]?.stream && peers[others[0].id]?.cam !== false
             ? <Vid stream={peers[others[0].id].stream} className="call-full" />
             : <Face avatar={avatarOf(others[0]?.id || call.first?.id)} />}
           <div className="call-bubble-tag">{call.phase === "active" ? clock(now - (call.startedAt || now)) : "Calling…"}{mic ? "" : " 🔇"}</div>

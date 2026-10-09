@@ -52,6 +52,46 @@ const Phone = () => (
   </svg>
 );
 
+// ── chat in the call ─────────────────────────────────────────────────────────
+const EMOJI = ["😂", "❤️", "👍", "🔥", "😮", "😢", "🎉", "🙏"];
+const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+function ChatPanel({ chat, onSend, onClose }) {
+  const [text, setText] = useState("");
+  const listRef = useRef(null);
+  useEffect(() => { const l = listRef.current; if (l) l.scrollTop = l.scrollHeight; }, [chat.length]);
+  const send = () => { if (text.trim()) { onSend(text); setText(""); } };
+  // an emoji on its own is sent at once, like a reaction; in a message it's added to it
+  const emoji = (e) => { if (text.trim()) setText((t) => t + e); else onSend(e); };
+  // keys typed here are the chat's: a game listening on the page (Space to
+  // jump…) mustn't take them
+  const keep = (e) => e.stopPropagation();
+  return (
+    <div className="call-chat" role="dialog" aria-label="Chat" onKeyDown={keep} onKeyUp={keep}>
+      <div className="call-chat-head">
+        <b>💬 Chat</b><span className="call-chat-note">only in this call · not saved</span>
+        <button type="button" className="call-chat-x" onClick={onClose} aria-label="Close the chat">✕</button>
+      </div>
+      <div className="call-chat-list" ref={listRef}>
+        {chat.length === 0 && <div className="call-chat-empty">Say hi 👋</div>}
+        {chat.map((m) => (
+          <div key={m.key} className={`call-msg${m.mine ? " mine" : ""}${/^\p{Extended_Pictographic}[\uFE0F\u200D\p{Extended_Pictographic}]*$/u.test(m.text) ? " big" : ""}`}>
+            {!m.mine && <b>{m.name}</b>}
+            <span>{m.text}</span>
+            <time>{hhmm(m.at)}</time>
+          </div>
+        ))}
+      </div>
+      <div className="call-chat-emoji">
+        {EMOJI.map((e) => <button key={e} type="button" onClick={() => emoji(e)} aria-label={`Send ${e}`}>{e}</button>)}
+      </div>
+      <form className="call-chat-input" onSubmit={(e) => { e.preventDefault(); send(); }}>
+        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder="Message…" aria-label="Message" enterKeyHint="send" autoComplete="off" />
+        <button type="submit" aria-label="Send" disabled={!text.trim()}>➤</button>
+      </form>
+    </div>
+  );
+}
+
 function Face({ avatar, name, big }) {
   return (
     <div className={`call-face${big ? " big" : ""}`}>
@@ -68,7 +108,19 @@ export default function CallLayer() {
   const [tapForSound, setTapForSound] = useState(false);
   const [picking, setPicking] = useState(false);   // the "add a friend" list
   const [swapped, setSwapped] = useState(false);   // one-to-one: me big, them in the corner (tap the corner to swap, like WhatsApp)
-  const { call, ring, local, peers, mic, cam, facing, notice, expanded, screen } = C;
+  const { call, ring, local, peers, mic, cam, facing, notice, expanded, screen, chat = [], unread = 0, chatOpen } = C;
+  // a message arriving with the chat closed: shown for a moment at the top
+  const [peek, setPeek] = useState(null);
+  const lastSeen = useRef(0);
+  useEffect(() => {
+    const last = chat[chat.length - 1];
+    if (!last || chat.length <= lastSeen.current) { lastSeen.current = chat.length; return undefined; }
+    lastSeen.current = chat.length;
+    if (last.mine || chatOpen) return undefined;
+    setPeek(last);
+    const t = setTimeout(() => setPeek((p) => (p === last ? null : p)), 4000);
+    return () => clearTimeout(t);
+  }, [chat, chatOpen]);
   const shareRef = useRef(null);
   const avatarOf = (id) => friends.find((f) => Number(f.id) === Number(id))?.avatar;
 
@@ -137,6 +189,7 @@ export default function CallLayer() {
   // ── the floating window: their faces left, mine right ──
   const pipState = {
     mic,
+    chat,
     people: [
       ...others.map((m) => {
         const p = peers[m.id] || {};
@@ -150,9 +203,10 @@ export default function CallLayer() {
   const pipRef = useRef(pipState);
   pipRef.current = pipState;
   const pipOn = useRef({});
-  pipOn.current = { onMic: C.toggleMic, onHangUp: C.hangUp, onBack: () => C.setExpanded(true) };
+  pipOn.current = { onMic: C.toggleMic, onHangUp: C.hangUp, onBack: () => C.setExpanded(true), onSend: C.sendChat };
   const popOut = React.useCallback(() => openPip(pipRef.current, {
     onMic: () => pipOn.current.onMic(), onHangUp: () => pipOn.current.onHangUp(), onBack: () => pipOn.current.onBack(),
+    onSend: (t) => pipOn.current.onSend(t),
   }), []);
   useEffect(() => { updatePip(pipRef.current); });                    // keep it current, every render
   const active = !!call && call.phase === "active";
@@ -187,7 +241,7 @@ export default function CallLayer() {
       )}
 
       {call && expanded && (
-        <div className={`call-screen n${Math.max(1, seats)}${shown ? " sharing" : ""}`} role="dialog" aria-label="Call">
+        <div className={`call-screen n${Math.max(1, seats)}${shown ? " sharing" : ""}${chatOpen ? " chatting" : ""}`} role="dialog" aria-label="Call">
           {call.phase === "outgoing" ? (
             <div className="call-stage">
               {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <Face avatar={avatarOf(call.first?.id)} big />}
@@ -272,6 +326,12 @@ export default function CallLayer() {
             <button type="button" className="call-mini" onClick={() => C.setExpanded(false)} aria-label="Shrink the call">
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
+            {active && (
+              <button type="button" className="call-mini call-chat-btn" onClick={() => C.setChatOpen(!chatOpen)}
+                aria-label={unread ? `Chat, ${unread} new` : "Chat"} aria-pressed={!!chatOpen}>
+                💬{unread > 0 && <span className="call-badge">{unread > 9 ? "9+" : unread}</span>}
+              </button>
+            )}
             {active && canDocPip() && (
               <button type="button" className="call-mini" onClick={popOut} aria-label="Float the call over other tabs" title="Float the call over other tabs">
                 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="#fff" strokeWidth="2.4" /><rect x="12" y="11" width="7" height="6" rx="1" fill="#fff" /></svg>
@@ -311,6 +371,13 @@ export default function CallLayer() {
             <button type="button" className="call-btn red" onClick={C.hangUp} aria-label={call.phase === "active" ? "Hang up" : "Cancel"}><Phone /></button>
           </div>
 
+          {active && chatOpen && <ChatPanel chat={chat} onSend={C.sendChat} onClose={() => C.setChatOpen(false)} />}
+          {active && !chatOpen && peek && (
+            <button type="button" className="call-peek" onClick={() => { setPeek(null); C.setChatOpen(true); }} aria-label="Open the chat">
+              <b>{peek.name}</b> {peek.text}
+            </button>
+          )}
+
           {picking && (
             <div className="call-pick" role="dialog" aria-label="Add a friend" onClick={(e) => { if (e.target === e.currentTarget) setPicking(false); }}>
               <div className="call-pick-card pop">
@@ -348,6 +415,7 @@ export default function CallLayer() {
           <div className="call-bubble-half me">
             {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <span className="call-emoji">🙂</span>}
           </div>
+          {unread > 0 && <span className="call-badge on-bubble">{unread > 9 ? "9+" : unread}</span>}
           <div className="call-bubble-tag">{shown ? "🖥️ " : ""}{call.phase === "active" ? clock(now - (call.startedAt || now)) : "Calling…"}{mic ? "" : " 🔇"}</div>
         </div>
       )}

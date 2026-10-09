@@ -139,6 +139,12 @@ export function CallProvider({ children }) {
   const [notice, setNotice] = useState(null);      // a short line after a call: { text, n }
   const [expanded, setExpanded] = useState(true);  // the full call screen, or the bubble
   const [screen, setScreen] = useState(null);      // the screen I'm sharing
+  // the call's chat: kept here for the call only, never saved anywhere
+  const [chat, setChat] = useState([]);            // [{ key, from, name, text, at, mine }]
+  const [unread, setUnread] = useState(0);
+  const [chatOpen, setChatOpenState] = useState(false);
+  const chatOpenRef = useRef(false);
+  const setChatOpen = useCallback((v) => { chatOpenRef.current = v; setChatOpenState(v); if (v) setUnread(0); }, []);
 
   const callRef = useRef(null); callRef.current = call;
   const localRef = useRef(null); localRef.current = local;
@@ -329,6 +335,7 @@ export function CallProvider({ children }) {
     if (callRef.current && reason) say(ENDED[reason] || "Call ended");
     callRef.current = null;
     setCall(null); setPeers({}); setExpanded(true);
+    setChat([]); setUnread(0); chatOpenRef.current = false; setChatOpenState(false);
   }, [closePeer, stopMedia, say]);
 
   // members changed: connect to newcomers, let go of whoever left
@@ -406,6 +413,15 @@ export function CallProvider({ children }) {
     const c = callRef.current;
     if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: m, cam: k, screen: screenRef.current ? screenRef.current.id : null });
   }, [socket]);
+
+  // ── chat ───────────────────────────────────────────────────────────────────
+  const sendChat = useCallback((text) => {
+    const c = callRef.current, t = String(text || "").trim().slice(0, 500);
+    if (!socket || !c || !c.id || !t) return;
+    const key = `${myId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setChat((all) => [...all, { key, from: myId, name: "You", text: t, at: Date.now(), mine: true }].slice(-200));
+    socket.emit("call:chat", { callId: c.id, text: t, key });
+  }, [socket, myId]);
 
   // ── sharing my screen ──────────────────────────────────────────────────────
   const stopShare = useCallback(() => {
@@ -510,8 +526,16 @@ export function CallProvider({ children }) {
     socket.on("call:ring", onRing); socket.on("call:ring-stop", onRingStop); socket.on("call:state", onState);
     socket.on("call:ended", onEnded); socket.on("call:left", onLeft); socket.on("call:declined", onDeclined);
     socket.on("call:missed", onMissed); socket.on("call:media", onMedia); socket.on("call:signal", onSignal);
+    const onChat = ({ callId, id, name: who, text, at, key }) => {
+      if (!callRef.current || callRef.current.id !== callId) return;
+      setChat((all) => (all.some((m) => m.key === key) ? all : [...all, { key, from: id, name: who, text, at, mine: false }].slice(-200)));
+      if (!chatOpenRef.current) setUnread((n) => n + 1);
+      tones.current.blip(true);
+    };
+    socket.on("call:chat", onChat);
     socket.on("connect", onConnect);
     return () => {
+      socket.off("call:chat", onChat);
       socket.off("call:ring", onRing); socket.off("call:ring-stop", onRingStop); socket.off("call:state", onState);
       socket.off("call:ended", onEnded); socket.off("call:left", onLeft); socket.off("call:declined", onDeclined);
       socket.off("call:missed", onMissed); socket.off("call:media", onMedia); socket.off("call:signal", onSignal);
@@ -524,9 +548,10 @@ export function CallProvider({ children }) {
   useEffect(() => () => { tones.current.stop(); stopMedia(); }, [stopMedia]);
 
   const value = useMemo(() => ({
-    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen,
-    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, clearNotice: () => setNotice(null),
-  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share]);
+    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen,
+    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
+  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen,
+    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

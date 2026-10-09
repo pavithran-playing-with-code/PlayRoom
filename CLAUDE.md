@@ -196,7 +196,12 @@ There is no test runner. What works:
   slot is reused. To test it, replace `getDisplayMedia` with the fake
   camera (a canvas stops making frames in a background tab, and the real
   desktop starves the machine), and allow tens of seconds: three tabs of
-  software video make every step slow here, not stuck.
+  software video make every step slow here, not stuck. Chat in a call
+  (`call:chat`) is relayed to the call's members and never stored; the
+  chat panel stops key events reaching the page, or a game listening for
+  Space eats the spaces typed into it. On a computer the call floats in a
+  Document Picture-in-Picture window (`src/utils/callPip.js`, plain DOM —
+  React's events don't reach another window): both faces and the chat.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

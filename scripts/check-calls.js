@@ -157,6 +157,26 @@ const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? 
   check("the stale call is left and a new one rings", r6.ok && r6.callId !== r5.callId && F.got("call:ring").length === 1);
   check("...and the friend in the stale call isn't left hanging", B1.got("call:ended").length === 1);
 
+  // ── chat in a call: passed on, never kept ──
+  {
+    const P = connect(1), Q = connect(3), R = connect(2), Z = connect(9);
+    const rc = await P.send("call:start", { to: 3 });
+    await Q.send("call:accept", { callId: rc.callId });
+    Q.clear(); P.clear();
+    await P.send("call:chat", { callId: rc.callId, text: "  hi 😂" + String.fromCharCode(0, 7) + " ❤️ ", key: "k1" });
+    const got = Q.got("call:chat");
+    check("a chat message reaches the others in the call", got.length === 1 && got[0].text === "hi 😂 ❤️" && got[0].id === 1 && got[0].key === "k1", JSON.stringify(got));
+    check("...not echoed back to the sender", P.got("call:chat").length === 0);
+    await Z.send("call:chat", { callId: rc.callId, text: "spam" });
+    await R.send("call:chat", { callId: rc.callId, text: "not in it" });
+    check("someone outside the call can't post in it", Q.got("call:chat").length === 1);
+    await P.send("call:chat", { callId: rc.callId, text: "x".repeat(900) });
+    check("a long message is cut to 500", Q.got("call:chat")[1].text.length === 500);
+    await P.send("call:chat", { callId: rc.callId, text: "   " });
+    check("an empty one is dropped", Q.got("call:chat").length === 2);
+    for (let i = 0; i < 12; i++) await P.send("call:chat", { callId: rc.callId, text: "m" + i });
+    check("a flood is held back (8 in 5 s)", Q.got("call:chat").length === 8, String(Q.got("call:chat").length));
+  }
   console.log(fails ? `\n${fails} FAILED` : "\nall passed");
   process.exit(fails ? 1 : 0);
 })();

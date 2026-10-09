@@ -18,6 +18,7 @@
 const presence = require("./presence");
 
 const MAX = 4;
+const CHAT_MAX = 500;
 // (overridable so scripts/check-calls.js doesn't wait half a minute)
 const RING_MS = Number(process.env.CALL_RING_MS) || 35000;
 const GRACE_MS = Number(process.env.CALL_GRACE_MS) || 15000;
@@ -222,6 +223,23 @@ function attach(io) {
       if (!c || !c.members.has(uid)) return;
       const screen = typeof msg.screen === "string" && /^[\w{}-]{1,100}$/.test(msg.screen) ? msg.screen : null;
       toMembers(c, "call:media", { callId: c.id, id: uid, mic: !!msg.mic, cam: !!msg.cam, screen }, uid);
+    });
+
+    // Chat in the call: passed to the others in it, never stored. A message
+    // is a line of text (emoji welcome), at most CHAT_MAX characters; a few a
+    // second at most, so nobody can flood the others' screens.
+    let chatTimes = [];
+    socket.on("call:chat", (msg) => {
+      const c = calls.get(msg && msg.callId);
+      if (!c || !c.members.has(uid) || c.members.get(uid).sid !== socket.id) return;
+      const text = typeof msg.text === "string" ? msg.text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "").trim().slice(0, CHAT_MAX) : "";
+      if (!text) return;
+      const now = Date.now();
+      chatTimes = chatTimes.filter((t) => now - t < 5000);
+      if (chatTimes.length >= 8) return;
+      chatTimes.push(now);
+      const key = typeof msg.key === "string" ? msg.key.slice(0, 40) : String(now);
+      toMembers(c, "call:chat", { callId: c.id, id: uid, name, text, at: now, key }, uid);
     });
 
     socket.on("disconnect", () => {

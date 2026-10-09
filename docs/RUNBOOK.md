@@ -104,7 +104,8 @@ Set in Render → Environment. Values are not recorded here.
 | `GENERATE_SOURCEMAP` | `false`, or the React build can exhaust the free builder's memory. |
 | `MAIL_URL` | The Google Apps Script web app's `/exec` URL. See "Email" below. |
 | `MAIL_SECRET` | The secret word in that script's `SECRET` line. Both must match. |
-| `TURN_URLS` `TURN_USERNAME` `TURN_CREDENTIAL` | Optional. A TURN relay for video calls (`config/calls.js`), e.g. `turn:host:3478,turns:host:443?transport=tcp`. Without one, calls still work on most networks, but two phones that can't reach each other directly (some mobile carriers, strict office Wi-Fi) stay on "Connecting…". |
+| `CF_TURN_KEY_ID` `CF_TURN_KEY_TOKEN` | The TURN relay for video calls: Cloudflare Realtime → TURN → the key's ID and API token. **Needed in practice**: without a relay, phones on Indian mobile networks (one shared address for many phones) usually can't reach each other, and the call sits on "Connecting…" then "Can't get through yet". `config/calls.js` fetches short-lived credentials from Cloudflare and reuses them for hours. A stuck call logs `call not connecting … relay MISSING` (or `configured`) in the service log. |
+| `TURN_URLS` `TURN_USERNAME` `TURN_CREDENTIAL` | Optional, instead of Cloudflare: any other TURN service, e.g. `turn:host:3478,turns:host:443?transport=tcp`. |
 
 **Never set `PORT`.** Render assigns it; overriding it makes the service
 unreachable.

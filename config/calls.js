@@ -32,13 +32,51 @@ let seq = 0;
 
 const userChannel = (uid) => `user:${Number(uid)}`;
 
-// STUN finds a phone's public address; TURN relays for the few networks where
-// two phones can't reach each other directly (some mobile carriers). The TURN
-// details come from the environment — never from the repository.
-function iceServers() {
-  const list = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+// STUN finds a phone's public address. TURN relays the call for the phones
+// that can't reach each other directly — common on Indian mobile networks,
+// which put many phones behind one shared address. Without it those calls
+// sit on "Connecting…" for good.
+//
+// TURN comes from the environment, never the repository, one of two ways:
+//   • Cloudflare Realtime TURN: CF_TURN_KEY_ID + CF_TURN_KEY_TOKEN. Short-lived
+//     credentials are fetched from Cloudflare and shared by every call for a
+//     few hours.
+//   • any other TURN service: TURN_URLS, TURN_USERNAME, TURN_CREDENTIAL.
+const STUN = { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] };
+const CF_TTL_S = 24 * 3600;
+let cfCache = { servers: null, until: 0 };
+async function cloudflareTurn() {
+  const id = process.env.CF_TURN_KEY_ID, token = process.env.CF_TURN_KEY_TOKEN;
+  if (!id || !token) return [];
+  if (cfCache.servers && Date.now() < cfCache.until) return cfCache.servers;
+  const ask = (path) => fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(id)}/credentials/${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ ttl: CF_TTL_S }),
+    signal: AbortSignal.timeout(4000),
+  });
+  try {
+    let res = await ask("generate-ice-servers");
+    if (res.status === 404) res = await ask("generate");          // the older address
+    if (!res.ok) throw new Error(`Cloudflare TURN ${res.status}`);
+    const data = await res.json();
+    // port 53 addresses are refused or hang in some browsers: leave them out
+    const list = [].concat(data.iceServers || []).filter((x) => x && x.urls)
+      .map((x) => ({ ...x, urls: [].concat(x.urls).filter((u) => !/:53(\?|$)/.test(u)) }))
+      .filter((x) => x.urls.length);
+    if (!list.length) throw new Error("Cloudflare TURN: no servers in the reply");
+    cfCache = { servers: list, until: Date.now() + (CF_TTL_S / 2) * 1000 };   // renew well before they expire
+    return list;
+  } catch (err) {
+    console.warn("⚠️  Calls: couldn't get TURN credentials —", err.message);
+    return cfCache.servers || [];
+  }
+}
+async function iceServers() {
+  const list = [STUN];
   const urls = (process.env.TURN_URLS || "").split(",").map((s) => s.trim()).filter(Boolean);
   if (urls.length) list.push({ urls, username: process.env.TURN_USERNAME || "", credential: process.env.TURN_CREDENTIAL || "" });
+  list.push(...(await cloudflareTurn()));
   return list;
 }
 
@@ -104,7 +142,7 @@ function attach(io) {
       // phone before it reconnected): that one's over, this is a new call
       if (c && c.members.get(uid).sid !== socket.id) { leave(c, uid, "switched"); c = null; }
       if (inCall.has(to) && (!c || inCall.get(to) !== c.id)) return reply({ ok: false, why: "busy" });
-      if (c && (c.members.has(to) || c.invited.has(to))) return reply({ ok: true, callId: c.id, iceServers: iceServers() });
+      if (c && (c.members.has(to) || c.invited.has(to))) return reply({ ok: true, callId: c.id, iceServers: await iceServers() });
       if (c && c.members.size + c.invited.size >= MAX) return reply({ ok: false, why: "full" });
       if (!c) {
         c = { id: `c${Date.now().toString(36)}${(++seq).toString(36)}`, members: new Map(), invited: new Map() };
@@ -120,13 +158,13 @@ function attach(io) {
       }, RING_MS);
       c.invited.set(to, { by: uid, timer });
       io.to(userChannel(to)).emit("call:ring", { callId: c.id, from: { id: uid, name }, members: view(c).members });
-      reply({ ok: true, callId: c.id, iceServers: iceServers() });
+      reply({ ok: true, callId: c.id, iceServers: await iceServers() });
       tellState(c);
     });
 
     // Answer: this socket joins (leaving any call it was in), every other
     // tab of mine stops ringing.
-    socket.on("call:accept", (msg, ack) => {
+    socket.on("call:accept", async (msg, ack) => {
       const reply = typeof ack === "function" ? ack : () => {};
       const c = calls.get(msg && msg.callId);
       if (!c || !c.invited.has(uid)) return reply({ ok: false, why: "gone" });
@@ -135,7 +173,8 @@ function attach(io) {
       stopRinging(c, uid);
       c.members.set(uid, { sid: socket.id, name, gone: null });
       inCall.set(uid, c.id);
-      reply({ ok: true, iceServers: iceServers(), ...view(c) });
+      const ice = await iceServers();
+      reply({ ok: true, iceServers: ice, ...view(c) });
       tellState(c);
     });
 
@@ -154,13 +193,13 @@ function attach(io) {
     });
 
     // Back after a dropped socket: the call goes on.
-    socket.on("call:rejoin", (msg, ack) => {
+    socket.on("call:rejoin", async (msg, ack) => {
       const reply = typeof ack === "function" ? ack : () => {};
       const c = calls.get(msg && msg.callId);
       const m = c && c.members.get(uid);
       if (!m) return reply({ ok: false });
       clearTimeout(m.gone); m.gone = null; m.sid = socket.id;
-      reply({ ok: true, iceServers: iceServers(), ...view(c) });
+      reply({ ok: true, iceServers: await iceServers(), ...view(c) });
       tellState(c);
     });
 

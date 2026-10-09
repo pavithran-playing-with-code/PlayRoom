@@ -8,7 +8,7 @@
 //     sideways on a phone), the cameras in a strip
 // The call itself lives in CallContext.
 import React, { useEffect, useRef, useState } from "react";
-import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallContext";
+import { useCall as useCallCtx, CALL_MAX } from "../utils/CallContext";
 import { usePresence } from "../utils/PresenceContext";
 
 const two = (n) => String(n).padStart(2, "0");
@@ -187,6 +187,12 @@ export default function CallLayer() {
                     <div className="call-tag">{m.name}{p.mic === false ? " · 🔇" : ""}</div>
                     {(p.link === "lost" || m.away) && <div className="call-weak">Reconnecting…</div>}
                     {p.link === "connecting" && !m.away && <div className="call-weak">Connecting…</div>}
+                    {p.link === "blocked" && !m.away && (
+                      <div className="call-weak blocked">
+                        <b>Can't get through yet</b>
+                        <span>Your networks are blocking a direct call. Still trying — switching one of you to Wi-Fi usually helps.</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -231,7 +237,7 @@ export default function CallLayer() {
                 <button type="button" className="call-btn" onClick={C.flip} aria-label="Switch camera">🔄</button>
               </>
             )}
-            {call.phase === "active" && canShareScreen() && (
+            {call.phase === "active" && (
               <button type="button" className={`call-btn${screen ? " off" : ""}`} onClick={C.share}
                 aria-label={screen ? "Stop sharing your screen" : "Share your screen"} aria-pressed={!!screen}>🖥️</button>
             )}

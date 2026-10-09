@@ -1457,7 +1457,8 @@ input::-ms-reveal,input::-ms-clear{display:none}
   padding:9px 16px;border-radius:999px;border:3px solid var(--ink);background:#fff;color:var(--ink);
   font:800 15px Nunito,system-ui,sans-serif;box-shadow:0 4px 0 var(--ink);white-space:nowrap;max-width:calc(100vw - 32px);
   overflow:hidden;text-overflow:ellipsis}
-.call-bar .call-btn{width:min(62px,16vw);height:min(62px,16vw)}
+.call-bar .call-btn{width:min(62px,14vw);height:min(62px,14vw);font-size:min(26px,6.4vw)}
+@media (max-width:420px){ .call-bar{gap:8px} }
 /* more than one friend: the pictures stop above the buttons, so no name hides under them */
 .call-screen:not(.n1) .call-grid{bottom:calc(env(safe-area-inset-bottom,0px) + 92px)}
 .call-tile.ringing{background:#2b2240}
@@ -1499,3 +1500,5 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-sharing{position:absolute;z-index:4;left:50%;top:calc(env(safe-area-inset-top,0px) + 66px);transform:translateX(-50%);
   display:flex;align-items:center;gap:10px;padding:6px 8px 6px 14px;border-radius:999px;background:rgba(0,0,0,.6);
   font-weight:800;font-size:14px;white-space:nowrap}
+.call-weak.blocked{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:20px;text-align:center}
+.call-weak.blocked span{font-weight:700;font-size:14px;max-width:300px;opacity:.9}

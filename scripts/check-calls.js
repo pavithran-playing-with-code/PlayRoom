@@ -7,6 +7,18 @@
 // browser — see CLAUDE.md, "Video calls".
 process.env.CALL_RING_MS = "150";
 process.env.CALL_GRACE_MS = "150";
+// a pretend Cloudflare: TURN credentials, counted, so we see they're cached
+process.env.CF_TURN_KEY_ID = "test-key";
+process.env.CF_TURN_KEY_TOKEN = "test-token";
+let cfAsked = 0;
+global.fetch = async (url, opts) => {
+  cfAsked++;
+  const ok = /rtc\.live\.cloudflare\.com\/v1\/turn\/keys\/test-key\/credentials\/generate-ice-servers/.test(url) && /test-token/.test(opts.headers.Authorization);
+  return { ok, status: ok ? 201 : 401, json: async () => ({ iceServers: [
+    { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"] },
+    { urls: ["turn:turn.cloudflare.com:3478?transport=udp", "turn:turn.cloudflare.com:53?transport=udp", "turns:turn.cloudflare.com:443?transport=tcp"], username: "u", credential: "p" },
+  ] }) };
+};
 const path = require("path");
 
 // who is friends with whom, and who is online
@@ -63,8 +75,13 @@ const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? 
   // ── ring, answer ──
   const r = await A.send("call:start", { to: 2 });
   check("a call starts and comes with the connection servers", r.ok && r.callId && Array.isArray(r.iceServers) && r.iceServers.length > 0);
+  const turn = r.iceServers.find((x) => x.username === "u");
+  check("...including the relay, from Cloudflare (for phones that can't reach each other)", !!turn && turn.credential === "p" && turn.urls.some((u) => u.startsWith("turns:")), JSON.stringify(r.iceServers));
+  check("...without the port 53 addresses browsers refuse", !JSON.stringify(r.iceServers).includes(":53"));
   check("it rings on every tab they have open", B1.got("call:ring").length === 1 && B2.got("call:ring").length === 1);
   const acc = await B1.send("call:accept", { callId: r.callId });
+  check("the one answering gets the relay too", acc.iceServers.some((x) => x.username === "u"));
+  check("...and Cloudflare is asked once, not every call", cfAsked === 1, `${cfAsked} times`);
   check("answered on one tab", acc.ok && acc.members.length === 2);
   check("...the other tab stops ringing", B2.got("call:ring-stop").length === 1);
   check("...and the caller sees them join", A.got("call:state").some((st) => st.members.length === 2));

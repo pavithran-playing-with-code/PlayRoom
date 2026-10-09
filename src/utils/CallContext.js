@@ -22,6 +22,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
+import { reportError } from "./reportError";
 
 const CallContext = createContext(null);
 
@@ -47,8 +48,11 @@ const SCREEN = {
   audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2, sampleRate: 48000 },
   systemAudio: "include", selfBrowserSurface: "exclude", surfaceSwitching: "include",
 };
-export const canShareScreen = () => typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia
-  && !(window.matchMedia && window.matchMedia("(pointer:coarse)").matches && !window.matchMedia("(hover:hover)").matches);
+// Whether this browser lets a page share the screen. Computers do; on phones
+// it depends on the browser (iPhone browsers don't let a website, only an
+// installed app) — so the button shows everywhere and says so if it can't.
+export const canShareScreen = () => typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;
+const STUCK_MS = 20000, RETRY_MS = 15000;
 // Ask the other side to send stereo, at film quality. A browser sends stereo
 // Opus only when the far side's description says it wants it, so this is
 // done to each description as it arrives.
@@ -244,7 +248,12 @@ export function CallProvider({ children }) {
       }
       place(id);
     };
-    pc.onicecandidate = (e) => { if (e.candidate) send(id, { candidate: e.candidate }); };
+    P.since = Date.now(); P.found = {}; P.heard = 0;
+    pc.onicecandidate = (e) => {
+      if (!e.candidate) return;
+      P.found[e.candidate.type || "?"] = (P.found[e.candidate.type || "?"] || 0) + 1;   // host / srflx / relay: which routes we have
+      send(id, { candidate: e.candidate });
+    };
     pc.onnegotiationneeded = async () => {
       if (P.polite && !pc.remoteDescription) return;     // the other side opens
       try {
@@ -264,11 +273,26 @@ export function CallProvider({ children }) {
       else if (st === "disconnected") patchPeer(id, { link: "lost" });
       else if (st === "failed") { patchPeer(id, { link: "lost" }); if (!P.polite) try { pc.restartIce(); } catch { /* old browser */ } }
     };
-    // not through yet: try again (the offering side), and keep trying
+    // not through yet: try again (the offering side), and keep trying. Still
+    // not through after a while: say so, and tell the server's log which
+    // routes each side had — "no relay" means the TURN relay is missing.
+    // (A restart only after RETRY_MS without getting through: a slow
+    // network can take a while, and restarting it every few seconds would
+    // stop it ever finishing.)
+    P.kicked = P.since;
     P.watch = setInterval(() => {
-      if (pc.connectionState === "connected" || pc.connectionState === "closed") return;
-      if (!P.polite) try { pc.restartIce(); } catch { /* old browser */ }
-    }, 12000);
+      if (pc.connectionState === "connected" || pc.connectionState === "closed") { P.kicked = Date.now(); return; }
+      if (!P.polite && Date.now() - P.kicked > RETRY_MS) { P.kicked = Date.now(); try { pc.restartIce(); } catch { /* old browser */ } }
+      if (!P.told && Date.now() - P.since > STUCK_MS) {
+        P.told = true;
+        patchPeer(id, { link: "blocked" });
+        const relay = ice.current.some((x) => [].concat(x.urls || []).some((u) => /^turns?:/.test(u)));
+        reportError("call", `call not connecting after ${Math.round((Date.now() - P.since) / 1000)}s: `
+          + `ice ${pc.iceConnectionState}, conn ${pc.connectionState}, signal ${pc.signalingState}, `
+          + `my routes ${JSON.stringify(P.found)}, their routes heard ${P.heard}, relay ${relay ? "configured" : "MISSING"}, `
+          + `${navigator.userAgent.slice(0, 120)}`);
+      }
+    }, 3000);
     patchPeer(id, {});
     return P;
   }, [myId, socket, send, patchPeer, tune, place]);
@@ -289,6 +313,7 @@ export function CallProvider({ children }) {
         }
         if (pc.signalingState === "stable" && pc.connectionState === "connected") tune(pc);
       } else if (data.candidate) {
+        P.heard++;
         if (!pc.remoteDescription) P.queue.push(data.candidate);
         else await pc.addIceCandidate(data.candidate).catch(() => {});
       }
@@ -398,9 +423,18 @@ export function CallProvider({ children }) {
   }, [tellMedia]);
   const share = useCallback(async () => {
     if (screenRef.current) return stopShare();
-    if (!canShareScreen()) return say("Screen sharing works from a computer.");
+    if (!canShareScreen()) {
+      return say(/iPhone|iPad|iPod/.test(navigator.userAgent)
+        ? "iPhone browsers don't let websites share the screen — share from a computer or an Android phone"
+        : "This browser can't share the screen — try Chrome on a computer or Android");
+    }
     let scr;
-    try { scr = await navigator.mediaDevices.getDisplayMedia(SCREEN); } catch { return undefined; }   // they changed their mind
+    try { scr = await navigator.mediaDevices.getDisplayMedia(SCREEN); }
+    catch (e) {
+      if (e && e.name === "NotAllowedError") return undefined;          // they changed their mind
+      try { scr = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true }); }   // a phone may refuse our film settings
+      catch (e2) { if (!e2 || e2.name !== "NotAllowedError") say("Couldn't share the screen on this device"); return undefined; }
+    }
     const v = scr.getVideoTracks()[0], a = scr.getAudioTracks()[0];
     if (v) { try { v.contentHint = "motion"; } catch { /* fine */ } v.addEventListener("ended", () => stopShare()); }
     if (a) { try { a.contentHint = "music"; } catch { /* fine */ } }

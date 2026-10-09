@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { usePresence } from "../utils/PresenceContext";
+import { useCall } from "../utils/CallContext";
 import { presenceLabel } from "../utils/timeAgo";
 import { Avatar, Tabs, useToast } from "../components/ui";
 import GameIcon from "../components/games/GameIcon";
@@ -11,6 +12,7 @@ export default function Friends() {
   const navigate = useNavigate();
   const toast = useToast();
   const { presenceOf, inboxVersion, refresh } = usePresence();
+  const { call: onCall, startCall } = useCall();
 
   const [tab, setTab] = useState("friends");
   const [watchBusy, setWatchBusy] = useState(null);
@@ -137,6 +139,13 @@ export default function Friends() {
                         : online(f.id) ? "🟢 online now · ready to play"
                         : presenceOf(f.id)?.last_seen ? presenceLabel(presenceOf(f.id))
                         : `friends since ${new Date(f.friends_since).toLocaleDateString()}`} />
+                    {online(f.id) && (
+                      <button className="press p-lime sm" onClick={() => startCall(f)}
+                        disabled={!!onCall && onCall.members.some((m) => Number(m.id) === Number(f.id))}
+                        aria-label={`Video call ${f.username}`}>
+                        📞
+                      </button>
+                    )}
                     {f.playing && (
                       <button className="press p-sun sm" disabled={watchBusy === f.id}
                         onClick={() => watch(f)}

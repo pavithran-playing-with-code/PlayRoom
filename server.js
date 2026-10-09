@@ -288,6 +288,9 @@ require("./config/togetherWorld").attach(io);
 // Memory, Mahjong, Number Rush and Pipes played together: one board, the
 // moves put in one order here (the phones know the rules).
 require("./config/coopBoard").attach(io);
+// Video calls between friends: ringing and introductions only — the calls
+// themselves go phone to phone.
+require("./config/calls").attach(io);
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Every game the app offers needs its row in game_types, or creating a room for

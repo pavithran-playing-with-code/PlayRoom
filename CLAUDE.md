@@ -181,6 +181,14 @@ There is no test runner. What works:
   tail to tail in seat order (`tether`: each phone holds back only its own
   explorer, never in the air; the rope snaps and re-ties).
   `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
+- **Video calls** (friends, up to 4) — `config/calls.js` rings and
+  introduces; the media goes phone to phone (`src/utils/CallContext.js`,
+  `src/components/CallLayer.jsx`). In each pair only the lower user id
+  makes the first offer: letting both offer and one back off left Chrome
+  stuck on "Connecting…" about one call in three. Test with two headless
+  tabs and Chrome's `--use-fake-device-for-media-stream
+  --use-fake-ui-for-media-stream`; the failure is intermittent, so run it
+  several times.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

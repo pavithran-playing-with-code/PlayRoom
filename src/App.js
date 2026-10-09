@@ -4,9 +4,11 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "
 import { AuthProvider } from "./utils/AuthContext";
 import { SocketProvider } from "./utils/SocketContext";
 import { PresenceProvider } from "./utils/PresenceContext";
+import { CallProvider } from "./utils/CallContext";
 import { ToastProvider, FunLayer } from "./components/ui";
 import Navbar          from "./components/Navbar";
 import Notifier        from "./components/Notifier";
+import CallLayer       from "./components/CallLayer";
 import ProtectedRoute  from "./components/ProtectedRoute";
 import Home            from "./pages/Home";
 import Login           from "./pages/Login";
@@ -43,12 +45,15 @@ export default function App() {
     <AuthProvider>
       <SocketProvider>
       <PresenceProvider>
+      <CallProvider>
       <ToastProvider>
       {/* Sparkle trail + tap bursts + confetti, above everything, click-through */}
       <FunLayer />
       <BrowserRouter>
         {/* Live friend requests, invites and "X is online", on every page, mid-game too */}
         <Notifier />
+        {/* A call, over every page — a game too */}
+        <CallLayer />
         <ScrollToTop />
         <Routes>
           {/* Room page has its own full-screen game layout — no Navbar */}
@@ -61,6 +66,7 @@ export default function App() {
         </Routes>
       </BrowserRouter>
       </ToastProvider>
+      </CallProvider>
       </PresenceProvider>
       </SocketProvider>
     </AuthProvider>

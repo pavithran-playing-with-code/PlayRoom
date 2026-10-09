@@ -104,6 +104,7 @@ Set in Render → Environment. Values are not recorded here.
 | `GENERATE_SOURCEMAP` | `false`, or the React build can exhaust the free builder's memory. |
 | `MAIL_URL` | The Google Apps Script web app's `/exec` URL. See "Email" below. |
 | `MAIL_SECRET` | The secret word in that script's `SECRET` line. Both must match. |
+| `TURN_URLS` `TURN_USERNAME` `TURN_CREDENTIAL` | Optional. A TURN relay for video calls (`config/calls.js`), e.g. `turn:host:3478,turns:host:443?transport=tcp`. Without one, calls still work on most networks, but two phones that can't reach each other directly (some mobile carriers, strict office Wi-Fi) stay on "Connecting…". |
 
 **Never set `PORT`.** Render assigns it; overriding it makes the service
 unreachable.

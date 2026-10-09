@@ -6,7 +6,7 @@
 //   • shrunk: a small picture you can drag anywhere; tap to open it again
 // The call itself lives in CallContext.
 import React, { useEffect, useRef, useState } from "react";
-import { useCall } from "../utils/CallContext";
+import { useCall as useCallCtx, CALL_MAX } from "../utils/CallContext";
 import { usePresence } from "../utils/PresenceContext";
 
 const two = (n) => String(n).padStart(2, "0");
@@ -55,10 +55,11 @@ function Face({ avatar, name, big }) {
 }
 
 export default function CallLayer() {
-  const C = useCall();
+  const C = useCallCtx();
   const { friends } = usePresence();
   const [now, setNow] = useState(Date.now());
   const [tapForSound, setTapForSound] = useState(false);
+  const [picking, setPicking] = useState(false);   // the "add a friend" list
   const { call, ring, local, peers, mic, cam, facing, notice, expanded } = C;
   const avatarOf = (id) => friends.find((f) => Number(f.id) === Number(id))?.avatar;
 
@@ -72,7 +73,7 @@ export default function CallLayer() {
     const t = setTimeout(() => C.clearNotice(), 3200);
     return () => clearTimeout(t);
   }, [notice]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!call) setTapForSound(false); }, [call]);
+  useEffect(() => { if (!call) { setTapForSound(false); setPicking(false); } }, [call]);
 
   // the bubble: drag it out of the way
   const [pos, setPos] = useState(null);
@@ -95,6 +96,11 @@ export default function CallLayer() {
   };
 
   const others = call ? call.members.filter((m) => m.id !== C.myId) : [];
+  // friends still being rung into the call: a tile each, "Ringing…"
+  const waiting = call && call.phase === "active" ? call.invited.map((id) => ({ id, name: call.names[id] || "Friend" })) : [];
+  const seats = others.length + waiting.length;
+  const room = call && call.members.length + call.invited.length < CALL_MAX;
+  const canAdd = friends.filter((f) => f.online && !call?.members.some((m) => m.id === Number(f.id)) && !call?.invited.includes(Number(f.id)));
   const needTap = React.useCallback(() => setTapForSound(true), []);
   const ringing = ring && (!call || call.id !== ring.callId);
 
@@ -118,7 +124,7 @@ export default function CallLayer() {
       )}
 
       {call && expanded && (
-        <div className={`call-screen n${Math.max(1, others.length)}`} role="dialog" aria-label="Call">
+        <div className={`call-screen n${Math.max(1, seats)}`} role="dialog" aria-label="Call">
           {call.phase === "outgoing" ? (
             <div className="call-stage">
               {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <Face avatar={avatarOf(call.first?.id)} big />}
@@ -135,13 +141,19 @@ export default function CallLayer() {
                 return (
                   <div className="call-tile" key={m.id}>
                     {showVid && <Vid stream={p.stream} className="call-full" />}
-                    {!showVid && <Face avatar={avatarOf(m.id)} name={others.length > 1 ? m.name : null} big={others.length === 1} />}
+                    {!showVid && <Face avatar={avatarOf(m.id)} name={seats > 1 ? m.name : null} big={seats === 1} />}
                     <div className="call-tag">{m.name}{p.mic === false ? " · 🔇" : ""}</div>
                     {(p.link === "lost" || m.away) && <div className="call-weak">Reconnecting…</div>}
                     {p.link === "connecting" && !m.away && <div className="call-weak">Connecting…</div>}
                   </div>
                 );
               })}
+              {waiting.map((w) => (
+                <div className="call-tile ringing" key={"w" + w.id}>
+                  <div className="call-pulse"><Face avatar={avatarOf(w.id)} /></div>
+                  <div className="call-tag">{w.name} · ringing…</div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -153,7 +165,7 @@ export default function CallLayer() {
 
           <div className="call-top">
             <button type="button" className="call-mini" onClick={() => C.setExpanded(false)} aria-label="Shrink the call">⌄</button>
-            {call.phase === "active" && <div className="call-time">{others.length === 1 ? others[0].name + " · " : ""}{clock(now - (call.startedAt || now))}</div>}
+            {call.phase === "active" && <div className="call-time">{seats === 1 ? others[0].name + " · " : `${call.members.length} in the call · `}{clock(now - (call.startedAt || now))}</div>}
           </div>
 
           {tapForSound && (
@@ -170,8 +182,33 @@ export default function CallLayer() {
                 <button type="button" className="call-btn" onClick={C.flip} aria-label="Switch camera">🔄</button>
               </>
             )}
+            {call.phase === "active" && room && (
+              <button type="button" className="call-btn" onClick={() => setPicking(true)} aria-label="Add a friend to the call">➕</button>
+            )}
             <button type="button" className="call-btn red" onClick={C.hangUp} aria-label={call.phase === "active" ? "Hang up" : "Cancel"}><Phone /></button>
           </div>
+
+          {picking && (
+            <div className="call-pick" role="dialog" aria-label="Add a friend" onClick={(e) => { if (e.target === e.currentTarget) setPicking(false); }}>
+              <div className="call-pick-card pop">
+                <div className="call-pick-head">
+                  <b>Add to the call</b>
+                  <button type="button" className="press p-white sm" onClick={() => setPicking(false)} aria-label="Close">✕</button>
+                </div>
+                {canAdd.length === 0
+                  ? <div className="call-pick-none">None of your friends are online right now.</div>
+                  : canAdd.map((f) => (
+                    <button type="button" key={f.id} className="call-pick-row" disabled={!room}
+                      onClick={() => { C.startCall(f); setPicking(false); }} aria-label={`Add ${f.username}`}>
+                      <span className="call-emoji">{f.avatar || "🙂"}</span>
+                      <span className="call-pick-name">{f.username}</span>
+                      <span className="call-pick-go">📞</span>
+                    </button>
+                  ))}
+                <div className="call-pick-note">Up to {CALL_MAX} in a call</div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

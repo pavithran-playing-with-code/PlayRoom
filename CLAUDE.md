@@ -185,10 +185,12 @@ There is no test runner. What works:
   introduces; the media goes phone to phone (`src/utils/CallContext.js`,
   `src/components/CallLayer.jsx`). In each pair only the lower user id
   makes the first offer: letting both offer and one back off left Chrome
-  stuck on "Connecting…" about one call in three. Test with two headless
-  tabs and Chrome's `--use-fake-device-for-media-stream
-  --use-fake-ui-for-media-stream`; the failure is intermittent, so run it
-  several times.
+  stuck on "Connecting…" about one call in three. `scripts/check-calls.js`
+  tests the server's rules (who can call, ringing, busy, four at most,
+  dropping and coming back) with a fake socket hub. Test the phones with
+  headless tabs and Chrome's `--use-fake-device-for-media-stream
+  --use-fake-ui-for-media-stream`; that failure was intermittent, so run
+  it several times.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

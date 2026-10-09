@@ -241,7 +241,11 @@ export function CallProvider({ children }) {
         return;
       }
       ice.current = r.iceServers || ice.current;
-      if (!c) { const cur = { ...callRef.current, id: r.callId }; callRef.current = cur; setCall(cur); }
+      // the call (new, or the one I'm in), and the name to show while it rings
+      const base = callRef.current;
+      if (!base) return;
+      const cur = { ...base, id: base.id || r.callId, names: { ...base.names, [friend.id]: friend.username } };
+      callRef.current = cur; setCall(cur);
     });
   }, [socket, myId, user, getMedia, say, finish]);
 

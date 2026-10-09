@@ -18,8 +18,9 @@
 const presence = require("./presence");
 
 const MAX = 4;
-const RING_MS = 35000;
-const GRACE_MS = 15000;
+// (overridable so scripts/check-calls.js doesn't wait half a minute)
+const RING_MS = Number(process.env.CALL_RING_MS) || 35000;
+const GRACE_MS = Number(process.env.CALL_GRACE_MS) || 15000;
 const SIGNAL_MAX = 20000;          // an offer is a few KB; anything bigger isn't one
 
 const calls = new Map();           // id -> { id, members: Map<uid, {sid, name, gone}>, invited: Map<uid, {by, timer}> }

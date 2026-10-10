@@ -30,9 +30,9 @@ const { recordResults } = require("./recordResults");
 const { tellFriends, roomChannel, userChannel } = require("./socket");
 
 // slug -> the rules module
-const GAMES = { kitchen: "kitchenCore.mjs", bomb: "bombCore.mjs", tower: "towerCore.mjs", carrom: "carromCore.mjs" };
+const GAMES = { kitchen: "kitchenCore.mjs", bomb: "bombCore.mjs", tower: "towerCore.mjs", carrom: "carromCore.mjs", wisps: "wispsCore.mjs" };
 // …and the ones a co-op room can be made for (Carrom is sides against each other only)
-const COOP = ["kitchen", "bomb", "tower"];
+const COOP = ["kitchen", "bomb", "tower", "wisps"];
 const KEEP_AFTER_MS = 120000;          // a finished world lingers for late hellos
 const SAVE_MS = 1500;                  // scores reach the database at most this often
 

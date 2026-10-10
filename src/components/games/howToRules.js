@@ -151,6 +151,12 @@ export const HOW_TO = {
     steps: ["Take food from the crates. Chop 🥬🍅🧀 on a 🔪 board.", "Grill 🥩 on a stove — take it off before it burns.", "Put everything on a plate and hand it in at SERVE.", "Walk with the stick; tap a counter or press Use."],
     tip: "Together, split the jobs: one chops, one cooks.",
   },
+  wisps: {
+    name: "Lantern Wisps",
+    goal: "Hold out until dawn — when the clock runs out.",
+    steps: ["Move with the stick (or W A S D). Your weapons fire by themselves.", "DASH (or Space) zips you through danger — it recharges in a second and a half.", "Grab gems to level up, then pick one of three upgrades — you're shielded while you choose.", "Bosses come at the half and near dawn. Together, stand by a fallen friend for 3 seconds to bring them back."],
+    tip: "Keep moving in big circles: the shadows bunch up behind you, right where your weapons hit.",
+  },
   bomb: {
     name: "Bomb Blast",
     goal: "Be the last bomber standing.",

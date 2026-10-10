@@ -167,7 +167,11 @@ There is no test runner. What works:
   database; `check-kitchen.mjs`, `check-bomb.mjs`, `check-tower.mjs` and
   `check-carrom.mjs` test
   the rules. Carrom and Bomb Blast are SHARED: one board or arena for the
-  whole room, scored per side.
+  whole room, scored per side. Lantern Wisps (`wispsCore.mjs`) is one too: the
+  server runs the shadows and every player's weapons, the phone moves its
+  own spirit (`tg:me`); the night is the room's clock, its events on a
+  "night clock" stretched to fit. `scripts/check-wisps.mjs` plays whole
+  nights with bots.
 - **Speedway is live-shared**: a top-down drift racer (`driftSim.js`, the
   "Turbo Drift" look). Each phone sends its car over the socket (`race:pos`:
   position, angle, velocity, drift and boost, relayed by `config/socket.js`);

@@ -35,6 +35,7 @@ const WHY = {
   full: "The call is full (4 people).",
   gone: "That call has ended.",
   error: "Couldn't start the call. Try again.",
+  elsewhere: "You're in a call on your other device — tap “Move here” to take it.",
   bad: "Couldn't start the call.",
 };
 const ENDED = { declined: "Call declined", "no-answer": "No answer", left: "Call ended", dropped: "Call ended — connection lost", switched: "Call ended" };
@@ -142,6 +143,9 @@ export function CallProvider({ children }) {
   const [screen, setScreen] = useState(null);      // the screen I'm sharing
   const [onHold, setOnHold] = useState(false);     // my side's on hold (a phone call)
   const holdRef = useRef(false);
+  // My account in a call on another device of mine: { callId, sid, with: [names] }.
+  // This one can take it over (moveHere).
+  const [elsewhere, setElsewhere] = useState(null);
   // A game drawn sideways on an upright screen: the camera's picture comes
   // out a quarter turned. Everyone (me included) shows it turned back.
   const turn = useDrawnSideways() ? -90 : 0;
@@ -404,6 +408,22 @@ export function CallProvider({ children }) {
     });
   }, [ring, socket, getMedia, stopMedia, say, finish, apply]);
 
+  // Take my call over from my other device: it hangs up there, and the
+  // others connect to this device instead.
+  const moveHere = useCallback(async () => {
+    const e = elsewhere;
+    if (!e || !socket || callRef.current) return;
+    try { await getMedia(); } catch (err) { return say(err.message); }
+    socket.emit("call:move", { callId: e.callId }, (r) => {
+      if (!r || !r.ok) { stopMedia(); return say(WHY[r && r.why] || WHY.gone); }
+      ice.current = r.iceServers || [];
+      const draft = { id: e.callId, phase: "outgoing", members: [], invited: [], names: {}, startedAt: Date.now(), first: null };
+      callRef.current = draft; setCall(draft); setExpanded(true);
+      setElsewhere(null);
+      apply(r);
+    });
+  }, [elsewhere, socket, getMedia, stopMedia, say, apply]);
+
   const decline = useCallback(() => {
     if (!ring || !socket) return;
     tones.current.stop();
@@ -567,9 +587,16 @@ export function CallProvider({ children }) {
     const onRingStop = ({ callId }) => setRing((r) => { if (r && r.callId === callId) { tones.current.stop(); return null; } return r; });
     const onState = (st) => apply(st);
     const onEnded = ({ callId, reason }) => { if (callRef.current && callRef.current.id === callId) finish(reason); };
-    const onLeft = ({ callId, id }) => {
+    const onLeft = ({ callId, id, reason }) => {
       const c = callRef.current;
-      if (c && c.id === callId) { closePeer(id); if (c.members.length > 2) say(`${c.names[id] || "Someone"} left the call`); }
+      // "moved": they took the call to their other device — reconnecting, not leaving
+      if (c && c.id === callId) { closePeer(id); if (c.members.length > 2 && reason !== "moved") say(`${c.names[id] || "Someone"} left the call`); }
+    };
+    const onMine = (m) => setElsewhere(m && m.callId && m.sid !== socket.id ? m : null);
+    const onMoved = ({ callId }) => {
+      if (!callRef.current || callRef.current.id !== callId) return;
+      finish(null);
+      say("Call moved to your other device");
     };
     const onDeclined = ({ callId, id }) => { const c = callRef.current; if (c && c.id === callId && c.members.length > 1) say(`${c.names[id] || "They"} can't join right now`); };
     const onMissed = ({ callId, id }) => { const c = callRef.current; if (c && c.id === callId && c.members.length > 1) say(`${c.names[id] || "They"} didn't answer`); };
@@ -585,6 +612,7 @@ export function CallProvider({ children }) {
     };
     // the socket came back: pick the call up where it was
     const onConnect = () => {
+      socket.emit("call:mine");
       const c = callRef.current;
       if (!c || !c.id) return;
       socket.emit("call:rejoin", { callId: c.id }, (r) => { if (!r || !r.ok) finish("dropped"); else apply(r); });
@@ -599,9 +627,12 @@ export function CallProvider({ children }) {
       tones.current.blip(true);
     };
     socket.on("call:chat", onChat);
+    socket.on("call:mine", onMine); socket.on("call:moved", onMoved);
+    if (socket.connected) socket.emit("call:mine");      // listening now: am I in a call somewhere?
     socket.on("connect", onConnect);
     return () => {
       socket.off("call:chat", onChat);
+      socket.off("call:mine", onMine); socket.off("call:moved", onMoved);
       socket.off("call:ring", onRing); socket.off("call:ring-stop", onRingStop); socket.off("call:state", onState);
       socket.off("call:ended", onEnded); socket.off("call:left", onLeft); socket.off("call:declined", onDeclined);
       socket.off("call:missed", onMissed); socket.off("call:media", onMedia); socket.off("call:signal", onSignal);
@@ -614,9 +645,9 @@ export function CallProvider({ children }) {
   useEffect(() => () => { tones.current.stop(); stopMedia(); }, [stopMedia]);
 
   const value = useMemo(() => ({
-    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn,
+    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
-  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn,
+  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;

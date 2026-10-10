@@ -96,7 +96,20 @@ function attach(io) {
   const toMembers = (c, event, payload, exceptUid = null) => {
     for (const [id, m] of c.members) if (id !== exceptUid && m.sid) io.to(m.sid).emit(event, payload);
   };
-  const tellState = (c) => toMembers(c, "call:state", view(c));
+  // Every device of mine hears which call my account is in, and on which
+  // device (sid; null while that device's connection is down). The others
+  // show "In a call on your other device" and can take it over (call:move).
+  const tellMine = (uid) => {
+    const c = calls.get(inCall.get(uid));
+    const m = c && c.members.get(uid);
+    io.to(userChannel(uid)).emit("call:mine", m
+      ? { callId: c.id, sid: m.sid, with: [...c.members].filter(([id]) => id !== uid).map(([, x]) => x.name) }
+      : { callId: null });
+  };
+  const tellState = (c) => {
+    toMembers(c, "call:state", view(c));
+    for (const id of c.members.keys()) tellMine(id);
+  };
 
   function stopRinging(c, uid) {
     const inv = c.invited.get(uid);
@@ -110,6 +123,7 @@ function attach(io) {
     toMembers(c, "call:ended", { callId: c.id, reason });
     for (const [id, m] of c.members) { clearTimeout(m.gone); if (inCall.get(id) === c.id) inCall.delete(id); }
     calls.delete(c.id);
+    for (const id of c.members.keys()) tellMine(id);
   }
   // nobody left to talk to: end it
   function settle(c, reason) {
@@ -124,6 +138,7 @@ function attach(io) {
     c.members.delete(uid);
     if (inCall.get(uid) === c.id) inCall.delete(uid);
     toMembers(c, "call:left", { callId: c.id, id: uid, reason });
+    tellMine(uid);
     settle(c, reason);
   }
 
@@ -142,9 +157,14 @@ function attach(io) {
       if (!presence.isOnline(to)) return reply({ ok: false, why: "offline" });
       let c = calls.get(inCall.get(uid));
       if (c && !c.members.has(uid)) c = null;
-      // still in a call from a connection that dropped (another tab, or this
-      // phone before it reconnected): that one's over, this is a new call
-      if (c && c.members.get(uid).sid !== socket.id) { leave(c, uid, "switched"); c = null; }
+      // In a call on another device: that call carries on, and this one
+      // doesn't start (that device can add people, or this one can take the
+      // call over). From a connection that dropped (this phone before it
+      // reconnected): that one's over, this is a new call.
+      if (c && c.members.get(uid).sid !== socket.id) {
+        if (c.members.get(uid).sid) return reply({ ok: false, why: "elsewhere" });
+        leave(c, uid, "switched"); c = null;
+      }
       if (inCall.has(to) && (!c || inCall.get(to) !== c.id)) return reply({ ok: false, why: "busy" });
       if (c && (c.members.has(to) || c.invited.has(to))) return reply({ ok: true, callId: c.id, iceServers: await iceServers() });
       if (c && c.members.size + c.invited.size >= MAX) return reply({ ok: false, why: "full" });
@@ -196,6 +216,24 @@ function attach(io) {
       if (c && c.members.has(uid) && c.members.get(uid).sid === socket.id) leave(c, uid, "left");
     });
 
+    // Take my call over from my other device ("Move here"): this device
+    // becomes me in the call. The other device is told it moved, and the
+    // others drop their connection to it and make a new one to this device.
+    socket.on("call:move", async (msg, ack) => {
+      const reply = typeof ack === "function" ? ack : () => {};
+      const c = calls.get(inCall.get(uid));
+      const m = c && c.members.get(uid);
+      if (!m || !msg || msg.callId !== c.id) return reply({ ok: false, why: "gone" });
+      const old = m.sid;
+      clearTimeout(m.gone); m.gone = null; m.sid = socket.id;
+      if (old && old !== socket.id) {
+        io.to(old).emit("call:moved", { callId: c.id });
+        toMembers(c, "call:left", { callId: c.id, id: uid, reason: "moved" }, uid);
+      }
+      reply({ ok: true, iceServers: await iceServers(), ...view(c) });
+      tellState(c);
+    });
+
     // Back after a dropped socket: the call goes on.
     socket.on("call:rejoin", async (msg, ack) => {
       const reply = typeof ack === "function" ? ack : () => {};
@@ -223,7 +261,7 @@ function attach(io) {
     // (its id, as the phones see it), so the others can show it.
     socket.on("call:media", (msg) => {
       const c = calls.get(msg && msg.callId);
-      if (!c || !c.members.has(uid)) return;
+      if (!c || !c.members.has(uid) || c.members.get(uid).sid !== socket.id) return;
       const screen = typeof msg.screen === "string" && /^[\w{}-]{1,100}$/.test(msg.screen) ? msg.screen : null;
       toMembers(c, "call:media", { callId: c.id, id: uid, mic: !!msg.mic, cam: !!msg.cam, screen, hold: !!msg.hold,
         turn: [90, -90, 180].includes(msg.turn) ? msg.turn : 0 }, uid);         // a camera turned a quarter (a sideways game)
@@ -254,6 +292,11 @@ function attach(io) {
       m.gone = setTimeout(() => leave(c, uid, "dropped"), GRACE_MS);
       tellState(c);
     });
+
+    // a device that comes online while my account is in a call hears about it
+    // (and can ask, once it's listening)
+    if (inCall.has(uid)) tellMine(uid);
+    socket.on("call:mine", () => tellMine(uid));
   });
 }
 

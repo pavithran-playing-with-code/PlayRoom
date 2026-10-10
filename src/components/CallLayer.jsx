@@ -350,6 +350,12 @@ export default function CallLayer() {
     <div className={`call-root${sideways ? " rot" : ""}`}>
       {active && VIDEO_PIP && <video ref={pipVid} className="call-pipvid" autoPlay playsInline muted aria-hidden="true" />}
       {notice && !ringing && <div className="call-notice" role="status">{notice.text}</div>}
+      {C.elsewhere && !call && !ringing && (
+        <div className="call-elsewhere" role="status">
+          <span>📞 {C.elsewhere.sid ? "In a call" : "Your call"} on your other device{C.elsewhere.with.length ? ` · ${C.elsewhere.with.join(", ")}` : ""}</span>
+          <button type="button" onClick={C.moveHere}>Move here</button>
+        </div>
+      )}
       {call && others.map((m) => peers[m.id]?.stream && <Sound key={m.id} stream={peers[m.id].stream} onNeedTap={needTap} />)}
       {call && others.map((m) => peers[m.id]?.screen && peers[m.id].screen.getAudioTracks().length > 0
         && <Sound key={"s" + m.id} stream={peers[m.id].screen} onNeedTap={needTap} />)}

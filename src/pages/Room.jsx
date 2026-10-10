@@ -83,7 +83,50 @@ function Room() {
   // board in somebody else's match and started posting scores the server then
   // rejected. Nobody plays until the room has confirmed who they are.
   const isPlayer    = !!me && !me.is_spectator;
-  useEffect(() => { spectatingRef.current = isSpectator; }, [isSpectator]);
+
+  // One account on two devices: only one plays a match (both would post
+  // scores for the same seat). The server's room:play decides — "here", or
+  // "elsewhere", where this device can watch, or take over if the other one
+  // lets go. "ask" until it answers.
+  const [device, setDevice] = useState("ask");
+  const [deviceFree, setDeviceFree] = useState(false);   // the other device let go
+  const [watchSelf, setWatchSelf] = useState(false);
+  const deviceRef = useRef(device);
+  deviceRef.current = device;
+  const sockRef = useRef(socket);
+  sockRef.current = socket;
+  const wantsGame = status === "in_progress" && seed !== null && isPlayer;
+  const claim = useCallback(() => {
+    if (!socket) { setDevice("here"); return; }
+    let done = false;
+    const ask = () => socket.emit("room:play", code, (r) => settle(r && r.ok === false ? "elsewhere" : "here"));
+    // no answer (an old server, no connection): play, as before
+    const t = setTimeout(() => settle("here"), 4000);
+    function settle(where) {
+      if (done) return;
+      done = true; clearTimeout(t); socket.off("connect", ask);
+      setDevice(where);
+      if (where === "here") setWatchSelf(false); else setDeviceFree(false);
+    }
+    if (socket.connected) ask(); else socket.once("connect", ask);
+  }, [socket, code]);
+  useEffect(() => { if (wantsGame && device === "ask") claim(); }, [wantsGame, device, claim]);
+  useEffect(() => {
+    if (!socket) return undefined;
+    // back after a dropped connection: hold the match again (the server let go)
+    const onConnect = () => { if (deviceRef.current === "here") claim(); };
+    const onFree = (m) => { if (m && m.code === code && deviceRef.current === "elsewhere") setDeviceFree(true); };
+    socket.on("connect", onConnect);
+    socket.on("room:play-free", onFree);
+    return () => { socket.off("connect", onConnect); socket.off("room:play-free", onFree); };
+  }, [socket, code, claim]);
+  useEffect(() => {
+    if (device !== "here" || !socket) return undefined;
+    socket.emit("room:play", code);                     // (again, after React's dev double-run let go)
+    return () => socket.emit("room:unplay", code);
+  }, [device, socket, code]);
+  const watchingSelf = isPlayer && device === "elsewhere" && watchSelf && status === "in_progress" && seed !== null;
+  useEffect(() => { spectatingRef.current = isSpectator || watchingSelf; }, [isSpectator, watchingSelf]);
 
   // Pause the room poll while we're actually playing — the game component runs
   // its own score/opponent sync loop, so a second timer is pure duplicate load.
@@ -132,6 +175,7 @@ function Room() {
       fetch(`/api/rooms/${code}/leave`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ sid: sockRef.current ? sockRef.current.id : null }),   // which of my devices is going
         keepalive: true,
       });
     } catch { /* silent */ }
@@ -262,8 +306,8 @@ function Room() {
   // records the score. Swapping to the "Game finished" card here used to pull
   // that screen away, and the result was never saved.
   useEffect(() => {
-    if (status === "in_progress" && seed !== null && isPlayer) setPlayed(true);
-  }, [status, seed, isPlayer]);
+    if (status === "in_progress" && seed !== null && isPlayer && device === "here") setPlayed(true);
+  }, [status, seed, isPlayer, device]);
 
   // Close invite popover on outside click / escape.
   useEffect(() => {
@@ -412,7 +456,25 @@ function Room() {
   }
 
   // ── In-game ───────────────────────────────────────────────────────────────
-  if ((played || status === "in_progress") && seed !== null && isPlayer) {
+  if ((played || status === "in_progress") && seed !== null && isPlayer && !watchingSelf) {
+    if (device === "elsewhere") {
+      const canWatch = !GAME_MAP[room?.game_slug]?.ownsSpectating;
+      return (
+        <Notice emoji="📱" title="You're playing on your other device">
+          <p className="muted" style={{ marginBottom: 20 }}>
+            {deviceFree
+              ? "Your other device has left this match. You can carry on here."
+              : "This match is being played on another device signed in as you. One device plays at a time, so your score stays right."}
+          </p>
+          {deviceFree && <button className="press p-sun full" style={{ marginBottom: 10 }} onClick={claim}>🎮 Play here instead</button>}
+          {canWatch && !deviceFree && <button className="press p-sun full" style={{ marginBottom: 10 }} onClick={() => setWatchSelf(true)}>👀 Watch it here</button>}
+          <button className="press p-white full" onClick={() => navigate("/lobby")}>← Back to lobby</button>
+        </Notice>
+      );
+    }
+    if (device === "ask" && !played) {
+      return <Notice emoji={<GameIcon slug={room?.game_slug} icon={room?.game_icon} />} title="Opening the game…" />;
+    }
     const GameComponent = getGameComponent(room?.game_slug);
     return (
       <PlayAgainContext.Provider value={playAgainValue}>
@@ -458,11 +520,11 @@ function Room() {
   }
 
   // ── Spectator view (game in progress, I'm watching) ───────────────────────
-  if (status === "in_progress" && isSpectator && seed !== null) {
+  if (status === "in_progress" && (isSpectator || watchingSelf) && seed !== null) {
     // Whoever you came to watch. Arriving from a friend's Watch button carries
     // ?watch=<their id>; otherwise start on the host. You can switch below.
     const wantId = Number(watchId) || null;
-    const watched =
+    const watched = watchingSelf ? me :
       seatedPlayers.find(p => Number(p.user_id) === Number(watching ?? wantId))
       || seatedPlayers.find(p => p.is_host)
       || seatedPlayers[0];
@@ -493,11 +555,17 @@ function Room() {
           isSpectator
           spectatorState={parsedState}
           spectatorWatching={watched}
-          onGameEnd={exitToLobby}
+          onGameEnd={watchingSelf ? () => navigate("/lobby") : exitToLobby}
         />
+        {watchingSelf && (
+          <div className="spec-switch" role="group" aria-label="Watching your other device">
+            <span className="chip c-sun">📱 Your other device is playing</span>
+            {deviceFree && <button type="button" className="press sm p-sun" onClick={claim}>🎮 Play here</button>}
+          </div>
+        )}
         {/* Hop between players without leaving. Only worth showing when there
             is somebody else to hop to, and when the game doesn't draw its own. */}
-        {seatedPlayers.length > 1 && !GAME_MAP[room?.game_slug]?.ownsSpectating && (
+        {!watchingSelf && seatedPlayers.length > 1 && !GAME_MAP[room?.game_slug]?.ownsSpectating && (
           <div className="spec-switch" role="group" aria-label="Choose who to watch">
             {seatedPlayers.map((p) => (
               <button key={p.user_id} type="button"

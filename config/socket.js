@@ -26,6 +26,8 @@ const { online } = presence;
 // reload would flash them offline and back, and fire an "is online" pop-up.
 const OFFLINE_GRACE_MS = 6000;
 const offlineTimers = new Map(); // userId -> Timeout
+const playing = new Map();       // "userId:CODE" -> the socket (device) playing that match
+const playKey = (userId, code) => `${Number(userId)}:${code}`;
 
 function roomChannel(code) {
   return `room:${String(code).toUpperCase()}`;
@@ -92,6 +94,24 @@ function initSocket(httpServer) {
 
     socket.on("room:leave", (code) => {
       if (typeof code === "string") socket.leave(roomChannel(code));
+    });
+
+    // One account on two devices, one match: only one of them plays it, or
+    // both would post scores for the same seat and overwrite each other. The
+    // first to open the game holds it; the other is told "elsewhere", and
+    // hears room:play-free when the one playing lets go (or goes offline).
+    socket.on("room:play", (code, ack) => {
+      const reply = typeof ack === "function" ? ack : () => {};
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return reply({ ok: true });
+      const held = playing.get(playKey(uid, code));
+      if (held && held !== socket.id && io.sockets.sockets.has(held)) return reply({ ok: false });
+      playing.set(playKey(uid, code), socket.id);
+      reply({ ok: true });
+    });
+    socket.on("room:unplay", (code) => {
+      if (typeof code !== "string" || playing.get(playKey(uid, code)) !== socket.id) return;
+      playing.delete(playKey(uid, code));
+      io.to(userChannel(uid)).emit("room:play-free", { code });
     });
 
     // Lightweight ephemeral signal (not persisted) — e.g. "X is typing".
@@ -193,6 +213,11 @@ function initSocket(httpServer) {
     });
 
     socket.on("disconnect", () => {
+      for (const [k, sid] of playing) {
+        if (sid !== socket.id) continue;
+        playing.delete(k);
+        io.to(userChannel(uid)).emit("room:play-free", { code: k.slice(k.indexOf(":") + 1) });
+      }
       const set = online.get(uid);
       if (!set) return;
       set.delete(socket.id);
@@ -222,6 +247,20 @@ function initSocket(httpServer) {
   return io;
 }
 
+// Is another device of this user (not `sid`) the one playing this match, or
+// — before it starts — still in the room? Then this device leaving the room
+// (its tab closed, Back to lobby) is only this device going, not the player.
+function heldElsewhere(io, userId, code, sid) {
+  if (!io || !sid) return false;
+  const held = playing.get(playKey(userId, code));
+  if (held) return held !== sid && io.sockets.sockets.has(held);
+  const mine = io.sockets.adapter.rooms.get(userChannel(userId));
+  const here = io.sockets.adapter.rooms.get(roomChannel(code));
+  if (!mine || !here) return false;
+  for (const id of mine) if (id !== sid && here.has(id)) return true;
+  return false;
+}
+
 // Called from REST routes after a successful DB write to push the change.
 function emitRoom(io, code, event, payload) {
   if (!io) return;
@@ -235,6 +274,6 @@ function emitUser(io, userId, event, payload) {
 }
 
 module.exports = {
-  initSocket, emitRoom, emitUser, tellFriends, roomChannel, userChannel,
+  initSocket, emitRoom, emitUser, tellFriends, roomChannel, userChannel, heldElsewhere,
   isOnline: presence.isOnline, onlineUserIds: presence.onlineUserIds,
 };

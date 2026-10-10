@@ -208,6 +208,13 @@ There is no test runner. What works:
   the phone taking the mic does. A game drawn sideways on an upright
   screen (`useDrawnSideways` in LandscapeGate) turns the call with it,
   and `call:media` carries `turn`, so the others turn that camera back.
+- **One account, two devices** — a call is on one device: the others hear
+  `call:mine`, show "In a call on your other device", can't start a second
+  call, and can take it over (`call:move`). A match is played on one device:
+  `room:play` in `config/socket.js` holds it, the other is told "elsewhere"
+  and can watch or, once `room:play-free`, play. Leaving a room from the
+  other device (tab closed) keeps the seat (`heldElsewhere`, the leave
+  sends its socket id). `check-calls.js` covers the call rules.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

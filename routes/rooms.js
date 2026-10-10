@@ -4,7 +4,7 @@ const db     = require("../config/db");
 const { settleIfExpired } = require("../config/matchClock");
 const { recordResults } = require("../config/recordResults");
 const { verifyToken } = require("../middleware/auth");
-const { emitRoom, emitUser, tellFriends, isOnline } = require("../config/socket");
+const { emitRoom, emitUser, tellFriends, isOnline, heldElsewhere } = require("../config/socket");
 const manor = require("../config/manorWorld");
 const together = require("../config/togetherWorld");
 const coopBoard = require("../config/coopBoard");
@@ -767,6 +767,12 @@ router.post("/:code/leave", verifyToken, async (req, res, next) => {
       [room.id, req.user.id]
     );
     if (!mine.length) return res.json({ success: true });
+
+    // The same account on another device is playing this match (or, before
+    // it starts, still in the room): only this device is going — its tab
+    // closed, or it went back to the lobby. The seat stays.
+    const sid = req.body && typeof req.body.sid === "string" ? req.body.sid : null;
+    if (heldElsewhere(req.app.get("io"), req.user.id, req.params.code, sid)) return res.json({ success: true, kept: true });
 
     // Walking out of Hollow Manor mid-match. The house is the server's, not
     // the host's, so nobody else's match ends with you. Your seat stays, so

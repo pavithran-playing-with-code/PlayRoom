@@ -22,8 +22,8 @@ global.fetch = async (url, opts) => {
 const path = require("path");
 
 // who is friends with whom, and who is online
-const FRIENDS = { 1: [2, 3, 4, 5, 6], 2: [1, 3], 3: [1, 2], 4: [1], 5: [1], 6: [1], 9: [] };
-const ONLINE = new Set([1, 2, 3, 4, 5, 6, 9]);
+const FRIENDS = { 1: [2, 3, 4, 5, 6], 2: [1, 3], 3: [1, 2], 4: [1], 5: [1], 6: [1], 7: [8, 10], 8: [7], 9: [], 10: [7] };
+const ONLINE = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 const presencePath = require.resolve(path.join(__dirname, "..", "config", "presence"));
 require.cache[presencePath] = {
   id: presencePath, filename: presencePath, loaded: true,
@@ -157,6 +157,8 @@ const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? 
   check("the stale call is left and a new one rings", r6.ok && r6.callId !== r5.callId && F.got("call:ring").length === 1);
   check("...and the friend in the stale call isn't left hanging", B1.got("call:ended").length === 1);
 
+  await A2.send("call:leave", { callId: r6.callId });   // (or the next call is "on your other device")
+
   // ── chat in a call: passed on, never kept ──
   {
     const P = connect(1), Q = connect(3), R = connect(2), Z = connect(9);
@@ -176,6 +178,34 @@ const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? 
     check("an empty one is dropped", Q.got("call:chat").length === 2);
     for (let i = 0; i < 12; i++) await P.send("call:chat", { callId: rc.callId, text: "m" + i });
     check("a flood is held back (8 in 5 s)", Q.got("call:chat").length === 8, String(Q.got("call:chat").length));
+  }
+
+  // ── one account, two devices: the call stays on one, the other can take it ──
+  {
+    const phone = connect(7), laptop = connect(7), G = connect(8), H = connect(10);
+    const rc = await phone.send("call:start", { to: 8 });
+    await G.send("call:accept", { callId: rc.callId });
+    const mine = laptop.got("call:mine").pop();
+    check("my other device hears I'm in a call, on which device, with whom", mine && mine.callId === rc.callId && mine.sid === phone.id && mine.with.join() === "u8", JSON.stringify(mine));
+    const late = connect(7);
+    const lm = late.got("call:mine").pop();
+    late.drop();
+    check("...a device that comes online later hears it too", lm && lm.callId === rc.callId);
+    phone.clear(); G.clear();
+    const again = await laptop.send("call:start", { to: 10 });
+    check("calling from the other device doesn't cut the call", again.why === "elsewhere" && phone.got("call:ended").length === 0 && G.got("call:left").length === 0 && H.got("call:ring").length === 0);
+    const mv = await laptop.send("call:move", { callId: rc.callId });
+    check("Move here: the laptop is now me in the call", mv.ok && mv.members.length === 2 && mv.iceServers.length > 0);
+    check("...the phone is told it moved", phone.got("call:moved").length === 1);
+    check("...the friend reconnects to the laptop (not 'left')", G.got("call:left").some((m) => m.id === 7 && m.reason === "moved") && G.got("call:ended").length === 0);
+    G.clear(); laptop.clear();
+    await G.send("call:signal", { callId: rc.callId, to: 7, data: { candidate: "x" } });
+    check("...connection details now go to the laptop", laptop.got("call:signal").length === 1 && phone.got("call:signal").length === 0);
+    await phone.send("call:leave", { callId: rc.callId });
+    await phone.send("call:media", { callId: rc.callId, mic: false, cam: false });
+    check("...and the phone can't hang up or change it any more", G.got("call:left").length === 0 && G.got("call:media").length === 0 && G.got("call:ended").length === 0);
+    await laptop.send("call:leave", { callId: rc.callId });
+    check("hanging up: every device hears I'm in no call", phone.got("call:mine").pop().callId === null);
   }
   console.log(fails ? `\n${fails} FAILED` : "\nall passed");
   process.exit(fails ? 1 : 0);

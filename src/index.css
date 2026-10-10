@@ -1612,3 +1612,10 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .call-root.rot > *{pointer-events:auto}
 /* the picture a phone floats over other apps: not shown in the page itself */
 .call-pipvid{position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none}
+/* my account in a call on my other device: a pill, and "Move here" (below .call-notice, which would cover it) */
+.call-elsewhere{position:fixed;z-index:9998;left:50%;top:calc(env(safe-area-inset-top,0px) + 66px);transform:translateX(-50%);
+  max-width:calc(100% - 24px);display:flex;align-items:center;gap:8px;padding:6px 6px 6px 14px;border:3px solid var(--ink);
+  border-radius:999px;background:var(--ink);color:#fff;font-weight:800;font-size:13px;box-shadow:3px 3px 0 var(--ink)}
+.call-elsewhere span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.call-elsewhere button{flex:0 0 auto;border:2px solid var(--ink);border-radius:999px;background:var(--lime);color:var(--ink);
+  font-weight:800;font-size:13px;padding:5px 12px;cursor:pointer}

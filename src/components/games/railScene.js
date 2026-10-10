@@ -27,7 +27,34 @@ const TH = RAW.map((t) => { const o = { hi: t.hi, di: t.di, st: t.st }; for (con
 const rnd = (a, b) => a + Math.random() * (b - a), pick = (a) => a[(Math.random() * a.length) | 0], lerp = (a, b, t) => a + (b - a) * t;
 export const themeAt = (d) => Math.floor(Math.max(0, d) / THEME_M) % 3;
 
-export function createRailScene(T) {
+// Each stretch of path is baked into a few meshes, one per material: drawn
+// piece by piece it was ~40 objects a stretch, ~300 a frame, and a phone
+// dropped frames — the run felt like dragging iron.
+function bake(T, merge, group) {
+  group.updateMatrixWorld(true);
+  const byMat = new Map();
+  group.traverse((o) => {
+    if (!o.isMesh) return;
+    let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    for (const k of Object.keys(g.attributes)) if (k !== "position") g.deleteAttribute(k);
+    g.applyMatrix4(o.matrixWorld);
+    if (!byMat.has(o.material)) byMat.set(o.material, []);
+    byMat.get(o.material).push(g);
+  });
+  const out = new T.Group(), geos = [];
+  for (const [mat, list] of byMat) {
+    const merged = merge(list);
+    for (const g of list) g.dispose();
+    if (!merged) continue;
+    merged.computeVertexNormals();                 // not indexed: a normal per face, so it stays low-poly flat
+    geos.push(merged);
+    out.add(new T.Mesh(merged, mat));
+  }
+  out.userData.geos = geos;
+  return out;
+}
+
+export function createRailScene(T, merge) {
   // a phone: a little less sharp (it's small) and no edge smoothing at high
   // density — 3D that drops frames makes the run feel heavy
   const phone = !!(window.matchMedia && window.matchMedia("(pointer:coarse)").matches);
@@ -47,7 +74,9 @@ export function createRailScene(T) {
   const cur = { ...Object.fromEntries(KEYS.map((k) => [k, [...TH[0][k]]])), hi: 0.95, di: 0.85, st: 0 };
 
   // ── sky, clouds, stars ──
-  const mGrass = mk(0x5fd06a), mPath = mk(0xeadbb8, { shininess: 20 }), mRail = mk(0xff6a4d), mLine = mk(0xffffff, { transparent: true, opacity: 0.5 });
+  // the scenery: Lambert (lit per corner, not per pixel) — cheap on a phone, and flat faces keep it low-poly
+  const mkL = (c, o) => keep(new T.MeshLambertMaterial(Object.assign({ color: c }, o || {})));
+  const mGrass = mkL(0x5fd06a), mPath = mkL(0xeadbb8), mRail = mkL(0xff6a4d), mLine = mkL(0xffffff, { transparent: true, opacity: 0.5 });
   const skyMat = keep(new T.ShaderMaterial({
     side: T.BackSide, depthWrite: false, fog: false, uniforms: { top: { value: new T.Color() }, bot: { value: new T.Color() } },
     vertexShader: "varying vec3 v;void main(){v=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
@@ -90,14 +119,15 @@ export function createRailScene(T) {
   const gTrunk = G(new T.CylinderGeometry(0.25, 0.35, 1.6, 6)), gCone = G(new T.ConeGeometry(1.7, 3.4, 7)), gSph = G(new T.SphereGeometry(1.7, 7, 5)), gRock = G(new T.IcosahedronGeometry(1.2, 0));
   const gCact = G(new T.CylinderGeometry(0.4, 0.45, 3.4, 8)), gArm = G(new T.CylinderGeometry(0.25, 0.25, 1.1, 6)), gCry = G(new T.OctahedronGeometry(1, 0));
   const gIsl = G(new T.ConeGeometry(5, 7, 7).rotateX(Math.PI)), gIslTop = G(new T.CylinderGeometry(5, 5, 0.8, 7));
-  const mTrunk = mk(0x6b4a2e), mPine = [mk(0x1b7a46), mk(0x2f9a58), mk(0x3fae4a)], mCact = mk(0x4f9a4a), mSand = [mk(0xc98b52), mk(0xb5764a)], mRock = mk(0x8d8e99), mUnder = mk(0x6a5648);
-  const mCry = [0x37f0ff, 0xff4fd8, 0xa58bff].map((c, i) => keep(new T.MeshPhongMaterial({ color: c, emissive: [0x1296b0, 0xa01e8a, 0x5a3fc0][i], flatShading: true, shininess: 90 })));
+  const mTrunk = mkL(0x6b4a2e), mPine = [mkL(0x1b7a46), mkL(0x2f9a58), mkL(0x3fae4a)], mCact = mkL(0x4f9a4a), mSand = [mkL(0xc98b52), mkL(0xb5764a)], mRock = mkL(0x8d8e99), mUnder = mkL(0x6a5648);
+  const mCry = [0x37f0ff, 0xff4fd8, 0xa58bff].map((c, i) => mkL(c, { emissive: [0x1296b0, 0xa01e8a, 0x5a3fc0][i] }));
   const mesh = (g, m, x, y, z, sx, sy, sz) => { const o = new T.Mesh(g, m); o.position.set(x, y, z); if (sx) o.scale.set(sx, sy || sx, sz || sx); return o; };
+  let pine = mPine[0];             // one green a stretch (each extra material is another draw)
   function decor(th, x, z, grp) {
     const s = rnd(0.8, 1.7), r = Math.random();
     if (th === 0) {
-      if (r < 0.55) { grp.add(mesh(gTrunk, mTrunk, x, 0.8 * s - 0.2, z, s)); grp.add(mesh(gCone, pick(mPine), x, 2.4 * s, z, s)); grp.add(mesh(gCone, pick(mPine), x, 3.7 * s, z, s * 0.7)); }
-      else if (r < 0.85) { grp.add(mesh(gTrunk, mTrunk, x, 0.8 * s - 0.2, z, s)); grp.add(mesh(gSph, pick(mPine), x, 2.8 * s, z, s, s * 0.85, s)); }
+      if (r < 0.55) { grp.add(mesh(gTrunk, mTrunk, x, 0.8 * s - 0.2, z, s)); grp.add(mesh(gCone, pine, x, 2.4 * s, z, s)); grp.add(mesh(gCone, pine, x, 3.7 * s, z, s * 0.7)); }
+      else if (r < 0.85) { grp.add(mesh(gTrunk, mTrunk, x, 0.8 * s - 0.2, z, s)); grp.add(mesh(gSph, pine, x, 2.8 * s, z, s, s * 0.85, s)); }
       else grp.add(mesh(gRock, mRock, x, 0.4 * s, z, s, s * 0.6, s));
     } else if (th === 1) {
       if (r < 0.55) { const c = new T.Group(); c.add(mesh(gCact, mCact, 0, 1.4, 0, 1), mesh(gArm, mCact, 0.7, 1.9, 0, 1), mesh(gArm, mCact, -0.7, 1.4, 0, 1)); c.position.set(x, -0.2, z); c.scale.setScalar(s); grp.add(c); }
@@ -107,7 +137,8 @@ export function createRailScene(T) {
   }
   let chunks = [], lastChunkZ = CL;
   function mkChunk(zc, th) {
-    const g = new T.Group(); g.position.z = zc;
+    const g = new T.Group();
+    pine = pick(mPine);
     g.add(mesh(gPath, mPath, 0, -0.4, 0), mesh(gSide, mGrass, -LANE * 1.5 - 7.4, -1.45, 0), mesh(gSide, mGrass, LANE * 1.5 + 7.4, -1.45, 0),
       mesh(gRail, mRail, -LANE * 1.5 - 0.1, 0.28, 0), mesh(gRail, mRail, LANE * 1.5 + 0.1, 0.28, 0), mesh(gLine, mLine, -LANE / 2, 0.02, 0), mesh(gLine, mLine, LANE / 2, 0.02, 0));
     for (let i = 0; i < (phone ? 5 : 8); i++) { const z = rnd(-CL / 2, CL / 2); decor(th, -(LANE * 1.5 + rnd(1.8, 12)), z, g); decor(th, LANE * 1.5 + rnd(1.8, 12), z + rnd(-2, 2), g); }
@@ -115,13 +146,16 @@ export function createRailScene(T) {
       const I = new T.Group();
       I.add(mesh(gIsl, mUnder, 0, -3.4, 0), mesh(gIslTop, mGrass, 0, 0.2, 0));
       I.position.set(sd * rnd(26, 48), rnd(-7, 2), rnd(-CL / 2, CL / 2)); I.scale.setScalar(rnd(0.6, 1.2));
-      if (th === 0) I.add(mesh(gTrunk, mTrunk, 0, 1.4, 0), mesh(gCone, pick(mPine), 0, 3.4, 0));
+      if (th === 0) I.add(mesh(gTrunk, mTrunk, 0, 1.4, 0), mesh(gCone, pine, 0, 3.4, 0));
       else if (th === 1) I.add(mesh(gCact, mCact, 0, 2.2, 0, 0.8));
       else I.add(mesh(gCry, pick(mCry), 0, 3, 0, 1, 3, 1));
       g.add(I);
     }
-    scene.add(g); chunks.push({ g, z: zc });
+    const baked = bake(T, merge, g);
+    baked.position.z = zc;
+    scene.add(baked); chunks.push({ g: baked, z: zc });
   }
+  const dropChunk = (c) => { scene.remove(c.g); for (const geo of c.g.userData.geos || []) geo.dispose(); };
 
   // ── the runner (and friends, see-through) ──
   function mkHero(colour, ghost) {
@@ -149,8 +183,13 @@ export function createRailScene(T) {
     return { g, inner, legs, arms, sh, phase: Math.random() * 6 };
   }
   const hero = mkHero(0xff7a3d, false);
+  // A jump is drawn higher than the rules' 1.3 m (JUMP_LOOK): next to a 2 m
+  // runner the real height looked like a small, slow hop. What you clear or
+  // hit is still the rules', unchanged.
+  const JUMP_LOOK = 1.6;
   function poseHero(h, { x, y, grounded, sliding, stun, safe, speed, dt, t }) {
-    h.g.position.set(x, y, h.g.position.z); h.sh.position.set(x, 0.05, h.g.position.z); h.sh.scale.setScalar(Math.max(0.3, 1 - y * 0.12));
+    const vy = y * JUMP_LOOK;
+    h.g.position.set(x, vy, h.g.position.z); h.sh.position.set(x, 0.05, h.g.position.z); h.sh.scale.setScalar(Math.max(0.3, 1 - vy * 0.12));
     h.phase += dt * (8 + speed * 0.28);
     const k = Math.min(1, dt * 26);
     if (stun) {
@@ -214,14 +253,21 @@ export function createRailScene(T) {
       m.add(mesh(gTrainTop, mWallTop, 0, 3.5, -len / 2, 1, 1, len - 0.4));
       const f = new T.Mesh(gWallF, mChev); f.position.set(0, 1.7, 0.02); m.add(f);
       for (const sx of [-0.9, 0.9]) m.add(mesh(gLamp, mLamp, sx, 3.55, -0.2));
-    } else if (o.kind === "coin") m.add(mesh(gCoin, mGold, 0, 0, 0));
+    }
     scene.add(m);
     return m;
   }
   const hearts = new Map();      // distance -> mesh
+  // all the coins in one draw (one coin shape, placed many times): drawn one
+  // by one, the coins alone were ~60 draws a frame
+  const MAXC = 160, coinMesh = new T.InstancedMesh(gCoin, mGold, MAXC);
+  coinMesh.instanceMatrix.setUsage(T.DynamicDrawUsage); coinMesh.frustumCulled = false; coinMesh.count = 0;
+  scene.add(coinMesh);
+  const cm = new T.Object3D();
+  let coinsWere = new Map();     // coin -> where it was drawn last frame (for the sparkle when it's taken)
 
   // ── camera ──
-  let shake = 0, prevY = 0;
+  let shake = 0, prevY = 0, camX = 0;
   function resize(w, h) { renderer.setSize(Math.max(1, w), Math.max(1, h), false); cam.aspect = Math.max(1, w) / Math.max(1, h); cam.updateProjectionMatrix(); }
 
   function frame({ s, t, dt, mates: friends = [], hearts: hs = [], crashed = false }) {
@@ -229,23 +275,30 @@ export function createRailScene(T) {
     const th = themeAt(s.z);
     // the path ahead, and nothing behind
     while (lastChunkZ > pz - 250) { lastChunkZ -= CL; mkChunk(lastChunkZ, themeAt(-lastChunkZ)); }
-    for (let i = chunks.length - 1; i >= 0; i--) if (chunks[i].z > pz + CL * 1.5) { scene.remove(chunks[i].g); chunks.splice(i, 1); }
+    for (let i = chunks.length - 1; i >= 0; i--) if (chunks[i].z > pz + CL * 1.5) { dropChunk(chunks[i]); chunks.splice(i, 1); }
     // the course, from the sim
-    const seen = new Set();
+    const seen = new Set(), coinsNow = new Map();
+    let nc = 0;
     for (const row of s.rows) for (const o of row.items) {
-      if (o.kind === "coin" && o.got) continue;
+      if (o.kind === "coin") {
+        if (o.got || nc >= MAXC || o.z > s.z + 200 || o.z < s.z - 12) continue;
+        const x = o.lane * LANE, y = (o.y || 0.6) + 0.35, z = -o.z;
+        cm.position.set(x, y, z); cm.rotation.set(0, t * 5 + o.z, 0); cm.updateMatrix();
+        coinMesh.setMatrixAt(nc++, cm.matrix);
+        coinsNow.set(o, [x, y, z]);
+        continue;
+      }
       if (o.hit) { const m = items.get(o); if (m) { burst(m.position.x, 1.2, m.position.z, 22, 1, 0.55, 0.3, 7); scene.remove(m); items.delete(o); } continue; }
       if (o.z > s.z + 200 || (o.z + (o.len || 0)) < s.z - 12) continue;
       let m = items.get(o);
       if (!m) { m = itemMesh(o); items.set(o, m); }
       seen.add(o);
-      m.position.set(o.lane * LANE, o.kind === "coin" ? (o.y || 0.6) + 0.35 : 0, -o.z);
-      if (o.kind === "coin") m.rotation.y = t * 5 + o.z;
+      m.position.set(o.lane * LANE, 0, -o.z);
     }
-    for (const [o, m] of items) if (!seen.has(o)) {
-      if (o.kind === "coin" && o.got) burst(m.position.x, m.position.y, m.position.z, 4, 1, 0.85, 0.2, 2.5);
-      scene.remove(m); items.delete(o);
-    }
+    for (const [o, m] of items) if (!seen.has(o)) { scene.remove(m); items.delete(o); }
+    coinMesh.count = nc; coinMesh.instanceMatrix.needsUpdate = true;
+    for (const [o, at] of coinsWere) if (o.got && !coinsNow.has(o)) burst(at[0], at[1], at[2], 4, 1, 0.85, 0.2, 2.5);   // taken: a sparkle
+    coinsWere = coinsNow;
     // hearts (together)
     const hseen = new Set();
     for (const at of hs) {
@@ -258,7 +311,7 @@ export function createRailScene(T) {
     // you
     hero.g.position.z = pz;
     poseHero(hero, { x: px, y: py, grounded, sliding, stun: s.stunT > 0, safe: s.safeT > 0 && s.stunT <= 0, speed: s.speed, dt, t });
-    hero.g.rotation.z = s.stunT > 0 ? 0 : -(s.lane * LANE - px) * 0.09;
+    hero.g.rotation.z = s.stunT > 0 ? 0 : -(s.lane * LANE - px) * 0.05;
     if (grounded && s.stunT <= 0 && Math.random() < dt * 14) emit(px + rnd(-0.3, 0.3), 0.1, pz + 0.4, rnd(-1, 1), rnd(0.5, 1.8), rnd(1, 3), 0.45, 0.8, 0.75, 0.6);
     if (prevY > 0.05 && grounded) burst(px, 0.1, pz, 6, 0.8, 0.8, 0.7, 2.5);
     prevY = py;
@@ -279,9 +332,12 @@ export function createRailScene(T) {
     applyTheme(th, dt);
     for (const c of clouds) { c.position.x += dt * 3; if (c.position.x > 600) c.position.x = -600; c.position.z = pz + c.userData.dz; }
     const sx = (Math.random() * 2 - 1) * shake * 0.5, sy = (Math.random() * 2 - 1) * shake * 0.4;
-    // a steady camera: rising with the jump made every jump look half its height
-    cam.position.set(px * 0.6 + sx, 4.3 + sy, pz + 7.4);
-    cam.lookAt(px * 0.5, 1.5, pz - 12);
+    // A soft camera. Locked to the runner, the whole world lurched sideways
+    // at every lane change and rose with every jump — heavy. Now it drifts a
+    // little after you, so you see the runner glide across a steady path.
+    camX += (px * 0.3 - camX) * Math.min(1, dt * 5);
+    cam.position.set(camX + sx, 4.3 + sy, pz + 7.4);
+    cam.lookAt(camX * 0.8, 1.5, pz - 12);
     const portrait = cam.aspect < 1;
     const fov = (portrait ? 78 : 64) + Math.max(0, Math.min(1, (s.speed - 14) / 16)) * 7;
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 3); cam.updateProjectionMatrix(); }

@@ -92,10 +92,14 @@ export default function RailRunner(props) {
     setDown(false);
     sayRef.current(`❤️ ${Tref.current.nameOf(id)} saved you!`);
   } });
-  const hostRef = useRef(null);
+  const hostRef = useRef(null), distRef = useRef(null), coinRef = useRef(null);
   const size = useRef({ w: 300, h: 400 });
   const overRef = useRef(false);
   useEffect(() => { overRef.current = eng.gameOver; }, [eng.gameOver]);
+  // the last seconds: the score goes every frame, so nothing is left unsent at the whistle
+  const endingRef = useRef(false);
+  endingRef.current = eng.timeLeft <= 2;
+  useEffect(() => { if (eng.gameOver) { const s = sim.current; setHud({ dist: Math.floor(s.z), coins: s.coins, crashes: s.crashes }); } }, [eng.gameOver]);
   const [hud, setHud] = useState({ dist: 0, coins: 0, crashes: 0 });
   const [toast, setToast] = useState(null);
   const [flash, setFlash] = useState(0);
@@ -114,7 +118,9 @@ export default function RailRunner(props) {
   const [noGl, setNoGl] = useState(false);
   useEffect(() => {
     let alive = true;
-    import("three").then((m) => { if (alive) setThree(m); }).catch(() => { if (alive) setNoGl(true); });
+    Promise.all([import("three"), import("three/examples/jsm/utils/BufferGeometryUtils.js")])
+      .then(([m, u]) => { if (alive) setThree({ T: m, merge: (g) => u.BufferGeometryUtils.mergeBufferGeometries(g) }); })
+      .catch(() => { if (alive) setNoGl(true); });
     return () => { alive = false; };
   }, []);
 
@@ -167,14 +173,14 @@ export default function RailRunner(props) {
   useEffect(() => {
     if (isSpectator || !THREE || !hostRef.current) return undefined;
     let scene;
-    try { scene = createRailScene(THREE); } catch { setNoGl(true); return undefined; }
+    try { scene = createRailScene(THREE.T, THREE.merge); } catch { setNoGl(true); return undefined; }
     const host = hostRef.current;
     scene.canvas.className = "rr-gl";
     host.insertBefore(scene.canvas, host.firstChild);
     // the hint, for a few seconds from when you can see the run (not from when the page opened)
     setHint(true);
     timers.current.push(setTimeout(() => setHint(false), 3500));
-    let raf, last = performance.now(), pushed = 0, lastHud = 0, sizeW = 0, sizeH = 0, theme = 0, coinRun = 0;
+    let raf, last = performance.now(), pushed = 0, pushedAt = 0, lastHud = 0, sizeW = 0, sizeH = 0, theme = 0, coinRun = 0;
     const frame = (now) => {
       raf = requestAnimationFrame(frame);
       // never backwards (the first frame can be stamped early); and on a phone
@@ -224,9 +230,14 @@ export default function RailRunner(props) {
         for (let i = 0; i < out.got.length; i++) { coinRun++; A.coin(coinRun); }
         const th = themeAt(s.z);
         if (th !== theme) { theme = th; say(THEMES[th]); }
+        // the score to the engine a few times a second, and the metres and
+        // coins straight onto the page: re-rendering the screen for every
+        // metre caused little hitches
         const target = score(s) + tg.current.bonus;
-        if (target !== pushed) { addScore(target - pushed); pushed = target; }
-        if (now - lastHud > 120) { lastHud = now; setHud({ dist: Math.floor(s.z), coins: s.coins, crashes: s.crashes }); }
+        if (target !== pushed && (now - pushedAt > 250 || endingRef.current)) { addScore(target - pushed); pushed = target; pushedAt = now; }
+        if (distRef.current) distRef.current.textContent = String(Math.floor(s.z));
+        if (coinRef.current) coinRef.current.textContent = `● ${s.coins}`;
+        if (now - lastHud > 1000) { lastHud = now; setHud({ dist: Math.floor(s.z), coins: s.coins, crashes: s.crashes }); }
         A.music(dt);
       }
       const T1 = tg.current;
@@ -285,8 +296,8 @@ export default function RailRunner(props) {
               {noGl && <div className="rr-msg">This game needs WebGL. Try another browser, or turn on hardware acceleration.</div>}
               <div className="rr-hud" aria-live="polite">
                 <div key={flash} className={`rr-flash${flash ? " on" : ""}`} />
-                <div className="rr-coins" aria-label={`${hud.coins} coins`}>● {hud.coins}</div>
-                <div className="rr-score"><span>{hud.dist}</span><small>METERS</small></div>
+                <div className="rr-coins" ref={coinRef}>● {hud.coins}</div>
+                <div className="rr-score"><span ref={distRef}>{hud.dist}</span><small>METERS</small></div>
                 {coop && (
                   <div className="rr-team">
                     <b>Team {teamTotal.toLocaleString()}</b>

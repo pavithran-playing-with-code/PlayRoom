@@ -42,6 +42,10 @@ body.chatting .chat{display:flex}
 .msg.mine{align-self:flex-end;border-radius:12px 12px 3px 12px;background:#4CC9F0;color:#2E2140}
 .msg b{display:block;font-size:10px;color:#FFC53D}
 .empty{margin:auto;opacity:.55;font-weight:800;font-size:12px}
+.emo{display:flex;gap:4px;padding:4px 6px 0;overflow-x:auto;scrollbar-width:none}
+.emo::-webkit-scrollbar{display:none}
+.emo button{flex:0 0 auto;width:32px;height:32px;border-radius:10px;border:0;background:rgba(255,255,255,.1);font-size:18px;
+  font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
 form{display:flex;gap:6px;padding:6px}
 input{flex:1;min-width:0;height:34px;padding:0 12px;border-radius:999px;border:0;font:700 14px Nunito,system-ui,sans-serif;color:#2E2140;outline:none}
 form button{background:#B5E655;color:#2E2140;border:0}
@@ -153,7 +157,19 @@ export async function openPip(state, on) {
     const t = input.value.trim();
     if (t && handlers.onSend) { handlers.onSend(t); input.value = ""; }
   });
-  chat.append(list, form);
+  // the same quick emoji as the call's chat: one on its own is sent at once, in a message it's added
+  const emo = doc.createElement("div"); emo.className = "emo";
+  for (const e of ["😂", "❤️", "👍", "🔥", "😮", "😢", "🎉", "🙏"]) {
+    const b = doc.createElement("button"); b.type = "button"; b.textContent = e; b.title = "Send " + e; b.dataset.e = e;
+    emo.append(b);
+  }
+  emo.addEventListener("click", (ev) => {
+    const b = ev.target.closest("button");
+    if (!b) return;
+    if (input.value.trim()) { input.value += b.dataset.e; input.focus(); }
+    else if (handlers.onSend) handlers.onSend(b.dataset.e);
+  });
+  chat.append(list, emo, form);
   row.append(peek);
   doc.body.append(row, bar, chat);
   ui = { tiles: new Map(), mic, row, list, input, peek, badge, chatN: -1, unread: 0, open: false, peekT: 0 };

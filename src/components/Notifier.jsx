@@ -10,7 +10,7 @@ import { useSocket } from "../utils/SocketContext";
 import { usePresence } from "../utils/PresenceContext";
 import { Avatar } from "./ui";
 
-// How long each kind stays up (ms). Requests and invites also wait in the Crew page.
+// How long each kind stays up (ms). Requests and invites also wait on the Friends page.
 const LIFETIME = { request: 20000, invite: 25000, info: 5000, online: 4000 };
 const MAX_SHOWN = 4;
 
@@ -81,7 +81,7 @@ export default function Notifier() {
       const data = await res.json();
       dismiss(n.id);
       push(data.success
-        ? { key: `added-${n.reqId}`, kind: "info", face: n.face, text: "is in your crew now 🎉" }
+        ? { key: `added-${n.reqId}`, kind: "info", face: n.face, text: "is your friend now 🎉" }
         : { key: `err-${n.reqId}`, kind: "info", face: n.face, text: data.message || "That request is gone." });
     } catch {
       dismiss(n.id);

@@ -1,7 +1,7 @@
 // src/utils/PresenceContext.js
 // Your friends, whether each is online (and if not, when they were last seen),
 // and your inbox count. Kept live over the socket, so the navbar, the lobby,
-// the Crew page and the in-game header all agree without each polling on its own.
+// the Friends page and the in-game header all agree without each polling on its own.
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import { useAuth } from "./AuthContext";
@@ -9,13 +9,10 @@ import { useSocket } from "./SocketContext";
 
 const PresenceContext = createContext(null);
 
-// Online first, then whoever was seen most recently, then by name.
-function byPresence(a, b) {
-  if (a.online !== b.online) return a.online ? -1 : 1;
-  const ta = a.last_seen ? Date.parse(a.last_seen) : 0;
-  const tb = b.last_seen ? Date.parse(b.last_seen) : 0;
-  if (ta !== tb) return tb - ta;
-  return String(a.username).localeCompare(String(b.username));
+// Online first, A to Z; then everyone else, A to Z.
+export function byPresence(a, b) {
+  if (!!a.online !== !!b.online) return a.online ? -1 : 1;
+  return String(a.username).localeCompare(String(b.username), undefined, { sensitivity: "base" });
 }
 
 export function PresenceProvider({ children }) {

@@ -423,7 +423,7 @@ function CrewCard() {
   return (
     <div className="pop" style={{ padding: 22 }}>
       <div className="row" style={{ justifyContent: "space-between", marginBottom: 14 }}>
-        <h2 style={{ fontSize: "1.25rem" }}>👥 Your crew</h2>
+        <h2 style={{ fontSize: "1.25rem" }}>👥 Your friends</h2>
         {friends.length > 0 && <span className="chip c-lime">{onlineCt} online</span>}
       </div>
       {friends.length === 0 ? (

@@ -52,10 +52,36 @@ const Phone = () => (
   </svg>
 );
 
+// Drag something anywhere on the screen. A press that doesn't move is still
+// a tap (the corner picture swaps who's big); one that moves is a drag.
+function useDrag() {
+  const [pos, setPos] = useState(null);           // { x, y, w, h } once moved
+  const d = useRef(null);
+  const moved = useRef(false);
+  const start = (e, el) => {
+    const r = (el || e.currentTarget).getBoundingClientRect();
+    d.current = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, w: r.width, h: r.height, go: false };
+    moved.current = false;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
+  };
+  const move = (e) => {
+    const s = d.current;
+    if (!s || s.id !== e.pointerId) return;
+    if (!s.go && Math.hypot(e.clientX - s.x0, e.clientY - s.y0) < 6) return;
+    s.go = true; moved.current = true;
+    setPos({ x: Math.max(4, Math.min(window.innerWidth - s.w - 4, e.clientX - s.dx)), y: Math.max(4, Math.min(window.innerHeight - s.h - 4, e.clientY - s.dy)), w: s.w, h: s.h });
+  };
+  const end = (e) => { if (d.current && d.current.id === e.pointerId) d.current = null; };
+  const style = pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined;
+  // a tap after a drag isn't a tap
+  const wasDrag = () => { const m = moved.current; moved.current = false; return m; };
+  return { pos, setPos, start, move, end, style, wasDrag };
+}
+
 // ── chat in the call ─────────────────────────────────────────────────────────
 const EMOJI = ["😂", "❤️", "👍", "🔥", "😮", "😢", "🎉", "🙏"];
 const hhmm = (t) => new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-function ChatPanel({ chat, onSend, onClose }) {
+function ChatPanel({ chat, onSend, onClose, drag }) {
   const [text, setText] = useState("");
   const listRef = useRef(null);
   useEffect(() => { const l = listRef.current; if (l) l.scrollTop = l.scrollHeight; }, [chat.length]);
@@ -65,9 +91,14 @@ function ChatPanel({ chat, onSend, onClose }) {
   // keys typed here are the chat's: a game listening on the page (Space to
   // jump…) mustn't take them
   const keep = (e) => e.stopPropagation();
+  const panel = useRef(null);
+  // dragged somewhere: it keeps its size there
+  const style = drag.pos ? { ...drag.style, width: drag.pos.w, height: drag.pos.h } : undefined;
   return (
-    <div className="call-chat" role="dialog" aria-label="Chat" onKeyDown={keep} onKeyUp={keep}>
-      <div className="call-chat-head">
+    <div className={`call-chat${drag.pos ? " moved" : ""}`} ref={panel} style={style} role="dialog" aria-label="Chat" onKeyDown={keep} onKeyUp={keep}>
+      <div className="call-chat-head" title="Drag to move the chat"
+        onPointerDown={(e) => { if (e.target.closest("button")) return; drag.start(e, panel.current); }}
+        onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.end}>
         <b>💬 Chat</b><span className="call-chat-note">only in this call · not saved</span>
         <button type="button" className="call-chat-x" onClick={onClose} aria-label="Close the chat">✕</button>
       </div>
@@ -85,7 +116,8 @@ function ChatPanel({ chat, onSend, onClose }) {
         {EMOJI.map((e) => <button key={e} type="button" onClick={() => emoji(e)} aria-label={`Send ${e}`}>{e}</button>)}
       </div>
       <form className="call-chat-input" onSubmit={(e) => { e.preventDefault(); send(); }}>
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder="Message…" aria-label="Message" enterKeyHint="send" autoComplete="off" />
+        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder="Message…" aria-label="Message" enterKeyHint="send" autoComplete="off"
+          autoFocus /* open the chat, start typing */ />
         <button type="submit" aria-label="Send" disabled={!text.trim()}>➤</button>
       </form>
     </div>
@@ -108,6 +140,7 @@ export default function CallLayer() {
   const [tapForSound, setTapForSound] = useState(false);
   const [picking, setPicking] = useState(false);   // the "add a friend" list
   const [swapped, setSwapped] = useState(false);   // one-to-one: me big, them in the corner (tap the corner to swap, like WhatsApp)
+  const meDrag = useDrag(), chatDrag = useDrag();   // the small picture and the chat, wherever you put them
   const { call, ring, local, peers, mic, cam, facing, notice, expanded, screen, chat = [], unread = 0, chatOpen } = C;
   // a message arriving with the chat closed: shown for a moment at the top
   const [peek, setPeek] = useState(null);
@@ -134,7 +167,7 @@ export default function CallLayer() {
     const t = setTimeout(() => C.clearNotice(), 3200);
     return () => clearTimeout(t);
   }, [notice]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (!call) { setTapForSound(false); setPicking(false); setSwapped(false); } }, [call]);
+  useEffect(() => { if (!call) { setTapForSound(false); setPicking(false); setSwapped(false); meDrag.setPos(null); chatDrag.setPos(null); } }, [call]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the bubble: drag it out of the way
   const [pos, setPos] = useState(null);
@@ -316,7 +349,9 @@ export default function CallLayer() {
           )}
 
           {call.phase === "active" && local && (
-            <button type="button" className="call-me" onClick={() => { if (canSwap) setSwapped((x) => !x); }}
+            <button type="button" className={`call-me${meDrag.pos ? " moved" : ""}`} style={meDrag.style}
+              onPointerDown={(e) => meDrag.start(e)} onPointerMove={meDrag.move} onPointerUp={meDrag.end} onPointerCancel={meDrag.end}
+              onClick={() => { if (meDrag.wasDrag()) return; if (canSwap) setSwapped((x) => !x); }}
               aria-label={canSwap ? (swap ? "Make them big" : "Make me big") : "Your camera"} disabled={!canSwap}>
               {swap
                 ? (theirVid ? <Vid stream={peers[others[0].id].stream} className="call-full" /> : <span className="call-emoji">{avatarOf(others[0].id) || "🙂"}</span>)
@@ -376,7 +411,7 @@ export default function CallLayer() {
             <button type="button" className="call-btn red" onClick={C.hangUp} aria-label={call.phase === "active" ? "Hang up" : "Cancel"}><Phone /></button>
           </div>
 
-          {active && chatOpen && <ChatPanel chat={chat} onSend={C.sendChat} onClose={() => C.setChatOpen(false)} />}
+          {active && chatOpen && <ChatPanel chat={chat} onSend={C.sendChat} onClose={() => C.setChatOpen(false)} drag={chatDrag} />}
           {active && !chatOpen && peek && (
             <button type="button" className="call-peek" onClick={() => { setPeek(null); C.setChatOpen(true); }} aria-label="Open the chat">
               <b>{peek.name}</b> {peek.text}

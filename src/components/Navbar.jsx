@@ -55,7 +55,7 @@ export default function Navbar() {
             <div className="navlinks">
               {navLink("/lobby", "🕹️ Lobby")}
               {navLink("/leaderboard", "🏆 Board")}
-              {navLink("/friends", pendingCt ? `👥 Crew (${pendingCt})` : "👥 Crew")}
+              {navLink("/friends", pendingCt ? `👥 Friends (${pendingCt})` : "👥 Friends")}
             </div>
 
             <div className="navme">

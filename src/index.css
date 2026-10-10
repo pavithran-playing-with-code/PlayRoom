@@ -1626,3 +1626,7 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .call-weak.hold b{font-size:20px}
 .call-weak.hold span{font-weight:700;font-size:13px;opacity:.85;max-width:260px}
 .call-bar .call-chat-btn{position:relative}
+/* the small picture and the chat move wherever you drag them */
+.call-me{touch-action:none;cursor:grab}
+.call-chat-head{touch-action:none;cursor:grab}
+.call-chat.moved,.call-me.moved{transform:none}

@@ -54,7 +54,7 @@ export default function Login() {
 
         <div className="pop" style={{ padding: 30 }}>
           <h1 style={{ fontSize: "2rem", marginBottom: 6 }}>Welcome back!</h1>
-          <p className="muted" style={{ marginBottom: 24 }}>Your crew has been waiting.</p>
+          <p className="muted" style={{ marginBottom: 24 }}>Your friends have been waiting.</p>
 
           <form onSubmit={handleSubmit}>
             <div className="field">

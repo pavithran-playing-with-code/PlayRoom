@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../utils/api";
-import { usePresence } from "../utils/PresenceContext";
+import { usePresence, byPresence } from "../utils/PresenceContext";
 import { useCall } from "../utils/CallContext";
 import { presenceLabel } from "../utils/timeAgo";
 import { Avatar, Tabs, useToast } from "../components/ui";
@@ -94,7 +94,7 @@ export default function Friends() {
   }
 
   const tabs = [
-    { id: "friends", label: "👥 Crew", count: friends.length },
+    { id: "friends", label: "👥 Friends", count: friends.length },
     { id: "requests", label: "📬 Requests", count: incoming.length },
     { id: "invites", label: "🎮 Invites", count: invites.length },
     { id: "find", label: "🔍 Find people" },
@@ -119,7 +119,7 @@ export default function Friends() {
   return (
     <div className="wrap">
       <div style={{ maxWidth: 820, margin: "0 auto" }}>
-        <h1 style={{ fontSize: "2.1rem", marginBottom: 6 }}>Your crew 👥</h1>
+        <h1 style={{ fontSize: "2.1rem", marginBottom: 6 }}>Your friends 👥</h1>
         <p className="muted" style={{ marginBottom: 26 }}>
           Add people once, then drop them straight into a room.
         </p>
@@ -131,7 +131,7 @@ export default function Friends() {
           friends.length === 0
             ? <Empty icon="🫂" line="No friends yet — go find some people!" />
             : <div className="stack">
-                {friends.map((f) => (
+                {friends.map((f) => ({ ...f, online: online(f.id) })).sort(byPresence).map((f) => (
                   <Row key={f.id}>
                     <Avatar emoji={f.avatar} size={48} seed={f.id} online={online(f.id)} />
                     <Who name={f.username}
@@ -168,7 +168,7 @@ export default function Friends() {
 
         {tab === "requests" && (
           <>
-            <div className="muted eyebrow">Wants to join your crew</div>
+            <div className="muted eyebrow">Wants to be your friend</div>
             {incoming.length === 0 ? <Empty line="No incoming requests." /> : (
               <div className="stack" style={{ marginBottom: 32 }}>
                 {incoming.map((r) => (
@@ -242,7 +242,7 @@ export default function Friends() {
                       online={u.rel_status === "accepted" ? online(u.id) : undefined} />
                     <Who name={u.username}
                       sub={u.rel_status === "accepted" ? presenceLabel(presenceOf(u.id)) : "player"} />
-                    {u.rel_status === "accepted" ? <span className="chip c-lime">✓ In your crew</span>
+                    {u.rel_status === "accepted" ? <span className="chip c-lime">✓ Friends</span>
                       : u.rel_status === "pending" ? <span className="chip">Pending…</span>
                       : u.rel_status === "blocked" ? <span className="chip">Unavailable</span>
                       : <button className="press p-lime sm" disabled={!!busy[`req-${u.id}`]}

@@ -8,7 +8,7 @@
 //     sideways on a phone), the cameras in a strip
 // The call itself lives in CallContext.
 import React, { useEffect, useRef, useState } from "react";
-import { useCall as useCallCtx, CALL_MAX } from "../utils/CallContext";
+import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallContext";
 import { usePresence } from "../utils/PresenceContext";
 import { canDocPip, openPip, updatePip, closePip } from "../utils/callPip";
 
@@ -362,8 +362,9 @@ export default function CallLayer() {
               </>
             )}
             {call.phase === "active" && (
-              <button type="button" className={`call-btn${screen ? " off" : ""}`} onClick={C.share}
-                aria-label={screen ? "Stop sharing your screen" : "Share your screen"} aria-pressed={!!screen}>🖥️</button>
+              <button type="button" className={`call-btn${screen ? " off" : ""}${canShareScreen() ? "" : " cant"}`} onClick={C.share}
+                aria-label={screen ? "Stop sharing your screen" : canShareScreen() ? "Share your screen" : "Screen sharing (needs a computer)"}
+                aria-pressed={!!screen}>🖥️</button>
             )}
             {call.phase === "active" && room && (
               <button type="button" className="call-btn" onClick={() => setPicking(true)} aria-label="Add a friend to the call">➕</button>
@@ -376,6 +377,19 @@ export default function CallLayer() {
             <button type="button" className="call-peek" onClick={() => { setPeek(null); C.setChatOpen(true); }} aria-label="Open the chat">
               <b>{peek.name}</b> {peek.text}
             </button>
+          )}
+
+          {C.shareHelp && (
+            <div className="call-pick" role="dialog" aria-label="Screen sharing needs a computer"
+              onClick={(e) => { if (e.target === e.currentTarget) C.setShareHelp(false); }}>
+              <div className="call-pick-card pop call-help">
+                <div className="call-help-icon">🖥️</div>
+                <b className="call-help-title">Screen sharing needs a computer</b>
+                <p>Phone browsers — Chrome on Android, Safari on iPhone — don't let <i>any</i> website share your screen. Only installed apps like WhatsApp or Discord can. It's the phone's rule, not PlayRoom's.</p>
+                <p className="call-help-how"><b>To share a film or a game:</b> join this call from a computer with Chrome or Edge, tap 🖥️ there, and pick a tab (tick “Share tab audio” for sound). Everyone can watch on their phones.</p>
+                <button type="button" className="press p-sun" onClick={() => C.setShareHelp(false)}>Got it</button>
+              </div>
+            </div>
           )}
 
           {picking && (

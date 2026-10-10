@@ -139,6 +139,7 @@ export function CallProvider({ children }) {
   const [notice, setNotice] = useState(null);      // a short line after a call: { text, n }
   const [expanded, setExpanded] = useState(true);  // the full call screen, or the bubble
   const [screen, setScreen] = useState(null);      // the screen I'm sharing
+  const [shareHelp, setShareHelp] = useState(false); // "why can't I share from my phone" card
   // the call's chat: kept here for the call only, never saved anywhere
   const [chat, setChat] = useState([]);            // [{ key, from, name, text, at, mine }]
   const [unread, setUnread] = useState(0);
@@ -440,11 +441,11 @@ export function CallProvider({ children }) {
   const share = useCallback(async () => {
     if (screenRef.current) return stopShare();
     if (!canShareScreen()) {
-      // phone browsers (Chrome on Android, Safari on iPhone) don't let a
-      // website capture the screen — only installed apps can
-      return say(/Android|iPhone|iPad|iPod|Mobile/.test(navigator.userAgent)
-        ? "Phones can't share their screen from a browser — share from a computer, and watch here"
-        : "This browser can't share the screen — try Chrome or Edge");
+      // phone browsers (Chrome on Android, Safari on iPhone) don't let any
+      // website capture the screen — only installed apps can. Say so
+      // properly (CallLayer's card), not in a line that gets cut off.
+      setShareHelp(true);
+      return undefined;
     }
     let scr;
     try { scr = await navigator.mediaDevices.getDisplayMedia(SCREEN); }
@@ -548,9 +549,9 @@ export function CallProvider({ children }) {
   useEffect(() => () => { tones.current.stop(); stopMedia(); }, [stopMedia]);
 
   const value = useMemo(() => ({
-    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen,
+    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
-  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen,
+  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;

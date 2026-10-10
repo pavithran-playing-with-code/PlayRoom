@@ -1562,3 +1562,12 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;animation:call-peek-in .25s ease}
 .call-peek b{color:var(--sun)}
 @keyframes call-peek-in{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+/* 🖥️ on a phone: can't share from here — dimmed, and a tap explains why */
+.call-btn.cant{opacity:.5;position:relative}
+.call-btn.cant::after{content:"✕";position:absolute;right:-2px;bottom:-2px;width:18px;height:18px;border-radius:50%;background:#e5484d;
+  border:2px solid #fff;font:900 10px/14px Nunito,system-ui,sans-serif;color:#fff;text-align:center}
+.call-help{align-items:center;text-align:center;gap:10px;padding:20px 18px}
+.call-help-icon{font-size:40px}
+.call-help-title{font-size:19px}
+.call-help p{margin:0;font-weight:700;font-size:14px;line-height:1.45;opacity:.85}
+.call-help-how{background:#fff7e0;border-radius:var(--r);padding:10px 12px;opacity:1 !important}

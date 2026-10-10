@@ -11,16 +11,20 @@
 //   - doors and hiding spots: Use acts here at once (so a door you open lets you
 //     straight through) and asks the server, which has the last word — the
 //     door states in every tick put any disagreement right;
-//   - the scares, which are this phone's alone and change nothing.
+//   - the scares, which are this phone's alone and change nothing;
+//   - finding your keys without a map: Nana's note (a riddle per key), the
+//     music box of the nearest one (by the walk to it), and chalk marks,
+//     which are shared (manor:chalk) and kept by the server.
 //
 // No React and no DOM; ManorGame.jsx draws it and wires the socket.
 import {
   unpackWalls, newBody, stepBody, jumpBody, litBody, HURDLE, FLOOR, DOOR,
   actionAt, ACTION_LABEL, hideIn, leaveLocker, unstick, roomAt, spotKind, ROOM_KINDS, lampCount, lampSwitches, HEAR_R,
+  RIDDLES, NORTH, fieldOf, tuneFor, chalkAt, toggleMark,
 } from "./manorCore.mjs";
 import { AMBIENT, hints as hintsFor, say, scareStep } from "./manorSim.js";
 
-export const SHOW_MAP_MS = 6000;       // the map you memorise; ghosts sleep a little longer
+export const NOTE_MS = 6000;           // Nana's note, to read; ghosts sleep a little longer
 export const SCARE_MS = 1400;          // the face, when it gets you
 const EASE = 12;                       // how fast others catch up with their last report
 const DOOR_TRUST_MS = 1500;            // a door you just used: your word over the server's for this long
@@ -46,7 +50,7 @@ export function createClient(init, now = Date.now()) {
   }]));
   const me = init.role === "player" ? players.get(init.you) : null;
   const mySide = me ? me.side : null;
-  const body = newBody(me ? me.x : init.house.spawn.x, me ? me.y : init.house.spawn.y, me ? me.fa || 0 : 0);
+  const body = newBody(me ? me.x : init.house.spawn.x, me ? me.y : init.house.spawn.y, me ? me.fa ?? NORTH : NORTH);
   const c = {
     mode: init.mode, you: init.you, role: me ? "player" : "spectator", code: init.code,
     N, g, obst, env: { g, N, obst, doors: new Set(doorList), switches: lampSwitches(g, N, new Set(doorList), init.house.exitT) }, exitT: init.house.exitT,
@@ -58,29 +62,36 @@ export function createClient(init, now = Date.now()) {
       x, y, side, got: !!got, color: sides.get(side)?.color, mine: init.mode === "coop" || side === mySide,
     })),
     cells: init.house.batts.map(([x, y, got]) => ({ x, y, got: !!got })),
+    marks: [...(init.house.marks || [])], markPend: 0, tune: null,
     ghosts: [], pulses: [], puffs: [],
     hint: {}, msg: "", msgT: 0, tm: 0, ambT: 20, hb: 0, gStep: 0,
     bodies: [], flick: 0, scareT: 25 + Math.random() * 15,
     alive: me ? me.alive : false, left: me ? !!me.left : false, spawn: init.house.spawn,
     startLocal: now - init.elapsed, durMs: init.duration, introMs: init.intro,
-    skipIntro: init.elapsed > SHOW_MAP_MS, deadAt: null, watch: null,
+    skipIntro: init.elapsed > NOTE_MS, deadAt: null, watch: null,
     over: init.over || null,
     // her lullaby, as the server last said: humming, or listening
-    hum: init.hum ? { on: !!init.hum[0], t: init.hum[1], since: init.hum[2] } : { on: true, t: 99, since: 0 },
+    hum: init.hum ? { on: !!init.hum[0], t: init.hum[1], since: init.hum[2], hunt: !!init.hum[3] } : { on: true, t: 99, since: 0, hunt: false },
   };
+  // The keys you're after: a music box each (the walk to it from every
+  // tile), and Nana's riddle for its room
+  c.fields = c.relics.map((r) => (r.mine ? fieldOf(g, N, r) : null));
+  c.riddles = c.relics.filter((r) => r.mine).map((r) => ({ text: RIDDLES[c.rooms[roomAt(N, r.x, r.y)]] || "somewhere in the house", r }));
   if (me && !me.alive && !me.left) c.deadAt = now - SCARE_MS;  // came back while caught
-  if (c.role === "player" && c.alive) say(c, "Find your keys, then the front door. While she hums, move. When the humming stops — freeze.", 5500);
+  if (c.role === "player" && c.alive) say(c, "Listen for the music boxes — your keys are in them. While she hums, move. When the humming stops — freeze.", 5500);
   return c;
 }
 
 export const timeLeft = (c, now = Date.now()) => Math.max(0, c.durMs - (now - c.startLocal));
-export const inIntro = (c, now = Date.now()) => !c.skipIntro && now - c.startLocal < SHOW_MAP_MS;
+export const inIntro = (c, now = Date.now()) => !c.skipIntro && now - c.startLocal < NOTE_MS;
 export const playing = (c) => c.role === "player" && c.alive && !c.left && !c.over;
 // caught, and about to be back in at the entrance
 export const respawning = (c) => c.role === "player" && !c.alive && !c.left && !c.over;
 export const sideOfMe = (c) => (c.mySide ? c.sides.get(c.mySide) : null);
 // Has the humming stopped? Then she is listening, and you should be still.
-export const isListening = (c) => !!c.hum && !c.hum.on;
+export const isListening = (c) => !!c.hum && !c.hum.on && !c.hum.hunt;
+// Every key of mine found: she can hear me anywhere, and it's a run for the door
+export const finaleNow = (c) => !!(sideOfMe(c) && sideOfMe(c).open);
 // …and near enough to hear you: the red warning is only for then
 export const listeningNear = (c) => isListening(c) && !!c.body && c.ghosts.some((G) => Math.hypot(G.x - c.body.x, G.y - c.body.y) < HEAR_R);
 const nameOf = (c, id) => (c.players.get(id) || {}).name || "Someone";
@@ -124,7 +135,8 @@ export function applyTick(c, m, now = Date.now()) {
     if (s) { s.got = got; s.open = !!open; s.escapes = escapes; s.total = total; s.score = score; }
   }
   c.pulses = m.m.map(([x, y, t]) => ({ x, y, t }));
-  if (m.h) c.hum = { on: !!m.h[0], t: m.h[1], since: m.h[2] };
+  if (m.h) c.hum = { on: !!m.h[0], t: m.h[1], since: m.h[2], hunt: !!m.h[3] };
+  if (m.k && now > c.markPend) c.marks = m.k;           // chalk, but not one you just drew
   if (m.l && now > c.lampPend) c.lamps = [...m.l].map(Number);   // the rooms' lights, but not one you just switched
 
   for (const e of m.e || []) {
@@ -133,16 +145,16 @@ export function applyTick(c, m, now = Date.now()) {
       if (e.id === c.you) { snd("relic"); say(c, e.got >= e.need ? "The last key. The front door is unlocked. Go — quietly." : RELIC_LINES[(e.got - 1) % 4], 4000); }
       else if (mine) { snd("relic"); say(c, `${nameOf(c, e.id)} found one. ${e.got} of ${e.need}.`, 3000); }
     } else if (e.type === "open") {
-      if (mine && c.mode !== "free") say(c, "Every key found. The front door is unlocked!", 4000);
-      else if (!mine && c.mode !== "coop") say(c, `${c.sides.get(e.side)?.name || "Someone"} has every key. Their door is unlocked.`, 3500);
+      if (mine) { snd("finale"); say(c, e.all ? "Every key — the lights die and the humming stops. She hears every step now. RUN to the front door!" : "Every key! She hears every step you take now — RUN to the front door!", 5000); }
+      else if (c.mode !== "coop") say(c, `${c.sides.get(e.side)?.name || "Someone"} has every key — they're running for the door!`, 3500);
     } else if (e.type === "dead") {
       if (e.id === c.you) { if (e.cause !== "left") snd("caught"); }       // the banner says the rest
       else say(c, e.cause === "left" ? `${nameOf(c, e.id)} left the house.` : `${nameOf(c, e.id)} was caught!`, 3000);
     } else if (e.type === "respawn" && e.id === c.you) {
       // back at the entrance: after being caught, or for another round
       const P = c.body;
-      P.x = e.x; P.y = e.y; P.fa = 0; P.pitch = 0; P.hiding = null; P.lastTile = -1; P.jz = 0; P.vz = 0;
-      if (e.why === "caught") say(c, "Back in. Your keys are still yours.", 2600);
+      P.x = e.x; P.y = e.y; P.fa = e.fa ?? NORTH; P.pitch = 0; P.hiding = null; P.lastTile = -1; P.jz = 0; P.vz = 0;
+      if (e.why === "caught") say(c, "You wake up somewhere deep in the house. Your keys are still yours.", 3200);
     } else if (e.type === "gaveup" && e.id === c.you) {
       say(c, "She gives up and shuffles away, humming...", 3000);
     } else if (e.type === "door" && e.id !== c.you) {
@@ -168,6 +180,9 @@ export function applyTick(c, m, now = Date.now()) {
       if (here) { snd("flicker"); say(c, "The lights go out. She's in here.", 2500); }
     } else if (e.type === "lamp" && e.id !== c.you) {
       if (c.body && roomAt(c.N, c.body.x, c.body.y) === e.room) { snd("click"); say(c, `${nameOf(c, e.id)} switched the light ${e.on ? "on" : "off"}.`, 2000); }
+    } else if (e.type === "chalk" && e.id !== c.you && e.on) {
+      const N = c.N, d = c.body ? Math.hypot(c.body.x - (e.k % N) - 0.5, c.body.y - Math.floor(e.k / N) - 0.5) : 99;
+      if (d < 6) say(c, `${nameOf(c, e.id)} chalked a mark.`, 1600);
     } else if (e.type === "heard") {
       if (e.id === c.you) { snd("heard"); say(c, "She heard you. She's coming.", 2500); }
       else say(c, `She heard ${nameOf(c, e.id)}!`, 2500);
@@ -212,6 +227,8 @@ export function stepLocal(c, inp, dt, now = Date.now()) {
     say(c, `The front door is locked. ${side.need - side.got} of your keys still out there.`, 2500);
   }
   hintsFor(c, P);
+  // the music box of your nearest key, by the walk to it
+  c.tune = tuneFor(c.fields, c.relics, c.N, P, (r) => r.mine, c.g);
   scareStep(c, P, dt, Math.random, c.ghosts.some((G) => G.st === "hunt"), snd);
   c.ambT -= dt;
   if (c.ambT <= 0 && c.msgT <= 0) { c.ambT = 22 + Math.random() * 15; say(c, AMBIENT[(Math.random() * 4) | 0], 3000); }
@@ -247,6 +264,20 @@ export function report(c) {
 }
 
 export function jump(c) { return playing(c) && jumpBody(c.body); }
+
+// ── chalk ────────────────────────────────────────────────────────────────────
+// Drawn here at once; the server is asked (manor:chalk) and everyone sees it.
+// Returns what to send, or null.
+export const canChalk = (c, now = Date.now()) => playing(c) && !inIntro(c, now) && chalkAt(c.env, c.body) != null;
+export function chalk(c, now = Date.now()) {
+  if (!playing(c) || inIntro(c, now)) return null;
+  const k = chalkAt(c.env, c.body);
+  if (k == null) { say(c, "Face a wall or a door to chalk it.", 1800); return null; }
+  const on = toggleMark(c.marks, k);
+  c.markPend = now + 800;
+  say(c, on ? "Chalked — your friends can see it too." : "Rubbed out.", 1600);
+  return { code: c.code, k, px: c.body.x, py: c.body.y };
+}
 
 // ── doors and lockers ────────────────────────────────────────────────────────
 // Bodies a door must not shut on: the ghosts, and everyone else still inside
@@ -368,9 +399,10 @@ export function viewState(c, now = Date.now()) {
   const scared = c.deadAt !== null && now - c.deadAt < SCARE_MS;
   return {
     mode: inIntro(c, now) ? "intro" : scared ? "dead" : "play",
-    introT: Math.max(0, (SHOW_MAP_MS - (now - c.startLocal)) / 1000),
+    introT: Math.max(0, (NOTE_MS - (now - c.startLocal)) / 1000),
     deadT: scared ? (now - c.deadAt) / 1000 : 0,
-    N: c.N, g: c.g, obst: c.obst, exitT: c.exitT, rooms: c.rooms, lamps: c.lamps, switches: c.env.switches,
+    N: c.N, g: c.g, obst: c.obst, exitT: c.exitT, rooms: c.rooms, lamps: c.lamps, switches: c.env.switches, marks: c.marks,
+    riddles: (c.riddles || []).map((q) => q.text), doors: c.env.doors,
     relics: mine, cells: c.cells, pulses: c.pulses, puffs: c.puffs, tm: c.tm, bodies: own ? c.bodies : [],
     // before the first word from the server there are no ghosts yet: a
     // stand-in far away keeps the danger glow and arrows quiet

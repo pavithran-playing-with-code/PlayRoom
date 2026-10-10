@@ -174,6 +174,16 @@ There is no test runner. What works:
   everyone else's car is eased toward that and drawn with the same effects.
   Laps follow the room clock (`lapsFor`). The score sync still decides the
   result.
+- **Nana's Lullaby** (slug `manor`) has no map, on purpose: the Entrance
+  Hall is the middle room of the bottom row with the front door in its
+  wall (`hallOf`, `frontDoor` in `manorCore.mjs`), a sign over every
+  doorway names the room beyond, Nana's note gives a riddle per key
+  (`RIDDLES`), and each key's music box is followed by ear (`tuneFor`:
+  louder by the walk, panned toward the next visible step). Chalk marks
+  are shared (`manor:chalk`). A side with every key is `loud` — she hears
+  them anywhere — and together the house goes dark (`huntNight`). Caught
+  online, you wake deep in the house (`house.respawn`), never by the door.
+  `check-manor.mjs` has a bot find every key by the tune alone.
 - **Sunshard Islands** is a 3D platformer (three.js r128, a lazy chunk):
   islands from `sunshardWorld.js`, rules in `sunshardSim.js`, drawing in
   `sunshardScene.js`. Each phone relays its explorer (`isl:pos`); together,

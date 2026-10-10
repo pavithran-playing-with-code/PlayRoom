@@ -239,11 +239,11 @@ export const GAMES = [
   },
   {
     slug: "manor", name: "Nana's Lullaby", icon: "👵",
-    blurb: "Nana hums as she walks the halls. Find the three keys — and when the humming stops, freeze.",
+    blurb: "No map. Follow the music boxes to Nana's keys — freeze when her humming stops, then run for the door.",
     minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--grape)",
     coopMax: 4, defaultDuration: 300, ownsSpectating: true,
     coopLabel: "everyone gets out, or nobody does",
-    coopNote: "You're all on one side: find every key and get out the front door together. When the humming stops — freeze.",
+    coopNote: "You're all on one side: chalk the walls, split up to follow the music boxes, then run for the front door together when the lights die.",
     Component: ManorGame,
   },
   {

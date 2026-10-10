@@ -11,11 +11,12 @@
 // rules; the two-thumb controls here are the same as there.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "../../utils/SocketContext";
-import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R, METRES_PER_TILE } from "../horror/manorRender";
+import { drawManor, lookBy, SPRINT_PX, STICK_R } from "../horror/manorRender";
+import { Riddles } from "../../pages/Manor";
 import { createManorAudio } from "../horror/manorAudio";
 import {
   createClient, applyTick, stepLocal, report, doAction, actionDone, actionLabel, playing, respawning, inIntro, timeLeft, sideOfMe,
-  watchedPlayer, cycleWatch, viewState, roomNameAt, isListening, nearestGhost,
+  watchedPlayer, cycleWatch, viewState, roomNameAt, isListening, nearestGhost, finaleNow, chalk, canChalk,
 } from "../horror/manorClient";
 import { useSideways, toGame } from "../horror/LandscapeGate";
 import { usePlayAgain } from "./PlayAgain";
@@ -61,16 +62,12 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       room: roomNameAt(c, playing(c) ? c.body : w || c.body),
       players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left })),
       playing: playing(c), silent: isListening(c),
+      // no map, no distances: Nana's riddles for your keys, and at the end, the run
+      riddles: (c.riddles || []).map((q) => ({ text: q.text, got: q.r.got })),
+      finale: finaleNow(c), chalk: canChalk(c, now),
       ...(() => {
-        // the nearest key of yours not found yet, and Nana: how far
-        const P = c.body, m = (d) => Math.round(d * METRES_PER_TILE);
-        const left = c.relics.filter((r) => !r.got && r.mine !== false).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y));
-        const k = left[0], G = nearestGhost(c, P), nd = G ? Math.hypot(G.x - P.x, G.y - P.y) : 99;
-        const door = { x: c.exitT.x + 0.5, y: c.exitT.y + 0.5 };
-        return {
-          goal: k ? `Next key: ${roomNameAt(c, k)} · ${m(Math.hypot(k.x - P.x, k.y - P.y))} m` : `The front door is open · ${m(Math.hypot(door.x - P.x, door.y - P.y))} m`,
-          open: !k, nana: m(nd), near: nd < 4, close: nd < 3, hiding: !!P.hiding,
-        };
+        const P = c.body, G = nearestGhost(c, P), nd = G ? Math.hypot(G.x - P.x, G.y - P.y) : 99;
+        return { close: nd < 3, hiding: !!P.hiding };
       })(),
     });
   }, []);
@@ -155,7 +152,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       const W = box ? box.clientWidth : window.innerWidth, H = box ? box.clientHeight : window.innerHeight;
       c.width = W * dpr; c.height = H * dpr;
       const safeTop = rootRef.current ? parseFloat(getComputedStyle(rootRef.current).paddingTop) || 0 : 0;
-      view.current = { W, H, dpr, safeTop, bigMap: view.current.bigMap };
+      view.current = { W, H, dpr, safeTop };
     };
     fit();
     window.addEventListener("resize", fit);
@@ -197,9 +194,13 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
         socket.emit("manor:me", report(c));
       }
 
-      // her lullaby: louder the nearer she is; nothing at all while she listens
+      // her lullaby: louder the nearer she is; nothing at all while she
+      // listens, or once she's stopped humming for good
       const G = nearestGhost(c, c.body);
-      audio.current.humming(!inIntro(c, now) && !c.over && !isListening(c), G ? Math.max(0, 1 - Math.hypot(c.body.x - G.x, c.body.y - G.y) / 18) : 0);
+      audio.current.humming(!inIntro(c, now) && !c.over && !isListening(c) && !c.hum.hunt, G ? Math.max(0, 1 - Math.hypot(c.body.x - G.x, c.body.y - G.y) / 18) : 0);
+      // the music box of your nearest key: louder the shorter the walk, from the way to go
+      const tn = playing(c) && !inIntro(c, now) && !c.over ? c.tune : null;
+      audio.current.tune(!!tn, tn ? tn.vol : 0, tn ? tn.pan : 0);
       drawManor(cv.getContext("2d"), viewState(c, now), view.current, ts / 1000, playing(c) ? stick.current : null);
       if (ts - lastHud > HUD_MS) { lastHud = ts; syncHud(); }
     };
@@ -213,6 +214,11 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     for (const s of r.sounds) audio.current.play(s);
     if (r.ask && socket) socket.emit("manor:use", r.ask);
     if (r.lamp && socket) socket.emit("manor:lamp", r.lamp);
+  }, [socket]);
+  // Chalk: the wall in front of you, for everyone to see
+  const doChalk = useCallback((c) => {
+    const ask = chalk(c);
+    if (ask) { audio.current.play({ name: "chalk" }); if (socket) socket.emit("manor:chalk", ask); }
   }, [socket]);
 
   // ── keyboard ───────────────────────────────────────────────────────────────
@@ -233,6 +239,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       if (k === "r") c.body.runOn = !c.body.runOn;
       if (k === "e") doUse(c);
       if (k === "f") c.body.light = !c.body.light;
+      if (k === "c") doChalk(c);
       syncHud();
     };
     const up = (e) => { keys.current[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; };
@@ -245,7 +252,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", blur);
     };
-  }, [socket, roomCode, syncHud, doUse]);
+  }, [socket, roomCode, syncHud, doUse, doChalk]);
 
   // ── thumbs: left moves, right looks ────────────────────────────────────────
   const onDown = (e) => {
@@ -254,10 +261,6 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     if (!c) return;
     if (inIntro(c)) { c.skipIntro = true; syncHud(); return; }
     const at = toGame(e, sideways.current);
-    // the map: tap it for the big one, tap again (anywhere) to close it
-    const v = view.current, m = mapRect(v);
-    if (v.bigMap) { v.bigMap = false; return; }
-    if (at.x >= m.x0 - 6 && at.y <= m.y0 + m.size + 18 && at.y >= m.y0 - 6) { v.bigMap = true; return; }
     if (!playing(c)) return;
     const cv = canvasRef.current;
     if (e.pointerType === "mouse" || at.x >= view.current.W * 0.5) {
@@ -332,8 +335,7 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
           </div>
           {h.playing && <div className="hm-bar stam"><i style={{ width: `${h.stam * 100}%` }} /></div>}
           {h.room && <div className="hm-room">{h.room}</div>}
-          {h.playing && <div className={`hm-goal${h.open ? " open" : ""}`}>{h.goal}</div>}
-          {h.playing && <div className={`hm-nanad${h.near ? " near" : ""}`}>Nana: {h.nana} m away</div>}
+          {h.playing && (h.finale ? <div className="hm-run">🏃 Run to the front door!</div> : <Riddles list={h.riddles} />)}
           <div className="hmx-who">
             {h.players.map((p) => (
               <span key={p.id} className={`hmx-p${p.alive ? "" : " dead"}`} style={{ "--c": p.color }}
@@ -362,7 +364,9 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
 
       {h && h.playing && !h.intro && (
         <div className="hm-pad">
-          {/* one button: Use — doors, hiding, a room's light switch */}
+          <button className={`hm-chalk${h.chalk ? " on" : ""}`} onPointerDown={press(doChalk)} aria-label="Chalk a mark on the wall"
+            title="Chalk a mark on the wall in front of you — your friends see it too">✏️</button>
+          {/* Use — doors, hiding, a room's light switch */}
           <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
           <button className={`hm-light${h.light ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}
             title="Your light. Off, and standing still in the dark, she loses you">{h.light ? "Light on" : "Light off"}</button>

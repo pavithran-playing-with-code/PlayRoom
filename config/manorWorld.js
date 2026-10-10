@@ -19,10 +19,16 @@
 //     ghosts, which stop to open it. Someone hiding is safe from the ghosts;
 //     one that watched them hide searches the spot a while, then gives up.
 //
-// A match ends the moment a side gets out (every key of theirs, then the far
-// gate) — they've won — or when the clock runs out, or once everyone has
+// There is no map: phones find keys by their music boxes, Nana's riddles and
+// the doorway signs, and chalk walls (manor:chalk — shared, the server keeps
+// the marks). A side that has every key of theirs is "loud": Nana hears them
+// move anywhere, any time — the run back to the front door. Together, the
+// whole house goes dark and she stops humming for good (huntNight).
+//
+// A match ends the moment a side gets out (every key of theirs, then the
+// front door) — they've won — or when the clock runs out, or once everyone has
 // left. Until then, being caught isn't the end: a scare, then back in at the
-// entrance RESPAWN_MS later, keeping the keys you'd found.
+// house RESPAWN_MS later (deep inside, not at the front door), keeping the keys you'd found.
 // Score = escapes × ESCAPE_POINTS + every key taken × 100.
 //
 // Modes (rooms.mode):
@@ -43,9 +49,9 @@ const { ESCAPE_POINTS } = require("./matchResult");
 const GAME = "manor";
 const TICK_MS = 100;
 const DT = TICK_MS / 1000;
-const INTRO_MS = 8000;                 // ghosts asleep while everyone memorises the map
+const INTRO_MS = 8000;                 // ghosts asleep while everyone reads Nana's note
 const KEEP_AFTER_MS = 120000;          // a finished house lingers for late hellos
-const RESPAWN_MS = 2400;               // caught: the scare, then back in at the entrance
+const RESPAWN_MS = 2400;               // caught: the scare, then back in, deep in the house
 const RELIC_POINTS = 100;
 const SNAP_AFTER = 4;                  // reports out of step before the phone is put back
 const USE_REACH = 2.2;                 // a door or locker this near (tile centre) is in reach: a step, plus lag
@@ -110,7 +116,7 @@ function buildWorld(room, seats, elapsedMs) {
     const saved = parseSaved(p.game_state);
     players.set(id, {
       id, name: p.username, avatar: p.avatar, side: side.key, color: side.color,
-      x: house.spawn.x, y: house.spawn.y, fa: 0, jz: 0, cr: 0, lit: true, noiseR: 0, hiding: null,
+      x: house.spawn.x, y: house.spawn.y, fa: house.spawn.fa, jz: 0, cr: 0, lit: true, noiseR: 0, hiding: null,
       at: 0, alive: !(saved && saved.left), left: !!(saved && saved.left), respawnAt: 0,
       caught: (saved && saved.caught) || 0,
     });
@@ -124,7 +130,7 @@ function buildWorld(room, seats, elapsedMs) {
     code: room.room_code, roomId: room.id, mode, seed: room.seed,
     startMs: Date.now() - elapsedMs, durMs: room.duration_seconds * 1000,
     house, env: { g: house.g, N: house.N, obst: house.obst, doors: new Set(house.doors), switches: core.lampSwitches(house.g, house.N, new Set(house.doors), house.exitT) },
-    sides, players, pulses: [], over: false, reason: null,
+    sides, players, pulses: [], marks: [], over: false, reason: null,
     events: [], timer: null, lastScores: new Map(),
   };
   return w;
@@ -211,9 +217,10 @@ async function saveScores(w, force = false) {
 const ev = (w, e) => w.events.push(e);
 const sideOf = (w, p) => w.sides.find((s) => s.key === p.side);
 const living = (w) => [...w.players.values()].filter((p) => p.alive && !p.left);
-const toSpawn = (w, p) => { p.x = w.house.spawn.x; p.y = w.house.spawn.y; p.fa = 0; p.at = 0; p.hiding = null; };
+// caught: back in deep in the house (house.respawn), not by the front door
+const toSpawn = (w, p, at = w.house.respawn) => { p.x = at.x; p.y = at.y; p.fa = at.fa; p.at = 0; p.hiding = null; };
 
-// Out of it for now. Caught by a ghost: back in at the entrance shortly.
+// Out of it for now. Caught by a ghost: back in shortly, deep in the house.
 // Left (the Leave button, or the room's leave): out for good — and once
 // everyone has left, the match is over.
 function kill(w, id, cause) {
@@ -260,8 +267,10 @@ function tick(w) {
   }
 
   // the just-back-in are left alone a moment; a lit room shows you like your own light
+  // ...and a side with every key is loud: she hears them move, anywhere
   const targets = living(w).filter((p) => !(p.graceUntil > now)).map((p) => ({
     id: p.id, x: p.x, y: p.y, lit: p.lit || core.lampOn(w.house.lamps, w.house.N, p.x, p.y), cr: p.cr, noiseR: p.noiseR, hid: p.hiding,
+    loud: !!sideOf(w, p).open,
   }));
   if (awake) {
     w.house.ghosts.forEach((G, gi) => {
@@ -273,7 +282,7 @@ function tick(w) {
       }, w.house.hum);
       if (caught != null && !w.over) {
         kill(w, caught, "ghost");
-        // it has had its prey: off it goes, and the entrance isn't camped
+        // it has had its prey: off it goes, and where you wake up isn't camped
         G.st = "patrol"; G.prey = null; G.stun = 2;
         core.ghostPatrol(G, w.env, w.house.rand);
       }
@@ -283,15 +292,15 @@ function tick(w) {
     core.stepLamps(w.house.lamps, w.house.N, w.house.ghosts, (room) => ev(w, { type: "lampOut", room }));
   }
   // the caught come back in — with her sent off to the far side of the house
-  // if she's anywhere near the entrance, and a moment's grace
+  // if she's anywhere near where they wake, and a moment's grace
   for (const p of w.players.values()) {
     if (p.alive || p.left || !p.respawnAt || now < p.respawnAt) continue;
     p.alive = true;
     p.respawnAt = 0;
     toSpawn(w, p);
     p.graceUntil = now + core.GRACE_S * 1000;
-    for (const G of w.house.ghosts) if (Math.hypot(G.x - p.x, G.y - p.y) < 14) core.sendAway(G, w.env, w.house.spawn, w.house.rand);
-    ev(w, { type: "respawn", id: p.id, x: p.x, y: p.y, why: "caught" });
+    for (const G of w.house.ghosts) if (Math.hypot(G.x - p.x, G.y - p.y) < 14) core.sendAway(G, w.env, w.house.respawn, w.house.rand);
+    ev(w, { type: "respawn", id: p.id, x: p.x, y: p.y, fa: p.fa, why: "caught" });
   }
 
   let scored = false;
@@ -305,11 +314,19 @@ function tick(w) {
       side.total++;
       scored = true;
       ev(w, { type: "relic", i, id: p.id, side: side.key, got: side.got, need: side.need });
-      // taking one is heard: every ghost not already hunting comes to look
-      for (const G of w.house.ghosts) {
-        if (G.st !== "hunt" && Math.hypot(G.x - p.x, G.y - p.y) < 14) { G.st = "search"; G.wait = 0; core.ghostTarget(G, w.env, p.x | 0, p.y | 0); }
+      // the music box stops, and she notices: the nearest ghost not already
+      // hunting comes to look, wherever it is
+      const free = w.house.ghosts.filter((G) => G.st !== "hunt").sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+      if (free) { free.st = "search"; free.wait = 0; core.ghostTarget(free, w.env, p.x | 0, p.y | 0); }
+      if (side.got >= side.need && !side.open) {
+        side.open = true;
+        // together (one side), the whole house: the lights die and she stops
+        // humming for good. Against others, only this side is loud.
+        const all = w.sides.length === 1;
+        if (all) { core.huntNight(w.house.hum); w.house.lamps.fill(0); }
+        for (const G of w.house.ghosts) G.stun = Math.max(G.stun, 2);
+        ev(w, { type: "open", side: side.key, all: all ? 1 : 0 });
       }
-      if (side.got >= side.need && !side.open) { side.open = true; ev(w, { type: "open", side: side.key }); }
     }
     for (let i = 0; i < w.house.batts.length; i++) {
       const b = w.house.batts[i];
@@ -341,8 +358,9 @@ function broadcast(w, now) {
     b: w.house.batts.map((b) => (b.got ? 1 : 0)).join(""),
     s: w.sides.map((s) => [s.key, s.got, s.open ? 1 : 0, s.escapes, s.total, scoreOf(s)]),
     m: w.pulses.map((q) => [r2(q.x), r2(q.y), r2(q.t)]),
-    // the lullaby: [humming?, seconds till it changes, seconds since it did]
-    h: [w.house.hum.on ? 1 : 0, r2(w.house.hum.t), r2(w.house.hum.since)],
+    // the lullaby: [humming?, seconds till it changes, seconds since it did, hunting (no more humming)?]
+    h: [w.house.hum.on ? 1 : 0, r2(Math.min(w.house.hum.t, 999)), r2(w.house.hum.since), w.house.hum.hunt ? 1 : 0],
+    k: w.marks,                                // chalk marks: wall and door tiles
     l: w.house.lamps.join(""),                 // the rooms' lights
     e: w.events,
   });
@@ -401,7 +419,7 @@ function initFor(w, uid, role) {
       rooms: w.house.rooms,
       relics: w.house.relics.map((r) => [r.x, r.y, r.side, r.got ? 1 : 0]),
       batts: w.house.batts.map((b) => [b.x, b.y, b.got ? 1 : 0]),
-      spawn: w.house.spawn, lamps: w.house.lamps,
+      spawn: w.house.spawn, lamps: w.house.lamps, marks: w.marks,
     },
     sides: w.sides.map((s) => ({ key: s.key, name: s.name, color: s.color, need: s.need, got: s.got, open: s.open,
       escapes: s.escapes, total: s.total, score: scoreOf(s), members: s.members.map(Number) })),
@@ -410,7 +428,7 @@ function initFor(w, uid, role) {
       x: p.x, y: p.y, fa: p.fa, alive: p.alive, left: p.left, caught: p.caught,
     })),
     respawnMs: RESPAWN_MS,
-    hum: [w.house.hum.on ? 1 : 0, w.house.hum.t, w.house.hum.since],
+    hum: [w.house.hum.on ? 1 : 0, Math.min(w.house.hum.t, 999), w.house.hum.since, w.house.hum.hunt ? 1 : 0],
     over: w.over ? standings(w) : null,
   };
 }
@@ -513,6 +531,26 @@ function attach(server) {
       if (Math.hypot(wx - fx, wy - fy) > USE_REACH + 0.6) return;
       w.house.lamps[room] = w.house.lamps[room] ? 0 : 1;
       ev(w, { type: "lamp", room, on: w.house.lamps[room], id: uid });
+    });
+
+    // Chalk: { code, k, px, py } — mark (or rub out) a wall or door tile in
+    // reach. Everyone sees the marks in the next tick.
+    socket.on("manor:chalk", (m) => {
+      if (!m || typeof m.code !== "string") return;
+      const w = worlds.get(m.code.toUpperCase());
+      if (!w || w.over) return;
+      const p = w.players.get(uid);
+      if (!p || !p.alive || p.hiding) return;
+      const N = w.house.N, k = Number(m.k);
+      if (!Number.isInteger(k) || k < 0 || k >= N * N) return;
+      const tx = k % N, ty = Math.floor(k / N), v = w.house.g[ty][tx];
+      if (v !== core.WALL && v !== core.DOOR && !w.env.doors.has(k)) return;
+      let fx = p.x, fy = p.y;
+      const px = num(m.px, 0, N), py = num(m.py, 0, N);
+      if (px != null && py != null && Math.hypot(px - p.x, py - p.y) <= core.MAX_SPEED + 0.6) { fx = px; fy = py; }
+      if (Math.hypot(tx + 0.5 - fx, ty + 0.5 - fy) > USE_REACH) return;
+      const on = core.toggleMark(w.marks, k);
+      ev(w, { type: "chalk", k, on: on ? 1 : 0, id: uid });
     });
 
     // Use: { code, act: open | close | hide | out, x, y }. Only the tile in

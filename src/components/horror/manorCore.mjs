@@ -33,10 +33,10 @@ export const spotKind = (x, y) => SPOT_KINDS[(x * 7 + y * 13) % 3];
 
 export const SNIFF_S = 3;              // a ghost that saw you hide searches the spot this long, then gives up
 
-// Rooms have names, and each its own wall colour, so the map gives
-// directions ("through the Library to the Chapel") and you can tell where you
-// are by looking. The first room is always the Entrance Hall.
-// [name, short name for the map, wall colour]
+// Rooms have names, and each its own wall colour, so you can tell where you
+// are by looking — there is no map. A sign over every doorway names the room
+// beyond it. The hall the front door opens into is always the Entrance Hall.
+// [name, short name, wall colour]
 export const ROOM_KINDS = [
   ["Entrance Hall", "Hall", [120, 92, 66]],
   ["Kitchen", "Kitchen", [150, 140, 120]],
@@ -65,10 +65,60 @@ export const ROOM_KINDS = [
   ["Servants' Hall", "Servants", [104, 92, 84]],
 ];
 
+// Nana's riddles: one per kind of room, in ROOM_KINDS order. Her note
+// gives you one for each key, and the riddle names the room in a roundabout
+// way — the signs over the doorways do the rest.
+export const RIDDLES = [
+  "where every visitor first wipes their feet",
+  "where the kettle sings and the bread is kept warm",
+  "where a thousand pages whisper in the dark",
+  "where the candles pray and the pews creak",
+  "where the cradle still rocks with nobody in it",
+  "where the ink dried on letters never sent",
+  "where the dancers stopped, but the floor remembers",
+  "down where the coal sleeps and the damp drips",
+  "where the long table is laid for guests who never came",
+  "under the pillow where I said my prayers",
+  "where the tap drips and the mirror fogs",
+  "where the faces in the frames follow you",
+  "where the good chairs wait for Sunday visitors",
+  "up where the trunks keep their secrets",
+  "where the piano sleeps under its sheet",
+  "where the jam jars stand in rows",
+  "where the old swords hang on hooks",
+  "where the ferns grow tall behind the glass",
+  "where the sheets hang and the soap smells sweet",
+  "where the stone lids lie heavy",
+  "where the dolls sit in a circle, waiting",
+  "where the spare bed is always made",
+  "where the saws and hammers rest",
+  "where the bottles lie on their sides, dreaming",
+  "where the servants ate their supper standing",
+];
+
+// The Entrance Hall: the middle room of the bottom row. The front door is in
+// its outer wall, and every night starts and ends there.
+export const hallOf = (RN) => ({ i: RN >> 1, j: RN - 1 });
+export const hallRoom = (RN) => (RN - 1) * RN + (RN >> 1);
+// The front door: the middle of the hall's bottom wall. You come in through
+// it facing up the house (north), and you leave through it.
+export const NORTH = -Math.PI / 2;
+export function frontDoor(N) {
+  const RN = (N - 1) / ROOM;
+  return { x: 1 + ROOM * hallOf(RN).i + 3, y: N - 1 };
+}
+// Just inside it, facing in.
+export function spawnOf(N) {
+  const d = frontDoor(N);
+  return { x: d.x + 0.5, y: N - 2.5, fa: NORTH };
+}
+
 // rooms[k] (k = j·RN + i, the room in column i, row j) -> an index into ROOM_KINDS
 export function nameRooms(RN, rand) {
   const rest = shuffle(ROOM_KINDS.map((_, i) => i).slice(1), rand);
-  return Array.from({ length: RN * RN }, (_, k) => (k === 0 ? 0 : rest[(k - 1) % rest.length]));
+  const hall = hallRoom(RN);
+  let n = 0;
+  return Array.from({ length: RN * RN }, (_, k) => (k === hall ? 0 : rest[n++ % rest.length]));
 }
 // Which room a point is in (walls belong to the room on the low side).
 export function roomAt(N, x, y) {
@@ -92,13 +142,14 @@ export function shuffle(arr, rand) {
 }
 
 // ── the house ────────────────────────────────────────────────────────────────
-// Rooms, not a maze: a grid of 7×7 rooms (8 tiles apart, walls shared), each
-// joined to its neighbours by a one-tile doorway. A random tree of doorways
-// makes every room reachable; extra ones make loops to run round. About half
-// the doorways have a door, starting shut. Each room gets a block or two of
-// furniture (never in front of a doorway) and a hiding spot or two — a
-// table, a bed or a wardrobe standing in the room. Barricades go only in
-// open doorways.
+// Rooms, not a maze, and a house you can learn without a map: a grid of 7×7
+// rooms (8 tiles apart, walls shared) with the Entrance Hall in the middle
+// of the bottom row. The hall opens onto every room beside it; from there a
+// random tree of doorways reaches the rest, and a few extra ones make loops
+// to run round. About half the doorways have a door, starting shut. Each
+// room gets a block or two of furniture (never in front of a doorway) and a
+// hiding spot or two — a table, a bed or a wardrobe standing in the room.
+// The floor just inside the front door stays clear.
 //
 // N must be 1 + 8·rooms-per-side. Returns { g, doors, gaps, spots }:
 // doors and gaps are tile indices (y·N + x), spots are [x, y].
@@ -115,9 +166,18 @@ export function genHouse(N, rand) {
       for (let y = 1 + ROOM * j; y < ROOM + ROOM * j; y++) for (let x = 1 + ROOM * i; x < ROOM + ROOM * i; x++) g[y][x] = FLOOR;
     }
 
-    // which rooms join: a spanning tree, then some extra links for loops
-    const seen = new Set(["0,0"]), st = [[0, 0]], links = [], linked = new Set();
+    // which rooms join: the hall to every room beside it, a spanning tree
+    // out from there, then a few extra links for loops
+    const H = hallOf(RN);
+    const seen = new Set([`${H.i},${H.j}`]), st = [], links = [], linked = new Set();
     const link = (i, j, a, b) => { links.push([i, j, a, b]); linked.add(`${i},${j},${a},${b}`); linked.add(`${a},${b},${i},${j}`); };
+    for (const [a, b] of D4) {
+      const ni = H.i + a, nj = H.j + b;
+      if (ni < 0 || nj < 0 || ni >= RN || nj >= RN) continue;
+      seen.add(`${ni},${nj}`);
+      link(H.i, H.j, ni, nj);
+      st.push([ni, nj]);
+    }
     while (st.length) {
       const [i, j] = st[st.length - 1];
       const nb = shuffle(D4.map(([a, b]) => [i + a, j + b]), rand)
@@ -128,14 +188,17 @@ export function genHouse(N, rand) {
       link(i, j, a, b);
       st.push([a, b]);
     }
-    for (let k = 0; k < (RN * RN) / 2; k++) {
+    for (let k = 0; k < (RN * RN) / 3; k++) {
       const i = (rand() * RN) | 0, j = (rand() * RN) | 0, [a, b] = D4[(rand() * 4) | 0], ni = i + a, nj = j + b;
       if (ni < 0 || nj < 0 || ni >= RN || nj >= RN || linked.has(`${i},${j},${ni},${nj}`)) continue;
       link(i, j, ni, nj);
     }
 
-    // a doorway for each link; the floor either side of it stays clear
+    // a doorway for each link; the floor either side of it stays clear, and
+    // so does the floor inside the front door
     const clear = new Set();
+    const door = frontDoor(N);
+    for (let y = N - 4; y < N - 1; y++) for (let x = door.x - 1; x <= door.x + 1; x++) clear.add(y * N + x);
     for (const [i, j, a, b] of links) {
       const o = 1 + ((rand() * 5) | 0);
       let x, y;
@@ -151,7 +214,7 @@ export function genHouse(N, rand) {
         const n = 1 + ((rand() * 2) | 0);
         for (let k = 0; k < n; k++) {
           const x = 2 + ROOM * i + ((rand() * 5) | 0), y = 2 + ROOM * j + ((rand() * 5) | 0);
-          if (!clear.has(y * N + x) && !(x < 4 && y < 4)) g[y][x] = WALL;
+          if (!clear.has(y * N + x)) g[y][x] = WALL;
         }
       }
     }
@@ -159,10 +222,10 @@ export function genHouse(N, rand) {
     // hiding spots: furniture standing in the room, with floor around it,
     // never in front of a doorway or in the first corner
     for (let j = 0; j < RN; j++) for (let i = 0; i < RN; i++) {
-      const want = j === 0 && i === 0 ? 1 : 2;
+      const want = i === H.i && j === H.j ? 1 : 2;
       for (let k = 0, put = 0; k < 8 && put < want; k++) {
         const x = 2 + ROOM * i + ((rand() * 5) | 0), y = 2 + ROOM * j + ((rand() * 5) | 0);
-        if (clear.has(y * N + x) || (x < 4 && y < 4) || g[y][x] !== FLOOR) continue;
+        if (clear.has(y * N + x) || g[y][x] !== FLOOR) continue;
         // floor all round it, corners too: two pieces touching at a corner
         // leave a gap you can see but can't fit through
         let boxed = false;
@@ -174,9 +237,9 @@ export function genHouse(N, rand) {
       }
     }
 
-    // every floor tile must be reachable from the start (furniture can wall a
-    // corner off); if not, deal again
-    const d = dmap(g, N, 1, 1);
+    // every floor tile must be reachable from the front door (furniture can
+    // wall a corner off); if not, deal again
+    const d = dmap(g, N, door.x, N - 2);
     let ok = true;
     for (let y = 0; y < N && ok; y++) for (let x = 0; x < N; x++) if (g[y][x] === FLOOR && d[x + y * N] < 0) { ok = false; break; }
     if (ok || tries >= 39) return { g, doors, gaps, spots };
@@ -308,7 +371,7 @@ export function jumpBody(p) {
 export function stepBody(p, env, inp, dt, emit) {
   let ix = inp.ix || 0, iy = inp.iy || 0;
   p.fa += (inp.turn || 0) * 2.4 * dt;
-  if (p.entering) { ix = 0; iy = -1; p.fa = 0; }
+  if (p.entering) { ix = 0; iy = -1; p.fa = NORTH; }     // in through the front door
   if (p.hiding) { ix = 0; iy = 0; }
   const m = Math.hypot(ix, iy);
   if (m > 1) { ix /= m; iy /= m; }
@@ -422,10 +485,16 @@ export const LISTEN_GRACE = 0.7;       // the start of a silence: time to stop m
 export const HEAR_R = 24;              // in the silence she hears a step almost anywhere in the house
 export const FIRST_HUM_S = 10;
 
-export function newHum(rand) { return { on: true, t: FIRST_HUM_S + rand() * 3, since: 0 }; }
+export function newHum(rand) { return { on: true, t: FIRST_HUM_S + rand() * 3, since: 0, hunt: false }; }
+// Every key found, together (or alone): she stops humming for good, and
+// hunts. No more humming to move under and no silences to freeze in — she
+// hears anyone moving (see `loud` in stepGhost) and the run to the front door
+// is on.
+export function huntNight(H) { H.hunt = true; H.on = false; H.t = 1e9; H.since = 0; }
 // Advance the lullaby. Returns "hum" or "listen" when it changes, else null.
 export function stepHum(H, dt, rand) {
   H.since += dt;
+  if (H.hunt) return null;
   H.t -= dt;
   if (H.t > 0) return null;
   H.on = !H.on;
@@ -434,8 +503,11 @@ export function stepHum(H, dt, rand) {
   H.t = lo + rand() * (hi - lo);
   return H.on ? "hum" : "listen";
 }
-export const listeningNow = (H) => !!H && !H.on;
-export const hearingNow = (H) => !!H && !H.on && H.since >= LISTEN_GRACE;
+export const listeningNow = (H) => !!H && !H.on && !H.hunt;
+export const hearingNow = (H) => !!H && !H.on && !H.hunt && H.since >= LISTEN_GRACE;
+// Walls muffle: in the silence she hears a step anywhere in sight up to
+// HEAR_R, but through walls only half as far.
+export const hearReach = (env, G, t) => (los(env.g, G.x, G.y, t.x, t.y) ? HEAR_R : HEAR_R / 2);
 
 // ── the thing ────────────────────────────────────────────────────────────────
 // A ghost patrols, hears noise, and hunts anyone it can see. On first sight it
@@ -531,22 +603,25 @@ export function ghostSpeed(G, hustle = 0) {
 }
 
 // One step of one ghost. `targets`: the living, [{ id, x, y, lit, cr, noiseR,
-// hid }] — `hid` is the body's `hiding` while it is in a locker. `hum`: the
-// house's lullaby (newHum); while she listens she stands still, and whoever
-// moves in the silence she hears ("heard").
+// hid, loud }] — `hid` is the body's `hiding` while it is in a locker, `loud`
+// that their keys are all found and she's after them: she hears them move
+// anywhere, any time. `hum`: the house's lullaby (newHum); while she listens
+// she stands still, and whoever moves in the silence she hears ("heard").
 // `emit(name, extra)` hears "spotted", "lost", "door" ({ x, y }: it opened
 // one) and "gaveup" ({ id }: it searched a hiding spot and found nothing).
 // Returns the id of whoever it caught this step, or null.
 export function stepGhost(G, env, targets, dt, rand, hustle, emit, hum = null) {
   if (G.stun > 0) G.stun -= dt;
 
-  // the silence: a step anywhere near and she knows where you are
-  if (hearingNow(hum)) {
+  // the silence: a step anywhere near and she knows where you are. And
+  // anyone with every key found, she hears whenever they move.
+  {
+    const silence = hearingNow(hum);
     let heard = null, hd = Infinity;
     for (const t of targets) {
-      if (t.hid || !(t.noiseR > 0)) continue;
+      if (t.hid || !(t.noiseR > 0) || !(silence || t.loud)) continue;
       const d = Math.hypot(t.x - G.x, t.y - G.y);
-      if (d < HEAR_R && d < hd) { heard = t; hd = d; }
+      if ((t.loud || d < hearReach(env, G, t)) && d < hd) { heard = t; hd = d; }
     }
     if (heard) {
       if (G.st !== "hunt" || G.prey !== heard.id) emit("heard", { id: heard.id });
@@ -647,19 +722,90 @@ export function stepGhost(G, env, targets, dt, rand, hustle, emit, hum = null) {
   return null;
 }
 
+// ── keys in music boxes ──────────────────────────────────────────────────────
+// Each key sits in a music box that plays while it's there. You find it by
+// ear: the tune is louder the shorter the walk to it (the way round, through
+// doorways, not through walls) and comes from the way to go.
+//
+// fieldOf: walking distance from a relic to every tile (dmap). tuneAt: from
+// (x, y) along that field — how far, and a point a few steps along the way,
+// never past what you can see from where you stand (`g`): so the tune turns
+// at a doorway instead of calling you through the wall beside it.
+export const fieldOf = (g, N, r) => dmap(g, N, r.x | 0, r.y | 0);
+export const TUNE_R = 40;              // the walk over which it fades; further than this it's only just there
+export function tuneAt(dm, N, x, y, g = null) {
+  let cx = x | 0, cy = y | 0;
+  const d = dm[cx + cy * N];
+  if (d < 0) return null;
+  for (let k = 0; k < 4; k++) {
+    let best = null, bd = dm[cx + cy * N];
+    for (const [a, b] of D4) {
+      const nd = dm[(cx + a) + (cy + b) * N];
+      if (nd >= 0 && nd < bd) { bd = nd; best = [cx + a, cy + b]; }
+    }
+    if (!best) break;
+    // the first step always (it may be a shut door); after that, only in sight
+    if (k > 0 && g && (g[best[1]][best[0]] || !los(g, x, y, best[0] + 0.5, best[1] + 0.5))) break;
+    [cx, cy] = best;
+  }
+  return { d, x: cx + 0.5, y: cy + 0.5 };
+}
+// The tune to play for a body: the nearest unfound key of theirs, by walk.
+// `fields[i]` for `relics[i]`; `mine(r)` says which are theirs; `g`, the
+// house as it is now (for what's in sight).
+// Returns { i, vol 0..1, pan -1..1 } or null.
+export function tuneFor(fields, relics, N, P, mine = () => true, g = null) {
+  let best = null;
+  relics.forEach((r, i) => {
+    if (r.got || !mine(r) || !fields[i]) return;
+    const w = tuneAt(fields[i], N, P.x, P.y, g);
+    if (w && (!best || w.d < best.w.d)) best = { i, w };
+  });
+  if (!best) return null;
+  const { w } = best;
+  const a = Math.atan2(w.y - P.y, w.x - P.x) - P.fa;
+  // never quite silent: always something to follow, however far
+  return { i: best.i, vol: Math.max(0.04, Math.pow(1 - Math.min(w.d, TUNE_R) / TUNE_R, 1.6)), pan: w.d < 1 ? 0 : Math.sin(Math.atan2(Math.sin(a), Math.cos(a))) };
+}
+
+// ── chalk ────────────────────────────────────────────────────────────────────
+// Mark a wall or a door ("been here"). Shared online. The mark is on the tile,
+// so it shows on every face of it. MARKS_MAX: the oldest goes past this.
+export const MARKS_MAX = 40;
+export function chalkAt(env, p) {
+  if (p.hiding || p.entering) return null;
+  for (const reach of [0.9, 1.5]) {
+    const tx = (p.x + Math.cos(p.fa) * reach) | 0, ty = (p.y + Math.sin(p.fa) * reach) | 0;
+    const row = env.g[ty];
+    if (!row || tx < 0 || tx >= env.N) return null;
+    const v = row[tx];
+    if (v === WALL || v === DOOR) return ty * env.N + tx;
+    if (v === SPOT) return null;
+  }
+  return null;
+}
+export function toggleMark(marks, k) {
+  const i = marks.indexOf(k);
+  if (i >= 0) { marks.splice(i, 1); return false; }
+  marks.push(k);
+  if (marks.length > MARKS_MAX) marks.shift();
+  return true;
+}
+
 // ── a house for a room ───────────────────────────────────────────────────────
-// Everyone starts in the first room; the gate you came in by is already shut.
+// Everyone starts in the Entrance Hall, just inside the front door — the way
+// in, and the way out.
 //
 // sides: [{ key, need }] — whose relics are whose. Relics are dealt out so
 // every side's set sits at a similar spread of distances from the start:
 // sorted by distance, then dealt in snake order (1,2,3,3,2,1,…), so nobody
 // gets all the near ones.
 
-// The house grows with the crowd, but stays small enough to learn: 3×3
-// rooms for up to three, 4×4 up to six, 5×5 for more.
+// Small enough to learn without a map: 3×3 rooms (the hall and eight more),
+// 4×4 for seven or more.
 export function sizeFor(players) {
   const n = Math.max(1, players);
-  return houseSize(n <= 3 ? 3 : n <= 6 ? 4 : 5);
+  return houseSize(n <= 6 ? 3 : 4);
 }
 export const ghostsFor = (players) => (players >= 7 ? 3 : players >= 4 ? 2 : 1);
 
@@ -668,25 +814,28 @@ export function buildHouse(seed, { players, sides }) {
   const N = sizeFor(players);
   const { g, doors, gaps, spots: hideSpots } = genHouse(N, rand);
   const doorways = new Set([...doors, ...gaps]);
-  const d0 = dmap(g, N, 1, 1);
+  const exitT = frontDoor(N), spawn = spawnOf(N);
+  const d0 = dmap(g, N, exitT.x, N - 2);
   const cells = shuffle(roomFloors(g, N, doorways), rand);
-  const { exitT } = farGate(g, N, d0, cells);
-  g[exitT.y][exitT.x] = WALL;
-  const rooms = nameRooms((N - 1) / ROOM, rand);
-  const taken = new Set(["1,1", "2,1", "1,2"]);
+  const RN = (N - 1) / ROOM, hall = hallRoom(RN);
+  const rooms = nameRooms(RN, rand);
+  const taken = new Set();
   const key = (c) => `${c[0]},${c[1]}`;
 
-  // Relic spots: far enough in, not beside the gate, as spread out as the
-  // count allows.
+  // Relic spots: never in the hall, far enough in, one room each while
+  // there are rooms to go round, and as spread out as the count allows.
   const total = sides.reduce((a, s) => a + s.need, 0);
-  const ok = (c) => d0[c[0] + c[1] * N] >= 10 && Math.hypot(c[0] - exitT.x, c[1] - exitT.y) >= 5;
+  const perRoom = Math.max(1, Math.ceil(total / (RN * RN - 1)));
+  const ok = (c) => d0[c[0] + c[1] * N] >= 8 && roomAt(N, c[0] + 0.5, c[1] + 0.5) !== hall;
   let spots = [];
-  for (let gap = 7; gap >= 1 && spots.length < total; gap--) {
+  for (let gap = 5; gap >= 0 && spots.length < total; gap--) {
     spots = [];
+    const inRoom = new Map();
     for (const c of cells) {
       if (spots.length >= total) break;
-      if (!ok(c) || taken.has(key(c))) continue;
-      if (spots.every((o) => Math.hypot(o[0] - c[0], o[1] - c[1]) > gap)) spots.push(c);
+      const rm = roomAt(N, c[0] + 0.5, c[1] + 0.5);
+      if (!ok(c) || taken.has(key(c)) || (inRoom.get(rm) || 0) >= perRoom) continue;
+      if (spots.every((o) => Math.hypot(o[0] - c[0], o[1] - c[1]) > gap)) { spots.push(c); inRoom.set(rm, (inRoom.get(rm) || 0) + 1); }
     }
   }
   spots.sort((a, b) => d0[a[0] + a[1] * N] - d0[b[0] + b[1] * N]);
@@ -720,10 +869,12 @@ export function buildHouse(seed, { players, sides }) {
   const obst = {};
   void gapObstacles;
 
-  // Ghosts start deep in, apart from each other.
+  // Ghosts start deep in (the furthest third of the house from the front
+  // door), apart from each other.
   const ghosts = [];
   const nG = ghostsFor(players);
-  const deep = cells.filter((c) => d0[c[0] + c[1] * N] > N * 0.8);
+  const byDepth = cells.filter((c) => roomAt(N, c[0] + 0.5, c[1] + 0.5) !== hall).sort((a, b) => d0[b[0] + b[1] * N] - d0[a[0] + a[1] * N]);
+  const deep = byDepth.slice(0, Math.max(4, Math.floor(byDepth.length / 3)));
   for (const c of deep) {
     if (ghosts.length >= nG) break;
     if (ghosts.every((o) => Math.hypot(o.x - c[0], o.y - c[1]) > N / 3)) ghosts.push(newGhost(c[0] + 0.5, c[1] + 0.5));
@@ -733,10 +884,16 @@ export function buildHouse(seed, { players, sides }) {
     ghosts.push(newGhost(c[0] + 0.5, c[1] + 0.5));
   }
 
+  // Caught, you wake up deep in the house — never back beside the front
+  // door, or being caught would be the quickest way out.
+  const deepest = byDepth.find((c) => canAt(g, c[0] + 0.5, c[1] + 0.5)) || [spawn.x | 0, spawn.y | 0];
+  const respawn = { x: deepest[0] + 0.5, y: deepest[1] + 0.5, fa: Math.atan2(spawn.y - deepest[1], spawn.x - deepest[0]) };
+
+  g[exitT.y][exitT.x] = WALL;           // the front door, shut behind everyone
   return {
     N, g, exitT, relics, batts, obst, ghosts, doors,
     spots: hideSpots, rooms,
-    spawn: { x: 1.5, y: 1.5 }, rand,
+    spawn, respawn, rand,
     hum: newHum(rand), lamps: new Array(lampCount(N)).fill(0),
   };
 }

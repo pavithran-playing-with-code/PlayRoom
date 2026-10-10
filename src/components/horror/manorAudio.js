@@ -1,7 +1,9 @@
 // src/components/horror/manorAudio.js
 // The sounds of NANA'S LULLABY, all synthesised — no files. Over everything,
 // when she is humming, her lullaby (Brahms', in a thin old voice that wavers
-// off the note), louder the nearer she is; it stops dead when she listens. A low drone runs
+// off the note), louder the nearer she is; it stops dead when she listens.
+// The music box of the key you're nearest, by the walk there: a tinkling
+// waltz, louder the closer you get, from the way to go. A low drone runs
 // underneath; everything else is a short tone or a burst of noise, played for
 // the events manorSim pushes. The tones are the original page's, unchanged.
 //
@@ -106,6 +108,44 @@ export function createManorAudio() {
     }
   }
 
+  // ── the music box ──
+  // A little waltz in a minor key, plucked high and bright, looping. tune()
+  // is called every frame with how loud (by the walk to the key) and which
+  // side (the way to go): it fades in and out and pans smoothly.
+  const BOX = [81, 76, 72, 76, 81, 83, 84, 83, 81, 76, 77, 76, 74, 71, 72, 0];
+  const BOX_S = 0.3;
+  let boxOn = false, boxI = 0, boxGain = null, boxPan = null, boxTimer = null;
+  function boxNote() {
+    boxTimer = null;
+    if (!boxOn || !AC) return;
+    const n = BOX[boxI++ % BOX.length], t = AC.currentTime;
+    if (n) {
+      const f = 440 * Math.pow(2, (n - 69) / 12);
+      for (const [mul, amp, dur] of [[1, 0.5, 0.9], [2.01, 0.18, 0.35], [3, 0.06, 0.2]]) {
+        const o = AC.createOscillator(), v = AC.createGain();
+        o.type = "sine"; o.frequency.value = f * mul;
+        v.gain.setValueAtTime(0.0001, t);
+        v.gain.exponentialRampToValueAtTime(amp, t + 0.006);
+        v.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(v); v.connect(boxGain);
+        o.start(t); o.stop(t + dur + 0.05);
+      }
+    }
+    boxTimer = setTimeout(boxNote, BOX_S * 1000 * (boxI % 8 === 0 ? 1.5 : 1));
+  }
+  function tune(on, vol = 0, pan = 0) {
+    if (!AC) return;
+    if (!boxGain) {
+      boxGain = AC.createGain(); boxGain.gain.value = 0;
+      if (AC.createStereoPanner) { boxPan = AC.createStereoPanner(); boxGain.connect(boxPan); boxPan.connect(mg); }
+      else boxGain.connect(mg);
+    }
+    boxGain.gain.setTargetAtTime(on ? 0.03 + vol * 0.32 : 0, AC.currentTime, 0.3);
+    if (boxPan) boxPan.pan.setTargetAtTime(Math.max(-1, Math.min(1, pan * 0.85)), AC.currentTime, 0.15);
+    if (on && !boxOn) { boxOn = true; if (!boxTimer) boxNote(); }
+    else if (!on && boxOn) { boxOn = false; if (boxTimer) { clearTimeout(boxTimer); boxTimer = null; } }
+  }
+
   const SOUNDS = {
     step: () => tone(75, 0.09, 0.07, "triangle", 45),
     stepRun: () => tone(95, 0.09, 0.12, "triangle", 45),
@@ -114,7 +154,11 @@ export function createManorAudio() {
     gateSlam: () => { noise(0.4, 0.6); tone(70, 0.7, 0.4, "square", 40); },
     puff: () => { tone(160, 0.25, 0.12, "triangle", 60); noise(0.15, 0.12); },
     battery: () => tone(660, 0.4, 0.2, "square", 990),
-    relic: () => { tone(880, 0.8, 0.25, "sine", 1320); tone(1320, 1, 0.15, "sine"); },
+    relic: () => { tone(880, 0.8, 0.25, "sine", 1320); tone(1320, 1, 0.15, "sine"); later(() => tone(620, 0.6, 0.12, "triangle", 300), 500); },   // the box winds down
+    // chalk on plaster: a short scratch
+    chalk: () => { noise(0.12, 0.08); later(() => noise(0.09, 0.06), 140); },
+    // the last key: the lights die, and she screams
+    finale: () => { tone(90, 0.6, 0.35, "square", 40); later(() => { noise(1.2, 0.5); tone(1400, 1.4, 0.25, "sawtooth", 300); tone(700, 1.4, 0.2, "sawtooth", 160); }, 450); },
     win: () => { noise(0.8, 0.3); tone(440, 1.5, 0.2, "sine", 880); },
     caught: () => { noise(1, 0.9); tone(1100, 0.9, 0.3, "sawtooth", 120); },
     spotted: () => { noise(0.5, 0.5); tone(700, 0.6, 0.15, "sawtooth", 180); },
@@ -156,10 +200,13 @@ export function createManorAudio() {
   return {
     start,
     humming,
+    tune,
     play(ev) { const fn = SOUNDS[ev.name]; if (fn) fn(ev.v); },
     close() {
       humOn = false;
       if (humTimer) { clearTimeout(humTimer); humTimer = null; }
+      boxOn = false;
+      if (boxTimer) { clearTimeout(boxTimer); boxTimer = null; }
       timers.forEach(clearTimeout);
       timers.clear();
       if (AC) { try { AC.close(); } catch (e) { /* already closed */ } }

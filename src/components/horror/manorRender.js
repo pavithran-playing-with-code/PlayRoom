@@ -1,19 +1,21 @@
 // src/components/horror/manorRender.js
 // Drawing NANA'S LULLABY: a column raycaster for the halls, billboard sprites
-// for everything in them, a minimap, and the full-screen moments (the map you
-// memorise at the start, the thing's face when it gets you).
+// for everything in them, and the full-screen moments (Nana's note at the
+// start, the thing's face when it gets you).
 //
-// Reads the sim and never writes to it. The map is for finding your way:
-// every room with its name, the doors, the relics, the way out, you, your
-// friends, and the demons wherever they are — nothing else. Tap it for a big
-// one. Each room has its own wall colour, so you can tell where you are.
+// Reads the sim and never writes to it. There is no map: you find your way
+// by the rooms themselves — each its own wall colour, a sign over every
+// doorway naming the room beyond, and chalk marks on the walls. Keys sit in
+// music boxes (heard, not shown). Friends wear a name tag you can see.
 //
 // The same picture serves solo and online. What it reads from `s`:
 //   P        the body whose eyes we look through (x, y, fa, jz, cr, light...)
 //   G        the nearest ghost: the danger glow, the red arrow
 //   ghosts   every ghost to draw (solo: just G)
 //   others   other players, online: [{ x, y, color, name, lit, cr, jz }]
-//   exitOpen whether the far gate is open to you (solo: all relics taken)
+//   exitOpen whether the front door is open to you (solo: all relics taken)
+//   marks    chalked wall and door tiles (y·N + x)
+//   riddles  Nana's note: a line per key (the intro)
 //   bodies   the scare: bodies dropping from the ceiling, [{ x, y, t }]
 //   rooms    which ROOM_KINDS each room is (names and wall colours)
 // and a relic may carry a `color` (whose it is) and `mine: false`. P.hiding
@@ -236,151 +238,28 @@ export function ghostEyes(ctx, x, y, s, angry, t = 0, tilt = 0.12) {
   ctx.restore();
 }
 
-// Where the small map sits, and how big: shared with the pages, which open
-// the big map when you tap it.
-export function mapRect(view) {
-  const { W, H, safeTop = 0 } = view;
-  const size = Math.min(170, Math.min(W, H) * 0.42);
-  return { x0: W - size - 14, y0: 16 + safeTop, size };
-}
-
 const roomOf = (s, k) => ROOM_KINDS[(s.rooms && s.rooms[k]) || 0];
 
-// What you collect is a key: drawn as one in a badge of its owner's colour,
-// on the map and on its distance marker.
-export const RELIC_ICONS = ["🗝️"];
-export const relicIcon = (i) => RELIC_ICONS[((i % RELIC_ICONS.length) + RELIC_ICONS.length) % RELIC_ICONS.length];
-
-function relicBadge(ctx, x, y, rad, icon, color, alpha = 1, glow = 0) {
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  if (glow) { ctx.shadowColor = color; ctx.shadowBlur = glow; }
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(x, y, rad, 0, TAU);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = "rgba(20,12,8,.85)";
-  ctx.lineWidth = Math.max(1, rad * 0.18);
-  ctx.stroke();
-  ctx.font = `${Math.round(rad * 1.35)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(icon, x, y + rad * 0.06);
-  ctx.restore();
-}
-
-// The map: rooms (each faintly its own colour, with its name), doors, the
-// relics, the way out, you, your friends and the demons. Nothing else — no
-// furniture, no barricades, no batteries.
-function mini(ctx, s, x0, y0, size, intro, t, big = false) {
-  const { N, g, relics, exitT, P } = s;
-  const c = size / N, RN = (N - 1) / 8;
-  ctx.fillStyle = big ? "rgba(5,4,8,.92)" : "rgba(0,0,0,.72)";
-  ctx.fillRect(x0 - 5, y0 - 5, size + 10, size + 10);
-  // floors, tinted by room
-  for (let j = 0; j < RN; j++) for (let i = 0; i < RN; i++) {
-    const [r, gg, b] = roomOf(s, j * RN + i)[2];
-    ctx.fillStyle = `rgb(${(110 + r * 0.25) | 0},${(92 + gg * 0.25) | 0},${(66 + b * 0.25) | 0})`;
-    ctx.fillRect(x0 + (1 + i * 8) * c, y0 + (1 + j * 8) * c, 7 * c + 0.5, 7 * c + 0.5);
+// Every doorway (with a door or without): its tile, the rooms either side,
+// and which way it runs. Worked out from the walls once per house — a
+// doorway is a gap in a wall between two rooms, whatever its door is doing.
+const doorwayCache = new WeakMap();
+function doorwaysOf(s) {
+  let list = doorwayCache.get(s.rooms || s.g);
+  if (list) return list;
+  list = [];
+  const { N, g } = s;
+  for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
+    const v = g[y][x], onX = x % 8 === 0, onY = y % 8 === 0;
+    if (onX === onY) continue;                         // inside a room, or a corner
+    if (v !== 0 && v !== DOOR && !(s.doors && s.doors.has && s.doors.has(y * N + x))) continue;
+    // across a vertical wall (onX) the rooms are left and right; else above and below
+    const a = onX ? roomAt(N, x - 0.5, y + 0.5) : roomAt(N, x + 0.5, y - 0.5);
+    const b = onX ? roomAt(N, x + 1.5, y + 0.5) : roomAt(N, x + 0.5, y + 1.5);
+    list.push({ x, y, a, b, nx: onX ? 1 : 0, ny: onX ? 0 : 1 });
   }
-  // walls; open doorways show as floor; shut doors as a bar in the wall
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      const v = g[y][x];
-      if (v === 0 || v === SPOT) {
-        if (x % 8 === 0 || y % 8 === 0) { ctx.fillStyle = "#8a7552"; ctx.fillRect(x0 + x * c, y0 + y * c, c + 0.5, c + 0.5); }
-        continue;
-      }
-      // furniture blocks inside a room are left off: only the room's walls
-      if (v === 1 && x % 8 && y % 8) continue;
-      ctx.fillStyle = "#2b2119";
-      ctx.fillRect(x0 + x * c, y0 + y * c, c + 0.5, c + 0.5);
-      if (v === DOOR) {
-        const along = !g[y][x - 1] || !g[y][x + 1] ? "v" : "h";
-        const th = Math.max(1.5, c * 0.5);
-        ctx.fillStyle = "#c08848";
-        if (along === "v") ctx.fillRect(x0 + x * c + (c - th) / 2, y0 + y * c, th, c + 0.5);
-        else ctx.fillRect(x0 + x * c, y0 + y * c + (c - th) / 2, c + 0.5, th);
-      }
-    }
-  }
-  // room names
-  const fs = Math.max(7, Math.min(big ? 16 : 10, 7 * c * 0.2));
-  ctx.font = `bold ${fs}px Georgia`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  for (let j = 0; j < RN; j++) for (let i = 0; i < RN; i++) {
-    const name = roomOf(s, j * RN + i)[big ? 0 : 1];
-    const cx = x0 + (4.5 + i * 8) * c, cy = y0 + (4.5 + j * 8) * c;
-    ctx.fillStyle = "rgba(30,20,12,.55)";
-    ctx.fillText(name, cx, cy, 7 * c - 2);
-  }
-  ctx.textBaseline = "alphabetic";
-
-  // the relics: each its own object in a badge; yours bob gently, others'
-  // sit smaller and faded
-  const rad = Math.max(big ? 11 : 6.5, c * (big ? 1.3 : 1.15));
-  relics.forEach((r, i) => {
-    if (r.got) return;
-    const theirs = r.mine === false;
-    const bob = theirs ? 0 : Math.sin(t * 3 + i) * rad * 0.15;
-    relicBadge(ctx, x0 + r.x * c, y0 + r.y * c + bob, theirs ? rad * 0.75 : rad, relicIcon(i),
-      r.color || "#ffdca0", theirs ? 0.5 : 1, theirs ? 0 : 6 + 4 * Math.sin(t * 4 + i));
-  });
-  // the way out
-  ctx.fillStyle = exitOpen(s) ? "#5fd68a" : "#a33";
-  ctx.fillRect(x0 + exitT.x * c - c * 0.3, y0 + exitT.y * c - c * 0.3, c * 1.6, c * 1.6);
-  // the demons, always, pulsing red (not on the map you memorise: it hasn't moved yet)
-  if (!intro) {
-    const pulse = 0.75 + 0.25 * Math.sin(t * 8);
-    for (const G of ghostsOf(s)) {
-      if (G.x < 0) continue;                         // the stand-in before the first update
-      // red with a white ring: no player dot has a ring, so it can't be
-      // mistaken for a friend in red
-      const gx = x0 + G.x * c, gy = y0 + G.y * c, gr = Math.max(3.5, c * 1.5);
-      ctx.save();
-      ctx.shadowColor = "#ff2040";
-      ctx.shadowBlur = 8;
-      ctx.fillStyle = `rgba(230,30,60,${pulse})`;
-      ctx.beginPath();
-      ctx.arc(gx, gy, gr, 0, TAU);
-      ctx.fill();
-      ctx.restore();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(gx, gy, gr + 1.5, 0, TAU);
-      ctx.stroke();
-    }
-  }
-  // everyone else, in their colours
-  for (const o of s.others || []) {
-    ctx.fillStyle = o.color;
-    ctx.strokeStyle = "rgba(0,0,0,.7)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(x0 + o.x * c, y0 + o.y * c, Math.max(2.5, c * 1.1), 0, TAU);
-    ctx.fill();
-    ctx.stroke();
-  }
-  // you, with the way you're facing
-  ctx.fillStyle = "#fff";
-  ctx.beginPath();
-  ctx.arc(x0 + P.x * c, y0 + P.y * c, Math.max(3, c * 1.1), 0, TAU);
-  ctx.fill();
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(x0 + P.x * c, y0 + P.y * c);
-  ctx.lineTo(x0 + (P.x + Math.cos(P.fa) * 3) * c, y0 + (P.y + Math.sin(P.fa) * 3) * c);
-  ctx.stroke();
-  if (!big && !intro) {
-    ctx.fillStyle = "rgba(233,227,211,.55)";
-    ctx.font = "9px Georgia";
-    ctx.textAlign = "right";
-    ctx.fillText("tap for big map", x0 + size, y0 + size + 14);
-  }
+  doorwayCache.set(s.rooms || s.g, list);
+  return list;
 }
 
 // DDA ray from the player to the first wall.
@@ -459,6 +338,7 @@ function scene(ctx, s, W, H, t) {
   ctx.fillStyle = fg;
   ctx.fillRect(0, hz, W, H - hz);
 
+  const marks = s.marks && s.marks.length ? new Set(s.marks) : null;
   for (let i = 0; i < cols; i++) {
     const cam = 2 * (i + 0.5) / cols - 1, h = cast(s, dx + plx * cam, dy + ply * cam), pd = h.d;
     zb[i] = pd;
@@ -470,18 +350,15 @@ function scene(ctx, s, W, H, t) {
     b += (lampLv[hitRoom] || 0) * 0.85 * Math.max(0.45, 1 - pd / 18);   // a lit room: its walls in its light
     const switches = s.switches || (s.env && s.env.switches), sw = switches && switches.get(h.my * s.N + h.mx);
     const swHere = sw && sw.room === hitRoom ? sw : null;
-    const isEx = h.mx === exitT.x && h.my === exitT.y, isEn = h.mx === 0 && h.my === 1;
-    const sealed = isEn;
+    const isEx = h.mx === exitT.x && h.my === exitT.y;
     const tv = h.my >= 0 && h.my < s.N && h.mx >= 0 && h.mx < s.N ? s.g[h.my][h.mx] : 1;
-    const plain = !isEx && !isEn && tv !== DOOR;
+    const plain = !isEx && tv !== DOOR;
     // the front door: dark and locked, or warm light round it once unlocked
     if (isEx) { col = exitOpen(s) ? [30, 100, 52] : [70, 46, 34]; b = Math.max(b, 0.35) + 0.25 * Math.max(0, 1 - pd / 14); }
-    else if (isEn) col = [220, 190, 120];
     else if (tv === DOOR) col = [130, 84, 44];
     else if (((h.mx * 7 + h.my * 13) & 3) === 0) col = col.map((v) => v * 0.88);
     if (h.side) b *= 0.72;
     if (plain && (h.u * 3 % 1) < 0.05) b *= 0.55;
-    if (sealed && (h.u * 5 % 1) < 0.35) b *= 0.25;
     b = Math.min(1, b);
     const lh = H / pd, ds = hz - lh * (1 - eye);
     ctx.fillStyle = `rgb(${(col[0] * b) | 0},${(col[1] * b) | 0},${(col[2] * b) | 0})`;
@@ -505,7 +382,7 @@ function scene(ctx, s, W, H, t) {
         ctx.fillRect(i * cw, ds, cw + 1, lh);
         ctx.globalCompositeOperation = "source-over";
       }
-    } else if (tv === DOOR && !isEn) {
+    } else if (tv === DOOR) {
       decorDoor(ctx, i * cw, cw + 1, ds, lh, h.u, b);
     } else if (plain) {
       const wallId = h.mx * 31 + h.my * 17;
@@ -516,6 +393,8 @@ function scene(ctx, s, W, H, t) {
         eyes: Math.max(0, 1 - Math.min(...ghostsOf(s).map((G) => Math.hypot(G.x - h.mx - 0.5, G.y - h.my - 0.5))) / 6),
       });
     }
+    // a chalk mark: a cross, in the middle of the face
+    if (marks && !isEx && marks.has(h.my * s.N + h.mx)) chalkCross(ctx, i * cw, cw + 1, ds, lh, h.u, b);
   }
 
   // sprites, far to near, clipped column by column against the walls
@@ -531,6 +410,16 @@ function scene(ctx, s, W, H, t) {
   for (const c of s.cells) if (!c.got) sp.push({ x: c.x, y: c.y, k: "b" });
   // every room's light, hanging from its ceiling in the middle of the room
   if (s.lamps) { const RN = Math.round(Math.sqrt(s.lamps.length)); for (let ri = 0; ri < s.lamps.length; ri++) sp.push({ x: (ri % RN) * 8 + 4.5, y: Math.floor(ri / RN) * 8 + 4.5, k: "lamp", ri }); }
+  // over each doorway near you, a sign naming the room on the other side
+  // (hung a little out from the wall on your side, so a shut door doesn't hide it)
+  const myRoom = roomAt(s.N, P.x, P.y);
+  for (const dw of doorwaysOf(s)) {
+    if (Math.abs(dw.x + 0.5 - P.x) > 9 || Math.abs(dw.y + 0.5 - P.y) > 9) continue;
+    const mineA = dw.a === myRoom, mineB = dw.b === myRoom;
+    if (!mineA && !mineB) continue;
+    const beyond = mineA ? dw.b : dw.a, sg = mineA ? -1 : 1;
+    sp.push({ x: dw.x + 0.5 + dw.nx * sg * 0.62, y: dw.y + 0.5 + dw.ny * sg * 0.62, k: "sign", name: roomOf(s, beyond)[0] });
+  }
   for (const G of ghostsOf(s)) sp.push({ x: G.x, y: G.y, k: "g", G });
   for (const o of s.others || []) sp.push({ x: o.x, y: o.y, k: "o", o });
   for (const o of sp) {
@@ -542,7 +431,7 @@ function scene(ctx, s, W, H, t) {
   for (const o of sp) {
     if (o.ty < 0.2 || o.ty > 18) continue;
     const ob = o.k === HURDLE || o.k === BEAM, scr = W / 2 * (1 + o.tx / o.ty), u = H / o.ty;
-    const size = o.k === "lamp" ? u * 2.2 : (ob || o.k === "p" || o.k === "f") ? u : o.k === "o" ? u * 1.6 : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : o.k === "bd" ? 0.6 : 0.3);
+    const size = o.k === "lamp" ? u * 2.2 : o.k === "sign" ? u * 0.9 : (ob || o.k === "p" || o.k === "f") ? u : o.k === "o" ? u * 1.6 : u * (o.k === "g" ? 1 : o.k === "r" ? 0.32 : o.k === "bd" ? 0.6 : 0.3);
     const cy = hz + (eye - (o.k === "g" ? 0.5 : o.k === "r" || o.k === "b" ? 0.45 : 0.2)) * u;
     const x0 = Math.max(0, Math.floor((scr - size / 2) / cw)), x1 = Math.min(cols - 1, Math.floor((scr + size / 2) / cw));
     ctx.save();
@@ -554,6 +443,9 @@ function scene(ctx, s, W, H, t) {
     if (o.k === "lamp") {
       const lbr = Math.min(1, (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) : 0) + 0.08);
       drawLamp(ctx, scr, u, hz, eye, lampLv[o.ri] || 0, lbr);
+    } else if (o.k === "sign") {
+      const sb = Math.min(1, 0.22 + (L ? Math.pow(Math.max(0, 1 - o.ty / 8), 1.1) * 0.85 : 0.1) + (lampLv[myRoom] || 0) * 0.7);
+      drawSign(ctx, scr, hz + (eye - 0.93) * u, u, o.name, sb);
     } else if (o.k === "g") {
       const cam = o.tx / o.ty / PLANE;
       const gb = (L ? Math.pow(Math.max(0, 1 - o.ty / 7.5), 1.2) * (1 - Math.abs(cam) * 0.45) : 0) + Math.max(0, 1 - o.ty / 2.2) * 0.3 +
@@ -572,6 +464,7 @@ function scene(ctx, s, W, H, t) {
       gr.addColorStop(1, `rgba(${rc},0)`);
       ctx.fillStyle = gr;
       ctx.fillRect(scr - size * 2, by - size * 2, size * 4, size * 4);
+      musicBox(ctx, scr, cy + size * 1.05, size * 1.4, t + o.x, o.mine !== false);
       drawKey(ctx, scr, by, size * 1.3, o.color ? `rgb(${rc})` : "#ffd66b", t + o.x);
       ctx.globalAlpha = 1;
     } else if (o.k === "o") {
@@ -647,6 +540,56 @@ function spotsOf(s) {
     spotCache.set(s.g, list);
   }
   return list;
+}
+
+// A painted board over a doorway: the room's name, in white on dark wood.
+function drawSign(ctx, x, y, u, name, br) {
+  const fs = Math.max(8, Math.min(30, u * 0.085));
+  ctx.font = `bold ${fs}px Georgia`;
+  const w = Math.min(u * 0.95, ctx.measureText(name).width + fs * 1.4), h = fs * 1.7;
+  ctx.fillStyle = `rgb(${(70 * br) | 0},${(46 * br) | 0},${(28 * br) | 0})`;
+  ctx.fillRect(x - w / 2, y - h / 2, w, h);
+  ctx.strokeStyle = `rgba(${(200 * br) | 0},${(160 * br) | 0},${(90 * br) | 0},.9)`;
+  ctx.lineWidth = Math.max(1, fs * 0.12);
+  ctx.strokeRect(x - w / 2 + 2, y - h / 2 + 2, w - 4, h - 4);
+  ctx.fillStyle = `rgba(245,236,214,${Math.min(1, 0.25 + br)})`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(name, x, y + fs * 0.05, w - fs * 0.6);
+  ctx.textBaseline = "alphabetic";
+}
+
+// A chalk cross on a wall or door: two strokes across the middle of the face.
+function chalkCross(ctx, X, W, ds, lh, u, b) {
+  if (u < 0.3 || u > 0.7) return;
+  const a = Math.min(0.95, 0.35 + b * 1.2), c = `rgba(236,234,224,${a})`;
+  const v1 = 0.32 + (u - 0.3), v2 = 0.72 - (u - 0.3);
+  band(ctx, X, W, ds, lh, v1 - 0.012, v1 + 0.012, c);
+  band(ctx, X, W, ds, lh, v2 - 0.012, v2 + 0.012, c);
+}
+
+// The music box a key sits on: a little lacquered box, its lid up, a brass
+// comb glinting. Yours turn their tiny handle.
+function musicBox(ctx, x, y, size, t, turning) {
+  const w = size, h = size * 0.45;
+  ctx.fillStyle = "#5a2a36";
+  ctx.fillRect(x - w / 2, y - h / 2, w, h);
+  ctx.fillStyle = "#7d3b4b";
+  ctx.fillRect(x - w / 2, y - h / 2, w, h * 0.22);
+  ctx.fillStyle = "#d8b25a";
+  ctx.fillRect(x - w * 0.3, y - h * 0.05, w * 0.6, h * 0.12);
+  // the lid, propped open behind
+  ctx.fillStyle = "#4a2230";
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2, y - h / 2); ctx.lineTo(x + w / 2, y - h / 2);
+  ctx.lineTo(x + w * 0.42, y - h * 1.25); ctx.lineTo(x - w * 0.42, y - h * 1.25); ctx.closePath();
+  ctx.fill();
+  if (turning) {
+    const a = t * 4, hx = x + w / 2 + size * 0.06;
+    ctx.strokeStyle = "#d8b25a";
+    ctx.lineWidth = Math.max(1, size * 0.05);
+    ctx.beginPath(); ctx.moveTo(hx, y); ctx.lineTo(hx + Math.cos(a) * size * 0.14, y + Math.sin(a) * size * 0.14); ctx.stroke();
+  }
 }
 
 // ── walls, one strip at a time ───────────────────────────────────────────────
@@ -1270,8 +1213,8 @@ function drawPlayer(ctx, p, scr, hz, eye, u, L, dist, t) {
   ctx.textAlign = "center";
   ctx.lineWidth = 3;
   ctx.strokeStyle = "rgba(0,0,0,.8)";
-  // the name tag carries the distance too, so there's no separate marker
-  const tag = `${p.name || ""} · ${metres(dist)}`;
+  // the name tag: in sight, there's no separate marker
+  const tag = p.name || "";
   ctx.strokeText(tag, scr, headY - hr - fs * 0.6);
   ctx.fillStyle = `rgb(${rc})`;
   ctx.fillText(tag, scr, headY - hr - fs * 0.6);
@@ -1335,31 +1278,23 @@ function hidingOverlay(ctx, W, H, kind, t) {
 // it's open, each with how far it is — through walls. In front of you, a
 // marker floats over the thing itself; anywhere else it waits at the edge of
 // the screen with an arrow showing which way to turn.
-export const METRES_PER_TILE = 2;
-const metres = (d) => `${Math.max(1, Math.round(d * METRES_PER_TILE))} m`;
 
 function markers(ctx, s, W, H, t) {
   const { P } = s;
   const dx = Math.cos(P.fa), dy = Math.sin(P.fa), plx = -dy * PLANE, ply = dx * PLANE;
   const inv = 1 / (plx * dy - dx * ply);
   const hz = H / 2 + (P.pitch || 0) * H;
+  // Only friends: no pins for keys or the way out — those you find by ear and
+  // by the signs. A friend wears their name; one out of sight shows at the
+  // edge you'd turn to, without a distance.
   const list = [];
-  const left = s.relics.filter((r) => !r.got && r.mine !== false);
-  let nearest = null;
-  for (const r of left) if (!nearest || Math.hypot(r.x - P.x, r.y - P.y) < Math.hypot(nearest.x - P.x, nearest.y - P.y)) nearest = r;
-  s.relics.forEach((r, i) => {
-    if (r.got || r.mine === false) return;
-    list.push({ x: r.x, y: r.y, kind: "relic", icon: relicIcon(i), color: r.color || "#ffdca0", label: "", main: r === nearest });
-  });
-  if (exitOpen(s)) list.push({ x: s.exitT.x + 0.5, y: s.exitT.y + 0.5, kind: "exit", color: "#f0c478", label: "Front door", main: !left.length });
-  // a friend in plain sight wears their distance on their name tag instead
   for (const o of s.others || []) {
     const inSight = Math.hypot(o.x - P.x, o.y - P.y) < 9 && los(s.g, P.x, P.y, o.x, o.y);
     list.push({ x: o.x, y: o.y, kind: "friend", color: o.color, label: o.name || "", main: true, inSight });
   }
+  if (!list.length) return;
 
-  const mr = mapRect({ W, H, safeTop: 0 });
-  const edgeL = 46, edgeR = mr.x0 - 34;               // clear of the HUD's bars and the map
+  const edgeL = 46, edgeR = W - 46;
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -1404,24 +1339,16 @@ function markers(ctx, s, W, H, t) {
       y = (side < 0 ? Math.max(H * 0.3, 150) : H * 0.3) + m.slot * 38;
     }
     ctx.globalAlpha = alpha;
-    // the pin: a diamond for a relic, a door for the way out, a ring for a friend
+    // the pin: a ring, with a dot in the middle — it's a person
     const r = 8 * size;
     ctx.lineWidth = 2;
     ctx.strokeStyle = "rgba(0,0,0,.75)";
     ctx.fillStyle = m.color;
     ctx.beginPath();
-    if (m.kind === "relic") {
-      relicBadge(ctx, x, y, r * 1.35, m.icon, m.color, alpha, m.main ? 12 + 4 * Math.sin(t * 5) : 0);
-    } else if (m.kind === "exit") {
-      ctx.rect(x - r * 0.8, y - r * 1.2, r * 1.6, r * 2.4);
-    } else {
-      ctx.arc(x, y, r, 0, TAU);
-    }
-    if (m.kind !== "relic") { ctx.fill(); ctx.stroke(); }
-    if (m.kind === "friend") {                        // a dot in the middle: it's a person
-      ctx.fillStyle = "rgba(0,0,0,.6)";
-      ctx.beginPath(); ctx.arc(x, y, r * 0.35, 0, TAU); ctx.fill();
-    }
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,.6)";
+    ctx.beginPath(); ctx.arc(x, y, r * 0.35, 0, TAU); ctx.fill();
     // the turn arrow, off screen
     if (side) {
       const ax = x + side * (r + 9);
@@ -1431,34 +1358,58 @@ function markers(ctx, s, W, H, t) {
       ctx.fill();
       ctx.stroke();
     }
-    // name and distance, outlined so they read on any wall
-    const text = m.label ? `${m.label} · ${metres(m.d)}` : metres(m.d);
+    // the name, outlined so it reads on any wall
+    const text = m.label;
     ctx.font = `bold ${Math.round(12 * size + 1)}px Georgia`;
     const tyy = y + r * 1.3 + 10;
-    // at an edge the words grow away from it, never under the map or off screen
+    // at an edge the words grow away from it, never off screen
     ctx.textAlign = side < 0 ? "left" : side > 0 ? "right" : "center";
     const txx = side < 0 ? x - r - 2 : side > 0 ? x + r + 2 : x;
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(0,0,0,.85)";
     ctx.strokeText(text, txx, tyy);
-    ctx.fillStyle = m.kind === "relic" ? "#fff3d0" : m.color;
+    ctx.fillStyle = m.color;
     ctx.fillText(text, txx, tyy);
   }
   ctx.restore();
 }
 
-function arrow(ctx, W, H, s, ang, radius, size, color) {
+// Nana's note: what you read before the dark falls — a riddle for each key's
+// room, in her hand, on old paper.
+function noteCard(ctx, s, W, H, t) {
+  const lines = (s.riddles || []).slice(0, 6);
+  const fs = Math.max(13, Math.min(20, Math.min(W, H) / 22));
+  const w = Math.min(W - 32, 560), h = Math.min(H - 24, fs * (4.6 + lines.length * 1.75) + 30);
+  const x0 = (W - w) / 2, y0 = (H - h) / 2;
   ctx.save();
-  ctx.translate(W / 2 + Math.sin(ang - s.P.fa) * radius, H / 2 - Math.cos(ang - s.P.fa) * radius);
-  ctx.rotate(ang - s.P.fa - Math.PI / 2);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(size, 0);
-  ctx.lineTo(-size * 0.7, -size * 0.7);
-  ctx.lineTo(-size * 0.3, 0);
-  ctx.lineTo(-size * 0.7, size * 0.7);
-  ctx.fill();
+  ctx.translate(W / 2, H / 2); ctx.rotate(-0.012); ctx.translate(-W / 2, -H / 2);
+  ctx.fillStyle = "#e8dcc0";
+  ctx.fillRect(x0, y0, w, h);
+  ctx.fillStyle = "rgba(120,90,50,.18)";
+  ctx.fillRect(x0, y0, w, fs * 0.5);
+  ctx.strokeStyle = "rgba(90,60,30,.5)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x0 + 6, y0 + 6, w - 12, h - 12);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#4a2a1a";
+  ctx.font = `italic bold ${Math.round(fs * 1.3)}px Georgia`;
+  let y = y0 + fs * 2;
+  ctx.fillText("My keys, dear, are where they belong:", W / 2, y, w - 30);
+  ctx.font = `italic ${fs}px Georgia`;
+  y += fs * 0.6;
+  lines.forEach((ln, i) => {
+    y += fs * 1.75;
+    ctx.fillText(`${i + 1}. ${ln.charAt(0).toUpperCase()}${ln.slice(1)}.`, W / 2, y, w - 30);
+  });
+  ctx.font = `${Math.round(fs * 0.85)}px Georgia`;
+  ctx.fillStyle = "#7a5a3a";
+  y += fs * 1.9;
+  ctx.fillText("Listen for the music boxes. Read the signs over the doors. — Nana", W / 2, y, w - 30);
   ctx.restore();
+  ctx.fillStyle = "#a39a88";
+  ctx.font = "13px Georgia";
+  ctx.textAlign = "center";
+  ctx.fillText(`The dark falls in ${Math.ceil(s.introT)}s — tap to go in now.`, W / 2, Math.min(H - 8, y0 + h + 22));
 }
 
 // view: { W, H, dpr, safeTop }; stick: the move thumb, if down.
@@ -1470,19 +1421,7 @@ export function drawManor(ctx, s, view, t, stick) {
   if (!s) return;
 
   if (s.mode === "intro") {
-    // The map plus a line above and two below, all inside the screen — a
-    // phone on its side is only ~360px tall.
-    const size = Math.max(120, Math.min(W * 0.74, H - 124));
-    const x0 = (W - size) / 2, y0 = (H - size - 100) / 2 + 36;
-    mini(ctx, s, x0, y0, size, true, t);
-    ctx.fillStyle = "#e9e3d3";
-    ctx.textAlign = "center";
-    ctx.font = `italic ${Math.max(15, Math.min(22, W / 22))}px Georgia`;
-    ctx.fillText("Memorize the halls. Gold marks the keys.", W / 2, y0 - 14);
-    ctx.fillStyle = "#a39a88";
-    ctx.font = "14px Georgia";
-    ctx.fillText(`The dark falls in ${Math.ceil(s.introT)}s. Tap or press any key to start now.`, W / 2, y0 + size + 24);
-    ctx.fillText("Gold: keys · Brown bars: doors · Red: the front door (it unlocks when you have all three)", W / 2, y0 + size + 44);
+    noteCard(ctx, s, W, H, t);
     return;
   }
   if (s.mode === "dead") {
@@ -1501,31 +1440,8 @@ export function drawManor(ctx, s, view, t, stick) {
   scene(ctx, s, W, H, t);
   if (s.P.hiding) hidingOverlay(ctx, W, H, s.P.hiding.kind || "wardrobe", t);
 
-  // where everything is, and how far: relics, friends, the way out
-  const { P, G } = s;
+  // where your friends are (the keys and the door you find yourself)
   markers(ctx, s, W, H, t);
-
-  // where it is, when it is near: redder and bigger the closer it gets
-  const d = G ? Math.hypot(P.x - G.x, P.y - G.y) : Infinity;
-  // (not when she's plainly in front of you: the arrow would sit on her face)
-  const rel = G ? Math.atan2(G.y - P.y, G.x - P.x) - P.fa : 0;
-  const inView = G && Math.abs(Math.atan2(Math.sin(rel), Math.cos(rel))) < 0.55 && los(s.g, P.x, P.y, G.x, G.y);
-  if (d < 14 && !inView) {
-    const k = 1 - d / 14;
-    arrow(ctx, W, H, s, Math.atan2(G.y - P.y, G.x - P.x), Math.min(W, H) * 0.36, 8 + k * 16, `rgba(224,32,63,${0.35 + k * 0.6})`);
-  }
-
-  const mr = mapRect(view);
-  mini(ctx, s, mr.x0, mr.y0, mr.size, false, t);
-  if (view.bigMap) {
-    // the whole house, big, over the game (which carries on underneath)
-    const bs = Math.min(W - 40, H - 56);
-    mini(ctx, s, (W - bs) / 2, (H - bs) / 2 + 8, bs, false, t, true);
-    ctx.fillStyle = "#e9e3d3";
-    ctx.font = "italic 14px Georgia";
-    ctx.textAlign = "center";
-    ctx.fillText("Tap anywhere to close the map", W / 2, (H - bs) / 2 - 6);
-  }
 
   if (stick) {
     // the walk ring, and outside it the run ring: push past to sprint

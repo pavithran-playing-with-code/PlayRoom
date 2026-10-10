@@ -171,9 +171,9 @@ export const HOW_TO = {
   },
   manor: {
     name: "Nana's Lullaby",
-    goal: "Find the 3 keys and get out the front door.",
-    steps: ["While Nana hums, you can move.", "When the humming stops, freeze — she hears every step.", "Use: open doors, hide in beds and wardrobes, flip light switches.", "Light: your own torch. Chased? Light off and stand still in the dark — she loses you and wanders off.", "Lit rooms show you to her — but she puts the lights out when she walks in."],
-    tip: "Left thumb moves, right thumb looks. Push the stick far to run.",
+    goal: "Find your keys, then get out the front door — there's no map.",
+    steps: ["Nana's note gives a riddle for each key's room. A sign over every doorway names the room beyond.", "Each key sits in a music box: follow the tune — louder is closer, and it comes from the way to go.", "While Nana hums, you can move. When the humming stops, freeze — she hears every step.", "Use: open doors, hide in beds and wardrobes, flip light switches. ✏️ chalks the wall in front of you (friends see it too).", "With every key the lights die and she stops humming for good — she hears every step. Run for the front door!"],
+    tip: "Learn the way back to the hall as you go: you'll need it at the end.",
   },
 };
 

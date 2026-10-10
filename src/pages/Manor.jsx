@@ -11,34 +11,35 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  newNight, tick, begin, doAction, actionLabel, toggleRun, toggleLight, timeText, roomName, listening,
+  newNight, tick, begin, doAction, actionLabel, toggleRun, toggleLight, timeText, roomName, listening, chalk, canChalk,
 } from "../components/horror/manorSim";
-import { drawManor, lookBy, mapRect, SPRINT_PX, STICK_R, METRES_PER_TILE } from "../components/horror/manorRender";
+import { drawManor, lookBy, SPRINT_PX, STICK_R } from "../components/horror/manorRender";
 import { createManorAudio } from "../components/horror/manorAudio";
 import { useSideways, goLandscape, toGame } from "../components/horror/LandscapeGate";
 
 const HUD_MS = 80;
 const SHOW_CAUGHT_AFTER = 1.4;     // seconds of its face before the card
 
-// The nearest key you haven't found: which room, how far. And Nana: how far.
-const toward = (s) => {
-  const P = s.P, m = (d) => Math.round(d * METRES_PER_TILE);
-  const left = s.relics.filter((r) => !r.got).sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y));
-  const k = left[0];
-  const door = { x: s.exitT.x + 0.5, y: s.exitT.y + 0.5 };
-  const nana = Math.hypot(s.G.x - P.x, s.G.y - P.y);
-  return {
-    goal: k ? `Next key: ${roomName(s, k.x, k.y)} · ${m(Math.hypot(k.x - P.x, k.y - P.y))} m` : `The front door is open · ${m(Math.hypot(door.x - P.x, door.y - P.y))} m`,
-    open: !k, nana: m(nana), near: nana < 4, close: nana < 3,
-  };
-};
+// No map and no distances: Nana's riddles (ticked off as you find each key),
+// and at the end, the run.
 const hudOf = (s) => s && ({
-  ...toward(s),
+  riddles: s.riddles.map((text, i) => ({ text, got: s.relics[i].got })),
+  finale: s.finale, close: Math.hypot(s.G.x - s.P.x, s.G.y - s.P.y) < 3, chalk: canChalk(s),
   mode: s.mode, night: s.night, count: s.count, need: s.need, stam: s.P.stam,
   runOn: s.P.runOn, tired: s.P.stamCool > 0,
   light: s.P.light, msg: s.msg, use: actionLabel(s), hiding: !!s.P.hiding, room: roomName(s),
   silent: s.mode === "play" && !s.P.entering && listening(s),
 });
+
+// Nana's riddles, one per key: found ones crossed off.
+export function Riddles({ list }) {
+  if (!list || !list.length) return null;
+  return (
+    <div className="hm-riddles">
+      {list.map((q, i) => <div key={i} className={q.got ? "got" : ""}>📜 {q.got ? "found" : q.text}</div>)}
+    </div>
+  );
+}
 
 export default function Manor() {
   const navigate = useNavigate();
@@ -80,7 +81,6 @@ export default function Manor() {
     sim.current = newNight(Math.floor(Math.random() * 1e9) + 1, night.current);
     stick.current = null;
     look.current = null;
-    view.current.bigMap = false;
     shown.current = false;
     setOver(null);
     setScreen("game");
@@ -98,7 +98,7 @@ export default function Manor() {
       const W = box ? box.clientWidth : window.innerWidth, H = box ? box.clientHeight : window.innerHeight;
       c.width = W * dpr; c.height = H * dpr;
       const safeTop = rootRef.current ? parseFloat(getComputedStyle(rootRef.current).paddingTop) || 0 : 0;
-      view.current = { W, H, dpr, safeTop, bigMap: view.current.bigMap };
+      view.current = { W, H, dpr, safeTop };
     };
     fit();
     window.addEventListener("resize", fit);
@@ -135,9 +135,13 @@ export default function Manor() {
 
       for (const ev of s.events) audio.current.play(ev);
       s.events.length = 0;
-      // her lullaby: louder the nearer she is; nothing at all while she listens
+      // her lullaby: louder the nearer she is; nothing at all while she
+      // listens, or once she's hunting at the end
       const near = Math.max(0, 1 - Math.hypot(s.P.x - s.G.x, s.P.y - s.G.y) / 18);
-      audio.current.humming(s.mode === "play" && !s.P.entering && !listening(s), near);
+      audio.current.humming(s.mode === "play" && !s.P.entering && !listening(s) && !s.finale, near);
+      // the music box of the nearest key: louder the shorter the walk, from the way to go
+      const tn = s.mode === "play" ? s.tune : null;
+      audio.current.tune(!!tn, tn ? tn.vol : 0, tn ? tn.pan : 0);
 
       if (!shown.current && (s.mode === "won" || (s.mode === "dead" && s.deadT > SHOW_CAUGHT_AFTER))) {
         shown.current = true;
@@ -177,6 +181,7 @@ export default function Manor() {
       if (k === "r") toggleRun(s);
       if (k === "e") doAction(s);
       if (k === "f") toggleLight(s);
+      if (k === "c") chalk(s);
       syncHud();
     };
     const up = (e) => { keys.current[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; };
@@ -198,10 +203,6 @@ export default function Manor() {
     if (s.mode === "intro") { begin(s); syncHud(); return; }
     const c = canvasRef.current;
     const at = toGame(e, sideways.current);
-    // the map: tap it for the big one, tap again (anywhere) to close it
-    const v = view.current, m = mapRect(v);
-    if (v.bigMap) { v.bigMap = false; return; }
-    if (at.x >= m.x0 - 6 && at.y <= m.y0 + m.size + 18 && at.y >= m.y0 - 6) { v.bigMap = true; return; }
     if (e.pointerType === "mouse" || at.x >= view.current.W * 0.5) {
       if (!look.current) { look.current = { id: e.pointerId, lx: at.x, ly: at.y }; c.setPointerCapture(e.pointerId); }
     } else if (!stick.current) {
@@ -242,8 +243,9 @@ export default function Manor() {
         <div className="hm-keys">{"●".repeat(hud?.count || 0)}{"○".repeat(Math.max(0, (hud?.need || 3) - (hud?.count || 0)))} <span>keys · night {hud?.night}</span></div>
         <div className="hm-bar stam"><i style={{ width: `${(hud?.stam ?? 1) * 100}%` }} /></div>
         <div className="hm-room">{hud?.room}</div>
-        <div className={`hm-goal${hud?.open ? " open" : ""}`}>{hud?.goal}</div>
-        <div className={`hm-nanad${hud?.near ? " near" : ""}`}>Nana: {hud?.nana} m away</div>
+        {hud?.finale
+          ? <div className="hm-run">🏃 Run to the front door!</div>
+          : <Riddles list={hud?.riddles} />}
       </div>
 
       {/* hidden: how it's going */}
@@ -256,10 +258,12 @@ export default function Manor() {
 
       <div className="hm-msg" style={{ opacity: playing && hud.msg ? 1 : 0 }} aria-live="polite">{playing ? hud.msg : ""}</div>
 
-      {/* One button, on the right: Use — doors, hiding, a room's light switch;
-          lit when there's something in front of you. Running is the stick
-          pushed out past its ring. */}
+      {/* On the right: Use — doors, hiding, a room's light switch; lit when
+          there's something in front of you — the light, and chalk for the
+          wall in front of you. Running is the stick pushed out past its ring. */}
       <div className={`hm-pad${playing ? "" : " off"}`}>
+        <button className={`hm-chalk${hud?.chalk ? " on" : ""}`} onPointerDown={press(chalk)} aria-label="Chalk a mark on the wall"
+          title="Chalk a mark on the wall in front of you">✏️</button>
         <button className={`hm-use${hud?.use ? " on" : ""}`} onPointerDown={press(doAction)}>{hud?.use || "Use"}</button>
         <button className={`hm-light${hud?.light ? " on" : ""}`} onPointerDown={press(toggleLight)}
           title="Your light. Off, and standing still in the dark, she loses you">{hud?.light ? "Light on" : "Light off"}</button>
@@ -270,11 +274,11 @@ export default function Manor() {
           <button className="hm-leave" onClick={() => navigate("/")}>← Leave</button>
           <h1>Nana's Lullaby</h1>
           <p>Sweet old Nana Elowen never left her house. She hums a lullaby as she walks the halls, and she does not like visitors.</p>
-          <p>Find the three keys to unlock the front door. While you hear her humming, you are safe to move. <b>When the humming stops, she is listening. Freeze.</b></p>
+          <p>There is no map. Her note tells you where her three keys are, in riddles; each key sits in a music box — <b>follow the tune</b>, and read the signs over the doors. While you hear her humming, you are safe to move. <b>When the humming stops, she is listening. Freeze.</b> With the last key, the humming stops for good: run for the front door.</p>
           <button className="hm-go" onClick={newGame}>Enter the house</button>
           <p className="hm-small">
             Move: WASD. Look: drag the mouse or use the left and right arrows. Run: Shift or R. Use (open doors,
-            hide in beds, wardrobes and under tables, a room's light switch): E. A light switched on stays on — until she walks into that room.<br />
+            hide in beds, wardrobes and under tables, a room's light switch): E. Chalk the wall in front of you: C. A light switched on stays on — until she walks into that room.<br />
             On a phone: left thumb moves (push it out past the ring to run), right thumb looks, and the buttons are on the right.
           </p>
         </div>

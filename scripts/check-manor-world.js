@@ -1,4 +1,4 @@
-// scripts/check-manor-world.js — Hollow Manor online, the server's side of it.
+// scripts/check-manor-world.js — Nana's Lullaby online, the server's side of it.
 //
 //   node scripts/check-manor-world.js
 //
@@ -95,9 +95,10 @@ function walk(w, ph, id, tx, ty) {
   }
   return Math.hypot(p.x - tx, p.y - ty) < 0.06;
 }
+// just inside the front door (in the bottom wall of the Entrance Hall)
 const exitSpot = (w) => {
-  const e = w.house.exitT, N = w.house.N;
-  return e.x === N - 1 ? [e.x - 0.5, e.y + 0.5] : [e.x + 0.5, e.y - 0.5];
+  const e = w.house.exitT;
+  return [e.x + 0.5, e.y - 0.5];
 };
 const lastEv = (type) => sent.filter((s) => s.ev === "manor:tick").flatMap((s) => s.payload.e).filter((e) => e.type === type);
 
@@ -113,7 +114,7 @@ let coreMod;
       for (let seed = 1; seed <= 25; seed++) {
         const sides = Array.from({ length: n }, (_, i) => ({ key: `p${i}`, need: 3 }));
         const h = coreMod.buildHouse(seed * 31 + n, { players: n, sides });
-        const d = coreMod.dmap(h.g, h.N, 1, 1);
+        const d = coreMod.dmap(h.g, h.N, h.spawn.x | 0, h.spawn.y | 0);
         const open = coreMod.floors(h.g, h.N);
         if (open.some(([x, y]) => d[x + y * h.N] < 0)) { ok = false; why = `n${n} s${seed} sealed`; }
         for (const s of sides) if (h.relics.filter((r) => r.side === s.key).length !== s.need) { ok = false; why = `n${n} s${seed} side ${s.key} short`; }
@@ -125,15 +126,77 @@ let coreMod;
     }
     check("200 houses for 1–8 players: connected, every side's relics all there, nothing stacked", ok, why);
     const sizes = [1, 2, 4, 6, 8].map((n) => coreMod.sizeFor(n));
-    check("the house grows with the crowd", sizes.every((v, i) => i === 0 || v >= sizes[i - 1]) && sizes[4] > sizes[0], sizes.join(" ≤ "));
+    check("the house grows with the crowd — but stays small enough to learn", sizes.every((v, i) => i === 0 || v >= sizes[i - 1]) && sizes[4] > sizes[0] && sizes[4] <= 33, sizes.join(" ≤ "));
     check("more ghosts for more players", coreMod.ghostsFor(2) === 1 && coreMod.ghostsFor(4) === 2 && coreMod.ghostsFor(8) === 3);
 
     // fairness: each side's relics sit at a similar spread of distances
     const h = coreMod.buildHouse(77, { players: 4, sides: [0, 1, 2, 3].map((i) => ({ key: `p${i}`, need: 3 })) });
-    const d = coreMod.dmap(h.g, h.N, 1, 1);
+    const d = coreMod.dmap(h.g, h.N, h.spawn.x | 0, h.spawn.y | 0);
     const sums = [0, 1, 2, 3].map((i) => h.relics.filter((r) => r.side === `p${i}`).reduce((a, r) => a + d[(r.x | 0) + (r.y | 0) * h.N], 0));
     const spread = (Math.max(...sums) - Math.min(...sums)) / Math.max(...sums);
     check("relics are dealt fairly: every player's are about as far away", spread < 0.25, `walking distance per player ${sums.join(", ")}`);
+  }
+
+  // ── the run at the end ─────────────────────────────────────────────────────
+  {
+    // together: the last key and the whole house goes dark; she stops humming and hunts
+    const w = room("coop", [{ id: 301 }, { id: 302 }]);
+    const P = [phone(301), phone(302)];
+    w.house.lamps.fill(1);
+    const rs = w.house.relics;
+    rs.slice(0, -1).forEach((r, i) => { walk(w, P[i % 2], 301 + (i % 2), r.x, r.y); world._tick(w); });
+    check("(set-up) one key left, still humming", !w.sides[0].open && !w.house.hum.hunt);
+    sent.length = 0;
+    const last = rs[rs.length - 1];
+    walk(w, P[0], 301, last.x, last.y); world._tick(w);
+    const tk = sent.filter((q) => q.ev === "manor:tick").pop().payload;
+    check("together, the last key: the lights die and she stops humming for good", w.sides[0].open && w.house.hum.hunt && w.house.lamps.every((v) => v === 0) &&
+      tk.h[3] === 1 && tk.e.some((e) => e.type === "open" && e.all === 1));
+    // she hears a step from anywhere
+    const G = w.house.ghosts[0];
+    const far = w.house.respawn;                          // on the floor, deep in the house
+    Object.assign(G, { stun: 0, st: "patrol", x: far.x, y: far.y });
+    coreMod.ghostTarget(G, w.env, far.x | 0, far.y | 0);
+    const a = w.players.get(301);
+    a.noiseR = 3; a.graceUntil = 0;
+    world._tick(w);
+    check("…and hears you move, wherever you are", G.st === "hunt" && G.prey === 301);
+
+    // against each other: only the side with every key is loud; the others still hum along
+    const f = room("free", [{ id: 311 }, { id: 312 }]);
+    const F = [phone(311), phone(312)];
+    for (const r of f.house.relics.filter((q) => q.side === "p311")) { walk(f, F[0], 311, r.x, r.y); world._tick(f); }
+    check("free-for-all: your keys all found — the lullaby goes on for everyone else", f.sides[0].open && !f.house.hum.hunt);
+    const G2 = f.house.ghosts[0];
+    const me = f.players.get(311), them = f.players.get(312);
+    me.noiseR = 3; them.noiseR = 3; me.graceUntil = 0; them.graceUntil = 0;
+    f.house.hum.on = true; f.house.hum.t = 99;
+    Object.assign(G2, { stun: 0, st: "patrol", x: f.house.respawn.x, y: f.house.respawn.y, prey: null });
+    coreMod.ghostTarget(G2, f.env, f.house.respawn.x | 0, f.house.respawn.y | 0);
+    world._tick(f);
+    check("…but she hears the one with every key, anywhere, any time", G2.st === "hunt" && G2.prey === 311);
+  }
+
+  // ── chalk ──────────────────────────────────────────────────────────────────
+  {
+    const w = room("coop", [{ id: 401 }, { id: 402 }]);
+    const A = phone(401);
+    const N = w.house.N, p = w.players.get(401);
+    const k = w.house.exitT.y * N + w.house.exitT.x;       // the wall with the front door
+    p.y = N - 1.6; p.at = Date.now();                      // standing just inside it
+    A.h["manor:chalk"]({ code: w.code, k: k - 1, px: p.x, py: p.y });
+    check("chalk a wall in reach: everyone sees the mark", w.marks.includes(k - 1));
+    sent.length = 0;
+    world._tick(w);
+    const tk = sent.filter((q) => q.ev === "manor:tick").pop().payload;
+    check("…in every tick", tk.k.includes(k - 1) && tk.e.some((e) => e.type === "chalk" && e.k === k - 1 && e.on === 1));
+    A.h["manor:chalk"]({ code: w.code, k: k - 1, px: p.x, py: p.y });
+    check("…again, and it's rubbed out", !w.marks.includes(k - 1));
+    A.h["manor:chalk"]({ code: w.code, k: N + 1, px: p.x, py: p.y });
+    check("a wall across the house: no", !w.marks.includes(N + 1));
+    const floorK = (p.y | 0) * N + (p.x | 0);
+    A.h["manor:chalk"]({ code: w.code, k: floorK, px: p.x, py: p.y });
+    check("the floor: no", !w.marks.includes(floorK));
   }
 
   // ── a free-for-all: first one out wins, and that ends it ──────────────────
@@ -170,7 +233,9 @@ let coreMod;
     check("…not back yet (a moment for the scare)", !cy.alive);
     cy.respawnAt = Date.now() - 1;
     world._tick(w);
-    check("…then back in at the entrance", cy.alive && Math.hypot(cy.x - w.house.spawn.x, cy.y - w.house.spawn.y) < 1e-9 && lastEv("respawn").some((e) => e.id === 3 && e.why === "caught"));
+    const dFromDoor = coreMod.dmap(w.house.g, w.house.N, w.house.spawn.x | 0, w.house.spawn.y | 0)[(cy.x | 0) + (cy.y | 0) * w.house.N];
+    check("…then back in — deep in the house, not beside the front door", cy.alive && Math.hypot(cy.x - w.house.respawn.x, cy.y - w.house.respawn.y) < 1e-9 && dFromDoor >= 12 &&
+      lastEv("respawn").some((e) => e.id === 3 && e.why === "caught" && e.fa === w.house.respawn.fa), `${dFromDoor} steps from the door`);
     check("…keeping the keys you'd found", w.sides[2].got === 1);
 
 
@@ -269,12 +334,12 @@ let coreMod;
     check("a teleport is refused: you get no further than a sprint would take you", p.x < w.house.spawn.x + 1);
     Object.assign(p, { x: w.house.spawn.x, y: w.house.spawn.y });
     p.at = Date.now() - 100;
-    ph.me(w.code, 0.5, 0.5);
+    p.at = Date.now() - 300;
+    ph.me(w.code, p.x, w.house.N - 0.9);                 // into the wall with the front door in it
     check("a step into a wall is refused", p.x === w.house.spawn.x && p.y === w.house.spawn.y);
     p.at = Date.now() - 100;
-    const east = !w.house.g[1][2];                       // whichever way the hall runs
-    ph.me(w.code, p.x + (east ? 0.3 : 0), p.y + (east ? 0 : 0.3));
-    check("an honest step is taken", Math.abs(p.x + p.y - (w.house.spawn.x + w.house.spawn.y + 0.3)) < 1e-9);
+    ph.me(w.code, p.x, p.y - 0.3);                       // up the hall: clear floor
+    check("an honest step is taken", Math.abs(p.x + p.y - (w.house.spawn.x + w.house.spawn.y - 0.3)) < 1e-9);
     const stranger = phone(99);
     stranger.me(w.code, 5, 5);
     check("someone not in the house moves nobody", ![...w.players.values()].some((q) => q.x === 5));
@@ -316,7 +381,7 @@ let coreMod;
     G2.stun = 0;
     Object.assign(G2, { x: early.players.get(81).x + 0.2, y: early.players.get(81).y });
     world._tick(early);
-    check("while everyone memorises the map, the ghosts sleep", early.players.get(81).alive);
+    check("while everyone reads Nana's note, the ghosts sleep", early.players.get(81).alive);
   }
 
   // ── doors ──────────────────────────────────────────────────────────────────
@@ -327,8 +392,15 @@ let coreMod;
     const N = w.house.N, g = w.house.g;
     const k = w.house.doors[0], dx = k % N, dy = (k / N) | 0;
     const horiz = dx % 8 === 0;
-    const before = horiz ? [dx - 0.5, dy + 0.5] : [dx + 0.5, dy - 0.5];
-    const after = horiz ? [dx + 1.5, dy + 0.5] : [dx + 0.5, dy + 1.5];
+    // "before": the side you reach from the front door without going through it
+    let before = horiz ? [dx - 0.5, dy + 0.5] : [dx + 0.5, dy - 0.5];
+    let after = horiz ? [dx + 1.5, dy + 0.5] : [dx + 0.5, dy + 1.5];
+    {
+      const shut = g.map((row) => row.slice());
+      shut[dy][dx] = coreMod.WALL;
+      const dd = coreMod.dmap(shut, N, w.house.spawn.x | 0, w.house.spawn.y | 0);
+      if (dd[(before[0] | 0) + (before[1] | 0) * N] < 0) [before, after] = [after, before];
+    }
     check("doors start shut", g[dy][dx] === coreMod.DOOR);
     walk(w, A, 111, before[0], before[1]);
     const a = w.players.get(111);
@@ -549,8 +621,21 @@ let coreMod;
     sent.length = 0;
     world._tick(w);
     for (const t of sent.filter((x) => x.ev === "manor:tick")) mc.applyTick(cb, t.payload, Date.now() + 3000);
-    check("back in after the scare: the phone is playing again, at the entrance",
-      cb.alive && mc.playing(cb) && Math.hypot(cb.body.x - w.house.spawn.x, cb.body.y - w.house.spawn.y) < 1e-6 && /Back in/.test(cb.msg), cb.msg);
+    check("back in after the scare: the phone is playing again, where the house woke you",
+      cb.alive && mc.playing(cb) && Math.hypot(cb.body.x - w.house.respawn.x, cb.body.y - w.house.respawn.y) < 1e-6 && /wake up/.test(cb.msg), cb.msg);
+
+    // no map on the phone: riddles for its own keys, a tune to follow, chalk shared
+    check("the phone has Nana's riddles for its own keys only", cb.riddles.length === w.sides.find((sd) => sd.members.includes(102)).need &&
+      cb.riddles.every((q) => q.r.mine));
+    const vn = mc.viewState(cb, Date.now() + 9000);
+    check("…and nothing to draw a map from: no pins for keys or the door", !("bigMap" in vn) && vn.riddles.length === cb.riddles.length);
+    for (let i = 0; i < 3; i++) mc.stepLocal(cb, { ix: 0, iy: 0, turn: 0 }, 1 / 60, Date.now() + 9000);
+    check("…a music box to follow from the start", !!cb.tune && cb.tune.vol > 0);
+    Object.assign(cb.body, { x: w.house.exitT.x + 0.5, y: w.house.N - 1.6, fa: Math.PI / 2 });
+    const ask = mc.chalk(cb, Date.now() + 9000);
+    check("chalk on the phone: drawn at once, and the server asked", !!ask && cb.marks.includes(ask.k) && ask.k === w.house.exitT.y * w.house.N + w.house.exitT.x);
+    mc.applyTick(cb, { ...sent.filter((x) => x.ev === "manor:tick").pop().payload, k: [5, 6] }, Date.now() + 9000 + 2000);
+    check("…and a friend's marks arrive with the ticks", cb.marks.join() === "5,6");
 
     // Use on the phone: at once, then the server agrees — or doesn't
     {

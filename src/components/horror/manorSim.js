@@ -1,9 +1,14 @@
 // src/components/horror/manorSim.js
 // NANA'S LULLABY, solo — a first-person walk through Nana Elowen's house at
-// night: find the three keys, unlock the front door, get out. Nana walks the
-// halls humming a lullaby. While she hums you're safe to move; when the
-// humming stops she is listening — move then and she hears you. She also
-// hears running and sees your light, and hunts.
+// night: find the three keys, unlock the front door, get out. There is no
+// map. Nana's note gives a riddle for each key's room, a sign over every
+// doorway names the room beyond, and each key sits in a music box you can
+// follow by ear. Chalk a wall to remember where you've been.
+// Nana walks the halls humming a lullaby. While she hums you're safe to
+// move; when the humming stops she is listening — move then and she hears
+// you. She also hears running and sees your light, and hunts. With the last
+// key the house goes dark and she stops humming altogether: she hears every
+// step, and it's a run back to the front door.
 // Doors creak open and can be shut behind you; tables, beds and wardrobes
 // hide you — it can't catch you there, and if it watched you go in it only
 // searches a while and gives up. Now and then the house tries to frighten you (scareStep)
@@ -12,15 +17,15 @@
 // Ported from a standalone page; the numbers are the original's. The house,
 // movement, doors, hiding spots and the ghost are manorCore.mjs, shared with the multiplayer game
 // and the server. This file is the solo night around them: nights that grow,
-// the memorise-the-map intro, the walk in through the gate, the music box,
-// and the lines it says to you.
+// Nana's note, the walk in through the front door, the music boxes, the run
+// at the end, and the lines it says to you.
 //
 // Nothing here draws or plays sound: anything the page should hear about is
 // pushed onto `s.events`. No React and no DOM, so it runs from a Node script.
 import {
   D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, rng, shuffle, genHouse, houseSize, dmap, floors, roomFloors,
-  nameRooms, roomAt, ROOM_KINDS,
-  los, canAt, farGate, gapObstacles,
+  nameRooms, roomAt, ROOM_KINDS, RIDDLES, frontDoor, spawnOf, hallRoom, fieldOf, tuneFor, chalkAt, toggleMark, huntNight,
+  los, canAt, gapObstacles,
   newBody, litBody, mvOK as bodyMvOK, jumpBody, stepBody,
   newGhost, ghostTarget, ghostPatrol, ghostSees, ghostSpeed as speedOf, stepGhost,
   actionAt, ACTION_LABEL, watcher, hideIn, leaveLocker,
@@ -28,7 +33,7 @@ import {
 } from "./manorCore.mjs";
 
 export { D4, R, HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, dmap, floors, los, canAt, ROOM_KINDS, roomAt };
-export const INTRO_S = 9;              // seconds to memorise the map
+export const INTRO_S = 9;              // seconds to read Nana's note
 
 const RELIC_LINES = [
   "An iron key, tied with a faded pink ribbon.",
@@ -36,7 +41,7 @@ const RELIC_LINES = [
   "A tiny key from a sewing tin. Somewhere, the humming falters.",
   "A black key. Footsteps overhead.",
 ];
-const LAST_RELIC = "The third key. The front door is unlocked. Go — quietly.";
+const LAST_RELIC = "The last key — and the humming stops. The lights die. She's coming. RUN to the front door!";
 export const AMBIENT = [
   "Somewhere, a rocking chair creaks.",
   "Knitting needles click in the dark.",
@@ -44,7 +49,7 @@ export const AMBIENT = [
   "Lavender and dust. She was here a moment ago.",
 ];
 
-// A little bigger and fuller with the nights, but never a hard map: 3×3
+// A little bigger with the nights, but always a house you can learn: 3×3
 // rooms for the first two nights, 4×4 after that.
 export function nightSize(night) {
   return { N: houseSize(night <= 2 ? 3 : 4), need: 3 };   // always the three keys
@@ -56,30 +61,40 @@ export function newNight(seed, night = 1) {
   const rand = rng((Number(seed) || 1) + night * 104729);
   let { N, need } = nightSize(night);
   const { g, doors, gaps, spots } = genHouse(N, rand);
-  const d0 = dmap(g, N, 1, 1);
+  const exitT = frontDoor(N), RN = (N - 1) / 8, hall = hallRoom(RN);
+  const d0 = dmap(g, N, exitT.x, N - 2);
   const f = shuffle(roomFloors(g, N, new Set([...doors, ...gaps])), rand);
-  const { far, exitT } = farGate(g, N, d0, f);
-  g[exitT.y][exitT.x] = WALL;           // the far gate
-  g[1][0] = FLOOR;                      // the entrance gate, open until you are through
+  g[exitT.y][exitT.x] = FLOOR;          // the front door, open until you are through
 
-  const relics = [];
-  for (const c of f) {
-    if (relics.length >= need) break;
-    if (d0[c[0] + c[1] * N] < 12 || Math.hypot(c[0] - exitT.x, c[1] - exitT.y) < 6) continue;
-    if (relics.every((r) => Math.hypot(r.x - c[0] - 0.5, r.y - c[1] - 0.5) > 7)) relics.push({ x: c[0] + 0.5, y: c[1] + 0.5, got: false });
+  // the keys: each in its own room, never the hall, far enough in
+  const relics = [], used = new Set();
+  for (const gap of [6, 3, 0]) {
+    for (const c of f) {
+      if (relics.length >= need) break;
+      const rm = roomAt(N, c[0] + 0.5, c[1] + 0.5);
+      if (rm === hall || used.has(rm) || d0[c[0] + c[1] * N] < 9) continue;
+      if (relics.every((r) => Math.hypot(r.x - c[0] - 0.5, r.y - c[1] - 0.5) > gap)) { relics.push({ x: c[0] + 0.5, y: c[1] + 0.5, got: false }); used.add(rm); }
+    }
   }
   need = relics.length;
 
   const cells = [];                      // no batteries in Nana's house: your light never dies
 
-  const gs = f.find((c) => d0[c[0] + c[1] * N] > 24 && relics.every((r) => Math.hypot(r.x - c[0], r.y - c[1]) > 4)) || far;
+  // she starts in the deepest part of the house, away from the keys
+  const deep = f.filter((c) => roomAt(N, c[0] + 0.5, c[1] + 0.5) !== hall).sort((a, b) => d0[b[0] + b[1] * N] - d0[a[0] + a[1] * N]);
+  const gs = deep.slice(0, Math.max(4, deep.length >> 2)).find((c) => relics.every((r) => Math.hypot(r.x - c[0], r.y - c[1]) > 4)) || deep[0];
+  const far = deep[0];
   const obst = {};                      // and nothing to jump
   void gapObstacles;
 
-  const P = newBody(0.5, 1.5, 0);
+  const P = newBody(exitT.x + 0.5, N - 0.5, spawnOf(N).fa);
+  const rooms = nameRooms(RN, rand);
   const s = {
     seed, night, rand, N, g, need, relics, cells, exitT, obst, far, spots,
-    rooms: nameRooms((N - 1) / 8, rand),
+    rooms,
+    // Nana's note: a riddle for each key's room
+    riddles: relics.map((r) => RIDDLES[rooms[roomAt(N, r.x, r.y)]] || "somewhere in the house"),
+    fields: relics.map((r) => fieldOf(g, N, r)), marks: [], tune: null, finale: false,
     env: { g, N, obst, doors: new Set(doors), switches: lampSwitches(g, N, new Set(doors), exitT) },
     G: newGhost(gs[0] + 0.5, gs[1] + 0.5),
     P,
@@ -100,7 +115,7 @@ const emit = (s, name, v) => s.events.push(v === undefined ? { name } : { name, 
 export function say(s, text, ms) { s.msg = text; s.msgT = ms || 0; }
 export const lit = (s) => litBody(s.P);
 
-// The dark falls: the map goes and you walk in through the gate.
+// The note is put away and you walk in through the front door.
 export function begin(s) {
   if (s.mode !== "intro") return;
   s.mode = "play";
@@ -159,15 +174,37 @@ export function toggleLight(s) {
   say(s, s.P.light ? "Light on." : "Light off. Dark — but she has to be right beside you to see you now.", 2200);
 }
 export function toggleRun(s) { s.P.runOn = !s.P.runOn; }
+// Chalk: mark (or rub out) the wall or door in front of you.
+export function chalk(s) {
+  if (s.mode !== "play") return false;
+  const k = chalkAt(s.env, s.P);
+  if (k == null) { say(s, "Face a wall or a door to chalk it.", 1800); return false; }
+  const on = toggleMark(s.marks, k);
+  emit(s, "chalk");
+  say(s, on ? "Chalked. You'll know you've been here." : "Rubbed out.", 1600);
+  return true;
+}
+export const canChalk = (s) => s.mode === "play" && chalkAt(s.env, s.P) != null;
 
 // ── the thing ────────────────────────────────────────────────────────────────
 
 // a lit room shows you as plainly as your own light does
-const asTarget = (s) => ({ id: 1, x: s.P.x, y: s.P.y, lit: litBody(s.P) || lampOn(s.lamps, s.N, s.P.x, s.P.y), cr: s.P.cr, noiseR: s.P.noiseR, hid: s.P.hiding });
+const asTarget = (s) => ({ id: 1, x: s.P.x, y: s.P.y, lit: litBody(s.P) || lampOn(s.lamps, s.N, s.P.x, s.P.y), cr: s.P.cr, noiseR: s.P.noiseR, hid: s.P.hiding, loud: s.finale });
 export const seesYou = (s) => ghostSees(s.G, s.env, asTarget(s));
 // Faster with each relic you take and each night you survive.
 export const hustleOf = (s) => 0.12 * s.count + 0.08 * (s.night - 1);
 export const ghostSpeed = (s) => speedOf(s.G, hustleOf(s));
+
+// Every key: the lights die, she stops humming, and hunts. She hears every
+// step you take from now on (loud), so it's a run for the front door — and
+// knowing the way.
+function finale(s) {
+  s.finale = true;
+  huntNight(s.hum);
+  s.lamps.fill(0);
+  s.G.stun = Math.max(s.G.stun, 2);
+  emit(s, "finale");
+}
 
 function caught(s) {
   if (s.mode !== "play") return;
@@ -191,13 +228,13 @@ function update(s, inp, dt) {
   s.tm += dt;
   stepBody(P, s.env, inp, dt, (name) => emit(s, name));
 
-  if (P.entering && P.x >= 1.6) {
+  if (P.entering && P.y <= N - 1.9) {
     P.entering = false;
-    s.g[1][0] = WALL;
+    s.g[s.exitT.y][s.exitT.x] = WALL;
     emit(s, "gateSlam");
     s.G.stun = 3;
     s.grace = GRACE_S;                       // a moment to get your bearings
-    say(s, "The front door locks behind you. Find the three keys.", 5000);
+    say(s, "The front door locks behind you. Listen — somewhere, a music box is playing.", 5000);
   }
 
   const ct = (P.y | 0) * N + (P.x | 0);
@@ -226,14 +263,16 @@ function update(s, inp, dt) {
         r.got = true;
         s.count++;
         emit(s, "relic");
+        // the music box falls silent — and she notices, wherever she is
         if (s.G.st !== "hunt") { s.G.st = "search"; s.G.wait = 0; ghostTarget(s.G, s.env, P.x | 0, P.y | 0); }
-        say(s, s.count >= s.need ? LAST_RELIC : RELIC_LINES[(s.count - 1) % 4], 4000);
+        if (s.count >= s.need) finale(s);
+        say(s, s.count >= s.need ? LAST_RELIC : `${RELIC_LINES[(s.count - 1) % 4]} The music box stops — she heard that.`, 4500);
       }
     }
   }
 
   const ex = s.exitT.x + 0.5, ey = s.exitT.y + 0.5;
-  if (Math.hypot(ex - P.x, ey - P.y) < 1.2) {
+  if (!P.entering && Math.hypot(ex - P.x, ey - P.y) < 1.2) {
     if (s.count >= s.need) { s.mode = "won"; emit(s, "win"); return; }
     else if (s.msgT <= 0) say(s, "The front door is locked. Find all three keys.", 2500);
   }
@@ -256,6 +295,8 @@ function update(s, inp, dt) {
   if (s.mode !== "play") return;
 
   hints(s, P);
+  // the music box of the nearest key, by the walk to it
+  s.tune = P.entering ? null : tuneFor(s.fields, s.relics, N, P, undefined, s.g);
   s.puffs.forEach((q) => { q.t -= dt; });
   s.puffs = s.puffs.filter((q) => q.t > 0);
   P.lightOut -= dt;
@@ -265,7 +306,7 @@ function update(s, inp, dt) {
   scareStep(s, P, dt, s.rand, s.G.st === "hunt", (name, v) => emit(s, name, v));
 
   s.ambT -= dt;
-  if (s.ambT <= 0 && s.msgT <= 0) {
+  if (s.ambT <= 0 && s.msgT <= 0 && !s.finale) {
     s.ambT = 22 + s.rand() * 15;
     say(s, AMBIENT[(s.rand() * 4) | 0], 3000);
   }

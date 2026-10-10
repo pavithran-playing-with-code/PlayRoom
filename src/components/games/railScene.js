@@ -28,8 +28,12 @@ const rnd = (a, b) => a + Math.random() * (b - a), pick = (a) => a[(Math.random(
 export const themeAt = (d) => Math.floor(Math.max(0, d) / THEME_M) % 3;
 
 export function createRailScene(T) {
-  const renderer = new T.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+  // a phone: a little less sharp (it's small) and no edge smoothing at high
+  // density — 3D that drops frames makes the run feel heavy
+  const phone = !!(window.matchMedia && window.matchMedia("(pointer:coarse)").matches);
+  const dpr = Math.min(window.devicePixelRatio || 1, phone ? 1.3 : 1.75);
+  const renderer = new T.WebGLRenderer({ antialias: !phone || dpr < 1.5, powerPreference: "high-performance" });
+  renderer.setPixelRatio(dpr);
   const canvas = renderer.domElement;
   const scene = new T.Scene(), cam = new T.PerspectiveCamera(65, 1, 0.1, 1500);
   scene.fog = new T.Fog(0xcfeeff, 60, 250); scene.add(cam);
@@ -106,7 +110,7 @@ export function createRailScene(T) {
     const g = new T.Group(); g.position.z = zc;
     g.add(mesh(gPath, mPath, 0, -0.4, 0), mesh(gSide, mGrass, -LANE * 1.5 - 7.4, -1.45, 0), mesh(gSide, mGrass, LANE * 1.5 + 7.4, -1.45, 0),
       mesh(gRail, mRail, -LANE * 1.5 - 0.1, 0.28, 0), mesh(gRail, mRail, LANE * 1.5 + 0.1, 0.28, 0), mesh(gLine, mLine, -LANE / 2, 0.02, 0), mesh(gLine, mLine, LANE / 2, 0.02, 0));
-    for (let i = 0; i < 9; i++) { const z = rnd(-CL / 2, CL / 2); decor(th, -(LANE * 1.5 + rnd(1.8, 12)), z, g); decor(th, LANE * 1.5 + rnd(1.8, 12), z + rnd(-2, 2), g); }
+    for (let i = 0; i < (phone ? 5 : 8); i++) { const z = rnd(-CL / 2, CL / 2); decor(th, -(LANE * 1.5 + rnd(1.8, 12)), z, g); decor(th, LANE * 1.5 + rnd(1.8, 12), z + rnd(-2, 2), g); }
     for (const sd of [-1, 1]) if (Math.random() < 0.7) {
       const I = new T.Group();
       I.add(mesh(gIsl, mUnder, 0, -3.4, 0), mesh(gIslTop, mGrass, 0, 0.2, 0));
@@ -148,7 +152,7 @@ export function createRailScene(T) {
   function poseHero(h, { x, y, grounded, sliding, stun, safe, speed, dt, t }) {
     h.g.position.set(x, y, h.g.position.z); h.sh.position.set(x, 0.05, h.g.position.z); h.sh.scale.setScalar(Math.max(0.3, 1 - y * 0.12));
     h.phase += dt * (8 + speed * 0.28);
-    const k = Math.min(1, dt * 18);
+    const k = Math.min(1, dt * 26);
     if (stun) {
       // a crash: a tumble forward, arms out
       h.inner.rotation.x = lerp(h.inner.rotation.x, 0.9 + Math.sin(t * 14) * 0.15, k);
@@ -224,7 +228,7 @@ export function createRailScene(T) {
     const pz = -s.z, px = s.x * LANE, py = s.y, grounded = s.y <= 0.001, sliding = s.slideT > 0 && s.y < 0.3;
     const th = themeAt(s.z);
     // the path ahead, and nothing behind
-    while (lastChunkZ > pz - 300) { lastChunkZ -= CL; mkChunk(lastChunkZ, themeAt(-lastChunkZ)); }
+    while (lastChunkZ > pz - 250) { lastChunkZ -= CL; mkChunk(lastChunkZ, themeAt(-lastChunkZ)); }
     for (let i = chunks.length - 1; i >= 0; i--) if (chunks[i].z > pz + CL * 1.5) { scene.remove(chunks[i].g); chunks.splice(i, 1); }
     // the course, from the sim
     const seen = new Set();
@@ -275,8 +279,9 @@ export function createRailScene(T) {
     applyTheme(th, dt);
     for (const c of clouds) { c.position.x += dt * 3; if (c.position.x > 600) c.position.x = -600; c.position.z = pz + c.userData.dz; }
     const sx = (Math.random() * 2 - 1) * shake * 0.5, sy = (Math.random() * 2 - 1) * shake * 0.4;
-    cam.position.set(px * 0.6 + sx, 4.3 + py * 0.4 + sy, pz + 7.4);
-    cam.lookAt(px * 0.5, 1.5 + py * 0.3, pz - 12);
+    // a steady camera: rising with the jump made every jump look half its height
+    cam.position.set(px * 0.6 + sx, 4.3 + sy, pz + 7.4);
+    cam.lookAt(px * 0.5, 1.5, pz - 12);
     const portrait = cam.aspect < 1;
     const fov = (portrait ? 78 : 64) + Math.max(0, Math.min(1, (s.speed - 14) / 16)) * 7;
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 3); cam.updateProjectionMatrix(); }

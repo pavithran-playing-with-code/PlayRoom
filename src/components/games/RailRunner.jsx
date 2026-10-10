@@ -142,23 +142,24 @@ export default function RailRunner(props) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // a swipe: one move, the moment the finger has gone far enough — and the
-  // next one from there, so a finger that keeps going can swipe again
+  // a swipe: one move, the moment the finger has gone far enough. One per
+  // touch: letting a finger that kept going swipe again took a single swipe
+  // two lanes, to the edge
   const touch = useRef(null);
   const onDown = (e) => {
     if (overRef.current || isSpectator) return;
     if (e.target.closest && e.target.closest("button")) return;
     audio.current.init();
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* not supported */ }
-    touch.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    touch.current = { id: e.pointerId, x: e.clientX, y: e.clientY, used: false };
   };
   const onMove = (e) => {
     const t = touch.current;
-    if (!t || e.pointerId !== t.id) return;
+    if (!t || t.used || e.pointerId !== t.id) return;
     const dx = e.clientX - t.x, dy = e.clientY - t.y;
     if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_PX) return;
+    t.used = true;
     act(Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : dy < 0 ? "up" : "down");
-    t.x = e.clientX; t.y = e.clientY;
   };
   const onUp = (e) => { if (touch.current && e.pointerId === touch.current.id) touch.current = null; };
 
@@ -176,14 +177,22 @@ export default function RailRunner(props) {
     let raf, last = performance.now(), pushed = 0, lastHud = 0, sizeW = 0, sizeH = 0, theme = 0, coinRun = 0;
     const frame = (now) => {
       raf = requestAnimationFrame(frame);
-      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));   // never backwards: the first frame can be stamped early
+      // never backwards (the first frame can be stamped early); and on a phone
+      // that draws slowly, the run still goes at its real speed: a long frame
+      // is played in small steps, so nothing is jumped over
+      const dt = Math.min(0.25, Math.max(0, (now - last) / 1000));
       last = Math.max(last, now);
       if (size.current.w !== sizeW || size.current.h !== sizeH) { sizeW = size.current.w; sizeH = size.current.h; scene.resize(sizeW, sizeH); }
       const s = sim.current, A = audio.current;
       let crashed = false;
       if (!overRef.current) {
         const z0 = s.z;
-        const out = step(s, dt);
+        const out = { crashed: false, got: [] };
+        for (let left = dt; left > 1e-6; left -= 1 / 60) {
+          const o = step(s, Math.min(left, 1 / 60));
+          if (o.crashed) out.crashed = true;
+          out.got.push(...o.got);
+        }
         crashed = out.crashed;
         const T0 = tg.current;
         if (coop) {

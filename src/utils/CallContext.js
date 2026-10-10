@@ -139,6 +139,8 @@ export function CallProvider({ children }) {
   const [notice, setNotice] = useState(null);      // a short line after a call: { text, n }
   const [expanded, setExpanded] = useState(true);  // the full call screen, or the bubble
   const [screen, setScreen] = useState(null);      // the screen I'm sharing
+  const [onHold, setOnHold] = useState(false);     // my side's on hold (a phone call)
+  const holdRef = useRef(false);
   const [shareHelp, setShareHelp] = useState(false); // "why can't I share from my phone" card
   // the call's chat: kept here for the call only, never saved anywhere
   const [chat, setChat] = useState([]);            // [{ key, from, name, text, at, mine }]
@@ -236,7 +238,7 @@ export function CallProvider({ children }) {
     P = { pc, polite: myId > id, makingOffer: false, ignoreOffer: false, queue: [], video: null };
     pcs.current.set(id, P);
     const s = localRef.current;
-    if (s) s.getTracks().forEach((t) => { const snd = pc.addTrack(t, s); if (t.kind === "video") P.video = snd; });
+    if (s) s.getTracks().forEach((t) => { const snd = pc.addTrack(t, s); if (t.kind === "video") P.video = snd; else P.audio = snd; });
     const scr = screenRef.current;                    // sharing already: they see it too
     if (scr) shareInto(P, scr);
     if (!streams.current.has(id)) streams.current.set(id, { all: new Map(), screenId: null });
@@ -275,7 +277,7 @@ export function CallProvider({ children }) {
         patchPeer(id, { link: "ok" }); tune(pc);
         // a newcomer needs telling what's what: mic, camera, and which stream is my screen
         const c = callRef.current;
-        if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: micRef.current, cam: camRef.current, screen: screenRef.current ? screenRef.current.id : null });
+        if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: micRef.current, cam: camRef.current, screen: screenRef.current ? screenRef.current.id : null, hold: holdRef.current });
       }
       else if (st === "disconnected") patchPeer(id, { link: "lost" });
       else if (st === "failed") { patchPeer(id, { link: "lost" }); if (!P.polite) try { pc.restartIce(); } catch { /* old browser */ } }
@@ -337,6 +339,7 @@ export function CallProvider({ children }) {
     callRef.current = null;
     setCall(null); setPeers({}); setExpanded(true);
     setChat([]); setUnread(0); chatOpenRef.current = false; setChatOpenState(false);
+    holdRef.current = false; setOnHold(false);
   }, [closePeer, stopMedia, say]);
 
   // members changed: connect to newcomers, let go of whoever left
@@ -412,8 +415,61 @@ export function CallProvider({ children }) {
   // ── mic, camera, which camera ──────────────────────────────────────────────
   const tellMedia = useCallback((m, k) => {
     const c = callRef.current;
-    if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: m, cam: k, screen: screenRef.current ? screenRef.current.id : null });
+    if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: m, cam: k, screen: screenRef.current ? screenRef.current.id : null, hold: holdRef.current });
   }, [socket]);
+
+  // ── on hold: a phone call came in ──────────────────────────────────────────
+  // The phone takes the mic (and often the camera) for its own call, and may
+  // pause the page. The others are told "on hold" rather than seeing the
+  // call drop; coming back, any camera or mic the phone stopped is opened
+  // again and put back into every connection.
+  const setHold = useCallback((h) => {
+    if (holdRef.current === h || !callRef.current) return;
+    holdRef.current = h;
+    setOnHold(h);
+    tellMedia(micRef.current, camRef.current);
+  }, [tellMedia]);
+  const revive = useCallback(async () => {
+    const s = localRef.current;
+    if (!s || !callRef.current) return;
+    const dead = s.getTracks().filter((t) => t.readyState === "ended");
+    if (!dead.length) return;
+    try {
+      const want = { audio: dead.some((t) => t.kind === "audio") ? AUDIO : false, video: dead.some((t) => t.kind === "video") ? video(facing) : false };
+      const fresh = await navigator.mediaDevices.getUserMedia(want);
+      for (const t of fresh.getTracks()) {
+        const old = dead.find((d) => d.kind === t.kind);
+        if (!old) { t.stop(); continue; }
+        t.enabled = t.kind === "audio" ? micRef.current : camRef.current;
+        s.removeTrack(old); s.addTrack(t);
+        for (const P of pcs.current.values()) { const snd = t.kind === "video" ? P.video : P.audio; if (snd) await snd.replaceTrack(t).catch(() => {}); }
+      }
+      const copy = new MediaStream(s.getTracks());
+      localRef.current = copy; setLocal(copy);
+    } catch { say("Couldn't get the camera or mic back — tap 🎤 or 📹"); }
+  }, [facing, say]);
+  useEffect(() => {
+    if (!call || !local) return undefined;
+    const mic0 = local.getAudioTracks()[0];
+    const coarse = window.matchMedia && window.matchMedia("(pointer:coarse)").matches;
+    const check = () => {
+      const taken = !!mic0 && (mic0.muted || mic0.readyState === "ended");
+      const away = coarse && document.visibilityState === "hidden";
+      if (taken || away) { setHold(true); return; }
+      if (holdRef.current) { setHold(false); revive(); say("Back from hold"); }
+    };
+    // back in front: get any stopped camera or mic back, then look again at once
+    const onVis = () => { check(); if (document.visibilityState === "visible") revive().then(check); };
+    if (mic0) { mic0.addEventListener("mute", check); mic0.addEventListener("unmute", check); mic0.addEventListener("ended", check); }
+    document.addEventListener("visibilitychange", onVis);
+    const t = setInterval(check, 2000);                 // some phones don't fire the events
+    check();                                            // a new mic (just revived): straight away
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+      if (mic0) { mic0.removeEventListener("mute", check); mic0.removeEventListener("unmute", check); mic0.removeEventListener("ended", check); }
+    };
+  }, [call, local, setHold, revive, say]);
 
   // ── chat ───────────────────────────────────────────────────────────────────
   const sendChat = useCallback((text) => {
@@ -508,14 +564,14 @@ export function CallProvider({ children }) {
     };
     const onDeclined = ({ callId, id }) => { const c = callRef.current; if (c && c.id === callId && c.members.length > 1) say(`${c.names[id] || "They"} can't join right now`); };
     const onMissed = ({ callId, id }) => { const c = callRef.current; if (c && c.id === callId && c.members.length > 1) say(`${c.names[id] || "They"} didn't answer`); };
-    const onMedia = ({ callId, id, mic: m, cam: k, screen: sid }) => {
+    const onMedia = ({ callId, id, mic: m, cam: k, screen: sid, hold }) => {
       if (!callRef.current || callRef.current.id !== callId) return;
       const S = streams.current.get(id);
       if (S) {
         if (S.screenId && S.screenId !== sid) S.all.delete(S.screenId);     // they stopped sharing
         S.screenId = sid || null;
       }
-      patchPeer(id, { mic: m, cam: k });
+      patchPeer(id, { mic: m, cam: k, hold: !!hold });
       place(id);
     };
     // the socket came back: pick the call up where it was
@@ -549,9 +605,9 @@ export function CallProvider({ children }) {
   useEffect(() => () => { tones.current.stop(); stopMedia(); }, [stopMedia]);
 
   const value = useMemo(() => ({
-    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp,
+    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
-  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp,
+  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;

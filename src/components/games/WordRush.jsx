@@ -28,6 +28,16 @@ const WORDS = [
   "voice","water","zebra","brave","charm","dwarf","eagle","flame","grape","heart",
   "ivory","koala","maple","noble","olive","pearl","quilt","raven","shore","trust",
 ];
+// Other real words made of the same letters: any of them counts. (Only
+// common words — "earth" takes HEART and HATER, not every Scrabble oddity.)
+export const ALSO = {
+  stone: ["notes", "onset", "tones"], cloud: ["could"], dance: ["caned"], ocean: ["canoe"], green: ["genre"],
+  table: ["bleat"], bread: ["beard", "bared", "debar"], dream: ["armed"], smile: ["limes", "miles", "slime"],
+  earth: ["heart", "hater"], heart: ["earth", "hater"], lemon: ["melon"], mango: ["among"], night: ["thing"],
+  snake: ["sneak"], zebra: ["braze"], charm: ["march"], grape: ["pager"], maple: ["ample"], olive: ["voile"],
+  pearl: ["paler"], shore: ["horse"], trust: ["strut"],
+};
+export const accepts = (word, guess) => guess === word || (ALSO[word] || []).includes(guess);
 const CORRECT = 16;
 const SKIP = -4;
 const WRONG_MS = 450;   // how long a wrong word stays up before it clears
@@ -38,7 +48,9 @@ function buildRound(seed) {
   const order = shuffleInPlace([...WORDS], rand);
   return order.map((w) => {
     let scrambled = shuffleInPlace(w.split(""), rand).join("");
-    if (scrambled === w) scrambled = w.split("").reverse().join(""); // never show the answer
+    // never show an answer (the word, or another real word of its letters)
+    for (let k = 1; k < w.length && accepts(w, scrambled); k++) scrambled = scrambled.slice(1) + scrambled[0];
+    if (accepts(w, scrambled)) scrambled = w.split("").reverse().join("");
     return { word: w, scrambled };
   });
 }
@@ -154,7 +166,7 @@ export default function WordRush(props) {
     if (s.picked.length < word.word.length) return;
 
     const guess = s.picked.map((j) => word.scrambled[j]).join("");
-    if (guess === word.word) {
+    if (accepts(word.word, guess)) {
       setSolved((n) => n + 1);
       nextWord(CORRECT, "good");
     } else {

@@ -1622,3 +1622,7 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .rr-flash{position:absolute;inset:0;background:#ff3b3b;opacity:0}
 .rr-flash.on{animation:rr-flash .35s ease}
 @keyframes rr-flash{0%{opacity:.5}100%{opacity:0}}
+.call-weak.hold{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:16px;text-align:center;background:rgba(20,16,28,.6)}
+.call-weak.hold b{font-size:20px}
+.call-weak.hold span{font-weight:700;font-size:13px;opacity:.85;max-width:260px}
+.call-bar .call-chat-btn{position:relative}

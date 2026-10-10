@@ -293,9 +293,11 @@ export default function CallLayer() {
                     {showVid && <Vid stream={p.stream} className="call-full" />}
                     {!showVid && <Face avatar={avatarOf(m.id)} name={seats > 1 ? m.name : null} big={seats === 1} />}
                     <div className="call-tag">{m.name}{p.mic === false ? " · 🔇" : ""}</div>
-                    {(p.link === "lost" || m.away) && <div className="call-weak">Reconnecting…</div>}
-                    {p.link === "connecting" && !m.away && <div className="call-weak">Connecting…</div>}
-                    {p.link === "blocked" && !m.away && (
+                    {(p.hold || m.away) ? (
+                      <div className="call-weak hold"><b>⏸ On hold</b><span>{m.name} stepped away — the call carries on when they're back</span></div>
+                    ) : p.link === "lost" ? <div className="call-weak">Reconnecting…</div> : null}
+                    {p.link === "connecting" && !m.away && !p.hold && <div className="call-weak">Connecting…</div>}
+                    {p.link === "blocked" && !m.away && !p.hold && (
                       <div className="call-weak blocked">
                         <b>Can't get through yet</b>
                         <span>Your networks are blocking a direct call. Still trying — switching one of you to Wi-Fi usually helps.</span>
@@ -326,10 +328,9 @@ export default function CallLayer() {
             <button type="button" className="call-mini" onClick={() => C.setExpanded(false)} aria-label="Shrink the call">
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
-            {active && (
-              <button type="button" className="call-mini call-chat-btn" onClick={() => C.setChatOpen(!chatOpen)}
-                aria-label={unread ? `Chat, ${unread} new` : "Chat"} aria-pressed={!!chatOpen}>
-                💬{unread > 0 && <span className="call-badge">{unread > 9 ? "9+" : unread}</span>}
+            {active && room && (
+              <button type="button" className="call-mini" onClick={() => setPicking(true)} aria-label="Add a friend to the call">
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></svg>
               </button>
             )}
             {active && canDocPip() && (
@@ -366,8 +367,11 @@ export default function CallLayer() {
                 aria-label={screen ? "Stop sharing your screen" : canShareScreen() ? "Share your screen" : "Screen sharing (needs a computer)"}
                 aria-pressed={!!screen}>🖥️</button>
             )}
-            {call.phase === "active" && room && (
-              <button type="button" className="call-btn" onClick={() => setPicking(true)} aria-label="Add a friend to the call">➕</button>
+            {active && (
+              <button type="button" className={`call-btn call-chat-btn${chatOpen ? " off" : ""}`} onClick={() => C.setChatOpen(!chatOpen)}
+                aria-label={unread ? `Chat, ${unread} new` : "Chat"} aria-pressed={!!chatOpen}>
+                💬{unread > 0 && <span className="call-badge">{unread > 9 ? "9+" : unread}</span>}
+              </button>
             )}
             <button type="button" className="call-btn red" onClick={C.hangUp} aria-label={call.phase === "active" ? "Hang up" : "Cancel"}><Phone /></button>
           </div>

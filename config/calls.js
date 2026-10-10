@@ -21,7 +21,10 @@ const MAX = 4;
 const CHAT_MAX = 500;
 // (overridable so scripts/check-calls.js doesn't wait half a minute)
 const RING_MS = Number(process.env.CALL_RING_MS) || 35000;
-const GRACE_MS = Number(process.env.CALL_GRACE_MS) || 15000;
+// Two minutes: long enough for a phone call to come in and be answered —
+// the phone takes the mic, the browser may pause PlayRoom and drop its
+// socket — without the PlayRoom call ending under you ("on hold" meanwhile).
+const GRACE_MS = Number(process.env.CALL_GRACE_MS) || 120000;
 // A description from Chrome lists every codec it has: 4-5 KB a video
 // section, and a call with a screen shared has several. 20 KB dropped a
 // second share's offer, and the share never arrived.
@@ -222,7 +225,7 @@ function attach(io) {
       const c = calls.get(msg && msg.callId);
       if (!c || !c.members.has(uid)) return;
       const screen = typeof msg.screen === "string" && /^[\w{}-]{1,100}$/.test(msg.screen) ? msg.screen : null;
-      toMembers(c, "call:media", { callId: c.id, id: uid, mic: !!msg.mic, cam: !!msg.cam, screen }, uid);
+      toMembers(c, "call:media", { callId: c.id, id: uid, mic: !!msg.mic, cam: !!msg.cam, screen, hold: !!msg.hold }, uid);
     });
 
     // Chat in the call: passed to the others in it, never stored. A message

@@ -1567,34 +1567,6 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .call-help-title{font-size:19px}
 .call-help p{margin:0;font-weight:700;font-size:14px;line-height:1.45;opacity:.85}
 .call-help-how{background:#fff7e0;border-radius:var(--r);padding:10px 12px;opacity:1 !important}
-/* ── Lantern Wisps (.lw-): a night forest, full screen and sideways ──────── */
-.lw-stage{position:relative;overflow:hidden;background:#0a1030;touch-action:none;color:#f7f1d0;font-family:Nunito,'Trebuchet MS',system-ui,sans-serif}
-.lw-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
-.lw-msg{position:absolute;inset:0;display:grid;place-items:center;font:700 20px Fredoka,'Arial Rounded MT Bold',sans-serif;color:#ffcf5a}
-.lw-count{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;font:700 clamp(64px,22vh,140px)/1 Fredoka,'Arial Rounded MT Bold',sans-serif;
-  color:#ffcf5a;text-shadow:0 0 30px rgba(255,207,90,.6),0 6px 0 #8a5a10}
-.lw-down{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);transform:translateX(-50%);max-width:min(92%,520px);
-  padding:8px 16px;border-radius:999px;background:rgba(10,16,48,.85);border:2px solid rgba(255,255,255,.2);font-weight:800;font-size:14px;text-align:center;pointer-events:none}
-.lw-stick{position:absolute;left:calc(env(safe-area-inset-left,0px) + 22px);bottom:calc(env(safe-area-inset-bottom,0px) + 20px);width:120px;height:120px;border-radius:50%;
-  background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.3);touch-action:none;display:grid;place-items:center}
-.lw-knob{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.5);pointer-events:none}
-.lw-dash{position:absolute;right:calc(env(safe-area-inset-right,0px) + 24px);bottom:calc(env(safe-area-inset-bottom,0px) + 44px);width:84px;height:84px;border-radius:50%;
-  border:3px solid rgba(255,255,255,.6);background:rgba(91,227,255,.22);color:#f7f1d0;font:600 18px Fredoka,'Arial Rounded MT Bold',sans-serif;touch-action:none;cursor:pointer}
-.lw-dash:active{transform:scale(.94);background:rgba(91,227,255,.4)}
-.lw-cards{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,calc(100% - 24px));max-height:calc(100% - 70px);overflow:auto;
-  padding:12px 12px 14px;border-radius:20px;background:rgba(10,16,48,.94);border:2px solid rgba(255,255,255,.18);box-shadow:0 18px 60px rgba(0,0,0,.5);z-index:3}
-.lw-cards-head{display:flex;align-items:baseline;justify-content:center;gap:10px;margin-bottom:8px}
-.lw-cards-head b{font:700 24px Fredoka,'Arial Rounded MT Bold',sans-serif;color:#ffcf5a}
-.lw-cards-head span{font-size:13px;font-weight:800;color:#aab6e0}
-.lw-cards-row{display:flex;gap:8px}
-.lw-card{flex:1 1 0;min-width:0;padding:10px 8px 8px;border:2px solid rgba(255,255,255,.18);border-radius:14px;background:rgba(255,255,255,.05);color:#f7f1d0;
-  display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center;cursor:pointer;transition:transform .12s,border-color .12s,background .12s}
-.lw-card:hover,.lw-card:focus-visible,.lw-card:active{transform:translateY(-3px);border-color:#ffcf5a;background:rgba(255,207,90,.1)}
-.lw-card b{font:600 16px Fredoka,'Arial Rounded MT Bold',sans-serif}
-.lw-card i{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#5be3ff}
-.lw-card span{font-size:12px;line-height:1.3;color:#aab6e0}
-.lw-card kbd{margin-top:4px;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:0 7px;font:700 12px Nunito,sans-serif;color:#aab6e0}
-.lw-stage.touch .lw-card kbd{display:none}
 /* ── Rail Runner in the "Sky Sprint" look: full screen 3D, a bold HUD ───── */
 .rr-stage{position:relative;overflow:hidden;background:#10203a;touch-action:none;color:#fffaf0;font-family:Nunito,'Trebuchet MS',system-ui,sans-serif}
 .rr-gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
@@ -1630,3 +1602,13 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .call-me{touch-action:none;cursor:grab}
 .call-chat-head{touch-action:none;cursor:grab}
 .call-chat.moved,.call-me.moved{transform:none}
+/* a camera picture turned back a quarter (its phone is playing a sideways game) */
+.call-turnbox{overflow:hidden;container-type:size}
+.call-turned{position:absolute;left:50%;top:50%;width:100cqh;height:100cqw;max-width:none;max-height:none;object-fit:cover;background:#000}
+/* the whole call drawn sideways with a sideways game (like .gameshell.rot) */
+.call-root{display:contents}
+.call-root.rot{display:block;position:fixed;top:0;left:100vw;width:100vh;width:100dvh;height:100vw;
+  transform:rotate(90deg);transform-origin:0 0;z-index:10000;pointer-events:none}
+.call-root.rot > *{pointer-events:auto}
+/* the picture a phone floats over other apps: not shown in the page itself */
+.call-pipvid{position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none}

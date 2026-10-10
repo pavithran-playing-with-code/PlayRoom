@@ -11,25 +11,44 @@ import React, { useEffect, useRef, useState } from "react";
 import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallContext";
 import { usePresence } from "../utils/PresenceContext";
 import { canDocPip, openPip, updatePip, closePip } from "../utils/callPip";
+import { useDrawnSideways, isDrawnSideways, toGame, gameRect } from "./horror/LandscapeGate";
 
 // Where the floating call window (callPip.js) can be used, a video's own
 // picture-in-picture is turned off: it can only show one face.
 const NO_VIDEO_PIP = canDocPip();
+// A phone: the call can float as the friend's video in its own little window,
+// which stays over other apps when you leave PlayRoom (like WhatsApp).
+const VIDEO_PIP = !NO_VIDEO_PIP && typeof document !== "undefined" && !!document.pictureInPictureEnabled;
+
+// Positions while dragging, in the call's own frame — turned a quarter when
+// a game is drawn sideways (the call is then drawn sideways with it).
+const at = (e) => toGame(e, isDrawnSideways());
+const area = () => (isDrawnSideways() ? { w: window.innerHeight, h: window.innerWidth } : { w: window.innerWidth, h: window.innerHeight });
 
 const two = (n) => String(n).padStart(2, "0");
 const clock = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${two(s % 60)}`; };
 
 // A picture. Always silent: the sound is played by <Sound>, which stays put
 // whether the call is full screen or shrunk to the bubble. Mine is mirrored,
-// like a mirror.
-function Vid({ stream, mirror = false, className = "" }) {
+// like a mirror. `turn`: the camera's picture came out turned (its phone is
+// playing a sideways game with the screen upright) — it's turned back here,
+// filling its box the same way.
+function Vid({ stream, mirror = false, className = "", turn = 0 }) {
   const ref = useRef(null);
   useEffect(() => {
     const v = ref.current;
     if (!v) return;
     if (v.srcObject !== stream) v.srcObject = stream || null;
     if (stream) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
-  }, [stream]);
+  }, [stream, turn]);
+  if (turn) {
+    return (
+      <div className={`${className} call-turnbox`}>
+        <video ref={ref} className="call-turned" autoPlay playsInline muted disablePictureInPicture={NO_VIDEO_PIP}
+          style={{ transform: `translate(-50%,-50%)${mirror ? " scaleX(-1)" : ""} rotate(${turn}deg)` }} />
+      </div>
+    );
+  }
   return <video ref={ref} className={`${className}${mirror ? " mirror" : ""}`} autoPlay playsInline muted disablePictureInPicture={NO_VIDEO_PIP} />;
 }
 
@@ -59,17 +78,18 @@ function useDrag() {
   const d = useRef(null);
   const moved = useRef(false);
   const start = (e, el) => {
-    const r = (el || e.currentTarget).getBoundingClientRect();
-    d.current = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, w: r.width, h: r.height, go: false };
+    const r = gameRect(el || e.currentTarget, isDrawnSideways()), p = at(e);
+    d.current = { id: e.pointerId, dx: p.x - r.left, dy: p.y - r.top, x0: p.x, y0: p.y, w: r.width, h: r.height, go: false };
     moved.current = false;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
   };
   const move = (e) => {
     const s = d.current;
     if (!s || s.id !== e.pointerId) return;
-    if (!s.go && Math.hypot(e.clientX - s.x0, e.clientY - s.y0) < 6) return;
+    const p = at(e), A = area();
+    if (!s.go && Math.hypot(p.x - s.x0, p.y - s.y0) < 6) return;
     s.go = true; moved.current = true;
-    setPos({ x: Math.max(4, Math.min(window.innerWidth - s.w - 4, e.clientX - s.dx)), y: Math.max(4, Math.min(window.innerHeight - s.h - 4, e.clientY - s.dy)), w: s.w, h: s.h });
+    setPos({ x: Math.max(4, Math.min(A.w - s.w - 4, p.x - s.dx)), y: Math.max(4, Math.min(A.h - s.h - 4, p.y - s.dy)), w: s.w, h: s.h });
   };
   const end = (e) => { if (d.current && d.current.id === e.pointerId) d.current = null; };
   const style = pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined;
@@ -173,16 +193,17 @@ export default function CallLayer() {
   const [pos, setPos] = useState(null);
   const drag = useRef(null);
   const bubbleDown = (e) => {
-    const r = e.currentTarget.getBoundingClientRect();
-    drag.current = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, moved: false };
+    const r = gameRect(e.currentTarget, isDrawnSideways()), p = at(e);
+    drag.current = { id: e.pointerId, dx: p.x - r.left, dy: p.y - r.top, x0: p.x, y0: p.y, moved: false };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
   };
   const bubbleMove = (e) => {
     const d = drag.current; if (!d || d.id !== e.pointerId) return;
-    if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 6) d.moved = true;
+    const p = at(e), A = area();
+    if (Math.hypot(p.x - d.x0, p.y - d.y0) > 6) d.moved = true;
     if (!d.moved) return;
     const w = e.currentTarget.offsetWidth, h = e.currentTarget.offsetHeight;
-    setPos({ x: Math.max(4, Math.min(window.innerWidth - w - 4, e.clientX - d.dx)), y: Math.max(4, Math.min(window.innerHeight - h - 4, e.clientY - d.dy)) });
+    setPos({ x: Math.max(4, Math.min(A.w - w - 4, p.x - d.dx)), y: Math.max(4, Math.min(A.h - h - 4, p.y - d.dy)) });
   };
   const bubbleUp = (e) => {
     const d = drag.current; drag.current = null;
@@ -226,10 +247,10 @@ export default function CallLayer() {
     people: [
       ...others.map((m) => {
         const p = peers[m.id] || {};
-        return { key: String(m.id), name: m.name, stream: p.stream, avatar: avatarOf(m.id), muted: p.mic === false,
+        return { key: String(m.id), name: m.name, stream: p.stream, avatar: avatarOf(m.id), muted: p.mic === false, turn: p.turn || 0,
           showVideo: !!p.stream && p.cam !== false && p.stream.getVideoTracks().length > 0 };
       }),
-      { key: "me", name: "You", stream: local, avatar: "🙂", muted: !mic, mirror: facing === "user",
+      { key: "me", name: "You", stream: local, avatar: "🙂", muted: !mic, mirror: facing === "user", turn: C.turn || 0,
         showVideo: !!local && cam && local.getVideoTracks().length > 0 },
     ],
   };
@@ -252,8 +273,82 @@ export default function CallLayer() {
   }, [active, popOut]);
   const ringing = ring && (!call || call.id !== ring.callId);
 
+  // Back, with the call screen open, shrinks it to the bubble (like WhatsApp)
+  // and leaves the page underneath where it was. The open call screen holds
+  // one extra history entry; Back takes it away. (A ref, not the effect's
+  // cleanup alone, so React's dev double-run doesn't push it twice.)
+  const open = !!call && expanded;
+  const openRef = useRef(open);
+  openRef.current = open;
+  const entry = useRef(false);
+  useEffect(() => {
+    const onPop = () => {
+      if (!entry.current || (window.history.state && window.history.state.prCall)) return;
+      entry.current = false;
+      if (openRef.current) C.setExpanded(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (open && !entry.current) {
+      window.history.pushState({ ...(window.history.state || {}), prCall: true }, "");
+      entry.current = true;
+      return undefined;
+    }
+    if (open || !entry.current) return undefined;
+    // shrunk or hung up some other way: take our entry back off, if it's still on top
+    const t = setTimeout(() => {
+      if (openRef.current || !entry.current) return;
+      entry.current = false;
+      if (window.history.state && window.history.state.prCall) window.history.back();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  // A phone: float the friend's picture in its own little window. It stays
+  // over other apps when you leave PlayRoom, and tapping it brings you back
+  // to the call. The float button does it; where the phone allows, leaving
+  // the app does it by itself too.
+  const pipVid = useRef(null);
+  const floatFace = others.map((m) => peers[m.id]).find((q) => q && q.stream && q.cam !== false && q.stream.getVideoTracks().length > 0);
+  const floatStream = floatFace ? floatFace.stream : local;
+  useEffect(() => {
+    const v = pipVid.current;
+    if (!v) return;
+    if (v.srcObject !== floatStream) v.srcObject = floatStream || null;
+    if (floatStream) { const q = v.play(); if (q && q.catch) q.catch(() => {}); }
+  }, [floatStream, active]);
+  const floatOut = React.useCallback(async () => {
+    const v = pipVid.current;
+    if (!v || !v.srcObject) return;
+    try {
+      if (document.pictureInPictureElement === v) return;
+      await v.requestPictureInPicture();
+      C.setExpanded(false);
+    } catch { /* not allowed right now */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const v = pipVid.current;
+    if (!active || !VIDEO_PIP || !v) return undefined;
+    // tapping the little window (back to PlayRoom): the call, full screen
+    const back = () => C.setExpanded(true);
+    v.addEventListener("leavepictureinpicture", back);
+    try { v.setAttribute("autopictureinpicture", ""); v.autoPictureInPicture = true; } catch { /* fine */ }
+    if (navigator.mediaSession) {
+      try { navigator.mediaSession.setActionHandler("enterpictureinpicture", floatOut); } catch { /* not this browser */ }
+    }
+    return () => {
+      v.removeEventListener("leavepictureinpicture", back);
+      if (document.pictureInPictureElement === v) document.exitPictureInPicture().catch(() => {});
+      if (navigator.mediaSession) { try { navigator.mediaSession.setActionHandler("enterpictureinpicture", null); } catch { /* fine */ } }
+    };
+  }, [active, floatOut]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sideways = useDrawnSideways();
+
   return (
-    <>
+    <div className={`call-root${sideways ? " rot" : ""}`}>
+      {active && VIDEO_PIP && <video ref={pipVid} className="call-pipvid" autoPlay playsInline muted aria-hidden="true" />}
       {notice && !ringing && <div className="call-notice" role="status">{notice.text}</div>}
       {call && others.map((m) => peers[m.id]?.stream && <Sound key={m.id} stream={peers[m.id].stream} onNeedTap={needTap} />)}
       {call && others.map((m) => peers[m.id]?.screen && peers[m.id].screen.getAudioTracks().length > 0
@@ -277,7 +372,7 @@ export default function CallLayer() {
         <div className={`call-screen n${Math.max(1, seats)}${shown ? " sharing" : ""}${chatOpen ? " chatting" : ""}`} role="dialog" aria-label="Call">
           {call.phase === "outgoing" ? (
             <div className="call-stage">
-              {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <Face avatar={avatarOf(call.first?.id)} big />}
+              {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <Face avatar={avatarOf(call.first?.id)} big />}
               <div className="call-calling">
                 <Face avatar={avatarOf(call.first?.id)} name={call.first?.name} />
                 <div className="call-ring-sub">Calling…</div>
@@ -297,13 +392,13 @@ export default function CallLayer() {
                   const v = p.stream && p.cam !== false && p.stream.getVideoTracks().length > 0;
                   return (
                     <div className="call-mini-tile" key={m.id} title={m.name}>
-                      {v ? <Vid stream={p.stream} className="call-full" /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
+                      {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
                       <span className="call-mini-name">{m.name}{p.mic === false ? " 🔇" : ""}</span>
                     </div>
                   );
                 })}
                 <div className="call-mini-tile me" title="You">
-                  {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <span className="call-emoji">🙂</span>}
+                  {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
                   <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
                 </div>
               </div>
@@ -317,13 +412,13 @@ export default function CallLayer() {
                   // swapped: my own picture big; theirs is in the corner
                   return (
                     <div className="call-tile" key={m.id}>
-                      {cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <Face avatar="🙂" name="Camera off" big />}
+                      {cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <Face avatar="🙂" name="Camera off" big />}
                     </div>
                   );
                 }
                 return (
                   <div className="call-tile" key={m.id}>
-                    {showVid && <Vid stream={p.stream} className="call-full" />}
+                    {showVid && <Vid stream={p.stream} className="call-full" turn={p.turn} />}
                     {!showVid && <Face avatar={avatarOf(m.id)} name={seats > 1 ? m.name : null} big={seats === 1} />}
                     <div className="call-tag">{m.name}{p.mic === false ? " · 🔇" : ""}</div>
                     {(p.hold || m.away) ? (
@@ -354,8 +449,8 @@ export default function CallLayer() {
               onClick={() => { if (meDrag.wasDrag()) return; if (canSwap) setSwapped((x) => !x); }}
               aria-label={canSwap ? (swap ? "Make them big" : "Make me big") : "Your camera"} disabled={!canSwap}>
               {swap
-                ? (theirVid ? <Vid stream={peers[others[0].id].stream} className="call-full" /> : <span className="call-emoji">{avatarOf(others[0].id) || "🙂"}</span>)
-                : cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <div className="call-me-off">📷 off</div>}
+                ? (theirVid ? <Vid stream={peers[others[0].id].stream} className="call-full" turn={peers[others[0].id].turn} /> : <span className="call-emoji">{avatarOf(others[0].id) || "🙂"}</span>)
+                : cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <div className="call-me-off">📷 off</div>}
             </button>
           )}
 
@@ -368,8 +463,9 @@ export default function CallLayer() {
                 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></svg>
               </button>
             )}
-            {active && canDocPip() && (
-              <button type="button" className="call-mini" onClick={popOut} aria-label="Float the call over other tabs" title="Float the call over other tabs">
+            {active && (canDocPip() || VIDEO_PIP) && (
+              <button type="button" className="call-mini" onClick={canDocPip() ? popOut : floatOut}
+                aria-label={canDocPip() ? "Float the call over other tabs" : "Float the call over other apps"} title={canDocPip() ? "Float the call over other tabs" : "Float the call over other apps"}>
                 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="#fff" strokeWidth="2.4" /><rect x="12" y="11" width="7" height="6" rx="1" fill="#fff" /></svg>
               </button>
             )}
@@ -462,16 +558,16 @@ export default function CallLayer() {
           {/* their face above, mine below */}
           <div className="call-bubble-half">
             {others[0] && peers[others[0].id]?.stream && peers[others[0].id]?.cam !== false && peers[others[0].id].stream.getVideoTracks().length > 0
-              ? <Vid stream={peers[others[0].id].stream} className="call-full" />
+              ? <Vid stream={peers[others[0].id].stream} className="call-full" turn={peers[others[0].id].turn} />
               : <span className="call-emoji">{avatarOf(others[0]?.id || call.first?.id) || "🙂"}</span>}
           </div>
           <div className="call-bubble-half me">
-            {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" /> : <span className="call-emoji">🙂</span>}
+            {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
           </div>
           {unread > 0 && <span className="call-badge on-bubble">{unread > 9 ? "9+" : unread}</span>}
           <div className="call-bubble-tag">{shown ? "🖥️ " : ""}{call.phase === "active" ? clock(now - (call.startedAt || now)) : "Calling…"}{mic ? "" : " 🔇"}</div>
         </div>
       )}
-    </>
+    </div>
   );
 }

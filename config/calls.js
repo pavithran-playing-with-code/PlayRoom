@@ -225,7 +225,8 @@ function attach(io) {
       const c = calls.get(msg && msg.callId);
       if (!c || !c.members.has(uid)) return;
       const screen = typeof msg.screen === "string" && /^[\w{}-]{1,100}$/.test(msg.screen) ? msg.screen : null;
-      toMembers(c, "call:media", { callId: c.id, id: uid, mic: !!msg.mic, cam: !!msg.cam, screen, hold: !!msg.hold }, uid);
+      toMembers(c, "call:media", { callId: c.id, id: uid, mic: !!msg.mic, cam: !!msg.cam, screen, hold: !!msg.hold,
+        turn: [90, -90, 180].includes(msg.turn) ? msg.turn : 0 }, uid);         // a camera turned a quarter (a sideways game)
     });
 
     // Chat in the call: passed to the others in it, never stored. A message

@@ -103,8 +103,11 @@ export function updatePip({ people, mic, chat = [] }) {
     ui.row.appendChild(t.box);                          // keeps the order: them, then me
     const v = p.showVideo ? p.stream : null;
     if (t.vid.srcObject !== v) { t.vid.srcObject = v; if (v) t.vid.play().catch(() => {}); }
-    t.vid.style.display = v ? "" : "none";
-    t.vid.className = p.mirror ? "mirror" : "";
+    t.vid.className = p.mirror && !p.turn ? "mirror" : "";
+    // a camera turned a quarter (a sideways game on their phone): turned back, filling the tile
+    t.box.style.containerType = p.turn ? "size" : "";
+    t.vid.style.cssText = (v ? "" : "display:none;") + (p.turn
+      ? `inset:auto;left:50%;top:50%;width:100cqh;height:100cqw;transform:translate(-50%,-50%)${p.mirror ? " scaleX(-1)" : ""} rotate(${p.turn}deg)` : "");
     t.face.style.display = v ? "none" : "";
     t.face.textContent = p.avatar || "🙂";
     t.name.textContent = p.name + (p.muted ? " 🔇" : "");

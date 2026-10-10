@@ -167,11 +167,7 @@ There is no test runner. What works:
   database; `check-kitchen.mjs`, `check-bomb.mjs`, `check-tower.mjs` and
   `check-carrom.mjs` test
   the rules. Carrom and Bomb Blast are SHARED: one board or arena for the
-  whole room, scored per side. Lantern Wisps (`wispsCore.mjs`) is one too: the
-  server runs the shadows and every player's weapons, the phone moves its
-  own spirit (`tg:me`); the night is the room's clock, its events on a
-  "night clock" stretched to fit. `scripts/check-wisps.mjs` plays whole
-  nights with bots.
+  whole room, scored per side.
 - **Speedway is live-shared**: a top-down drift racer (`driftSim.js`, the
   "Turbo Drift" look). Each phone sends its car over the socket (`race:pos`:
   position, angle, velocity, drift and boost, relayed by `config/socket.js`);
@@ -206,6 +202,12 @@ There is no test runner. What works:
   Space eats the spaces typed into it. On a computer the call floats in a
   Document Picture-in-Picture window (`src/utils/callPip.js`, plain DOM —
   React's events don't reach another window): both faces and the chat.
+  On a phone, ⧉ floats the friend's video over other apps (video
+  picture-in-picture). Back shrinks the call to its bubble (the open call
+  holds one history entry). Leaving the app doesn't hold the call; only
+  the phone taking the mic does. A game drawn sideways on an upright
+  screen (`useDrawnSideways` in LandscapeGate) turns the call with it,
+  and `call:media` carries `turn`, so the others turn that camera back.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

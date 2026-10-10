@@ -28,7 +28,6 @@ import BombBlast from "./BombBlast";
 import TowerGuard from "./TowerGuard";
 import CarromGame from "./CarromGame";
 import SunshardIslands from "./SunshardIslands";
-import LanternWisps from "./LanternWisps";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -255,15 +254,6 @@ export const GAMES = [
     coopLabel: "one shard count — light the temple together",
     coopNote: "One shard count for all of you: any of you can take a Sunshard for everyone, and when one of you gets home, you all win. You're tied tail to tail — wander off and you tug each other back.",
     Component: SunshardIslands,
-  },
-  {
-    slug: "wisps", name: "Lantern Wisps", icon: "🏮",
-    blurb: "Survive the night: your lantern spirit's weapons fire by themselves — dodge the shadows, grab gems, level up, hold out until dawn.",
-    minPlayers: 1, maxPlayers: 6, tag: "Survival", col: "var(--sun)",
-    coopMax: 4, defaultDuration: 300,
-    coopLabel: "one forest, one XP bar — hold out together",
-    coopNote: "One forest and one XP bar for all of you; each picks their own upgrades. A friend who falls comes back at the next level-up, or when you stand by them for 3 seconds. One of you standing at dawn and you all win.",
-    Component: LanternWisps,
   },
 ];
 

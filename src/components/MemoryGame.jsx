@@ -233,7 +233,8 @@ export default function MemoryGame({
                 const face = card.face;
                 const ring = card.by !== null ? T.colourOf(card.by) : null;
                 return (
-                  <button key={card.id} type="button" className={`memcard${card.peek ? " peek" : ""}`} onClick={() => flip(idx)}
+                  <button key={card.id} type="button" className={`memcard${card.peek ? " mem-peek" : ""}`}  /* not "peek": that's the home page's
+                    hover preview (absolute, invisible) — a wrong pair vanished and the whole board shifted */ onClick={() => flip(idx)}
                     aria-label={face ? card.emoji : "Face-down card"}
                     style={{
                       fontSize: Math.round(L.cw * 0.5),

@@ -192,36 +192,6 @@ function room(game, mode, seats, { elapsed = 0, duration = 120 } = {}) {
     for (const x of new Set(ws)) clearInterval(x.timer);
   }
 
-  // ── Lantern Wisps: a night on the server ────────────────────────────────────
-  {
-    const w = room("wisps", "coop", [{ id: 61 }, { id: 62 }], { duration: 360 });
-    world._start(w);
-    check("Lantern Wisps together: one forest for both", w.sides.length === 1 && w.sides[0].inst.pl.length === 2);
-    const a = phone(61);
-    await a.h["tg:hello"]({ code: w.code });
-    const ia = a.last("tg:init");
-    check("…a phone gets the forest's seed and the night's length", ia && ia.world.seed && ia.world.dur === 360 && ia.view.p.length === 2);
-    const inst = w.sides[0].inst, core = w.core;
-    for (const p of inst.pl) { p.inv = 1e9; p.WL.spark = 0; }   // nobody falls or fights back: a crowded forest
-    for (let i = 0; i < 1800; i++) core.step(inst, 0.1);     // three minutes in: shadows everywhere, a boss
-    sent.length = 0;
-    world._tick(w);
-    const tk = sent.find((m) => m.ev === "tg:tick");
-    const bytes = JSON.stringify(tk.payload).length;
-    check("…a busy tick stays small enough for a phone (~10 a second)", tk && tk.payload.v.e.length > 100 && bytes < 26000, tk.payload.v.e.length + " shadows, " + bytes + " bytes");
-    const me61 = inst.pl.find((p) => p.id === 61), x0 = me61.x;
-    a.h["tg:me"]({ code: w.code, x: x0 + 5, y: me61.y, d: 0, f: 1 });
-    check("…a phone moves its spirit", Math.abs(me61.x - (x0 + 5)) < 1e-9, x0 + " -> " + me61.x);
-    inst.pl[0].offers = [["nova", 0], ["leaf", 0], ["speed", 0]]; inst.pl[0].queue = 1;
-    a.h["tg:act"]({ code: w.code, n: 3, a: "pick", i: 0 });
-    check("…and picks a card over the socket", a.last("tg:reply").ok && inst.pl[0].WL.nova === 1);
-    clearInterval(w.timer);
-  }
-  {
-    const R = (mode, rows) => resultsFor({ game_slug: "wisps", mode }, rows);
-    check("Lantern Wisps alone: seeing dawn is a win", R("free", [{ user_id: 1, score: 9000, pairs_matched: 1 }]).get(1) === "win" && R("free", [{ user_id: 1, score: 2000, pairs_matched: 0 }]).get(1) === "loss");
-    check("…against friends: the best score wins", R("free", [{ user_id: 1, score: 9000, pairs_matched: 1 }, { user_id: 2, score: 4000, pairs_matched: 0 }]).get(1) === "win");
-  }
   console.log(fails ? `\n${fails} failed` : "\nall passed");
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

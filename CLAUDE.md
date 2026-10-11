@@ -236,7 +236,12 @@ There is no test runner. What works:
   frames stop (their phone left the app) is `paused` (CallContext counts
   decoded frames) and shows their face, not black. Sound goes first:
   audio senders have high priority, every Opus slot gets stereo + in-band
-  FEC, and the mic asks for one channel and voice isolation. Test the
+  FEC, and the mic asks for one channel (not voice isolation: it could
+  silence some laptops). A mic that sends digital silence (a laptop's
+  "Default" being an empty socket or Stereo Mix — friends hear nothing,
+  you hear them) is caught by measuring it (`peakOf`): the other mics are
+  tried, "communications" first, the first that hears anything swapped in
+  (`swapMic`); none, and a picker opens (also 🎙️ in the 👥 panel). Test the
   bubble with phones that can't float (`NO_FLOAT` in the harness). Back shrinks the call to its bubble (the open call
   holds one history entry). Leaving the app doesn't hold the call; only
   the phone taking the mic does. A game drawn sideways on an upright

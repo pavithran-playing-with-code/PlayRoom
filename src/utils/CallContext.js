@@ -41,10 +41,33 @@ const WHY = {
 const ENDED = { declined: "Call declined", "no-answer": "No answer", left: "Call ended", dropped: "Call ended — connection lost", switched: "Call ended" };
 
 // Clear voice first: the browser's echo cancelling, noise removal and level,
-// one channel (a voice needs no more), and where the browser has it, voice
-// isolation — keeps the voice and drops the room (unknown to a browser, it's
-// ignored).
-const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, voiceIsolation: true };
+// and one channel (a voice needs no more). (Not "voice isolation": where a
+// laptop's driver can't do it, the mic could come out silent.)
+const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+
+// How loud a microphone track is, over `ms`: the biggest sample, 0..1. A mic
+// that's connected always hears something — a room is never digital zero —
+// so 0 means it sends nothing at all. null: couldn't tell (sound locked).
+const MIC_SILENT = 1e-5;
+async function peakOf(track, ms) {
+  let ac;
+  try {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state !== "running") await ac.resume().catch(() => {});
+    if (ac.state !== "running") return null;
+    const an = ac.createAnalyser();
+    an.fftSize = 2048;
+    ac.createMediaStreamSource(new MediaStream([track])).connect(an);
+    const buf = new Float32Array(an.fftSize);
+    let peak = 0;
+    for (const end = Date.now() + ms; Date.now() < end;) {
+      await new Promise((r) => setTimeout(r, 100));
+      an.getFloatTimeDomainData(buf);
+      for (let i = 0; i < buf.length; i++) { const v = Math.abs(buf[i]); if (v > peak) peak = v; }
+    }
+    return peak;
+  } catch { return null; } finally { if (ac) ac.close().catch(() => {}); }
+}
 const video = (facing) => ({ facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } });
 // a screen: full HD, smooth, and its sound left alone (no echo or noise
 // cancelling — that would eat the music)
@@ -153,6 +176,8 @@ export function CallProvider({ children }) {
   // My account in a call on another device of mine: { callId, sid, with: [names] }.
   // This one can take it over (moveHere).
   const [elsewhere, setElsewhere] = useState(null);
+  // the microphones to choose from, when the one in use sends no sound (or you asked)
+  const [mics, setMics] = useState(null);
   // A game drawn sideways on an upright screen: the camera's picture comes
   // out a quarter turned. Everyone (me included) shows it turned back.
   // …or the phone held sideways to watch a shared screen, the screen upright
@@ -516,12 +541,89 @@ export function CallProvider({ children }) {
     };
   }, [call, local, setHold, revive, say]);
 
+  const liveCall = call && call.phase === "active" ? call.id : null;   // (the call, once someone's in it)
+
+  // ── a microphone that sends nothing ────────────────────────────────────────
+  // A laptop can have several microphones, and the one the browser picks
+  // ("Default") can be the wrong one — an empty headset socket, "Stereo Mix" —
+  // sending pure silence: you hear your friends, they hear nothing. (WhatsApp
+  // uses the one Windows keeps for calls.) While your mic is on its sound is
+  // measured; nothing at all for a few seconds, and the others are tried —
+  // Windows' call mic ("communications") first — and the first that hears
+  // anything takes over in every connection. If none does, you're told and
+  // shown them to choose from.
+  const swapMic = useCallback(async (t) => {
+    const s = localRef.current;
+    if (!s) { t.stop(); return; }
+    t.enabled = micRef.current;
+    const old = s.getAudioTracks()[0];
+    if (old) { s.removeTrack(old); old.stop(); }
+    s.addTrack(t);
+    for (const P of pcs.current.values()) if (P.audio) await P.audio.replaceTrack(t).catch(() => {});
+    const copy = new MediaStream(s.getTracks());
+    localRef.current = copy; setLocal(copy);
+  }, []);
+  const listMics = useCallback(async () => {
+    try {
+      const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+      const cur = localRef.current && localRef.current.getAudioTracks()[0];
+      const curId = cur && cur.getSettings ? cur.getSettings().deviceId : null;
+      setMics(all.map((d, i) => ({ id: d.deviceId, label: d.label || `Microphone ${i + 1}`, on: d.deviceId === curId })));
+    } catch { setMics([]); }
+  }, []);
+  const chooseMic = useCallback(async (id) => {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: { ...AUDIO, deviceId: { exact: id } } });
+      await swapMic(s.getAudioTracks()[0]);
+      setMics(null);
+      say("Microphone changed");
+    } catch { say("Couldn't open that microphone"); }
+  }, [swapMic, say]);
+  const tried = useRef(new Set());              // tracks already found silent (and dealt with)
+  useEffect(() => {
+    if (!liveCall || !local || !mic) return undefined;
+    const t = local.getAudioTracks()[0];
+    if (!t || tried.current.has(t.id)) return undefined;
+    let stop = false, silent = 0;
+    (async () => {
+      await new Promise((r) => setTimeout(r, 1500));
+      while (!stop && t.readyState === "live") {
+        const pk = await peakOf(t, 3000);
+        if (stop || !micRef.current) return;
+        if (pk == null) { await new Promise((r) => setTimeout(r, 3000)); continue; }
+        silent = pk < MIC_SILENT ? silent + 1 : 0;
+        if (silent < 2) { await new Promise((r) => setTimeout(r, 4000)); continue; }
+        // six seconds of nothing at all: find a microphone that hears something
+        tried.current.add(t.id);
+        let all = [];
+        try { all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput"); } catch { /* none listed */ }
+        const curId = t.getSettings ? t.getSettings().deviceId : null;
+        const order = [...all.filter((d) => d.deviceId === "communications"), ...all.filter((d) => d.deviceId !== "communications" && d.deviceId !== "default")]
+          .filter((d) => d.deviceId && d.deviceId !== curId);
+        for (const d of order) {
+          if (stop) return;
+          let fresh;
+          try { fresh = (await navigator.mediaDevices.getUserMedia({ audio: { ...AUDIO, deviceId: { exact: d.deviceId } } })).getAudioTracks()[0]; } catch { continue; }
+          const p2 = await peakOf(fresh, 1500);
+          if (p2 != null && p2 >= MIC_SILENT && !stop) {
+            await swapMic(fresh);
+            say(`Your microphone wasn't sending any sound — switched to ${d.label || "another microphone"}`);
+            return;
+          }
+          fresh.stop();
+        }
+        if (!stop) { say("Your friends can't hear your microphone — choose another one"); listMics(); }
+        return;
+      }
+    })();
+    return () => { stop = true; };
+  }, [liveCall, local, mic, swapMic, listMics, say]);
+
   // ── a friend's camera paused ───────────────────────────────────────────────
   // A phone that leaves its app pauses its camera: the picture it sent last
   // freezes, or goes black. Every 1.5 s, count the frames each friend's
   // camera has sent; none since last time and they're "paused" — the call
   // shows their face instead of a black box, until the frames come back.
-  const liveCall = call && call.phase === "active" ? call.id : null;
   useEffect(() => {
     if (!liveCall) return undefined;
     const last = new Map();
@@ -692,9 +794,9 @@ export function CallProvider({ children }) {
   useEffect(() => () => { tones.current.stop(); stopMedia(); }, [stopMedia]);
 
   const value = useMemo(() => ({
-    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn,
+    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn, mics, setMics, listMics, chooseMic,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
-  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere,
+  }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere, mics, listMics, chooseMic,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;

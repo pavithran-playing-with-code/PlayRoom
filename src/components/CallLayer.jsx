@@ -759,6 +759,29 @@ export default function CallLayer() {
                   </button>
                 ))}
                 <div className="call-pick-note">{facesNote || "Also beside a shared screen and in the floating window. The call itself still shows everyone."}</div>
+                <button type="button" className="press p-white sm full" onClick={() => { setFacesOpen(false); C.listMics(); }}>🎙️ Change microphone</button>
+              </div>
+            </div>
+          )}
+
+          {C.mics && (
+            <div className="call-pick" role="dialog" aria-label="Choose a microphone" onClick={(e) => { if (e.target === e.currentTarget) C.setMics(null); }}>
+              <div className="call-pick-card pop">
+                <div className="call-pick-head">
+                  <b>🎙️ Your microphone</b>
+                  <button type="button" className="press p-white sm" onClick={() => C.setMics(null)} aria-label="Close">✕</button>
+                </div>
+                {C.mics.length === 0
+                  ? <div className="call-pick-none">No microphone found. Check one is plugged in and allowed for this browser.</div>
+                  : C.mics.map((m) => (
+                    <button type="button" key={m.id} className={`call-pick-row call-face-row${m.on ? "" : " hidden"}`} onClick={() => C.chooseMic(m.id)}
+                      aria-label={`Use ${m.label}`}>
+                      <span className="call-emoji">🎙️</span>
+                      <span className="call-pick-name">{m.label}</span>
+                      {m.on && <span className="call-face-state">In use</span>}
+                    </button>
+                  ))}
+                <div className="call-pick-note">Your friends can't hear you? Pick the microphone you talk into. On Windows, “Communications” is usually the one calls use.</div>
               </div>
             </div>
           )}

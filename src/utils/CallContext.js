@@ -500,6 +500,37 @@ export function CallProvider({ children }) {
     };
   }, [call, local, setHold, revive, say]);
 
+  // ── a friend's camera paused ───────────────────────────────────────────────
+  // A phone that leaves its app pauses its camera: the picture it sent last
+  // freezes, or goes black. Every 1.5 s, count the frames each friend's
+  // camera has sent; none since last time and they're "paused" — the call
+  // shows their face instead of a black box, until the frames come back.
+  const liveCall = call && call.phase === "active" ? call.id : null;
+  useEffect(() => {
+    if (!liveCall) return undefined;
+    const last = new Map();
+    const t = setInterval(() => {
+      for (const [id, P] of pcs.current) {
+        const S = streams.current.get(id);
+        const cam = S && [...S.all.entries()].find(([sid]) => sid !== S.screenId);
+        const vt = cam && cam[1].getVideoTracks()[0];
+        const rc = vt && P.pc.getReceivers().find((r) => r.track === vt);
+        if (!rc) continue;
+        rc.getStats().then((rep) => {
+          let n = null;
+          rep.forEach((x) => { if (x.type === "inbound-rtp" && x.kind === "video") n = x.framesDecoded ?? x.framesReceived ?? n; });
+          if (n == null) return;
+          const was = last.get(id);
+          last.set(id, n);
+          if (was === undefined) return;
+          const paused = n === was;
+          setPeers((all) => (all[id] && !!all[id].paused !== paused ? { ...all, [id]: { ...all[id], paused } } : all));
+        }).catch(() => {});
+      }
+    }, 1500);
+    return () => clearInterval(t);
+  }, [liveCall]);
+
   // ── chat ───────────────────────────────────────────────────────────────────
   const sendChat = useCallback((text) => {
     const c = callRef.current, t = String(text || "").trim().slice(0, 500);

@@ -11,6 +11,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallContext";
 import { usePresence } from "../utils/PresenceContext";
 import { canDocPip, openPip, updatePip, closePip } from "../utils/callPip";
+import { canFloatBoth, createFloat } from "../utils/callFloat";
 import { useDrawnSideways, isDrawnSideways, toGame, gameRect } from "./horror/LandscapeGate";
 
 // Where the floating call window (callPip.js) can be used, a video's own
@@ -217,7 +218,8 @@ export default function CallLayer() {
   // swapping big and small: a one-to-one call, nobody sharing a screen
   const canSwap = !!call && call.phase === "active" && seats === 1 && others.length === 1 && !others.some((m) => peers[m.id]?.screen);
   const swap = swapped && canSwap;
-  const theirVid = others[0] && peers[others[0].id]?.stream && peers[others[0].id]?.cam !== false && peers[others[0].id].stream.getVideoTracks().length > 0;
+  // (a camera that's paused — their phone left the app — shows their face, not a black box)
+  const theirVid = others[0] && peers[others[0].id]?.stream && peers[others[0].id]?.cam !== false && !peers[others[0].id].paused && peers[others[0].id].stream.getVideoTracks().length > 0;
   const room = call && call.members.length + call.invited.length < CALL_MAX;
   // a friend sharing their screen (the first, if two are)
   const sharer = others.find((m) => peers[m.id]?.screen);
@@ -248,7 +250,7 @@ export default function CallLayer() {
       ...others.map((m) => {
         const p = peers[m.id] || {};
         return { key: String(m.id), name: m.name, stream: p.stream, avatar: avatarOf(m.id), muted: p.mic === false, turn: p.turn || 0,
-          showVideo: !!p.stream && p.cam !== false && p.stream.getVideoTracks().length > 0 };
+          showVideo: !!p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0 };
       }),
       { key: "me", name: "You", stream: local, avatar: "🙂", muted: !mic, mirror: facing === "user", turn: C.turn || 0,
         showVideo: !!local && cam && local.getVideoTracks().length > 0 },
@@ -306,13 +308,36 @@ export default function CallLayer() {
     return () => clearTimeout(t);
   }, [open]);
 
-  // A phone: float the friend's picture in its own little window. It stays
-  // over other apps when you leave PlayRoom, and tapping it brings you back
-  // to the call. The float button does it; where the phone allows, leaving
-  // the app does it by itself too.
+  // A phone: float the call in its own little window. It stays over other
+  // apps when you leave PlayRoom, and tapping it brings you back to the
+  // call. The float button does it; where the phone allows, leaving the app
+  // does it by itself too. Both faces, drawn into one picture (callFloat.js)
+  // — a phone can float only one video; where it can't draw them
+  // (iPhone), the friend's video alone.
   const pipVid = useRef(null);
-  const floatFace = others.map((m) => peers[m.id]).find((q) => q && q.stream && q.cam !== false && q.stream.getVideoTracks().length > 0);
-  const floatStream = floatFace ? floatFace.stream : local;
+  const floatWho = others.find((m) => peers[m.id] && peers[m.id].stream) || others[0];
+  const floatPeer = floatWho ? peers[floatWho.id] : null;
+  const floatFace = floatPeer && floatPeer.stream && floatPeer.cam !== false && floatPeer.stream.getVideoTracks().length > 0 ? floatPeer : null;
+  const both = useRef(null);
+  const [bothStream, setBothStream] = useState(null);
+  useEffect(() => {
+    if (!active || !VIDEO_PIP || !canFloatBoth()) return undefined;
+    let f;
+    try { f = createFloat(); } catch { return undefined; }
+    both.current = f;
+    setBothStream(f.stream);
+    return () => { f.close(); both.current = null; setBothStream(null); };
+  }, [active]);
+  useEffect(() => {
+    if (!both.current) return;
+    both.current.set({
+      them: floatFace ? floatFace.stream : null, me: local,
+      showThem: !!floatFace, showMe: !!local && cam && local.getVideoTracks().length > 0, mirror: facing === "user",
+      name: floatWho ? floatWho.name + (others.length > 1 ? ` +${others.length - 1}` : "") : "", avatar: avatarOf(floatWho?.id) || "🙂",
+      muted: !!floatPeer && floatPeer.mic === false,
+    });
+  });
+  const floatStream = bothStream || (floatFace ? floatFace.stream : local);
   useEffect(() => {
     const v = pipVid.current;
     if (!v) return;
@@ -395,7 +420,7 @@ export default function CallLayer() {
               <div className="call-strip">
                 {others.map((m) => {
                   const p = peers[m.id] || {};
-                  const v = p.stream && p.cam !== false && p.stream.getVideoTracks().length > 0;
+                  const v = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
                   return (
                     <div className="call-mini-tile" key={m.id} title={m.name}>
                       {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
@@ -413,7 +438,7 @@ export default function CallLayer() {
             <div className="call-grid">
               {others.map((m) => {
                 const p = peers[m.id] || {};
-                const showVid = p.stream && p.cam !== false && p.stream.getVideoTracks().length > 0;
+                const showVid = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
                 if (swap) {
                   // swapped: my own picture big; theirs is in the corner
                   return (
@@ -563,7 +588,7 @@ export default function CallLayer() {
           role="button" aria-label="Open the call">
           {/* their face above, mine below */}
           <div className="call-bubble-half">
-            {others[0] && peers[others[0].id]?.stream && peers[others[0].id]?.cam !== false && peers[others[0].id].stream.getVideoTracks().length > 0
+            {theirVid
               ? <Vid stream={peers[others[0].id].stream} className="call-full" turn={peers[others[0].id].turn} />
               : <span className="call-emoji">{avatarOf(others[0]?.id || call.first?.id) || "🙂"}</span>}
           </div>

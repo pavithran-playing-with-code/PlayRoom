@@ -212,8 +212,12 @@ There is no test runner. What works:
   Space eats the spaces typed into it. On a computer the call floats in a
   Document Picture-in-Picture window (`src/utils/callPip.js`, plain DOM —
   React's events don't reach another window): both faces and the chat.
-  On a phone, ⧉ floats the friend's video over other apps (video
-  picture-in-picture). Back shrinks the call to its bubble (the open call
+  On a phone, ⧉ floats the call over other apps (video
+  picture-in-picture, one video only): `src/utils/callFloat.js` draws both
+  faces into one canvas from the tracks' frames (MediaStreamTrackProcessor,
+  which keeps going in the background where <video> and timers don't). A
+  friend whose frames stop (their phone left the app) is `paused`
+  (CallContext counts decoded frames) and shows their face, not black. Back shrinks the call to its bubble (the open call
   holds one history entry). Leaving the app doesn't hold the call; only
   the phone taking the mic does. A game drawn sideways on an upright
   screen (`useDrawnSideways` in LandscapeGate) turns the call with it,

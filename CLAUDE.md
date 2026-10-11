@@ -222,7 +222,12 @@ There is no test runner. What works:
   windows are drawn to look like the bubble (faces stacked in a rounded
   card, the time in a pill); the bubble resizes from its top-left handle
   (`pr_bubble_size` in localStorage). A phone can only start floating
-  from a tap: Back, or leaving the app, can't do it. A friend whose
+  from a tap: Back, or leaving the app, can't do it. 👥 picks whose faces
+  show in the bubble, both floating windows, beside a shared screen and
+  over it in full screen (`pr_call_hidden`, never the last one); the call
+  grid itself always shows everyone. The installed app is portrait
+  (manifest.json), so while a screen is shared it asks for `lock("any")`
+  and goes back to portrait after. A friend whose
   frames stop (their phone left the app) is `paused` (CallContext counts
   decoded frames) and shows their face, not black. Sound goes first:
   audio senders have high priority, every Opus slot gets stereo + in-band

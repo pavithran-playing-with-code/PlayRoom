@@ -12,7 +12,7 @@ import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallCo
 import { usePresence } from "../utils/PresenceContext";
 import { canDocPip, openPip, updatePip, closePip, pipOpen } from "../utils/callPip";
 import { canFloatBoth, createFloat } from "../utils/callFloat";
-import { useDrawnSideways, isDrawnSideways, toGame, gameRect } from "./horror/LandscapeGate";
+import { useDrawnSideways, isDrawnSideways, toGame, gameRect, isInstalled } from "./horror/LandscapeGate";
 
 // Where the floating call window (callPip.js) can be used, a video's own
 // picture-in-picture is turned off: it can only show one face.
@@ -172,7 +172,16 @@ export default function CallLayer() {
   const [tapForSound, setTapForSound] = useState(false);
   const [picking, setPicking] = useState(false);   // the "add a friend" list
   const [swapped, setSwapped] = useState(false);   // one-to-one: me big, them in the corner (tap the corner to swap, like WhatsApp)
-  const meDrag = useDrag(), chatDrag = useDrag();   // the small picture and the chat, wherever you put them
+  const meDrag = useDrag(), chatDrag = useDrag();
+  // Whose faces you see in the bubble, the floating window and beside a
+  // shared screen (👥): someone can be hidden — your own other device, say,
+  // sharing a film with its camera off. Remembered for next time, by person.
+  const [hidden, setHidden] = useState(() => {
+    try { return new Set((JSON.parse(localStorage.getItem("pr_call_hidden") || "[]") || []).map(String)); } catch { return new Set(); }
+  });
+  const [facesOpen, setFacesOpen] = useState(false);
+  const [facesNote, setFacesNote] = useState("");
+  const seen = (key) => !hidden.has(String(key));   // the small picture and the chat, wherever you put them
   const { call, ring, local, peers, mic, cam, facing, notice, expanded, screen, chat = [], unread = 0, chatOpen } = C;
   // a message arriving with the chat closed: shown for a moment at the top
   const [peek, setPeek] = useState(null);
@@ -254,6 +263,22 @@ export default function CallLayer() {
   };
 
   const others = call ? call.members.filter((m) => m.id !== C.myId) : [];
+  const shownOthers = others.filter((m) => seen(m.id));
+  const showMe = seen("me");
+  const hiddenN = others.filter((m) => !seen(m.id)).length + (showMe ? 0 : 1);   // on the 👥 button
+  // hide or show someone's face — never the last one showing
+  const toggleFace = (key) => {
+    const k = String(key), next = new Set(hidden);
+    if (next.has(k)) next.delete(k);
+    else {
+      const left = [...others.map((m) => String(m.id)), "me"].filter((x) => x !== k && !next.has(x));
+      if (!left.length) { setFacesNote("Keep at least one face showing."); return; }
+      next.add(k);
+    }
+    setFacesNote("");
+    setHidden(next);
+    try { localStorage.setItem("pr_call_hidden", JSON.stringify([...next])); } catch { /* fine */ }
+  };
   // friends still being rung into the call: a tile each, "Ringing…"
   const waiting = call && call.phase === "active" ? call.invited.map((id) => ({ id, name: call.names[id] || "Friend" })) : [];
   const seats = others.length + waiting.length;
@@ -281,6 +306,27 @@ export default function CallLayer() {
       }
     } catch { /* stays as it is */ }
   };
+  const [full, setFull] = useState(false);          // the shared screen is full screen
+  const [tucked, setTucked] = useState(false);      // …with the faces tucked away
+  useEffect(() => {
+    const on = () => {
+      const f = !!document.fullscreenElement && document.fullscreenElement === shareRef.current;
+      setFull(f);
+      // out of full screen in the installed app: back to following the phone
+      if (!f && isInstalled() && sharerId) { try { window.screen.orientation.lock("any").catch(() => {}); } catch { /* fine */ } }
+    };
+    document.addEventListener("fullscreenchange", on);
+    return () => document.removeEventListener("fullscreenchange", on);
+  });
+  // The installed app is held upright (manifest.json: portrait), so turning
+  // the phone did nothing while you watched a film someone was sharing.
+  // While a screen is on show it follows the phone; after, upright again.
+  const sharerId = sharer ? sharer.id : null;
+  useEffect(() => {
+    if (!sharerId || !isInstalled() || isDrawnSideways() || !window.screen?.orientation?.lock) return undefined;
+    try { window.screen.orientation.lock("any").catch(() => {}); } catch { /* not on this phone */ }
+    return () => { if (!isDrawnSideways()) { try { window.screen.orientation.lock("portrait").catch(() => {}); } catch { /* fine */ } } };
+  }, [sharerId]);
   const canAdd = friends.filter((f) => f.online && !call?.members.some((m) => m.id === Number(f.id)) && !call?.invited.includes(Number(f.id)));
   const needTap = React.useCallback(() => setTapForSound(true), []);
 
@@ -290,13 +336,13 @@ export default function CallLayer() {
     chat,
     since: call && call.startedAt,
     people: [
-      ...others.map((m) => {
+      ...shownOthers.map((m) => {
         const p = peers[m.id] || {};
         return { key: String(m.id), name: m.name, stream: p.stream, avatar: avatarOf(m.id), muted: p.mic === false, turn: p.turn || 0,
           showVideo: !!p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0 };
       }),
-      { key: "me", name: "You", stream: local, avatar: "🙂", muted: !mic, mirror: facing === "user", turn: C.turn || 0,
-        showVideo: !!local && cam && local.getVideoTracks().length > 0 },
+      ...(showMe ? [{ key: "me", name: "You", stream: local, avatar: "🙂", muted: !mic, mirror: facing === "user", turn: C.turn || 0,
+        showVideo: !!local && cam && local.getVideoTracks().length > 0 }] : []),
     ],
   };
   const pipRef = useRef(pipState);
@@ -376,11 +422,11 @@ export default function CallLayer() {
     if (!both.current) return;
     // everyone in the call (up to four): friends first, you last
     both.current.set([
-      ...others.slice(0, 3).map((m) => {
+      ...shownOthers.slice(0, 3).map((m) => {
         const p = peers[m.id] || {};
         return { key: String(m.id), stream: p.stream || null, show: hasCam(p.stream) && p.cam !== false, name: m.name, avatar: avatarOf(m.id) || "🙂", muted: p.mic === false, mirror: false };
       }),
-      { key: "me", me: true, stream: local, show: hasCam(local) && cam, name: "You", avatar: "🙂", muted: !mic, mirror: facing === "user" },
+      ...(showMe ? [{ key: "me", me: true, stream: local, show: hasCam(local) && cam, name: "You", avatar: "🙂", muted: !mic, mirror: facing === "user" }] : []),
     ], { since: call && call.startedAt, muted: !mic });
   });
   const floatStream = bothStream || (floatFace ? floatFace.stream : local);
@@ -481,10 +527,36 @@ export default function CallLayer() {
                 <Vid stream={shown} className="call-fit" />
                 <div className="call-share-tag">🖥️ {sharer.name}'s screen</div>
                 <button type="button" className="call-big" onClick={big} aria-label="Full screen">⛶</button>
+                {/* full screen, the film fills the screen: the faces come with it, small, over the top corner — tap to tuck them away */}
+                {full && (
+                  <button type="button" className={`call-share-faces${tucked ? " tucked" : ""}`} onClick={() => setTucked((x) => !x)}
+                    aria-label={tucked ? "Show the faces" : "Tuck the faces away"}>
+                    {tucked ? <span className="call-share-faces-chip">👥 {shownOthers.length + (showMe ? 1 : 0)}</span> : (
+                      <>
+                        {shownOthers.map((m) => {
+                          const p = peers[m.id] || {};
+                          const v = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
+                          return (
+                            <span className="call-share-face" key={m.id}>
+                              {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
+                              <span className="call-mini-name">{m.name}{p.mic === false ? " 🔇" : ""}</span>
+                            </span>
+                          );
+                        })}
+                        {showMe && (
+                          <span className="call-share-face">
+                            {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
+                            <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
               {/* everyone's face beside the screen — theirs and mine — like Discord */}
               <div className="call-strip">
-                {others.map((m) => {
+                {shownOthers.map((m) => {
                   const p = peers[m.id] || {};
                   const v = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
                   return (
@@ -494,10 +566,12 @@ export default function CallLayer() {
                     </div>
                   );
                 })}
-                <div className="call-mini-tile me" title="You">
-                  {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
-                  <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
-                </div>
+                {showMe && (
+                  <div className="call-mini-tile me" title="You">
+                    {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
+                    <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -560,6 +634,13 @@ export default function CallLayer() {
                 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></svg>
               </button>
             )}
+            {active && others.length > 0 && (
+              <button type="button" className="call-mini" onClick={() => { setFacesNote(""); setFacesOpen(true); }} aria-label="Choose whose faces you see"
+                title="Choose whose faces you see in the mini screen">
+                <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><circle cx="9" cy="8" r="3.4" fill="none" stroke="#fff" strokeWidth="2.4" /><path d="M2.8 19c.6-3.4 3.2-5.2 6.2-5.2s5.6 1.8 6.2 5.2" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" /><path d="M16 5.2a3.2 3.2 0 0 1 0 6.1M18.3 14.3c1.6.8 2.6 2.4 2.9 4.7" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" /></svg>
+                {hiddenN > 0 && <span className="call-badge" aria-hidden="true">{hiddenN}</span>}
+              </button>
+            )}
             {call.phase === "active" && <div className="call-time">{seats === 1 ? others[0].name + " · " : `${call.members.length} in the call · `}{clock(now - (call.startedAt || now))}</div>}
           </div>
 
@@ -618,6 +699,26 @@ export default function CallLayer() {
             </div>
           )}
 
+          {facesOpen && (
+            <div className="call-pick" role="dialog" aria-label="Whose faces you see" onClick={(e) => { if (e.target === e.currentTarget) setFacesOpen(false); }}>
+              <div className="call-pick-card pop">
+                <div className="call-pick-head">
+                  <b>Faces in the mini screen</b>
+                  <button type="button" className="press p-white sm" onClick={() => setFacesOpen(false)} aria-label="Close">✕</button>
+                </div>
+                {[...others.map((m) => ({ key: String(m.id), name: m.name, avatar: avatarOf(m.id) || "🙂" })), { key: "me", name: "You", avatar: "🙂" }].map((f) => (
+                  <button type="button" key={f.key} className={`call-pick-row call-face-row${seen(f.key) ? "" : " hidden"}`} onClick={() => toggleFace(f.key)}
+                    aria-pressed={seen(f.key)} aria-label={`${seen(f.key) ? "Hide" : "Show"} ${f.name}`}>
+                    <span className="call-emoji">{f.avatar}</span>
+                    <span className="call-pick-name">{f.name}</span>
+                    <span className="call-face-state">{seen(f.key) ? "👁 Showing" : "Hidden"}</span>
+                  </button>
+                ))}
+                <div className="call-pick-note">{facesNote || "Also beside a shared screen and in the floating window. The call itself still shows everyone."}</div>
+              </div>
+            </div>
+          )}
+
           {picking && (
             <div className="call-pick" role="dialog" aria-label="Add a friend" onClick={(e) => { if (e.target === e.currentTarget) setPicking(false); }}>
               <div className="call-pick-card pop">
@@ -643,12 +744,12 @@ export default function CallLayer() {
       )}
 
       {call && !expanded && !floatsNow && (
-        <div ref={bubbleEl} className={`call-bubble n${Math.min(4, 1 + Math.max(1, others.length))}`}
+        <div ref={bubbleEl} className={`call-bubble n${Math.min(4, (others.length ? Math.min(3, shownOthers.length) : 1) + (showMe ? 1 : 0))}`}
           style={{ "--bs": bscale, ...(pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : {}) }}
           onPointerDown={bubbleDown} onPointerMove={bubbleMove} onPointerUp={bubbleUp} onPointerCancel={() => { drag.current = null; }}
           role="button" aria-label="Open the call">
           {/* everyone's face: friends first, mine last */}
-          {(others.length ? others.slice(0, 3) : [{ id: call.first?.id }]).map((m) => {
+          {(others.length ? shownOthers.slice(0, 3) : [{ id: call.first?.id }]).map((m) => {
             const p = peers[m.id] || {};
             const v = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
             return (
@@ -657,9 +758,11 @@ export default function CallLayer() {
               </div>
             );
           })}
-          <div className="call-bubble-half me">
-            {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
-          </div>
+          {showMe && (
+            <div className="call-bubble-half me">
+              {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
+            </div>
+          )}
           <span className="call-bubble-grip" aria-label="Drag to make the call bigger or smaller" title="Drag to resize"
             onPointerDown={gripDown} onPointerMove={gripMove} onPointerUp={gripUp} onPointerCancel={gripUp} onClick={(e) => e.stopPropagation()}>
             <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M1 5V1h4M1 1l5 5M11 7v4H7M11 11L6 6" fill="none" stroke="#2E2140" strokeWidth="1.8" strokeLinecap="round" /></svg>

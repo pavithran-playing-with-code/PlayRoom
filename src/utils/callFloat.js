@@ -40,15 +40,17 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
-// Where each face goes, as in the bubble: [x, y, w, h] for the friends in
-// order, then you. Inside a frame (F) with seams (G) between the faces.
+// Where each face goes, as in the bubble: [x, y, w, h] for each of `n`
+// faces in order (friends, then you). Inside a frame (F) with seams (G):
+// one fills it, two stacked, three with the first across the top, four two by two.
 const F = 10, G = 5;
 function layout(n) {
   const x0 = F, y0 = F, w = W - 2 * F, h = H - 2 * F;
-  if (n <= 1) { const hh = (h - G) / 2; return { boxes: [[x0, y0, w, hh]], me: [x0, y0 + hh + G, w, hh] }; }
   const hw = (w - G) / 2, hh = (h - G) / 2;
-  if (n === 2) return { boxes: [[x0, y0, w, hh], [x0, y0 + hh + G, hw, hh]], me: [x0 + hw + G, y0 + hh + G, hw, hh] };
-  return { boxes: [[x0, y0, hw, hh], [x0 + hw + G, y0, hw, hh], [x0, y0 + hh + G, hw, hh]], me: [x0 + hw + G, y0 + hh + G, hw, hh] };
+  if (n <= 1) return [[x0, y0, w, h]];
+  if (n === 2) return [[x0, y0, w, hh], [x0, y0 + hh + G, w, hh]];
+  if (n === 3) return [[x0, y0, w, hh], [x0, y0 + hh + G, hw, hh], [x0 + hw + G, y0 + hh + G, hw, hh]];
+  return [[x0, y0, hw, hh], [x0 + hw + G, y0, hw, hh], [x0, y0 + hh + G, hw, hh], [x0 + hw + G, y0 + hh + G, hw, hh]];
 }
 
 export function createFloat() {
@@ -121,9 +123,9 @@ export function createFloat() {
     const now = performance.now();
     if (!force && now - drawnAt < MIN_MS) return;
     drawnAt = now;
-    const them = people.filter((p) => !p.me).slice(0, 3), me = people.find((p) => p.me);
-    // one friend: tall and narrow, like the bubble; more: wider, two by two
-    const w = them.length <= 1 ? 270 : 360;
+    const tiles = [...people.filter((p) => !p.me).slice(0, 3), ...people.filter((p) => p.me)];
+    // one or two faces: tall and narrow, like the bubble; more: wider, two by two
+    const w = tiles.length <= 2 ? 270 : 360;
     if (cv.width !== w) { cv.width = w; W = w; }
     // the bubble's card: an ink rim, white inside, the faces on it
     ctx.clearRect(0, 0, W, H);
@@ -131,9 +133,8 @@ export function createFloat() {
     roundRect(ctx, 0, 0, W, H, 26); ctx.fill();
     ctx.fillStyle = "#fff";
     roundRect(ctx, 4, 4, W - 8, H - 8, 22); ctx.fill();
-    const L = layout(them.length);
-    them.forEach((p, i) => face(p, L.boxes[i], now, false));
-    if (me) face(me, L.me, now, false);
+    const L = layout(tiles.length);
+    tiles.forEach((p, i) => face(p, L[i], now, false));
     // the time, in a pill along the bottom
     if (since) {
       const sec = Math.max(0, Math.floor((Date.now() - since) / 1000));

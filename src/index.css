@@ -1517,6 +1517,11 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-bubble-half.me{border-top:2px solid #fff}
 .call-bubble-half .call-emoji{width:44px;height:44px;font-size:24px}
 .call-bubble-tag{z-index:1}
+/* three or four in the call: every face, two by two */
+.call-bubble.n3,.call-bubble.n4{width:150px;height:200px;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:2px;background:#fff}
+.call-bubble.n3 .call-bubble-half:first-child{grid-column:1 / span 2}
+.call-bubble.n3 .call-bubble-half.me,.call-bubble.n4 .call-bubble-half.me{border-top:0}
+.call-bubble.n3 .call-emoji,.call-bubble.n4 .call-emoji{width:36px;height:36px;font-size:20px}
 /* the corner picture is a button: tap it to swap who's big */
 button.call-me{padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent;display:grid;place-items:center}
 button.call-me:disabled{cursor:default}

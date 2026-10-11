@@ -40,8 +40,11 @@ const WHY = {
 };
 const ENDED = { declined: "Call declined", "no-answer": "No answer", left: "Call ended", dropped: "Call ended — connection lost", switched: "Call ended" };
 
-// Clear voice first: the browser's echo cancelling, noise removal and level.
-const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true };
+// Clear voice first: the browser's echo cancelling, noise removal and level,
+// one channel (a voice needs no more), and where the browser has it, voice
+// isolation — keeps the voice and drops the room (unknown to a browser, it's
+// ignored).
+const AUDIO = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, voiceIsolation: true };
 const video = (facing) => ({ facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } });
 // a screen: full HD, smooth, and its sound left alone (no echo or noise
 // cancelling — that would eat the music)
@@ -63,7 +66,11 @@ function stereo(desc) {
   const m = desc.sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/i);
   if (!m) return desc;
   const re = new RegExp(`a=fmtp:${m[1]} ([^\r\n]*)`);
-  const sdp = desc.sdp.replace(re, (line, params) => (/stereo=1/.test(params) ? line : `a=fmtp:${m[1]} ${params};stereo=1;sprop-stereo=1;maxaveragebitrate=128000`));
+  // (every sound slot: the voice, and a shared screen's — and in-band error
+  // correction, so a lost packet is patched rather than crackling)
+  const all = new RegExp(re.source, "g");
+  const sdp = desc.sdp.replace(all, (line, params) => (/stereo=1/.test(params) ? line
+    : `a=fmtp:${m[1]} ${params}${/useinbandfec/.test(params) ? "" : ";useinbandfec=1"};stereo=1;sprop-stereo=1;maxaveragebitrate=128000`));
   return { type: desc.type, sdp };
 }
 
@@ -217,8 +224,13 @@ export function CallProvider({ children }) {
           p.encodings[0].scaleResolutionDownBy = n === 1 ? 1 : n === 2 ? 1.2 : 1.5;
           p.encodings[0].maxFramerate = 30;
           p.degradationPreference = "maintain-framerate";
-        } else if (isScreen) p.encodings[0].maxBitrate = 128000;
+        } else if (isScreen) p.encodings[0].maxBitrate = 160000;
         else p.encodings[0].maxBitrate = s.track.kind === "video" ? (n === 1 ? 1500000 : n === 2 ? 900000 : 600000) : 64000;
+        // sound before pictures: on a busy connection (a film being shared)
+        // the voices and the film's sound go first, so they don't break up
+        const sound = s.track.kind === "audio";
+        p.encodings[0].priority = sound ? "high" : isScreen ? "medium" : "low";
+        p.encodings[0].networkPriority = sound ? "high" : isScreen ? "medium" : "low";
         s.setParameters(p).catch(() => {});
       } catch { /* not every browser lets us */ }
     }
@@ -576,7 +588,7 @@ export function CallProvider({ children }) {
     screenRef.current = scr; setScreen(scr);
     for (const P of pcs.current.values()) shareInto(P, scr);
     tellMedia(micRef.current, camRef.current);
-    say(a ? "Sharing your screen and its sound" : "Sharing without sound — for sound, share a tab and tick “Share tab audio”");
+    say(a ? "Sharing your screen and its sound — 🎧 headphones keep your mic from picking it up" : "Sharing without sound — for sound, share a tab and tick “Share tab audio”");
     return undefined;
   }, [stopShare, tellMedia, say]);
   const toggleMic = useCallback(() => {

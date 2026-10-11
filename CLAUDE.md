@@ -212,12 +212,18 @@ There is no test runner. What works:
   Space eats the spaces typed into it. On a computer the call floats in a
   Document Picture-in-Picture window (`src/utils/callPip.js`, plain DOM —
   React's events don't reach another window): both faces and the chat.
-  On a phone, ⧉ floats the call over other apps (video
-  picture-in-picture, one video only): `src/utils/callFloat.js` draws both
-  faces into one canvas from the tracks' frames (MediaStreamTrackProcessor,
-  which keeps going in the background where <video> and timers don't). A
-  friend whose frames stop (their phone left the app) is `paused`
-  (CallContext counts decoded frames) and shows their face, not black. Back shrinks the call to its bubble (the open call
+  ⌄ is the one way to minimise: it floats the call — a computer gets the
+  Document Picture-in-Picture window, a phone a video picture-in-picture
+  of every face (up to four) drawn into one canvas by
+  `src/utils/callFloat.js` from the tracks' frames
+  (MediaStreamTrackProcessor, which keeps going in the background where
+  <video> and timers don't). Only where neither works (iPhone) does it
+  leave the in-page bubble, which then shows every face. A friend whose
+  frames stop (their phone left the app) is `paused` (CallContext counts
+  decoded frames) and shows their face, not black. Sound goes first:
+  audio senders have high priority, every Opus slot gets stereo + in-band
+  FEC, and the mic asks for one channel and voice isolation. Test the
+  bubble with phones that can't float (`NO_FLOAT` in the harness). Back shrinks the call to its bubble (the open call
   holds one history entry). Leaving the app doesn't hold the call; only
   the phone taking the mic does. A game drawn sideways on an upright
   screen (`useDrawnSideways` in LandscapeGate) turns the call with it,

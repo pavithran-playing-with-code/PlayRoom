@@ -10,7 +10,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallContext";
 import { usePresence } from "../utils/PresenceContext";
-import { canDocPip, openPip, updatePip, closePip } from "../utils/callPip";
+import { canDocPip, openPip, updatePip, closePip, pipOpen } from "../utils/callPip";
 import { canFloatBoth, createFloat } from "../utils/callFloat";
 import { useDrawnSideways, isDrawnSideways, toGame, gameRect } from "./horror/LandscapeGate";
 
@@ -54,14 +54,24 @@ function Vid({ stream, mirror = false, className = "", turn = 0 }) {
 }
 
 // A friend's voice. If the browser won't start sound without a tap, says so.
+// A sound that arrives later (a shared film's, after the voices) is set
+// again when its tracks change — some phones only play what a stream had
+// when it was handed over — and if a phone won't start it without a tap,
+// the next tap anywhere starts it.
 function Sound({ stream, onNeedTap }) {
   const ref = useRef(null);
+  const tracks = stream ? stream.getAudioTracks().map((t) => t.id).join() : "";
   useEffect(() => {
     const a = ref.current;
     if (!a) return;
-    if (a.srcObject !== stream) a.srcObject = stream || null;
+    if (a.srcObject !== stream || tracks) { a.srcObject = null; a.srcObject = stream || null; }
     if (stream) { const p = a.play(); if (p && p.catch) p.catch(() => onNeedTap && onNeedTap()); }
-  }, [stream, onNeedTap]);
+  }, [stream, tracks, onNeedTap]);
+  useEffect(() => {
+    const kick = () => { const a = ref.current; if (a && a.paused && a.srcObject) a.play().catch(() => {}); };
+    document.addEventListener("pointerdown", kick, true);
+    return () => document.removeEventListener("pointerdown", kick, true);
+  }, []);
   return <audio ref={ref} className="call-sound" autoPlay />;
 }
 
@@ -318,6 +328,7 @@ export default function CallLayer() {
   const floatWho = others.find((m) => peers[m.id] && peers[m.id].stream) || others[0];
   const floatPeer = floatWho ? peers[floatWho.id] : null;
   const floatFace = floatPeer && floatPeer.stream && floatPeer.cam !== false && floatPeer.stream.getVideoTracks().length > 0 ? floatPeer : null;
+  const hasCam = (s) => !!s && s.getVideoTracks().length > 0;
   const both = useRef(null);
   const [bothStream, setBothStream] = useState(null);
   useEffect(() => {
@@ -330,12 +341,14 @@ export default function CallLayer() {
   }, [active]);
   useEffect(() => {
     if (!both.current) return;
-    both.current.set({
-      them: floatFace ? floatFace.stream : null, me: local,
-      showThem: !!floatFace, showMe: !!local && cam && local.getVideoTracks().length > 0, mirror: facing === "user",
-      name: floatWho ? floatWho.name + (others.length > 1 ? ` +${others.length - 1}` : "") : "", avatar: avatarOf(floatWho?.id) || "🙂",
-      muted: !!floatPeer && floatPeer.mic === false,
-    });
+    // everyone in the call (up to four): friends first, you last
+    both.current.set([
+      ...others.slice(0, 3).map((m) => {
+        const p = peers[m.id] || {};
+        return { key: String(m.id), stream: p.stream || null, show: hasCam(p.stream) && p.cam !== false, name: m.name, avatar: avatarOf(m.id) || "🙂", muted: p.mic === false, mirror: false };
+      }),
+      { key: "me", me: true, stream: local, show: hasCam(local) && cam, name: "You", avatar: "🙂", muted: !mic, mirror: facing === "user" },
+    ]);
   });
   const floatStream = bothStream || (floatFace ? floatFace.stream : local);
   useEffect(() => {
@@ -350,26 +363,46 @@ export default function CallLayer() {
     try {
       if (document.pictureInPictureElement === v) return;
       await v.requestPictureInPicture();
-      C.setExpanded(false);
-    } catch { /* not allowed right now */ }
+    } catch { /* not allowed right now: the bubble is there instead */ }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const v = pipVid.current;
     if (!active || !VIDEO_PIP || !v) return undefined;
-    // tapping the little window (back to PlayRoom): the call, full screen
-    const back = () => C.setExpanded(true);
-    v.addEventListener("leavepictureinpicture", back);
+    // Floating, and back: heard at the page (the events bubble), so it never
+    // matters which <video> it was. Tapping the little window (back to
+    // PlayRoom): the call, full screen.
+    const mine = (e) => e.target === pipVid.current;
+    const on = (e) => { if (mine(e)) setFloating(true); };
+    const back = (e) => { if (mine(e)) { setFloating(false); C.setExpanded(true); } };
+    document.addEventListener("enterpictureinpicture", on, true);
+    document.addEventListener("leavepictureinpicture", back, true);
+    if (document.pictureInPictureElement === v) setFloating(true);
     try { v.setAttribute("autopictureinpicture", ""); v.autoPictureInPicture = true; } catch { /* fine */ }
     if (navigator.mediaSession) {
       try { navigator.mediaSession.setActionHandler("enterpictureinpicture", floatOut); } catch { /* not this browser */ }
     }
     return () => {
-      v.removeEventListener("leavepictureinpicture", back);
+      document.removeEventListener("enterpictureinpicture", on, true);
+      document.removeEventListener("leavepictureinpicture", back, true);
+      setFloating(false);
       if (document.pictureInPictureElement === v) document.exitPictureInPicture().catch(() => {});
       if (navigator.mediaSession) { try { navigator.mediaSession.setActionHandler("enterpictureinpicture", null); } catch { /* fine */ } }
     };
   }, [active, floatOut]); // eslint-disable-line react-hooks/exhaustive-deps
   const sideways = useDrawnSideways();
+
+  // ⌄ Minimise — the one way to shrink the call: it floats, with everyone's
+  // face, over this app and others (a computer: its own little window, with
+  // the chat; a phone: a picture-in-picture of every face). Where floating
+  // isn't possible (iPhone), or the browser says no, the bubble in the page.
+  const [floating, setFloating] = useState(false);
+  const minimise = () => {
+    C.setExpanded(false);
+    if (!active) return;
+    if (canDocPip()) popOut();
+    else if (VIDEO_PIP) floatOut();
+  };
+  const floatsNow = floating || (canDocPip() && pipOpen());
 
   return (
     <div className={`call-root${sideways ? " rot" : ""}`}>
@@ -486,18 +519,12 @@ export default function CallLayer() {
           )}
 
           <div className="call-top">
-            <button type="button" className="call-mini" onClick={() => C.setExpanded(false)} aria-label="Shrink the call">
+            <button type="button" className="call-mini" onClick={minimise} aria-label="Shrink the call" title="Minimise — the call floats over your apps">
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
             {active && room && (
               <button type="button" className="call-mini" onClick={() => setPicking(true)} aria-label="Add a friend to the call">
                 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></svg>
-              </button>
-            )}
-            {active && (canDocPip() || VIDEO_PIP) && (
-              <button type="button" className="call-mini" onClick={canDocPip() ? popOut : floatOut}
-                aria-label={canDocPip() ? "Float the call over other tabs" : "Float the call over other apps"} title={canDocPip() ? "Float the call over other tabs" : "Float the call over other apps"}>
-                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="#fff" strokeWidth="2.4" /><rect x="12" y="11" width="7" height="6" rx="1" fill="#fff" /></svg>
               </button>
             )}
             {call.phase === "active" && <div className="call-time">{seats === 1 ? others[0].name + " · " : `${call.members.length} in the call · `}{clock(now - (call.startedAt || now))}</div>}
@@ -582,16 +609,20 @@ export default function CallLayer() {
         </div>
       )}
 
-      {call && !expanded && (
-        <div className="call-bubble" style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
+      {call && !expanded && !floatsNow && (
+        <div className={`call-bubble n${Math.min(4, 1 + Math.max(1, others.length))}`} style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
           onPointerDown={bubbleDown} onPointerMove={bubbleMove} onPointerUp={bubbleUp} onPointerCancel={() => { drag.current = null; }}
           role="button" aria-label="Open the call">
-          {/* their face above, mine below */}
-          <div className="call-bubble-half">
-            {theirVid
-              ? <Vid stream={peers[others[0].id].stream} className="call-full" turn={peers[others[0].id].turn} />
-              : <span className="call-emoji">{avatarOf(others[0]?.id || call.first?.id) || "🙂"}</span>}
-          </div>
+          {/* everyone's face: friends first, mine last */}
+          {(others.length ? others.slice(0, 3) : [{ id: call.first?.id }]).map((m) => {
+            const p = peers[m.id] || {};
+            const v = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
+            return (
+              <div className="call-bubble-half" key={m.id ?? "first"}>
+                {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
+              </div>
+            );
+          })}
           <div className="call-bubble-half me">
             {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
           </div>

@@ -155,7 +155,11 @@ export function CallProvider({ children }) {
   const [elsewhere, setElsewhere] = useState(null);
   // A game drawn sideways on an upright screen: the camera's picture comes
   // out a quarter turned. Everyone (me included) shows it turned back.
-  const turn = useDrawnSideways() ? -90 : 0;
+  // …or the phone held sideways to watch a shared screen, the screen upright
+  // (CallLayer turns the call; held: 90 its top to the left, -90 right)
+  const [heldTurn, setHeldTurn] = useState(0);
+  const drawnSideways = useDrawnSideways();
+  const turn = drawnSideways || heldTurn === 90 ? -90 : heldTurn === -90 ? 90 : 0;
   const turnRef = useRef(turn);
   const [shareHelp, setShareHelp] = useState(false); // "why can't I share from my phone" card
   // the call's chat: kept here for the call only, never saved anywhere
@@ -688,7 +692,7 @@ export function CallProvider({ children }) {
   useEffect(() => () => { tones.current.stop(); stopMedia(); }, [stopMedia]);
 
   const value = useMemo(() => ({
-    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere,
+    call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
   }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen]);

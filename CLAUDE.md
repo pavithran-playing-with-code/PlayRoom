@@ -227,7 +227,12 @@ There is no test runner. What works:
   over it in full screen (`pr_call_hidden`, never the last one); the call
   grid itself always shows everyone. The installed app is portrait
   (manifest.json), so while a screen is shared it asks for `lock("any")`
-  and goes back to portrait after. A friend whose
+  and goes back to portrait after — and since that isn't honoured
+  everywhere, an Android phone held sideways (the motion sensor,
+  `useHeldSideways`) draws the call turned (`.call-root.rot` / `rot-ccw`)
+  and sends `turn` for its camera. An iPhone can only full-screen a
+  <video> (its own player, no faces), so ⛶ there is our own full screen
+  (`.call-share.pfull`). A friend whose
   frames stop (their phone left the app) is `paused` (CallContext counts
   decoded frames) and shows their face, not black. Sound goes first:
   audio senders have high priority, every Opus slot gets stereo + in-band

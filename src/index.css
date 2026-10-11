@@ -1641,6 +1641,18 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .call-root.rot{display:block;position:fixed;top:0;left:100vw;width:100vh;width:100dvh;height:100vw;
   transform:rotate(90deg);transform-origin:0 0;z-index:10000;pointer-events:none}
 .call-root.rot > *{pointer-events:auto}
+/* …and the other way: the phone held with its top to the right */
+.call-root.rot-ccw{display:block;position:fixed;left:0;top:100vh;top:100dvh;width:100vh;width:100dvh;height:100vw;
+  transform:rotate(-90deg);transform-origin:0 0;z-index:10000;pointer-events:none}
+.call-root.rot-ccw > *{pointer-events:auto}
+/* the call turned with the phone (or a sideways game): the same film mode as a sideways screen */
+.call-root.rot .call-share,.call-root.rot-ccw .call-share{bottom:0;right:calc(env(safe-area-inset-right,0px) + 150px)}
+.call-root.rot .call-strip,.call-root.rot-ccw .call-strip{left:auto;right:calc(env(safe-area-inset-right,0px) + 68px);top:calc(env(safe-area-inset-top,0px) + 8px);bottom:auto;width:76px;height:auto;flex-direction:column;justify-content:flex-start;padding:0;gap:6px}
+.call-root.rot .call-strip .call-mini-tile,.call-root.rot-ccw .call-strip .call-mini-tile{width:76px;height:58px}
+.call-root.rot .call-screen.sharing .call-bar,.call-root.rot-ccw .call-screen.sharing .call-bar{left:auto;right:12px;bottom:12px;flex-direction:column;width:auto}
+.call-root.rot .call-screen.sharing .call-bar .call-btn,.call-root.rot-ccw .call-screen.sharing .call-bar .call-btn{width:44px;height:44px;font-size:20px}
+/* our own full screen for a shared screen (an iPhone): over everything in the call */
+.call-root .call-share.pfull{position:fixed;inset:0;bottom:0;right:0;z-index:7}
 /* the picture a phone floats over other apps: not shown in the page itself */
 .call-pipvid{position:fixed;left:0;bottom:0;width:2px;height:2px;opacity:0;pointer-events:none}
 /* my account in a call on my other device: a pill, and "Move here" (below .call-notice, which would cover it) */

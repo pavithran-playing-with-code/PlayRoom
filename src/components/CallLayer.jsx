@@ -21,10 +21,46 @@ const NO_VIDEO_PIP = canDocPip();
 // which stays over other apps when you leave PlayRoom (like WhatsApp).
 const VIDEO_PIP = !NO_VIDEO_PIP && typeof document !== "undefined" && !!document.pictureInPictureEnabled;
 
-// Positions while dragging, in the call's own frame — turned a quarter when
-// a game is drawn sideways (the call is then drawn sideways with it).
-const at = (e) => toGame(e, isDrawnSideways());
-const area = () => (isDrawnSideways() ? { w: window.innerHeight, h: window.innerWidth } : { w: window.innerWidth, h: window.innerHeight });
+// The call drawn turned a quarter: 90 (clockwise) with a game drawn
+// sideways, or with the phone held sideways while the screen stays upright
+// (heldSideways); -90 the other way. Set as the call draws.
+let layerTurn = 0;
+// Positions while dragging, in the call's own frame.
+const at = (e) => (layerTurn === 90 ? toGame(e, true) : layerTurn === -90 ? { x: window.innerHeight - e.clientY, y: e.clientX } : { x: e.clientX, y: e.clientY });
+const area = () => (layerTurn ? { w: window.innerHeight, h: window.innerWidth } : { w: window.innerWidth, h: window.innerHeight });
+// An element's box in the call's frame.
+const layerRect = (el) => {
+  if (layerTurn === 90) return gameRect(el, true);
+  const r = el.getBoundingClientRect();
+  if (layerTurn === -90) return { left: window.innerHeight - r.bottom, top: r.left, width: r.height, height: r.width };
+  return { left: r.left, top: r.top, width: r.width, height: r.height };
+};
+
+// An Android phone held sideways while its screen stays upright — the
+// installed app is portrait (manifest.json), and asking the screen to turn
+// isn't honoured everywhere. Read from the motion sensor (gravity along the
+// phone's width): 90 when its top points left, -90 right, 0 upright or flat.
+// Once the screen really turns, it's landscape and this says 0.
+function useHeldSideways(on) {
+  const [deg, setDeg] = useState(0);
+  useEffect(() => {
+    if (!on || typeof window === "undefined" || !/Android/i.test(navigator.userAgent || "")) { setDeg(0); return undefined; }
+    let cur = 0;
+    const onMotion = (e) => {
+      const g = e.accelerationIncludingGravity;
+      if (!g || g.x == null || g.y == null) return;
+      const ax = Math.abs(g.x), ay = Math.abs(g.y);
+      let next = cur;
+      if (!window.matchMedia("(orientation: portrait)").matches) next = 0;
+      else if (cur === 0) { if (ax > 7 && ax > ay + 3) next = g.x > 0 ? 90 : -90; }
+      else if (ax < 4 || ay > ax + 2) next = 0;
+      if (next !== cur) { cur = next; setDeg(next); }
+    };
+    window.addEventListener("devicemotion", onMotion);
+    return () => { window.removeEventListener("devicemotion", onMotion); setDeg(0); };
+  }, [on]);
+  return deg;
+}
 
 const two = (n) => String(n).padStart(2, "0");
 const BUBBLE_MIN = 0.8, BUBBLE_MAX = 2.4;        // how small and how big the bubble can be made
@@ -90,7 +126,7 @@ function useDrag() {
   const d = useRef(null);
   const moved = useRef(false);
   const start = (e, el) => {
-    const r = gameRect(el || e.currentTarget, isDrawnSideways()), p = at(e);
+    const r = layerRect(el || e.currentTarget), p = at(e);
     d.current = { id: e.pointerId, dx: p.x - r.left, dy: p.y - r.top, x0: p.x, y0: p.y, w: r.width, h: r.height, go: false };
     moved.current = false;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
@@ -224,7 +260,7 @@ export default function CallLayer() {
     e.stopPropagation();
     const el = bubbleEl.current;
     if (!el) return;
-    const r = gameRect(el, isDrawnSideways()), p = at(e);
+    const r = layerRect(el), p = at(e);
     grip.current = { id: e.pointerId, right: r.left + r.width, bottom: r.top + r.height, w1: r.width / bscale, h1: r.height / bscale, dx: p.x - r.left, s: bscale };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
   };
@@ -245,7 +281,7 @@ export default function CallLayer() {
     try { localStorage.setItem("pr_bubble_size", String(Math.round(bscale * 100) / 100)); } catch { /* fine */ }
   };
   const bubbleDown = (e) => {
-    const r = gameRect(e.currentTarget, isDrawnSideways()), p = at(e);
+    const r = layerRect(e.currentTarget), p = at(e);
     drag.current = { id: e.pointerId, dx: p.x - r.left, dy: p.y - r.top, x0: p.x, y0: p.y, moved: false };
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
   };
@@ -301,12 +337,16 @@ export default function CallLayer() {
         // a film on a phone: sideways (where the phone lets a page turn it)
         try { await window.screen.orientation.lock("landscape"); } catch { /* not on every phone */ }
       } else {
-        const v = el.querySelector("video");
-        if (v && v.webkitEnterFullscreen) v.webkitEnterFullscreen();       // iPhone: the video itself goes full screen
+        // an iPhone: only a <video> can go full screen there, in its own
+        // player — which can't show the faces or 👥. So: our own full screen,
+        // the shared screen over everything (the phone turns it by itself).
+        setPseudo((x) => !x);
       }
     } catch { /* stays as it is */ }
   };
   const [full, setFull] = useState(false);          // the shared screen is full screen
+  const [pseudo, setPseudo] = useState(false);      // …our own full screen (an iPhone: no element full screen)
+  useEffect(() => { if (!sharer) setPseudo(false); }, [sharer]);
   const [tucked, setTucked] = useState(false);      // …with the faces tucked away
   useEffect(() => {
     const on = () => {
@@ -469,6 +509,10 @@ export default function CallLayer() {
     };
   }, [active, floatOut]); // eslint-disable-line react-hooks/exhaustive-deps
   const sideways = useDrawnSideways();
+  // watching a shared screen with the phone held sideways: the call turns with it
+  const held = useHeldSideways(!!shown && !!call && expanded && !sideways && !full);
+  layerTurn = sideways ? 90 : held;
+  useEffect(() => { if (C.setHeldTurn) C.setHeldTurn(held); }, [held]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ⌄ Minimise — the one way to shrink the call: it floats, with everyone's
   // face, over this app and others (a computer: its own little window, with
@@ -484,7 +528,7 @@ export default function CallLayer() {
   const floatsNow = floating || (canDocPip() && pipOpen());
 
   return (
-    <div className={`call-root${sideways ? " rot" : ""}`}>
+    <div className={`call-root${layerTurn === 90 ? " rot" : layerTurn === -90 ? " rot-ccw" : ""}`}>
       {active && VIDEO_PIP && <video ref={pipVid} className="call-pipvid" autoPlay playsInline muted aria-hidden="true" />}
       {notice && !ringing && <div className="call-notice" role="status">{notice.text}</div>}
       {C.elsewhere && !call && !ringing && (
@@ -523,12 +567,12 @@ export default function CallLayer() {
             </div>
           ) : shown ? (
             <>
-              <div className="call-share" ref={shareRef} onDoubleClick={big}>
+              <div className={`call-share${pseudo ? " pfull" : ""}`} ref={shareRef} onDoubleClick={big}>
                 <Vid stream={shown} className="call-fit" />
                 <div className="call-share-tag">🖥️ {sharer.name}'s screen</div>
                 <button type="button" className="call-big" onClick={big} aria-label="Full screen">⛶</button>
                 {/* full screen, the film fills the screen: the faces come with it, small, over the top corner — tap to tuck them away */}
-                {full && (
+                {(full || pseudo) && (
                   <button type="button" className={`call-share-faces${tucked ? " tucked" : ""}`} onClick={() => setTucked((x) => !x)}
                     aria-label={tucked ? "Show the faces" : "Tuck the faces away"}>
                     {tucked ? <span className="call-share-faces-chip">👥 {shownOthers.length + (showMe ? 1 : 0)}</span> : (

@@ -27,6 +27,7 @@ const at = (e) => toGame(e, isDrawnSideways());
 const area = () => (isDrawnSideways() ? { w: window.innerHeight, h: window.innerWidth } : { w: window.innerWidth, h: window.innerHeight });
 
 const two = (n) => String(n).padStart(2, "0");
+const BUBBLE_MIN = 0.8, BUBBLE_MAX = 2.4;        // how small and how big the bubble can be made
 const clock = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${two(s % 60)}`; };
 
 // A picture. Always silent: the sound is played by <Sound>, which stays put
@@ -203,6 +204,37 @@ export default function CallLayer() {
   // the bubble: drag it out of the way
   const [pos, setPos] = useState(null);
   const drag = useRef(null);
+  // …and make it bigger or smaller: the handle in its top-left corner. The
+  // bottom-right corner stays put while you drag. Remembered for next time.
+  const [bscale, setBscale] = useState(() => {
+    try { const v = Number(localStorage.getItem("pr_bubble_size")); return v >= BUBBLE_MIN && v <= BUBBLE_MAX ? v : 1; } catch { return 1; }
+  });
+  const grip = useRef(null);
+  const bubbleEl = useRef(null);
+  const gripDown = (e) => {
+    e.stopPropagation();
+    const el = bubbleEl.current;
+    if (!el) return;
+    const r = gameRect(el, isDrawnSideways()), p = at(e);
+    grip.current = { id: e.pointerId, right: r.left + r.width, bottom: r.top + r.height, w1: r.width / bscale, h1: r.height / bscale, dx: p.x - r.left, s: bscale };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
+  };
+  const gripMove = (e) => {
+    const g = grip.current;
+    if (!g || g.id !== e.pointerId) return;
+    e.stopPropagation();
+    const p = at(e);
+    const k = Math.max(BUBBLE_MIN, Math.min(BUBBLE_MAX, (g.right - (p.x - g.dx)) / g.w1));
+    setBscale(k);
+    setPos({ x: Math.max(4, g.right - g.w1 * k), y: Math.max(4, g.bottom - g.h1 * k) });
+  };
+  const gripUp = (e) => {
+    const g = grip.current;
+    if (!g || g.id !== e.pointerId) return;
+    e.stopPropagation();
+    grip.current = null;
+    try { localStorage.setItem("pr_bubble_size", String(Math.round(bscale * 100) / 100)); } catch { /* fine */ }
+  };
   const bubbleDown = (e) => {
     const r = gameRect(e.currentTarget, isDrawnSideways()), p = at(e);
     drag.current = { id: e.pointerId, dx: p.x - r.left, dy: p.y - r.top, x0: p.x, y0: p.y, moved: false };
@@ -256,6 +288,7 @@ export default function CallLayer() {
   const pipState = {
     mic,
     chat,
+    since: call && call.startedAt,
     people: [
       ...others.map((m) => {
         const p = peers[m.id] || {};
@@ -348,7 +381,7 @@ export default function CallLayer() {
         return { key: String(m.id), stream: p.stream || null, show: hasCam(p.stream) && p.cam !== false, name: m.name, avatar: avatarOf(m.id) || "🙂", muted: p.mic === false, mirror: false };
       }),
       { key: "me", me: true, stream: local, show: hasCam(local) && cam, name: "You", avatar: "🙂", muted: !mic, mirror: facing === "user" },
-    ]);
+    ], { since: call && call.startedAt, muted: !mic });
   });
   const floatStream = bothStream || (floatFace ? floatFace.stream : local);
   useEffect(() => {
@@ -610,7 +643,8 @@ export default function CallLayer() {
       )}
 
       {call && !expanded && !floatsNow && (
-        <div className={`call-bubble n${Math.min(4, 1 + Math.max(1, others.length))}`} style={pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : undefined}
+        <div ref={bubbleEl} className={`call-bubble n${Math.min(4, 1 + Math.max(1, others.length))}`}
+          style={{ "--bs": bscale, ...(pos ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" } : {}) }}
           onPointerDown={bubbleDown} onPointerMove={bubbleMove} onPointerUp={bubbleUp} onPointerCancel={() => { drag.current = null; }}
           role="button" aria-label="Open the call">
           {/* everyone's face: friends first, mine last */}
@@ -626,6 +660,10 @@ export default function CallLayer() {
           <div className="call-bubble-half me">
             {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
           </div>
+          <span className="call-bubble-grip" aria-label="Drag to make the call bigger or smaller" title="Drag to resize"
+            onPointerDown={gripDown} onPointerMove={gripMove} onPointerUp={gripUp} onPointerCancel={gripUp} onClick={(e) => e.stopPropagation()}>
+            <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M1 5V1h4M1 1l5 5M11 7v4H7M11 11L6 6" fill="none" stroke="#2E2140" strokeWidth="1.8" strokeLinecap="round" /></svg>
+          </span>
           {unread > 0 && <span className="call-badge on-bubble">{unread > 9 ? "9+" : unread}</span>}
           <div className="call-bubble-tag">{shown ? "🖥️ " : ""}{call.phase === "active" ? clock(now - (call.startedAt || now)) : "Calling…"}{mic ? "" : " 🔇"}</div>
         </div>

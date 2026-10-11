@@ -218,7 +218,11 @@ There is no test runner. What works:
   `src/utils/callFloat.js` from the tracks' frames
   (MediaStreamTrackProcessor, which keeps going in the background where
   <video> and timers don't). Only where neither works (iPhone) does it
-  leave the in-page bubble, which then shows every face. A friend whose
+  leave the in-page bubble, which then shows every face. Both floating
+  windows are drawn to look like the bubble (faces stacked in a rounded
+  card, the time in a pill); the bubble resizes from its top-left handle
+  (`pr_bubble_size` in localStorage). A phone can only start floating
+  from a tap: Back, or leaving the app, can't do it. A friend whose
   frames stop (their phone left the app) is `paused` (CallContext counts
   decoded frames) and shows their face, not black. Sound goes first:
   audio senders have high priority, every Opus slot gets stereo + in-band

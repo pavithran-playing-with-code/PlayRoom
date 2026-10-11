@@ -1,9 +1,10 @@
 // src/utils/callFloat.js
 // The call's floating window on a phone. A phone browser can float only one
 // video over other apps (video picture-in-picture), so everyone's face is
-// drawn into one picture — up to four: one friend big with you in the
-// corner (like WhatsApp), two friends one above the other, three in a 2×2
-// with you — and that picture is what floats.
+// drawn into one picture — up to four — and that picture is what floats.
+// It looks like the call's bubble in the page: the faces stacked in a
+// rounded card with white seams, a friend on top and you below (with three
+// or four, two by two), and the call's time in a pill at the bottom.
 //
 // The frames come straight off the cameras' tracks (MediaStreamTrackProcessor),
 // not from <video> elements: those stop drawing when the app is in the
@@ -14,7 +15,7 @@
 //
 // Plain DOM, no React. Where the processor isn't there (iPhone Safari),
 // canFloatBoth() is false and the call floats the friend's video alone.
-const W = 360, H = 480;            // portrait, like a phone's call
+let W = 270, H = 480;              // portrait, like the bubble; wider with three or four
 const STALE_MS = 1500;             // no frame for this long: that camera is paused
 const MIN_MS = 55;                 // at most ~18 pictures a second
 
@@ -39,13 +40,15 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
-// Where each face goes: [x, y, w, h] for the friends in order, then you.
-// One friend: them full, you in the corner (`inset`).
+// Where each face goes, as in the bubble: [x, y, w, h] for the friends in
+// order, then you. Inside a frame (F) with seams (G) between the faces.
+const F = 10, G = 5;
 function layout(n) {
-  if (n <= 1) return { boxes: [[0, 0, W, H]], me: [W - 128, 12, 116, 154], inset: true };
-  if (n === 2) return { boxes: [[0, 0, W, H / 2 - 1], [0, H / 2 + 1, W, H / 2 - 1]], me: [W - 98, H / 2 - 66, 88, 116], inset: true };
-  const w = W / 2 - 1, h = H / 2 - 1;
-  return { boxes: [[0, 0, w, h], [W / 2 + 1, 0, w, h], [0, H / 2 + 1, w, h]], me: [W / 2 + 1, H / 2 + 1, w, h], inset: false };
+  const x0 = F, y0 = F, w = W - 2 * F, h = H - 2 * F;
+  if (n <= 1) { const hh = (h - G) / 2; return { boxes: [[x0, y0, w, hh]], me: [x0, y0 + hh + G, w, hh] }; }
+  const hw = (w - G) / 2, hh = (h - G) / 2;
+  if (n === 2) return { boxes: [[x0, y0, w, hh], [x0, y0 + hh + G, hw, hh]], me: [x0 + hw + G, y0 + hh + G, hw, hh] };
+  return { boxes: [[x0, y0, hw, hh], [x0 + hw + G, y0, hw, hh], [x0, y0 + hh + G, hw, hh]], me: [x0 + hw + G, y0 + hh + G, hw, hh] };
 }
 
 export function createFloat() {
@@ -56,6 +59,7 @@ export function createFloat() {
   // per face (key): the latest frame, kept small; when it came; the track it follows
   const faces = new Map();           // key -> { cv, at, got, track, stop }
   let people = [];                   // [{ key, stream, show, name, avatar, muted, mirror, me }]
+  let since = 0, muted = false;      // the pill: the call's time (worked out at each picture: the page's own clock stops in the background), 🔇
   let drawnAt = 0;
 
   function keep(track, into, onFrame) {
@@ -84,7 +88,7 @@ export function createFloat() {
     const [x, y, w, h] = box, F = faces.get(p.key);
     const has = p.show && F && F.got;
     ctx.save();
-    if (small) { roundRect(ctx, x, y, w, h, 12); ctx.clip(); }
+    roundRect(ctx, x, y, w, h, small ? 12 : 14); ctx.clip();
     ctx.fillStyle = "#221a30";
     ctx.fillRect(x, y, w, h);
     if (has) {
@@ -99,31 +103,49 @@ export function createFloat() {
       ctx.font = `${Math.round(Math.min(w, h) * 0.38)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
       ctx.fillText(p.avatar || "🙂", x + w / 2, y + h * 0.45);
     }
-    // the name, bottom left (yours too, in a grid; not on the little corner picture)
-    if (!small || !p.me) {
+    // the name, a small pill top left
+    if (!p.me) {
       const label = `${p.name}${p.muted ? " 🔇" : ""}`;
-      ctx.font = `bold ${h > 300 ? 20 : 15}px sans-serif`;
+      ctx.font = "bold 15px sans-serif";
       ctx.textBaseline = "middle"; ctx.textAlign = "left";
-      const th = h > 300 ? 32 : 26, tw = Math.min(w - 16, ctx.measureText(label).width + 20);
+      const th = 24, tw = Math.min(w - 16, ctx.measureText(label).width + 18);
       ctx.fillStyle = "rgba(0,0,0,.55)";
-      roundRect(ctx, x + 8, y + h - th - 8, tw, th, th / 2); ctx.fill();
+      roundRect(ctx, x + 8, y + 8, tw, th, th / 2); ctx.fill();
       ctx.fillStyle = "#fff";
-      ctx.fillText(label, x + 18, y + h - 8 - th / 2, w - 36);
+      ctx.fillText(label, x + 17, y + 8 + th / 2, w - 34);
     }
     ctx.restore();
-    if (small) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 3; roundRect(ctx, x, y, w, h, 12); ctx.stroke(); }
   }
 
   function draw(force = false) {
     const now = performance.now();
     if (!force && now - drawnAt < MIN_MS) return;
     drawnAt = now;
-    ctx.fillStyle = "#100b18";
-    ctx.fillRect(0, 0, W, H);
     const them = people.filter((p) => !p.me).slice(0, 3), me = people.find((p) => p.me);
+    // one friend: tall and narrow, like the bubble; more: wider, two by two
+    const w = them.length <= 1 ? 270 : 360;
+    if (cv.width !== w) { cv.width = w; W = w; }
+    // the bubble's card: an ink rim, white inside, the faces on it
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = "#2E2140";
+    roundRect(ctx, 0, 0, W, H, 26); ctx.fill();
+    ctx.fillStyle = "#fff";
+    roundRect(ctx, 4, 4, W - 8, H - 8, 22); ctx.fill();
     const L = layout(them.length);
     them.forEach((p, i) => face(p, L.boxes[i], now, false));
-    if (me) face(me, L.me, now, L.inset);
+    if (me) face(me, L.me, now, false);
+    // the time, in a pill along the bottom
+    if (since) {
+      const sec = Math.max(0, Math.floor((Date.now() - since) / 1000));
+      const pill = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}${muted ? " 🔇" : ""}`;
+      ctx.font = "bold 20px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const tw = ctx.measureText(pill).width + 28;
+      ctx.fillStyle = "rgba(0,0,0,.6)";
+      roundRect(ctx, (W - tw) / 2, H - F - 38, tw, 30, 15); ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.fillText(pill, W / 2, H - F - 23);
+    }
   }
 
   // a new frame: friends' frames lead; yours redraw only if theirs have stopped
@@ -152,8 +174,9 @@ export function createFloat() {
   draw(true);                        // a first picture, so the window can open at once
   return {
     stream,
-    // [{ key, stream, show, name, avatar, muted, mirror, me }] — friends first, you last
-    set(list) { people = list; follow(); draw(true); },
+    // [{ key, stream, show, name, avatar, muted, mirror, me }] — friends first, you last;
+    // `o`: { since (when the call began, ms), muted } — the pill at the bottom
+    set(list, o = {}) { people = list; since = o.since || 0; muted = !!o.muted; follow(); draw(true); },
     close() {
       for (const F of faces.values()) if (F.stop) F.stop();
       faces.clear();

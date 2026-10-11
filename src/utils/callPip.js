@@ -1,9 +1,11 @@
 // src/utils/callPip.js
 // The call in a small floating window that stays on top while you're on
-// another tab or app — their face on the left, yours on the right, with
-// mute and hang up. 💬 opens the call's chat underneath (read and reply while
-// a film plays in another tab); closed, the window is just the faces, and a
-// new message floats over them for a moment and counts on 💬.
+// another tab or app. It looks like the call's bubble in the page: a tall
+// rounded card, a friend on top and you below (three or four, two by two),
+// the call's time in a pill at the bottom. Mute, chat, back and hang up show
+// when the mouse is over it. 💬 opens the call's chat underneath (read and
+// reply while a film plays in another tab); a new message floats over the
+// faces for a moment and counts on 💬.
 //
 // A plain video picture-in-picture can only show one video, so it showed
 // just the other person. This uses Chrome's Document Picture-in-Picture
@@ -18,23 +20,34 @@ let handlers = {};
 
 const CSS = `
 *{box-sizing:border-box;margin:0}
-html,body{height:100%;background:#14101c;color:#fff;font-family:Nunito,system-ui,sans-serif;overflow:hidden}
-body{display:flex;flex-direction:column}
-.row{position:relative;flex:1 1 auto;min-height:90px;max-height:220px;display:flex;gap:3px;padding:3px}
-body.chatting .row{flex:0 0 46%}
+html,body{height:100%;background:#2E2140;color:#fff;font-family:Nunito,system-ui,sans-serif;overflow:hidden}
+body{display:flex;flex-direction:column;padding:6px}
+/* the bubble's card: white inside an ink rim, the faces on it with white seams */
+.row{position:relative;flex:1 1 auto;min-height:120px;display:grid;grid-template-columns:1fr;grid-auto-rows:1fr;gap:4px;padding:4px;
+  border-radius:22px;background:#fff}
+.row.n3,.row.n4{grid-template-columns:1fr 1fr}
+.row.n3 .tile.first{grid-column:1 / span 2}
+body.chatting .row{flex:0 0 52%}
+.pill{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:2;padding:3px 12px;border-radius:999px;background:rgba(0,0,0,.6);
+  font-weight:900;font-size:13px;white-space:nowrap;pointer-events:none;transition:opacity .2s}
 .peek{position:absolute;left:8px;right:8px;top:8px;z-index:2;padding:6px 10px;border-radius:12px;background:rgba(20,16,28,.88);border:2px solid #fff;
   font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;animation:pin .2s ease}
 .peek b{color:#FFC53D}
 @keyframes pin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 .badge{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#e5484d;border:2px solid #fff;font:900 10px/14px Nunito,sans-serif;text-align:center}
-.tile{position:relative;flex:1;min-width:0;border-radius:10px;overflow:hidden;background:#221a30;display:grid;place-items:center}
-.tile.me{outline:2px solid #FFC53D;outline-offset:-2px}
+.tile{position:relative;min-width:0;min-height:0;border-radius:16px;overflow:hidden;background:#221a30;display:grid;place-items:center}
 video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
 video.mirror{transform:scaleX(-1)}
 .face{font-size:34px;width:56px;height:56px;border-radius:50%;background:#FFC53D;display:grid;place-items:center;border:3px solid #fff}
-.name{position:absolute;left:4px;bottom:4px;padding:1px 8px;border-radius:999px;background:rgba(0,0,0,.55);font-weight:800;font-size:12px;
-  max-width:calc(100% - 8px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bar{flex:0 0 44px;display:flex;justify-content:center;align-items:center;gap:12px}
+.name{position:absolute;left:6px;top:6px;padding:1px 8px;border-radius:999px;background:rgba(0,0,0,.55);font-weight:800;font-size:12px;
+  max-width:calc(100% - 12px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.me .name{display:none}
+/* the buttons: over the faces, when the mouse is over the window (or the chat is open) */
+.bar{position:absolute;left:0;right:0;bottom:8px;z-index:3;display:flex;justify-content:center;align-items:center;gap:8px;
+  opacity:0;transition:opacity .2s;pointer-events:none}
+body:hover .bar,body.chatting .bar{opacity:1;pointer-events:auto}
+body:hover .pill,body.chatting .pill{opacity:0}
+.bar button{background:rgba(20,16,28,.75)}
 .chat{flex:1;min-height:0;display:none;flex-direction:column;border-top:1px solid rgba(255,255,255,.15)}
 body.chatting .chat{display:flex}
 .list{flex:1;min-height:0;overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;gap:4px}
@@ -51,8 +64,9 @@ input{flex:1;min-width:0;height:34px;padding:0 12px;border-radius:999px;border:0
 form button{background:#B5E655;color:#2E2140;border:0}
 button{position:relative;width:34px;height:34px;border-radius:50%;border:2px solid #fff;background:rgba(255,255,255,.2);color:#fff;font-size:16px;cursor:pointer;
   display:grid;place-items:center;padding:0}
-button.off{background:#fff;color:#2E2140}
-button.red{background:#e5484d}
+button.off,.bar button.off{background:#fff;color:#2E2140}
+button.red,.bar button.red{background:#e5484d}
+.chat{margin-top:6px;border-radius:16px;background:#14101c;overflow:hidden;border-top:0}
 `;
 
 function tile(doc, key) {
@@ -65,8 +79,10 @@ function tile(doc, key) {
 }
 
 // people: [{ key, name, stream, showVideo, avatar, mirror, muted }] — them first, me last
-export function updatePip({ people, mic, chat = [] }) {
+export function updatePip({ people, mic, chat = [], since = 0 }) {
   if (!win || !ui) return;
+  ui.since = since || 0;
+  ui.mute = !mic;
   // the chat: redrawn when there's something new
   if (ui.chatN !== chat.length) {
     const fresh = ui.chatN >= 0 ? chat.slice(ui.chatN).filter((m) => !m.mine) : [];
@@ -101,6 +117,7 @@ export function updatePip({ people, mic, chat = [] }) {
     let t = ui.tiles.get(p.key);
     if (!t) { t = tile(doc, p.key); ui.tiles.set(p.key, t); }
     ui.row.appendChild(t.box);                          // keeps the order: them, then me
+    t.box.classList.toggle("first", p === people[0]);
     const v = p.showVideo ? p.stream : null;
     if (t.vid.srcObject !== v) { t.vid.srcObject = v; if (v) t.vid.play().catch(() => {}); }
     t.vid.className = p.mirror && !p.turn ? "mirror" : "";
@@ -113,6 +130,8 @@ export function updatePip({ people, mic, chat = [] }) {
     t.name.textContent = p.name + (p.muted ? " 🔇" : "");
   }
   for (const [k, t] of ui.tiles) if (!keep.has(k)) { t.vid.srcObject = null; t.box.remove(); ui.tiles.delete(k); }
+  ui.row.className = `row n${Math.min(4, people.length)}`;
+  ui.row.appendChild(ui.pill);
   ui.mic.textContent = mic ? "🎤" : "🔇";
   ui.mic.className = mic ? "" : "off";
   ui.mic.title = mic ? "Mute" : "Unmute";
@@ -123,7 +142,7 @@ export async function openPip(state, on) {
   handlers = on || {};
   if (win && !win.closed) { updatePip(state); return true; }
   try {
-    win = await window.documentPictureInPicture.requestWindow({ width: 420, height: 230 });
+    win = await window.documentPictureInPicture.requestWindow({ width: 240, height: 400 });   // tall, like the bubble
   } catch { win = null; return false; }
   const doc = win.document;
   const style = doc.createElement("style"); style.textContent = CSS; doc.head.appendChild(style);
@@ -144,7 +163,7 @@ export async function openPip(state, on) {
     doc.body.classList.toggle("chatting", ui.open);
     chatBtn.className = ui.open ? "off" : "";
     if (ui.open) { ui.unread = 0; badge.style.display = "none"; peek.style.display = "none"; setTimeout(() => { ui && ui.input.focus(); ui && (ui.list.scrollTop = ui.list.scrollHeight); }, 30); }
-    try { win.resizeTo(win.outerWidth, ui.open ? Math.max(400, win.outerHeight) : 260); } catch { /* the window keeps its size; the layout fits it */ }
+    try { win.resizeTo(Math.max(300, win.outerWidth), ui.open ? Math.max(620, win.outerHeight) : 430); } catch { /* the window keeps its size; the layout fits it */ }
   };
   chatBtn.addEventListener("click", toggle);
   peek.addEventListener("click", () => { if (!ui.open) toggle(); });
@@ -173,11 +192,21 @@ export async function openPip(state, on) {
     else if (handlers.onSend) handlers.onSend(b.dataset.e);
   });
   chat.append(list, emo, form);
-  row.append(peek);
-  doc.body.append(row, bar, chat);
-  ui = { tiles: new Map(), mic, row, list, input, peek, badge, chatN: -1, unread: 0, open: false, peekT: 0 };
+  const pill = doc.createElement("div"); pill.className = "pill";
+  row.append(peek, bar, pill);
+  doc.body.append(row, chat);
+  ui = { tiles: new Map(), mic, row, pill, list, input, peek, badge, chatN: -1, unread: 0, open: false, peekT: 0, since: 0, mute: false };
+  // the time, ticking in the window itself (the page's own clock slows in a background tab)
+  const tick = () => {
+    if (!ui) return;
+    const sec = ui.since ? Math.max(0, Math.floor((Date.now() - ui.since) / 1000)) : 0;
+    ui.pill.textContent = ui.since ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}${ui.mute ? " 🔇" : ""}` : "";
+    ui.pill.style.display = ui.since ? "" : "none";
+  };
+  win.setInterval(tick, 1000);
   win.addEventListener("pagehide", () => { win = null; ui = null; });
   updatePip(state);
+  tick();
   return true;
 }
 

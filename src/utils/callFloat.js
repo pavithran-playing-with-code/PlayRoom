@@ -13,6 +13,12 @@
 // that stops sending (a phone that left its app, which pauses its camera)
 // shows its last frame dimmed, "camera paused".
 //
+// It reads the cameras only while the call is actually floating (run(true)):
+// reading every frame of your own camera all call long was work a phone's
+// camera and screen could do without — your own picture could stall. Not
+// floating, it keeps a still picture ready (the window needs one to open).
+// And it reads copies of the tracks, so it never holds up the real ones.
+//
 // Plain DOM, no React. Where the processor isn't there (iPhone Safari),
 // canFloatBoth() is false and the call floats the friend's video alone.
 let W = 270, H = 480;              // portrait, like the bubble; wider with three or four
@@ -63,10 +69,12 @@ export function createFloat() {
   let people = [];                   // [{ key, stream, show, name, avatar, muted, mirror, me }]
   let since = 0, muted = false;      // the pill: the call's time (worked out at each picture: the page's own clock stops in the background), 🔇
   let drawnAt = 0;
+  let running = false;               // floating: following the cameras
 
-  function keep(track, into, onFrame) {
+  function keep(source, into, onFrame) {
     let stop = false, reader;
-    try { reader = new window.MediaStreamTrackProcessor({ track }).readable.getReader(); } catch { return () => {}; }
+    const track = source.clone();      // a copy: the real track's picture and sending are never held up
+    try { reader = new window.MediaStreamTrackProcessor({ track }).readable.getReader(); } catch { track.stop(); return () => {}; }
     (async () => {
       while (!stop) {
         let r;
@@ -83,7 +91,7 @@ export function createFloat() {
         onFrame();
       }
     })();
-    return () => { stop = true; reader.cancel().catch(() => {}); };
+    return () => { stop = true; reader.cancel().catch(() => {}); track.stop(); };
   }
 
   function face(p, box, now, small) {
@@ -95,7 +103,7 @@ export function createFloat() {
     ctx.fillRect(x, y, w, h);
     if (has) {
       cover(ctx, F.cv, x, y, w, h, p.mirror);
-      if (now - F.at >= STALE_MS) {
+      if (running && now - F.at >= STALE_MS) {
         ctx.fillStyle = "rgba(20,14,30,.6)"; ctx.fillRect(x, y, w, h);
         ctx.font = `bold ${small ? 13 : 18}px sans-serif`; ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText(small ? "📷 paused" : "📷 camera paused", x + w / 2, y + h / 2);
@@ -157,9 +165,10 @@ export function createFloat() {
     if (people.every((q) => q.me || !faces.get(q.key) || now - faces.get(q.key).at > 300)) draw();
   }
 
-  // follow each face's camera, and let go of anyone who's left
+  // follow each face's camera (only while floating), and let go of anyone who's left
   function follow() {
-    const keys = new Set(people.map((p) => p.key));
+    const keys = new Set(running ? people.map((p) => p.key) : []);
+    if (!running) { for (const F of faces.values()) { if (F.stop) F.stop(); F.stop = null; F.track = null; } return; }
     for (const [k, F] of faces) if (!keys.has(k)) { if (F.stop) F.stop(); faces.delete(k); }
     for (const p of people) {
       const t = p.stream && p.stream.getVideoTracks()[0];
@@ -177,7 +186,21 @@ export function createFloat() {
     stream,
     // [{ key, stream, show, name, avatar, muted, mirror, me }] — friends first, you last;
     // `o`: { since (when the call began, ms), muted } — the pill at the bottom
-    set(list, o = {}) { people = list; since = o.since || 0; muted = !!o.muted; follow(); draw(true); },
+    set(list, o = {}) {
+      people = list; since = o.since || 0; muted = !!o.muted;
+      follow();
+      // floating: now; not: a still now and then is plenty
+      if (running || performance.now() - drawnAt > 2000) draw(true);
+    },
+    // a fresh picture now (a video just connected to it needs a frame to be ready to float)
+    poke() { draw(true); },
+    // floating or not: follow the cameras, or let them go
+    run(on) {
+      if (running === !!on) return;
+      running = !!on;
+      follow();
+      draw(true);
+    },
     close() {
       for (const F of faces.values()) if (F.stop) F.stop();
       faces.clear();

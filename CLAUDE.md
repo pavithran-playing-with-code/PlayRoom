@@ -217,7 +217,9 @@ There is no test runner. What works:
   of every face (up to four) drawn into one canvas by
   `src/utils/callFloat.js` from the tracks' frames
   (MediaStreamTrackProcessor, which keeps going in the background where
-  <video> and timers don't). Only where neither works (iPhone) does it
+  <video> and timers don't) — only while it floats (`run`), from clones of
+  the tracks: reading your own camera all call long stalled a phone's
+  self-view. Only where neither works (iPhone) does it
   leave the in-page bubble, which then shows every face. Both floating
   windows are drawn to look like the bubble (faces stacked in a rounded
   card, the time in a pill); the bubble resizes from its top-left handle
@@ -241,7 +243,8 @@ There is no test runner. What works:
   "Default" being an empty socket or Stereo Mix — friends hear nothing,
   you hear them) is caught by measuring it (`peakOf`): the other mics are
   tried, "communications" first, the first that hears anything swapped in
-  (`swapMic`); none, and a picker opens (also 🎙️ in the 👥 panel). Test the
+  (`swapMic`); none, and a picker opens (also 🎙️ in the 👥 panel) — measured
+  only for a mic's first half-minute. Test the
   bubble with phones that can't float (`NO_FLOAT` in the harness). Back shrinks the call to its bubble (the open call
   holds one history entry). Leaving the app doesn't hold the call; only
   the phone taking the mic does. A game drawn sideways on an upright
@@ -266,6 +269,9 @@ There is no test runner. What works:
   mid-match is visible and watchable) and `scripts/check-email-codes.js`
   (password-by-code and delete account, with a fake mail relay). API-level,
   no browser, quick to run.
+
+Every headless Chrome a test launches gets `--mute-audio`: tests must never
+play sound on the machine they run on.
 
 Register is rate limited to 10 accounts an hour per IP, so a long run of tests
 will start failing with 429 — reuse accounts from an earlier run rather than

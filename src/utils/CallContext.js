@@ -585,14 +585,17 @@ export function CallProvider({ children }) {
     const t = local.getAudioTracks()[0];
     if (!t || tried.current.has(t.id)) return undefined;
     let stop = false, silent = 0;
+    // only the first half-minute of a mic: a wrong one is silent from the
+    // start, and measuring all call long was work a phone could do without
+    const until = Date.now() + 30000;
     (async () => {
       await new Promise((r) => setTimeout(r, 1500));
-      while (!stop && t.readyState === "live") {
+      while (!stop && t.readyState === "live" && Date.now() < until) {
         const pk = await peakOf(t, 3000);
         if (stop || !micRef.current) return;
         if (pk == null) { await new Promise((r) => setTimeout(r, 3000)); continue; }
         silent = pk < MIC_SILENT ? silent + 1 : 0;
-        if (silent < 2) { await new Promise((r) => setTimeout(r, 4000)); continue; }
+        if (silent < 2) { await new Promise((r) => setTimeout(r, 1000)); continue; }
         // six seconds of nothing at all: find a microphone that hears something
         tried.current.add(t.id);
         let all = [];

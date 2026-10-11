@@ -39,7 +39,7 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(WEB, r));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const chrome = spawn(CHROME, ["--headless=new", "--disable-gpu", "--remote-debugging-port=9360",
+const chrome = spawn(CHROME, ["--headless=new", "--mute-audio", "--disable-gpu", "--remote-debugging-port=9360",
   "--user-data-dir=" + process.env.TEMP + "\\cdp-e2e", "about:blank"], { stdio: "ignore" });
 
 let ws, id = 0, fails = 0;

@@ -473,9 +473,12 @@ export default function CallLayer() {
   useEffect(() => {
     const v = pipVid.current;
     if (!v) return;
-    if (v.srcObject !== floatStream) v.srcObject = floatStream || null;
+    if (v.srcObject !== floatStream) {
+      v.srcObject = floatStream || null;
+      if (both.current && floatStream === bothStream) setTimeout(() => both.current && both.current.poke(), 50);   // a frame for it, so it can float at once
+    }
     if (floatStream) { const q = v.play(); if (q && q.catch) q.catch(() => {}); }
-  }, [floatStream, active]);
+  }, [floatStream, bothStream, active]);
   const floatOut = React.useCallback(async () => {
     const v = pipVid.current;
     if (!v || !v.srcObject) return;
@@ -491,11 +494,11 @@ export default function CallLayer() {
     // matters which <video> it was. Tapping the little window (back to
     // PlayRoom): the call, full screen.
     const mine = (e) => e.target === pipVid.current;
-    const on = (e) => { if (mine(e)) setFloating(true); };
-    const back = (e) => { if (mine(e)) { setFloating(false); C.setExpanded(true); } };
+    const on = (e) => { if (mine(e)) { setFloating(true); if (both.current) both.current.run(true); } };
+    const back = (e) => { if (mine(e)) { setFloating(false); if (both.current) both.current.run(false); C.setExpanded(true); } };
     document.addEventListener("enterpictureinpicture", on, true);
     document.addEventListener("leavepictureinpicture", back, true);
-    if (document.pictureInPictureElement === v) setFloating(true);
+    if (document.pictureInPictureElement === v) { setFloating(true); if (both.current) both.current.run(true); }
     try { v.setAttribute("autopictureinpicture", ""); v.autoPictureInPicture = true; } catch { /* fine */ }
     if (navigator.mediaSession) {
       try { navigator.mediaSession.setActionHandler("enterpictureinpicture", floatOut); } catch { /* not this browser */ }

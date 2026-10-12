@@ -184,7 +184,14 @@ export function CallProvider({ children }) {
   // (CallLayer turns the call; held: 90 its top to the left, -90 right)
   const [heldTurn, setHeldTurn] = useState(0);
   const drawnSideways = useDrawnSideways();
-  const turn = drawnSideways || heldTurn === 90 ? -90 : heldTurn === -90 ? 90 : 0;
+  // Which way the picture turns depends on the camera. The back camera sees
+  // the way the screen does: turn the phone to the left and the picture's top
+  // goes to its right, turned back by -90. The front camera looks out the
+  // other side, so left and right are swapped in its picture and the top goes
+  // to its left: turned back by +90. (Using -90 for both showed every selfie
+  // camera upside down in a sideways game, to you and to your friends.)
+  const backTurn = drawnSideways || heldTurn === 90 ? -90 : heldTurn === -90 ? 90 : 0;
+  const turn = facing === "user" ? -backTurn : backTurn;
   const turnRef = useRef(turn);
   const [shareHelp, setShareHelp] = useState(false); // "why can't I share from my phone" card
   // the call's chat: kept here for the call only, never saved anywhere

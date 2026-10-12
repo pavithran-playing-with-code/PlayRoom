@@ -22,10 +22,13 @@ const { cap, resultsFor } = require("./matchResult");
 // Rows already present are left alone, so this stays safe to call repeatedly.
 async function recordResults(roomId) {
   const [[room]] = await db.execute(
-    `SELECT r.id, r.mode, r.duration_seconds, gt.slug AS game_slug
+    `SELECT r.id, r.mode, r.duration_seconds, gt.slug AS game_slug,
+            TIMESTAMPDIFF(SECOND, r.started_at, COALESCE(r.finished_at, NOW())) AS played_s
        FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id
       WHERE r.id = ?`, [roomId]);
   if (!room) return [];
+  // an unlimited match (0): the together goals are paced on the time it ran
+  if (Number(room.duration_seconds) === 0) room.duration_seconds = Math.max(60, Number(room.played_s) || 0);
   const [all] = await db.execute(
     "SELECT user_id, team, score, pairs_matched, moves, is_spectator FROM room_players WHERE room_id = ?",
     [roomId]);

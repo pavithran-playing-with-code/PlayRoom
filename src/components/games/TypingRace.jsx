@@ -147,7 +147,7 @@ export default function TypingRace(props) {
   const s = live.current;
   const start = Math.floor(s.i / PER_LINE) * PER_LINE;    // whole lines, so words don't shuffle about
   const shown = words.slice(start, start + PER_LINE * LINES);
-  const elapsed = Math.max(0, durationSeconds - eng.timeLeft);
+  const elapsed = eng.elapsed;                    // seconds played (an unlimited match has no countdown to take it from)
   const now = check(words[s.i] || "", clean(s.typed));
   // the lanes: everyone else first, you at the bottom, next to your words.
   // A car's colour is its seat's, so it's the same on every phone.

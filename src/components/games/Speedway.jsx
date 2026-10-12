@@ -301,7 +301,9 @@ export default function Speedway(props) {
   const { socket } = useSocket() || {};
   const code = trackCode(seed);
   const T = useMemo(() => buildTrack(code), [code]);
-  const laps = lapsFor(durationSeconds);
+  // no time limit: the race is paced as a five-minute one
+  const pace = durationSeconds || 300;
+  const laps = lapsFor(durationSeconds || 180);
 
   // grid slots by join order (user id), the same on every phone
   const seated = useMemo(() => (players || []).filter((p) => !p.is_spectator)
@@ -339,7 +341,7 @@ export default function Speedway(props) {
   const anchor = useRef(null);
   if (anchor.current === null) {
     let gone = 0;
-    if (startedAt && serverNow) { const g = (new Date(serverNow).getTime() - new Date(startedAt).getTime()) / 1000; if (Number.isFinite(g)) gone = clamp(g, 0, durationSeconds); }
+    if (startedAt && serverNow) { const g = (new Date(serverNow).getTime() - new Date(startedAt).getTime()) / 1000; if (Number.isFinite(g)) gone = clamp(g, 0, durationSeconds || Infinity); }
     anchor.current = performance.now() - gone * 1000;
   }
   const [hud, setHud] = useState({ place: 1, of: 1, lap: 1, finished: false, finPlace: 0, hint: true });
@@ -511,7 +513,7 @@ export default function Speedway(props) {
             }
           }
         }
-        const target = raceScore(car, laps, durationSeconds);
+        const target = raceScore(car, laps, pace);
         if (target !== pushed) { addScore(target - pushed); pushed = target; }
         if (socket && roomCode && now - sent > SEND_MS) {
           sent = now;
@@ -597,7 +599,7 @@ export default function Speedway(props) {
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [isSpectator, addScore, socket, roomCode, T, code, laps, durationSeconds]);
+  }, [isSpectator, addScore, socket, roomCode, T, code, laps, pace]);
 
   // ── thumbs: the two halves of the track ──────────────────────────────────
   // Which fingers are down where -> left / right / both, and since when (a

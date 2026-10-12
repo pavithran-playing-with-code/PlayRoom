@@ -1520,3 +1520,14 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .s13x .hmx-spec{position:absolute}
 .s13x .hmx-specbar button{width:48px;height:48px;border-radius:50%;padding:0;font-size:18px;letter-spacing:0}
 
+/* ── Play again, together (AgainPanel): who's ready, and the button ── */
+.again{margin-bottom:12px}
+.again-list{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.again-list li{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:2.5px solid var(--ink);border-radius:999px;
+  background:var(--paper2);font-size:.88rem;font-weight:700}
+.again-list li.on{background:var(--lime)}
+.again-list li small{font-weight:600;opacity:.7}
+.again-note{margin:8px 0 0;font-size:.82rem;text-align:center;opacity:.75}
+.again.dark .again-list li{background:rgba(255,255,255,.06);border:1px solid #556055;color:#cfd6cf}
+.again.dark .again-list li.on{background:rgba(143,227,107,.18);border-color:#8fe36b;color:#e6f5dc}
+.again.dark .again-note{color:#a39a88}

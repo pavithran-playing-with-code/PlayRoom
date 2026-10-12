@@ -16,15 +16,17 @@ const CLOCK_GRACE_SECONDS = 3;   // absorbs network latency on the final sync
 
 // Flip an expired in_progress room to `finished`. Idempotent — the WHERE clause
 // means only the first caller to notice actually performs the transition.
-// Returns true if this call ended the match.
+// Returns true if this call ended the match. An unlimited match
+// (duration_seconds 0) never expires: it ends when its players leave.
+const UNLIMITED = 0;
 async function settleIfExpired(roomId) {
   const [r] = await db.execute(
     `UPDATE rooms SET status = 'finished', finished_at = NOW()
-      WHERE id = ? AND status = 'in_progress' AND started_at IS NOT NULL
+      WHERE id = ? AND status = 'in_progress' AND started_at IS NOT NULL AND duration_seconds > ${UNLIMITED}
         AND started_at + INTERVAL (duration_seconds + ${CLOCK_GRACE_SECONDS}) SECOND <= NOW()`,
     [roomId]
   );
   return r.affectedRows > 0;
 }
 
-module.exports = { CLOCK_GRACE_SECONDS, settleIfExpired };
+module.exports = { CLOCK_GRACE_SECONDS, UNLIMITED, settleIfExpired };

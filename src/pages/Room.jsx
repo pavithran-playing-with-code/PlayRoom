@@ -140,7 +140,7 @@ function Room() {
       if (!data.success) { setNotFound(true); setError(data.message || "Room not found."); return; }
       setRoom(data.room);
       setPlayers(data.room.players || []);
-      if (data.room.duration_seconds) setDuration(data.room.duration_seconds);
+      if (data.room.duration_seconds != null) setDuration(Number(data.room.duration_seconds));      // 0: unlimited
     } catch { setError("Could not load room."); }
   }, [code]);
 
@@ -156,7 +156,7 @@ function Room() {
       setStatus(data.status);
       setSeed(data.seed);
       if (data.mode) setRoomMode(data.mode);
-      if (data.duration_seconds) setDuration(data.duration_seconds);
+      if (data.duration_seconds != null) setDuration(Number(data.duration_seconds));
       setStartedAt(data.started_at || null);
       setServerNow(data.server_now || null);
       setPlayers(data.players || []);
@@ -186,28 +186,41 @@ function Room() {
     navigate("/lobby");
   }, [leaveRoom, navigate]);
 
-  // Play again: record this match (as Back to lobby does), then open the next
-  // room — or join the one another player already opened — and go there. A
-  // solo run starts straight away. Returns an error message, or null.
-  const [rematch, setRematch] = useState(null);         // { by, byId, next }: someone opened the next room
-  const playAgain = useCallback(async () => {
+  // Play again, together: tapping it says you're ready (record this match
+  // first, as Back to lobby does). The results card shows who in the room is
+  // ready; when everyone still here is, the server makes the next match with
+  // all of you and starts it, and room:again-go brings everyone straight into
+  // it — no waiting room. (Alone, or with teams that no longer work, it's made
+  // but left waiting.) start() returns an error message, or null.
+  const [again, setAgain] = useState(null);               // { members: [{ id, name, ready }] }
+  const goNext = useCallback((next) => { leaveRoom(); navigate(`/room/${next}`); }, [leaveRoom, navigate]);
+  const goNextRef = useRef(goNext);
+  goNextRef.current = goNext;
+  const sayReady = useCallback(async (ready) => {
     try { await api.post("/api/leaderboard/update", { room_code: code }); } catch { /* silent */ }
     try {
-      const res = await api.post(`/api/rooms/${code}/rematch`, {});
-      const data = await res.json();
-      if (!data.success) return data.message || "Couldn't start a new game.";
-      const next = data.room_code;
-      if (data.join) {
-        const j = await (await api.post("/api/rooms/join", { room_code: next })).json();
-        if (!j.success && !/already/i.test(j.message || "")) return j.message || "Couldn't join the new game.";
+      // the room's clock may be a moment behind the results screen: try again shortly
+      for (let i = 0; i < 6; i++) {
+        const res = await api.post(`/api/rooms/${code}/again`, { ready });
+        const data = await res.json();
+        if (res.status === 409 && /isn't over/.test(data.message || "")) { await new Promise((r) => setTimeout(r, 1000)); continue; }
+        if (!data.success) return data.message || "Couldn't start a new game.";
+        if (data.members) setAgain({ members: data.members });
+        if (data.next) goNext(data.next);
+        return null;
       }
-      if (data.solo) await api.patch(`/api/rooms/${next}/start`, {});
-      leaveRoom();
-      navigate(`/room/${next}`);
-      return null;
+      return "The match is still finishing — try again in a moment.";
     } catch { return "Couldn't reach the server."; }
-  }, [code, leaveRoom, navigate]);
-  const playAgainValue = useMemo(() => ({ start: playAgain, rematch }), [playAgain, rematch]);
+  }, [code, goNext]);
+  const playAgain = useCallback(() => sayReady(true), [sayReady]);
+  const notReady = useCallback(() => sayReady(false), [sayReady]);
+  const loadAgain = useCallback(async () => {
+    try {
+      const data = await (await api.get(`/api/rooms/${code}/again`)).json();
+      if (data.success) { setAgain({ members: data.members || [] }); if (data.next) goNext(data.next); }
+    } catch { /* the socket keeps it current */ }
+  }, [code, goNext]);
+  const playAgainValue = useMemo(() => ({ start: playAgain, notReady, load: loadAgain, again }), [playAgain, notReady, loadAgain, again]);
 
   // Countdown + auto-redirect when the room doesn't exist.
   // (Polling has already stopped — `pausePolling` covers notFound.)
@@ -257,10 +270,12 @@ function Room() {
             game_state: p.game_state ?? x.game_state }
         : x)));
     };
-    // another player opened the next room: the results card offers to follow
-    const onRematch = (m) => { if (m && m.code === code) setRematch({ by: m.by, byId: m.byId, next: m.next }); };
+    // who's ready to play again, and — everyone ready — the next match to go into
+    const onAgain = (m) => { if (m && m.code === code) setAgain({ members: m.members || [] }); };
+    const onAgainGo = (m) => { if (m && m.code === code && m.next) goNextRef.current(m.next); };
     socket.emit("room:join", code);
-    socket.on("room:rematch", onRematch);
+    socket.on("room:again", onAgain);
+    socket.on("room:again-go", onAgainGo);
     socket.on("room:live", onLive);
     socket.on("room:players", joined);
     socket.on("room:started", refresh);
@@ -268,7 +283,8 @@ function Room() {
     socket.on("room:ended", refresh);
     return () => {
       socket.emit("room:leave", code);
-      socket.off("room:rematch", onRematch);
+      socket.off("room:again", onAgain);
+      socket.off("room:again-go", onAgainGo);
       socket.off("room:live", onLive);
       socket.off("room:players", joined);
       socket.off("room:started", refresh);
@@ -484,7 +500,7 @@ function Room() {
           players={seatedPlayers}
           currentUser={user}
           mode={room?.mode}
-          durationSeconds={duration || 120}
+          durationSeconds={duration ?? 120}
           startedAt={startedAt}
           serverNow={serverNow}
           onGameEnd={async () => {
@@ -549,7 +565,7 @@ function Room() {
           players={seatedPlayers}
           currentUser={user}
           mode={room?.mode}
-          durationSeconds={duration || 120}
+          durationSeconds={duration ?? 120}
           startedAt={startedAt}
           serverNow={serverNow}
           isSpectator
@@ -615,7 +631,7 @@ function Room() {
           <button className="press p-white sm" onClick={exitToLobby}>← Leave</button>
           <span className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <span className="chip c-sun"><GameIcon icon={room?.game_icon} /> {room?.game_name || "Loading…"}</span>
-            {mins && <span className="chip c-sky">⏱️ {mins} min match</span>}
+            {mins ? <span className="chip c-sky">⏱️ {mins} min match</span> : duration === 0 && <span className="chip c-sky">♾️ No time limit</span>}
             {isSolo && <span className="chip c-coral">🧍 Solo run</span>}
             {room?.mode === "coop" && <span className="chip c-grape">🤝 Together</span>}
           </span>

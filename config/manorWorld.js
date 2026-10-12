@@ -221,7 +221,7 @@ function escape(w, p) {
 function tick(w) {
   if (w.over) return;
   const now = Date.now();
-  if (now - w.startMs >= w.durMs) { finish(w, "time"); return; }
+  if (w.durMs > 0 && now - w.startMs >= w.durMs) { finish(w, "time"); return; }      // 0: unlimited
   const targets = living(w).filter((p) => !(p.graceUntil > now)).map((p) => ({
     id: p.id, x: p.x, y: p.y, fl: p.fl, hid: p.hid != null, moving: p.moving, run: p.run,
   }));

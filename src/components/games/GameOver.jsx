@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import { Avatar, avatarColour } from "../ui";
 import { confetti } from "../ui/FunLayer";
 import { usePlayAgain } from "./PlayAgain";
+import AgainPanel from "./AgainPanel";
 
 const MEDAL = ["🥇", "🥈", "🥉"];
 
@@ -42,7 +43,6 @@ export default function GameOver(props) {
   const multi = isOnline && opponents.length > 0 && !together;
   // Play again: the room page's (so every game has it), or a caller's own.
   const ctx = usePlayAgain();
-  const rematch = ctx && ctx.rematch && Number(ctx.rematch.byId) !== Number(me?.id) ? ctx.rematch : null;
   async function playAgain() {
     if (onPlayAgain) { onPlayAgain(); return; }
     if (!ctx || again === "busy") return;
@@ -187,13 +187,12 @@ export default function GameOver(props) {
 
         {(onPlayAgain || (ctx && !closed)) && (
           <>
-            {rematch && (
-              <p className="muted" style={{ marginBottom: 8, fontWeight: 700 }}>🎮 {rematch.by} started a new game — join in!</p>
+            {ctx ? <AgainPanel me={me} onPlay={playAgain} busy={again === "busy"} leaving={leaving} /> : (
+              <button className="press p-coral lg full" style={{ marginBottom: 12 }} onClick={playAgain}
+                disabled={again === "busy" || leaving}>
+                {again === "busy" ? "Setting up…" : "🔄 Play again"}
+              </button>
             )}
-            <button className="press p-coral lg full" style={{ marginBottom: 12 }} onClick={playAgain}
-              disabled={again === "busy" || leaving}>
-              {again === "busy" ? "Setting up…" : rematch ? `🔄 Join ${rematch.by}'s game` : "🔄 Play again"}
-            </button>
             {again && again !== "busy" && <p className="hint hint-bad" style={{ marginBottom: 10 }}>{again}</p>}
           </>
         )}

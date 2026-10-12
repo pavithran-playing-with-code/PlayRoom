@@ -87,11 +87,12 @@ export default function WordRush(props) {
   const agreedRef = useRef(cb.agreed);
   agreedRef.current = cb.agreed;
   const seatCount = (players || []).filter((p) => !p.is_spectator).length;
-  const goal = wordGoal(durationSeconds, seatCount);
   const soloState = spectate.extraState;
 
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
     extraState: coop ? () => ({ pairs_matched: agreedRef.current.solved }) : soloState });
+  // the together goal; with no time limit it grows with the time played (as the server's does)
+  const goal = wordGoal(durationSeconds || Math.max(60, eng.elapsed), seatCount);
 
   // together: the side's score is everybody's
   const { setScore } = eng;

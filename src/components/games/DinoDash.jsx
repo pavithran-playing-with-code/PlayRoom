@@ -381,7 +381,7 @@ export default function DinoDash(props) {
   const bestRun = Math.max(best, sim.current.run);
   // together: the side's points, against the team goal
   const seats = (players || []).filter((p) => !p.is_spectator);
-  const goal = teamGoal("dino", durationSeconds, seats.length);
+  const goal = teamGoal("dino", durationSeconds || Math.max(60, eng.elapsed), seats.length);   // no time limit: paced on the time played
   const teamTotal = eng.score + oppList.reduce((t, o) => t + (Number(o.score) || 0), 0);
   const scores = { [myId]: eng.score };
   for (const o of oppList) scores[o.user_id] = Number(o.score) || 0;

@@ -28,6 +28,9 @@ function opponentsFrom(list, myId) {
   return out;
 }
 
+// what timeLeft reads in an unlimited match: no clock, but a time bonus still has a size
+export const UNLIMITED_LEFT = 60;
+
 export default function useGameEngine({
   roomCode,
   players = [],
@@ -45,17 +48,26 @@ export default function useGameEngine({
   // When the match ends, in local wall-clock ms. If the server told us when it
   // started, the time already gone is taken off, so a late joiner or a reload
   // mid-match sees the real time left instead of a fresh full clock.
-  const [deadline] = useState(() => {
-    let remaining = durationSeconds;
+  //
+  // An unlimited match (durationSeconds 0) has no deadline: it ends when the
+  // players leave (or the room says it's over). Its timeLeft holds still at
+  // UNLIMITED_LEFT — the games that add the time left as a bonus (Memory,
+  // Mahjong) still give one — and `elapsed` counts the time played.
+  const unlimited = durationSeconds === 0;
+  const [started] = useState(() => {
+    let gone = 0;
     if (startedAt && serverNow) {
-      const elapsed = (new Date(serverNow).getTime() - new Date(startedAt).getTime()) / 1000;
-      if (Number.isFinite(elapsed)) remaining = Math.max(0, Math.min(durationSeconds, durationSeconds - elapsed));
+      const g = (new Date(serverNow).getTime() - new Date(startedAt).getTime()) / 1000;
+      if (Number.isFinite(g)) gone = Math.max(0, g);
     }
-    return Date.now() + remaining * 1000;
+    return Date.now() - gone * 1000;
   });
-  const secondsLeft = useCallback(() => Math.max(0, Math.ceil((deadline - Date.now()) / 1000)), [deadline]);
+  const deadline = unlimited ? Infinity : started + durationSeconds * 1000;
+  const secondsLeft = useCallback(() => (unlimited ? UNLIMITED_LEFT : Math.max(0, Math.ceil((deadline - Date.now()) / 1000))), [deadline, unlimited]);
+  const secondsGone = useCallback(() => Math.max(0, Math.floor((Date.now() - started) / 1000)), [started]);
 
   const [timeLeft, setTimeLeft] = useState(secondsLeft);
+  const [elapsed, setElapsed] = useState(secondsGone);
   const [score, setScore] = useState(0);
   const [moves, setMoves] = useState(0);
   const [gameOver, setGameOver] = useState(false);
@@ -85,6 +97,7 @@ export default function useGameEngine({
     const tick = () => {
       const s = secondsLeft();
       setTimeLeft(s);
+      setElapsed(secondsGone());
       if (s <= 0 && !isSpectator) setGameOver(true);
     };
     tick();
@@ -94,7 +107,7 @@ export default function useGameEngine({
       clearInterval(t);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [gameOver, isSpectator, secondsLeft]);
+  }, [gameOver, isSpectator, secondsLeft, secondsGone]);
 
   // ── Score sync + opponent poll (online players only) ──
   // Scores stop being written once the match is over, but the poll keeps
@@ -272,7 +285,7 @@ export default function useGameEngine({
 
   return {
     isOnline,
-    timeLeft, durationSeconds, fmt,
+    timeLeft, durationSeconds, fmt, unlimited, elapsed,
     score, setScore, addScore,
     moves, addMove,
     gameOver, finished, closed, finish,

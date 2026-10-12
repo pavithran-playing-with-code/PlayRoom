@@ -2,9 +2,13 @@
 // "Play again" for every game, without every game knowing how.
 //
 // The room page provides this around whichever game is running:
-//   start()  record this match, open (or join) the next one, and go there
-//   rematch  { by, next } once another player has opened the next room
-// The results cards (GameOver, and Station 13's own) read it.
+//   start()     record this match and say I'm ready to play again
+//   notReady()  take it back
+//   load()      fetch who's ready (the socket keeps it current after)
+//   again       { members: [{ id, name, ready }] }
+// When everyone still in the room is ready, the next match starts for all of
+// them at once and the room page goes there. The results cards (GameOver,
+// TogetherResults, Station 13's) show it through AgainPanel.
 import { createContext, useContext } from "react";
 
 export const PlayAgainContext = createContext(null);

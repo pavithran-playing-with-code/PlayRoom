@@ -17,8 +17,8 @@ async function playingNow(ids) {
   const marks = ids.map(() => "?").join(",");
   const [rows] = await db.execute(
     `SELECT rp.user_id, r.room_code, gt.name AS game_name, gt.icon AS game_icon,
-            GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(),
-              r.started_at + INTERVAL r.duration_seconds SECOND)) AS seconds_left
+            IF(r.duration_seconds = 0, NULL, GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(),
+              r.started_at + INTERVAL r.duration_seconds SECOND))) AS seconds_left
        FROM room_players rp
        JOIN rooms r       ON r.id  = rp.room_id
        JOIN game_types gt ON gt.id = r.game_type_id
@@ -26,7 +26,7 @@ async function playingNow(ids) {
         AND rp.is_spectator = 0
         AND r.status = 'in_progress'
         AND r.started_at IS NOT NULL
-        AND r.started_at + INTERVAL r.duration_seconds SECOND > NOW()`,
+        AND (r.duration_seconds = 0 OR r.started_at + INTERVAL r.duration_seconds SECOND > NOW())`,
     ids
   );
   const out = {};

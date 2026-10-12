@@ -129,7 +129,7 @@ export default function SunshardIslands(props) {
   const anchor = useRef(null);
   if (anchor.current === null) {
     let gone = 0;
-    if (startedAt && serverNow) { const g = (new Date(serverNow).getTime() - new Date(startedAt).getTime()) / 1000; if (Number.isFinite(g)) gone = clamp(g, 0, durationSeconds); }
+    if (startedAt && serverNow) { const g = (new Date(serverNow).getTime() - new Date(startedAt).getTime()) / 1000; if (Number.isFinite(g)) gone = clamp(g, 0, durationSeconds || Infinity); }
     anchor.current = performance.now() - gone * 1000;
   }
 
@@ -353,7 +353,8 @@ export default function SunshardIslands(props) {
           sent = 0;
         }
         else if (e.k === "win") {
-          S.finishLeft = Math.max(0, durationSeconds - el);
+          S.finishLeft = Math.max(0, (durationSeconds || 300) - el);     // no time limit: the bonus as for five minutes
+          S.homeIn = el - START_S;
           A.sfx.win();
           for (let i = 0; i < 5; i++) timers.current.push(setTimeout(() => fx.burst(W.temple.x, W.temple.y + 1.5, W.temple.z, 40, [0xffe28a, 0x7fe3ff, 0xff7a4a, 0x6dff9c, 0xffffff][i], 8, 6), i * 220));
           shout("Temple lit!", coop ? "Your team did it!" : `Home in ${fmt(el - START_S)}`);
@@ -511,7 +512,7 @@ export default function SunshardIslands(props) {
       </GameFrame>
       {eng.gameOver && !isSpectator && (
         <GameOver eng={eng} me={currentUser}
-          extra={`${run.current.finished ? `Home in ${fmt((durationSeconds - (run.current.finishLeft || 0)) - START_S)}` : `${plural(hud.have, "shard")}`}${best ? ` · best ${fmt(best)}` : ""}`}
+          extra={`${run.current.finished ? `Home in ${fmt(run.current.homeIn || 0)}` : `${plural(hud.have, "shard")}`}${best ? ` · best ${fmt(best)}` : ""}`}
           together={coop ? { reached: teamDoneRef.current, goal: "light the Sky Temple", unit: "shards", mates } : null} />
       )}
     </>

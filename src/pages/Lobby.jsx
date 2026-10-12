@@ -18,12 +18,13 @@ const CREW = ["🐯", "🐼", "🦊", "🐸", "🌸", "🚀", "🐙", "🦁"];
 const CREW_COLS = ["var(--sun)", "var(--sky)", "var(--coral)", "var(--mint)",
   "var(--bubble)", "var(--lime)", "var(--peach)", "var(--berry)"];
 
+// 0 is unlimited: no clock, the match ends when its players leave
 const DURATIONS = [
   { s: 120, label: "2 min" },
-  { s: 180, label: "3 min" },
-  { s: 240, label: "4 min" },
   { s: 300, label: "5 min" },
+  { s: 0, label: "♾️ Unlimited" },
 ];
+const lengthText = (secs) => (secs === 0 ? "no time limit" : `${Math.round(secs / 60)} min`);
 
 export default function Lobby() {
   const { user } = useAuth();
@@ -57,7 +58,7 @@ export default function Lobby() {
   // Solo = 1 seat. Nobody can join, so the room is implicitly private and the
   // privacy toggle is hidden rather than shown as a no-op.
   const isSolo = maxPlayers === 1;
-  const mins = Math.round(duration / 60);
+  const length = lengthText(duration);
   // Two sides of two is the smallest team match worth the name.
   const MIN_TEAM_SEATS = 4;
   const canTeam = maxPlayers >= MIN_TEAM_SEATS;
@@ -81,6 +82,12 @@ export default function Lobby() {
   useEffect(() => {
     if (selected.defaultDuration) setDuration(selected.defaultDuration);
   }, [selected.slug, selected.defaultDuration]);
+
+  // A game you can play together starts out together: pick it and the box is
+  // ticked (untick it to play against each other).
+  useEffect(() => {
+    if (selected.coopMax > 0) { setCoopMode(true); setTeamMode(false); }
+  }, [selected.slug, selected.coopMax]);
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -302,7 +309,7 @@ export default function Lobby() {
             {/* What you're about to create, spelled out: game, clock, seats. */}
             <div className="lobby-sum" aria-live="polite">
               <span className="chip" style={{ background: selected.col }}><GameIcon icon={selected.icon} /> {selected.name}</span>
-              <span className="chip c-sky">⏱️ {mins} min match</span>
+              <span className="chip c-sky">{duration === 0 ? "♾️ No time limit" : `⏱️ ${length} match`}</span>
               <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
               {teams && <span className="chip c-grape">⚔️ Teams</span>}
               {coop && <span className="chip c-grape">🤝 Together</span>}
@@ -310,8 +317,8 @@ export default function Lobby() {
             </div>
             <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
               {creating ? "Creating…"
-                : isSolo ? `🎯 Start solo · ${mins} min`
-                : `🚀 Create room · ${mins} min`}
+                : isSolo ? `🎯 Start solo · ${length}`
+                : `🚀 Create room · ${length}`}
             </button>
           </div>
 
@@ -364,7 +371,7 @@ export default function Lobby() {
             <div className="tiles">
               {rooms.map((room) => {
                 const g = GAME_MAP[room.game_slug];
-                const mins = Math.round((room.duration_seconds || 120) / 60);
+                const mins = Number(room.duration_seconds) === 0 ? "∞" : `${Math.round((room.duration_seconds || 120) / 60)}m`;
                 const col = g?.col || "var(--sun)";
                 const icon = room.game_icon || g?.icon || "🎮";
                 return (
@@ -380,7 +387,7 @@ export default function Lobby() {
                       <span className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
                         <span className="row" style={{ gap: 6 }}>
                           <span className="chip c-lime">👥 {room.player_count}/{room.max_players}</span>
-                          <span className="chip c-sky">⏱️ {mins}m</span>
+                          <span className="chip c-sky">⏱️ {mins}</span>
                         </span>
                         <span className="display" style={{ letterSpacing: ".14em", fontSize: "1rem" }}>{room.room_code}</span>
                       </span>

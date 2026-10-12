@@ -6,13 +6,13 @@
 import React, { useEffect, useState } from "react";
 import { confetti } from "../ui/FunLayer";
 import { usePlayAgain } from "../games/PlayAgain";
+import AgainPanel from "../games/AgainPanel";
 
 export default function TogetherResults({ over, me, onExit, goalText, describe, icon = "🎮" }) {
   const myId = Number(me?.id);
   const ctx = usePlayAgain();
   const [again, setAgain] = useState(null);
   const [leaving, setLeaving] = useState(false);
-  const rematch = ctx && ctx.rematch && Number(ctx.rematch.byId) !== myId ? ctx.rematch : null;
   const mine = over.sides.find((s) => s.members.some((m) => Number(m.id) === myId)) || null;
   const one = over.sides.length === 1;
   const best = over.sides[0]?.score ?? 0;
@@ -72,10 +72,7 @@ export default function TogetherResults({ over, me, onExit, goalText, describe, 
         </div>
         {ctx && (
           <>
-            {rematch && <p className="muted" style={{ marginBottom: 8, fontWeight: 700 }}>🎮 {rematch.by} started a new game — join in!</p>}
-            <button className="press p-coral lg full" style={{ marginBottom: 12 }} onClick={playAgain} disabled={again === "busy" || leaving}>
-              {again === "busy" ? "Setting up…" : rematch ? `🔄 Join ${rematch.by}'s game` : "🔄 Play again"}
-            </button>
+            <AgainPanel me={{ id: myId }} onPlay={playAgain} busy={again === "busy"} leaving={leaving} />
             {again && again !== "busy" && <p className="hint hint-bad" style={{ marginBottom: 10 }}>{again}</p>}
           </>
         )}

@@ -91,6 +91,18 @@ so a backgrounded phone cannot drift.
 /api/leaderboard/update` reads the stored scores and ranks the whole room from
 one snapshot, once the clock has stopped. Never send `won: true`.
 
+**A match is 2 or 5 minutes, or unlimited** (`duration_seconds` 0): no
+clock (`settleIfExpired` skips it, the engine's `timeLeft` holds at
+`UNLIMITED_LEFT`, `GameFrame` shows ∞). It ends when its players leave:
+leaving keeps your seat and score (`leftUnlimited` in rooms.js), and the
+last one out finishes and records it; the sweep ends an idle one. Goals that
+scale with the clock (co-op runners, Word Rush) use the time played.
+
+**Play again is together**: the results card (`AgainPanel`) shows who in the
+room is ready (`POST /:code/again`, `room:again`); when everyone still there
+is, the next match is made with all of them and already started
+(`room:again-go`) — no waiting room. `scripts/check-again.js` tests both.
+
 **Clearing the objective does not end a match.** The room's clock does. A game
 that finished early should hand out a bonus and deal a fresh board — otherwise
 that player sees a results screen calling them the winner while everyone else

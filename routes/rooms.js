@@ -55,7 +55,7 @@ async function announcePlaying(req, roomId, code, playing) {
         room_code: code,
         game_name: g.game_name,
         game_icon: g.game_icon,
-        seconds_left: Number(g.duration_seconds) || 0,
+        seconds_left: Number(g.duration_seconds) || null,     // null: unlimited
       };
     }
     for (const s of seats) {
@@ -152,9 +152,10 @@ router.post("/", verifyToken, async (req, res, next) => {
     if (typeof game_slug !== "string" || !GAME_SLUG_RE.test(game_slug))
       return res.status(400).json({ success: false, message: "Invalid game_slug." });
 
-    // Match length: clamp to [120s, 300s] (2–5 minutes).
+    // Match length: 0 is unlimited (no clock: it ends when the players leave);
+    // anything else is clamped to [120s, 300s] (2–5 minutes).
     const DURATION_MIN = 120, DURATION_MAX = 300;
-    const duration = Math.max(DURATION_MIN,
+    const duration = Number(duration_seconds) === 0 ? 0 : Math.max(DURATION_MIN,
       Math.min(DURATION_MAX, Math.floor(Number(duration_seconds) || DURATION_MIN)));
 
     const [gt] = await db.execute(
@@ -278,6 +279,138 @@ router.post("/:code/rematch", verifyToken, async (req, res, next) => {
     release();
     if (rematchLocks.get(oldCode) === chain) rematchLocks.delete(oldCode);
   }
+});
+
+// ── Play again, together ─────────────────────────────────────────────────────
+// At the end of a match everyone still in the room sees who's ready to go
+// again. Tapping Play again marks you ready (POST /:code/again); when every
+// player still in the room is ready, the next match is made with all of them
+// in their seats (teams kept) and started at once — nobody goes back through
+// the waiting room. If the ones left can't make a match on their own (one
+// player left in a room for several, or teams that no longer work), the next
+// room is made all the same, with them in it, but left waiting, so friends
+// can join or teams be fixed. A solo run starts at once.
+//
+//   room:again     { code, members: [{ id, name, ready }] }   to the old room
+//   room:again-go  { code, next }                             everyone: go there
+//
+// Who's ready lives in memory: it only matters for the minute on the results
+// screen.
+const agains = new Map();                  // old room code -> { ready: Set, at, next }
+const AGAIN_TTL_MS = 30 * 60 * 1000;
+const againLocks = new Map();
+function serially(key, fn) {
+  const prev = againLocks.get(key) || Promise.resolve();
+  const run = prev.then(fn, fn);
+  const tail = run.catch(() => {});
+  againLocks.set(key, tail);
+  tail.then(() => { if (againLocks.get(key) === tail) againLocks.delete(key); });
+  return run;
+}
+
+async function againLoad(code) {
+  const [rows] = await db.execute(
+    `SELECT r.id, r.status, r.host_id, r.max_players, r.is_private, r.duration_seconds, r.mode, r.game_type_id,
+            r.seed AS old_seed, gt.slug, gt.is_active
+       FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id WHERE r.room_code = ?`, [code]);
+  if (!rows.length) return null;
+  const [seats] = await db.execute(
+    `SELECT rp.user_id, rp.team, u.username FROM room_players rp JOIN users u ON u.id = rp.user_id
+      WHERE rp.room_id = ? AND rp.is_spectator = 0 ORDER BY rp.joined_at, rp.id`, [rows[0].id]);
+  for (const [k, v] of agains) if (Date.now() - v.at > AGAIN_TTL_MS) agains.delete(k);
+  const a = agains.get(code) || { ready: new Set(), at: Date.now(), next: null };
+  const ids = new Set(seats.map((s) => Number(s.user_id)));
+  for (const id of [...a.ready]) if (!ids.has(id)) a.ready.delete(id);   // gone back to the lobby
+  return { room: rows[0], seats, a, members: seats.map((s) => ({ id: Number(s.user_id), name: s.username, ready: a.ready.has(Number(s.user_id)) })) };
+}
+
+// Everyone ready: make the next match with all of them, and start it if it can.
+async function againGo(req, code, st) {
+  const { room: old, seats, a } = st;
+  let next; let tries = 0;
+  do {
+    next = genCode(6);
+    const [ex] = await db.execute("SELECT id FROM rooms WHERE room_code = ?", [next]);
+    if (!ex.length) break;
+  } while (++tries < 10);
+  let seed = Math.floor(Math.random() * 1_000_000);
+  if (old.slug === "piano") seed = seed - (seed % PIANO_SONGS) + (Math.abs(Number(old.old_seed) || 0) % PIANO_SONGS);
+  const solo = Number(old.max_players) === 1;
+  const teamsOk = old.mode !== "teams" || (() => {
+    if (seats.some((s) => s.team == null)) return false;
+    const by = new Map();
+    for (const s of seats) by.set(s.team, (by.get(s.team) || 0) + 1);
+    return by.size >= 2 && [...by.values()].every((n) => n >= MIN_PER_TEAM);
+  })();
+  const startNow = solo || (seats.length >= 2 && teamsOk);
+  const host = seats.some((s) => Number(s.user_id) === Number(old.host_id)) ? Number(old.host_id) : Number(seats[0].user_id);
+  const [ins] = await db.execute(
+    `INSERT INTO rooms (room_code, game_type_id, host_id, max_players, is_private, seed, duration_seconds, mode, last_activity_at, status, started_at)
+     VALUES (?,?,?,?,?,?,?,?,NOW(),?,${startNow ? "NOW()" : "NULL"})`,
+    [next, old.game_type_id, host, old.max_players, old.is_private, seed, old.duration_seconds, old.mode, startNow ? "in_progress" : "waiting"]);
+  for (const s of seats) {
+    await db.execute("INSERT INTO room_players (room_id, user_id, is_host, team) VALUES (?,?,?,?)",
+      [ins.insertId, s.user_id, Number(s.user_id) === host ? 1 : 0, old.mode === "teams" ? s.team : null]);
+  }
+  a.next = next;
+  agains.set(code, a);
+  if (startNow) {
+    await announcePlaying(req, ins.insertId, next, true);
+    manor.worldFor(next).catch((e) => console.error("manor start:", e.message));
+    together.worldFor(next).catch((e) => console.error("together start:", e.message));
+  }
+  push(req, code, "room:again-go", { code, next, started: startNow });
+  return next;
+}
+
+// After a change (someone ready, or gone): tell the room, and go if everyone's ready.
+async function againCheck(req, code) {
+  return serially(code, async () => {
+    const st = await againLoad(code);
+    if (!st) return { members: [] };
+    if (st.a.next) return { members: st.members, next: st.a.next };
+    push(req, code, "room:again", { code, members: st.members });
+    if (st.members.length && st.members.every((m) => m.ready)) return { members: st.members, next: await againGo(req, code, st) };
+    return { members: st.members };
+  });
+}
+
+// GET /api/rooms/:code/again — who's ready (the results screen asks once).
+router.get("/:code/again", verifyToken, async (req, res, next) => {
+  try {
+    const code = String(req.params.code || "").toUpperCase();
+    const st = await againLoad(code);
+    if (!st) return res.status(404).json({ success: false, message: "Room not found." });
+    res.json({ success: true, members: st.members, next: st.a.next });
+  } catch (err) { next(err); }
+});
+
+// POST /api/rooms/:code/again { ready } — I'm ready to play again (or not).
+router.post("/:code/again", verifyToken, async (req, res, next) => {
+  try {
+    const code = String(req.params.code || "").toUpperCase();
+    const ready = !(req.body && req.body.ready === false);
+    const out = await serially(code, async () => {
+      const st = await againLoad(code);
+      if (!st) return { status: 404, body: { success: false, message: "Room not found." } };
+      if (st.room.status !== "finished") return { status: 409, body: { success: false, message: "The match isn't over yet." } };
+      if (!st.room.is_active) return { status: 409, body: { success: false, message: "This game isn't available right now." } };
+      if (!st.seats.some((s) => Number(s.user_id) === Number(req.user.id)))
+        return { status: 403, body: { success: false, message: "Only the players can play again." } };
+      if (st.a.next) return { status: 200, body: { success: true, members: st.members, next: st.a.next } };
+      if (ready) st.a.ready.add(Number(req.user.id)); else st.a.ready.delete(Number(req.user.id));
+      st.a.at = Date.now();
+      agains.set(code, st.a);
+      const members = st.members.map((m) => ({ ...m, ready: st.a.ready.has(m.id) }));
+      push(req, code, "room:again", { code, members });
+      if (members.every((m) => m.ready)) {
+        const nx = await againGo(req, code, { ...st, members });
+        return { status: 200, body: { success: true, members, next: nx } };
+      }
+      return { status: 200, body: { success: true, members } };
+    });
+    res.status(out.status).json(out.body);
+  } catch (err) { next(err); }
 });
 
 // POST /api/rooms/join
@@ -741,10 +874,11 @@ router.post("/:code/invite", verifyToken, async (req, res, next) => {
 // POST /api/rooms/:code/leave — remove self from the room.
 // If the host leaves a waiting room, the room is abandoned.
 // If the host leaves an in_progress room, it's also abandoned for everyone.
+const leftUnlimited = new Map();            // room id -> Set of user ids who left an unlimited match
 router.post("/:code/leave", verifyToken, async (req, res, next) => {
   try {
     const [rooms] = await db.execute(
-      `SELECT r.id, r.status, r.host_id, gt.slug AS game_slug
+      `SELECT r.id, r.status, r.host_id, r.duration_seconds, gt.slug AS game_slug
          FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id WHERE r.room_code = ?`,
       [req.params.code]
     );
@@ -775,6 +909,28 @@ router.post("/:code/leave", verifyToken, async (req, res, next) => {
       return res.json({ success: true, forfeited: true });
     }
 
+    // An unlimited match has no clock: it ends when its players leave. So
+    // leaving keeps your seat and your score (the host's too — nobody's match
+    // closes with them), and when the last one has gone it's over and written
+    // down. Who has left is kept in memory; after a restart the sweep ends an
+    // unlimited match nobody is playing.
+    if (room.status === "in_progress" && Number(room.duration_seconds) === 0 && !mine[0].is_spectator) {
+      const gone = leftUnlimited.get(room.id) || new Set();
+      gone.add(Number(req.user.id));
+      leftUnlimited.set(room.id, gone);
+      const [seated] = await db.execute("SELECT user_id FROM room_players WHERE room_id = ? AND is_spectator = 0", [room.id]);
+      if (seated.every((r) => gone.has(Number(r.user_id)))) {
+        leftUnlimited.delete(room.id);
+        const [r] = await db.execute("UPDATE rooms SET status = 'finished', finished_at = NOW() WHERE id = ? AND status = 'in_progress'", [room.id]);
+        if (r.affectedRows) {
+          push(req, req.params.code, "room:ended", { code: req.params.code });
+          await announcePlaying(req, room.id, req.params.code, false);
+          await recordResults(room.id);
+        }
+      } else push(req, req.params.code, "room:players", { code: req.params.code, left: req.user.id });
+      return res.json({ success: true, kept: true });
+    }
+
     await db.execute(
       "DELETE FROM room_players WHERE room_id = ? AND user_id = ?",
       [room.id, req.user.id]
@@ -802,6 +958,9 @@ router.post("/:code/leave", verifyToken, async (req, res, next) => {
       }
     }
     push(req, req.params.code, "room:players", { code: req.params.code, left: req.user.id });
+    // gone back to the lobby from the results: the ones still there may now all be ready
+    if (room.status === "finished" && agains.has(String(req.params.code).toUpperCase()))
+      againCheck(req, String(req.params.code).toUpperCase()).catch((e) => console.error("again:", e.message));
     res.json({ success: true });
   } catch (err) { next(err); }
 });

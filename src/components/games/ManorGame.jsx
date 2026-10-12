@@ -21,6 +21,7 @@ import { createS13Audio } from "../horror/s13Audio";
 import { useSideways, toGame } from "../horror/LandscapeGate";
 import { S13Hud, lookBy, loadSettings, coarse } from "../../pages/Manor";
 import { usePlayAgain } from "./PlayAgain";
+import AgainPanel from "./AgainPanel";
 
 const REPORT_MS = 66;                  // ~15 a second
 const HUD_MS = 120;
@@ -84,7 +85,7 @@ export default function ManorGame({ roomCode, currentUser, spectatorWatching = n
     if (!c) return;
     const now = Date.now(), side = sideOfMe(c), w = watchedPlayer(c);
     setHud({
-      role: c.role, mode: c.mode, playing: playing(c), respawning: respawning(c), left: c.left, timeLeft: timeLeft(c, now),
+      role: c.role, mode: c.mode, playing: playing(c), respawning: respawning(c), left: c.left, timeLeft: timeLeft(c, now), endless: c.durMs === 0,
       side: side && { name: side.name, color: side.color, got: side.got, need: side.need, open: side.open, escapes: side.escapes || 0, score: side.score || 0 },
       // how far each friend is from you, in metres (a tile is TILE_M), while you're in the building
       players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left,
@@ -230,7 +231,7 @@ export default function ManorGame({ roomCode, currentUser, spectatorWatching = n
   }
 
   const h = hud;
-  const clock = h ? `${Math.floor(h.timeLeft / 60000)}:${String(Math.floor(h.timeLeft / 1000) % 60).padStart(2, "0")}` : "";
+  const clock = !h ? "" : h.endless ? "∞" : `${Math.floor(h.timeLeft / 60000)}:${String(Math.floor(h.timeLeft / 1000) % 60).padStart(2, "0")}`;
   const watchingNow = h && !h.playing && !h.respawning && !over;
 
   return (
@@ -318,7 +319,6 @@ function Results({ over, me, onExit, leaving }) {
   const myId = Number(me?.id);
   const ctx = usePlayAgain();
   const [again, setAgain] = useState(null);             // null | "busy" | an error message
-  const rematch = ctx && ctx.rematch && Number(ctx.rematch.byId) !== myId ? ctx.rematch : null;
   async function playAgain() {
     if (!ctx || again === "busy") return;
     setAgain("busy");
@@ -359,8 +359,7 @@ function Results({ over, me, onExit, leaving }) {
       </div>
       {ctx && (
         <>
-          {rematch && <p className="hmx-rematch">🎮 {rematch.by} started a new game — join in!</p>}
-          <button onClick={playAgain} disabled={again === "busy" || leaving}>{again === "busy" ? "Setting up…" : rematch ? `Join ${rematch.by}'s game` : "Play again"}</button>
+          <AgainPanel me={me} onPlay={playAgain} busy={again === "busy"} leaving={leaving} className="" dark />
           {again && again !== "busy" && <p className="hmx-rematch">{again}</p>}
         </>
       )}

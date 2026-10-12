@@ -82,17 +82,19 @@ function parseSaved(raw) {
 function buildWorld(room, seats, elapsedMs) {
   const core = cores[room.game_slug];
   const mode = room.mode === "teams" || room.mode === "coop" ? room.mode : "free";
-  const durMs = room.duration_seconds * 1000;
+  // an unlimited match (0) has no clock; the rules still pace orders and
+  // stars as for five minutes
+  const durMs = room.duration_seconds * 1000, paceMs = durMs || 300000;
   const players = new Map();
   seats.forEach((p) => players.set(Number(p.user_id), {
     id: Number(p.user_id), name: p.username, avatar: p.avatar, left: !!(parseSaved(p.game_state) || {}).left,
   }));
   const plan = sidesFor(mode, seats);
   const shared = core.SHARED
-    ? core.createSide(room.seed, { players: seats.map((p) => Number(p.user_id)), sides: plan.map((x) => ({ key: x.key, members: x.members })), durMs, mode })
+    ? core.createSide(room.seed, { players: seats.map((p) => Number(p.user_id)), sides: plan.map((x) => ({ key: x.key, members: x.members })), durMs: paceMs, mode })
     : null;
   const sides = plan.map((s) => {
-    const inst = shared || core.createSide(room.seed, { players: s.members, durMs, mode });
+    const inst = shared || core.createSide(room.seed, { players: s.members, durMs: paceMs, mode });
     for (const id of s.members) { if (players.get(id).left) core.removePlayer(inst, id); }
     return { ...s, inst, best: 0 };
   });
@@ -193,7 +195,7 @@ function tick(w) {
   const now = Date.now();
   const dt = Math.min(0.5, (now - w.lastTick) / 1000);
   w.lastTick = now;
-  if (now - w.startMs >= w.durMs) { finish(w, "time"); return; }
+  if (w.durMs > 0 && now - w.startMs >= w.durMs) { finish(w, "time"); return; }
   for (const inst of worldsOf(w)) if (!w.core.done(inst)) w.core.step(inst, dt, now - w.startMs);
   if (w.sides.every((s) => w.core.done(s.inst))) { finish(w, "done"); return; }
   broadcast(w, now);

@@ -237,9 +237,23 @@ async function sweepStaleRooms() {
     const [p] = await db.execute(
       `UPDATE rooms SET status = 'finished', finished_at = NOW()
         WHERE status = 'in_progress'
-          AND started_at IS NOT NULL
+          AND started_at IS NOT NULL AND duration_seconds > 0
           AND started_at + INTERVAL (duration_seconds + 60) SECOND < NOW()`
     );
+    // An unlimited match ends when its players leave; one whose players
+    // vanished (a restart forgot who had left) ends once nothing has
+    // happened in it for 20 minutes, and none runs past six hours. The
+    // server-run games (Station 13, Kitchen Rush, Bomb Blast) write no
+    // activity while they run, so only the six hours applies to them.
+    const [u] = await db.execute(
+      `UPDATE rooms r JOIN game_types gt ON gt.id = r.game_type_id
+          SET r.status = 'finished', r.finished_at = NOW()
+        WHERE r.status = 'in_progress' AND r.started_at IS NOT NULL AND r.duration_seconds = 0
+          AND (r.started_at < NOW() - INTERVAL 6 HOUR
+               OR (gt.slug NOT IN ('manor', 'kitchen', 'bomb')
+                   AND COALESCE(r.last_activity_at, r.started_at) < NOW() - INTERVAL 20 MINUTE))`
+    );
+    p.affectedRows += u.affectedRows;
     // Belt and braces: an in_progress room that somehow never got started_at.
     const [o] = await db.execute(
       `UPDATE rooms SET status = 'abandoned', finished_at = NOW()

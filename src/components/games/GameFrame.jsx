@@ -88,6 +88,8 @@ export default function GameFrame({
   }, []);
 
   const mins = timer?.max ? Math.round(timer.max / 60) : null;
+  // max 0: an unlimited match — no countdown, it ends when you leave
+  const endless = !!timer && timer.max === 0;
   const [help, setHelp] = useState(false);          // the ? card: how to play
 
   return (
@@ -97,7 +99,8 @@ export default function GameFrame({
       {bare && (
         <div className="gf-float">
           {timer && (
-            <span className={`gf-clock${timer.value <= 20 ? " low" : ""}`} aria-label="Time left">⏱ {clock(timer.value)}</span>
+            endless ? <span className="gf-clock" aria-label="No time limit">⏱ ∞</span>
+              : <span className={`gf-clock${timer.value <= 20 ? " low" : ""}`} aria-label="Time left">⏱ {clock(timer.value)}</span>
           )}
           {floatExtra}
           {howToFor(gameName) && <button type="button" className="gf-btn" onClick={() => setHelp(true)} aria-label="How to play">?</button>}
@@ -110,17 +113,17 @@ export default function GameFrame({
           <Logo size="sm" showText={false} />
           <span className="chip c-sun">
             {isSpectator ? `👀 Watching ${spectatorName}` : badge || gameName}
-            {!isSpectator && mins ? ` · ${mins} MIN` : ""}
+            {!isSpectator && mins ? ` · ${mins} MIN` : !isSpectator && endless ? " · NO LIMIT" : ""}
           </span>
         </div>
 
         <div className="gb-stats">
           {timer && (
-            <span title={mins ? `${mins}-minute match` : undefined} style={{ display: "inline-flex" }}>
+            <span title={mins ? `${mins}-minute match` : endless ? "No time limit: it ends when you leave" : undefined} style={{ display: "inline-flex" }}>
               <ProgressRing
-                value={timer.value} max={timer.max} size={compact ? 44 : 54} stroke={compact ? 4 : 5}
-                urgent={timer.value <= 20}
-                label={clock(timer.value)}
+                value={endless ? 1 : timer.value} max={endless ? 1 : timer.max} size={compact ? 44 : 54} stroke={compact ? 4 : 5}
+                urgent={!endless && timer.value <= 20}
+                label={endless ? "∞" : clock(timer.value)}
               />
             </span>
           )}

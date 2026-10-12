@@ -181,7 +181,9 @@ There is no test runner. What works:
   (`s13Client.js`) and the server; `s13Scene.js` draws, `s13Audio.js`
   sounds. Online the server runs the monsters (`config/manorWorld.js`,
   `monstersFor`: 1–3 for 8 players); each phone moves itself and reports
-  (`manor:me`), lockers are asked for (`manor:use`). Each side hunts its
+  (`manor:me`), lockers are asked for (`manor:use`). Friends are drawn as
+  survivors (`friendFig`) with their name and distance in metres over them
+  (through walls), and the HUD lists how far each one is. Each side hunts its
   own 4 fuses in its colour (together: one set), every fuse lights two
   zones for everyone, the first side into the elevator wins. Caught online,
   you're back in the Main Hall in a moment with the monsters sent off.

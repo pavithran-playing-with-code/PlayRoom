@@ -15,7 +15,7 @@ import {
   createClient, applyTick, stepLocal, report, interact, actionDone, actionLabel, toggleTorch, playing, respawning, timeLeft, sideOfMe,
   watchedPlayer, cycleWatch, viewState,
 } from "../horror/s13Client";
-import { NEED } from "../horror/s13Core.mjs";
+import { NEED, S as TILE_M } from "../horror/s13Core.mjs";
 import { createStation } from "../horror/s13Scene";
 import { createS13Audio } from "../horror/s13Audio";
 import { useSideways, toGame } from "../horror/LandscapeGate";
@@ -86,7 +86,9 @@ export default function ManorGame({ roomCode, currentUser, spectatorWatching = n
     setHud({
       role: c.role, mode: c.mode, playing: playing(c), respawning: respawning(c), left: c.left, timeLeft: timeLeft(c, now),
       side: side && { name: side.name, color: side.color, got: side.got, need: side.need, open: side.open, escapes: side.escapes || 0, score: side.score || 0 },
-      players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left })),
+      // how far each friend is from you, in metres (a tile is TILE_M), while you're in the building
+      players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left,
+        m: playing(c) && p.id !== c.you && p.alive && !p.left ? Math.round(Math.hypot(p.x - c.body.x, p.y - c.body.y) * TILE_M) : null })),
       watching: w && { name: w.name, color: w.color },
       bat: c.body.bat, stam: c.body.stam, msg: c.msg, use: actionLabel(c), fl: c.body.fl && c.body.bat > 0, run: runOn.current, area: c.area,
       stick: stick.current && { ...stick.current },
@@ -256,7 +258,7 @@ export default function ManorGame({ roomCode, currentUser, spectatorWatching = n
           <div className="hmx-who">
             {h.players.map((p) => (
               <span key={p.id} className={`hmx-p${p.alive ? "" : " dead"}`} style={{ "--c": p.color }} title={p.name}>
-                <i />{p.name}{p.left ? " · left" : !p.alive ? " · caught" : ""}
+                <i />{p.name}{p.left ? " · left" : !p.alive ? " · caught" : p.m != null ? ` · ${p.m} m` : ""}
               </span>
             ))}
           </div>

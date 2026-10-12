@@ -170,27 +170,93 @@ export function createStation(host, THREE, opts) {
   }
 
   // ── your friends (online) ──
+  // A survivor: a jacket in their side's colour with a backpack, jeans and
+  // boots, a face and hair, and the flashlight held out in the right hand
+  // when it's on. Legs and arms swing as they walk (from how far they moved
+  // since the last frame). Over their head, their name and how far off they
+  // are in metres, seen through walls so you can find each other.
   const friendFigs = new Map();
+  function tagDraw(f, name, color, metres) {
+    const c = f.tagC, g = c.getContext("2d");
+    g.clearRect(0, 0, c.width, c.height);
+    g.textAlign = "center"; g.textBaseline = "middle"; g.lineWidth = 7; g.strokeStyle = "rgba(0,0,0,.85)";
+    g.font = "bold 40px sans-serif"; g.strokeText(name, 160, 34); g.fillStyle = color; g.fillText(name, 160, 34);
+    if (metres != null) { g.font = "bold 32px sans-serif"; const m = `${metres} m`; g.strokeText(m, 160, 86); g.fillStyle = "#f2efe6"; g.fillText(m, 160, 86); }
+    f.tag.material.map.needsUpdate = true;
+  }
   function friendFig(o) {
     let f = friendFigs.get(o.id);
     if (f) return f;
     const gr = new THREE.Group(), col = new THREE.Color(o.color || "#4cc9f0");
-    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: 0.6 }); lmPatch(mat);
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 1.25, 10), mat); body.position.y = 0.95; gr.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), new THREE.MeshStandardMaterial({ color: 0xd9bfa6, roughness: 0.7 })); head.position.y = 1.8; gr.add(head);
-    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.3), new THREE.MeshStandardMaterial({ color: 0x222833 })); legs.position.y = 0.22; gr.add(legs);
-    const tc = document.createElement("canvas"); tc.width = 256; tc.height = 64;
-    const tx = tc.getContext("2d"); tx.font = "bold 34px sans-serif"; tx.textAlign = "center"; tx.textBaseline = "middle";
-    tx.lineWidth = 6; tx.strokeStyle = "rgba(0,0,0,.85)"; tx.strokeText(o.name || "", 128, 32); tx.fillStyle = o.color || "#fff"; tx.fillText(o.name || "", 128, 32);
-    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(tc), depthTest: false, transparent: true }));
-    tag.scale.set(1.6, 0.4, 1); tag.position.y = 2.35; gr.add(tag);
-    const torch = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowT, color: 0xfff2d0, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }));
-    torch.scale.set(0.9, 0.9, 1); torch.position.set(0.3, 1.3, -0.35); gr.add(torch);
+    const mat = (c, r = 0.7) => { const m = new THREE.MeshStandardMaterial({ color: c, roughness: r }); lmPatch(m); return m; };
+    const jacket = mat(col, 0.6), jacketDk = mat(col.clone().multiplyScalar(0.62), 0.6), skin = mat(0xd9b294), jeans = mat(0x2b3446, 0.85),
+      boot = mat(0x2a221c), hairM = mat(0x2b1d14, 0.9), pack = mat(0x3a4038), dark = mat(0x15171a, 0.4), steel = mat(0x8c939a, 0.35);
+    const add = (geo, m, x, y, z, parent = gr, sx = 1, sy = 1, sz = 1) => { const o3 = new THREE.Mesh(geo, m); o3.position.set(x, y, z); o3.scale.set(sx, sy, sz); parent.add(o3); return o3; };
+    // the torso: a jacket, a darker collar and hem, a zip down the front
+    add(new THREE.CylinderGeometry(0.22, 0.25, 0.62, 12), jacket, 0, 1.22, 0, gr, 1, 1, 0.72);
+    add(new THREE.CylinderGeometry(0.15, 0.2, 0.08, 12), jacketDk, 0, 1.55, 0, gr, 1, 1, 0.8);
+    add(new THREE.CylinderGeometry(0.255, 0.255, 0.07, 12), jacketDk, 0, 0.93, 0, gr, 1, 1, 0.74);
+    add(new THREE.BoxGeometry(0.02, 0.55, 0.01), steel, 0, 1.22, -0.185);
+    // a backpack with a flap and two straps
+    add(new THREE.BoxGeometry(0.34, 0.42, 0.15), pack, 0, 1.22, 0.24);
+    add(new THREE.BoxGeometry(0.35, 0.12, 0.16), dark, 0, 1.38, 0.245);
+    for (const sx of [-0.11, 0.11]) add(new THREE.BoxGeometry(0.045, 0.5, 0.03), dark, sx, 1.24, -0.175);
+    // the head: neck, face, hair, eyes and brows
+    add(new THREE.CylinderGeometry(0.06, 0.07, 0.1, 8), skin, 0, 1.62, 0);
+    add(new THREE.SphereGeometry(0.125, 16, 12), skin, 0, 1.76, 0, gr, 1, 1.12, 1);
+    add(new THREE.SphereGeometry(0.132, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), hairM, 0, 1.79, 0.012, gr, 1, 1.1, 1.02);
+    for (const sx of [-0.045, 0.045]) { add(new THREE.SphereGeometry(0.017, 6, 5), dark, sx, 1.775, -0.115); add(new THREE.BoxGeometry(0.045, 0.01, 0.01), hairM, sx, 1.81, -0.118); }
+    // legs from the hip: jeans and a boot
+    const legs = [-1, 1].map((sx) => {
+      const l = new THREE.Group(); l.position.set(sx * 0.11, 0.92, 0); gr.add(l);
+      add(new THREE.CylinderGeometry(0.085, 0.075, 0.82, 8), jeans, 0, -0.42, 0, l);
+      add(new THREE.BoxGeometry(0.13, 0.1, 0.24), boot, 0, -0.86, -0.04, l);
+      return l;
+    });
+    // arms from the shoulder: a sleeve, a cuff, a hand; the right holds the flashlight
+    const arms = [-1, 1].map((sx) => {
+      const a = new THREE.Group(); a.position.set(sx * 0.27, 1.47, 0); gr.add(a);
+      add(new THREE.CylinderGeometry(0.06, 0.055, 0.5, 8), jacket, 0, -0.25, 0, a);
+      add(new THREE.CylinderGeometry(0.06, 0.06, 0.05, 8), jacketDk, 0, -0.5, 0, a);
+      add(new THREE.SphereGeometry(0.055, 8, 6), skin, 0, -0.56, 0, a);
+      return a;
+    });
+    const lamp = new THREE.Group(); lamp.position.set(0, -0.6, -0.04); arms[1].add(lamp);
+    add(new THREE.CylinderGeometry(0.03, 0.035, 0.2, 8), dark, 0, 0, -0.06, lamp).rotation.x = Math.PI / 2;
+    add(new THREE.CylinderGeometry(0.045, 0.035, 0.05, 8), steel, 0, 0, -0.17, lamp).rotation.x = Math.PI / 2;
+    const torch = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowT, color: 0xfff2d0, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
+    torch.scale.set(0.7, 0.7, 1); torch.position.set(0, 0, -0.22); lamp.add(torch);
+    gr.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+    // the name, and how far
+    const tagC = document.createElement("canvas"); tagC.width = 320; tagC.height = 120;
+    const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(tagC), depthTest: false, transparent: true }));
+    tag.scale.set(1.6, 0.6, 1); tag.position.y = 2.35; tag.renderOrder = 5; gr.add(tag);
     scene.add(gr);
-    f = { gr, torch, body };
+    f = { gr, torch, legs, arms, tag, tagC, shown: null, px: o.x, py: o.y, spd: 0, ph: 0 };
     friendFigs.set(o.id, f);
     return f;
   }
+  // one friend, this frame: where, which way, walking or not, light, and how far from you
+  function friendPose(f, o, P, dt) {
+    const moved = Math.hypot(o.x - f.px, o.y - f.py) * S;
+    f.px = o.x; f.py = o.y;
+    const v = dt > 0 ? Math.min(6, moved / dt) : 0;
+    f.spd += (v - f.spd) * Math.min(1, dt * 8);
+    const k = Math.min(1, f.spd / 3);
+    f.ph += dt * (4 + f.spd * 2.2);
+    const sw = Math.sin(f.ph) * 0.65 * k;
+    f.legs[0].rotation.x = sw; f.legs[1].rotation.x = -sw;
+    f.arms[0].rotation.x = -sw * 0.8;
+    // the light arm points the flashlight ahead; otherwise it swings too
+    f.arms[1].rotation.x += ((o.lit ? -1.25 : sw * 0.8) - f.arms[1].rotation.x) * Math.min(1, dt * 10);
+    f.gr.position.set(o.x * S, Math.abs(Math.sin(f.ph)) * 0.03 * k, o.y * S);
+    f.gr.rotation.y = o.yaw || 0;
+    f.torch.visible = !!o.lit;
+    const metres = Math.round(Math.hypot(o.x - P.x, o.y - P.y) * S);
+    const key = `${o.name}|${metres}`;
+    if (key !== f.shown) { f.shown = key; tagDraw(f, o.name || "", o.color || "#fff", metres); }
+  }
+
 
   // ── the building ──
   let lvl, fixMs = [], elev = null, doorM, itemMeshes = [];
@@ -483,8 +549,7 @@ export function createStation(host, THREE, opts) {
       seen.add(o.id);
       const f = friendFig(o);
       f.gr.visible = !o.hid;
-      f.gr.position.set(o.x * S, 0, o.y * S); f.gr.rotation.y = (o.yaw || 0);
-      f.torch.visible = !!o.lit;
+      friendPose(f, o, P, dt);
     });
     for (const [id, f] of friendFigs) if (!seen.has(id)) f.gr.visible = false;
     // the elevator: shut and red without the power; open and green once you have it and are near

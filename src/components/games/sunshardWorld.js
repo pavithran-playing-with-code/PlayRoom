@@ -1,5 +1,5 @@
 // src/components/games/sunshardWorld.js
-// Sunshard Islands: the level. No three.js and no React — just numbers, so
+// Sunshard Jump: the level. No three.js and no React — just numbers, so
 // scripts/check-sunshard.mjs can build it, walk it and drive a bot across it.
 //
 // Made from a text seed (xmur3 + mulberry32), so everyone in a room gets the
@@ -49,7 +49,7 @@ export const moverAt = (p, t) => {
 export function buildWorld(code) {
   const R = mkRng(code);
   const D = mkRng(code + "/deco");
-  const W = { code, plats: [], gems: [], slimes: [], shards: [], flags: [], springs: [], lifts: [], trees: [], flowers: [], clouds: [], pillars: [], temple: null, gate: null, path: [], topY: 0 };
+  const W = { code, plats: [], slimes: [], shards: [], flags: [], springs: [], lifts: [], trees: [], flowers: [], clouds: [], pillars: [], temple: null, gate: null, path: [], topY: 0 };
   const plats = W.plats;
   const addPlat = (o) => {
     const p = { x: 0, y: 0, z: 0, r: 3, th: 1.2, kind: "static", zone: 0, ph: 0, amp: 0, spd: 0, ax: 0, az: 0, cp: false, rot: D() * TAU, ...o };
@@ -60,7 +60,6 @@ export function buildWorld(code) {
   };
   const tree = (zi, x, y, z, s) => W.trees.push({ zi, x, y, z, s, rot: D() * TAU, v: [D(), D(), D(), D(), D(), D(), D()] });
   const scatter = (p, zi, n) => { for (let i = 0; i < n; i++) { const a = D() * TAU, d = p.r * (0.55 + D() * 0.35); tree(zi, p.x + Math.cos(a) * d, p.y, p.z + Math.sin(a) * d, 0.8 + D() * 0.5); } };
-  const addGem = (x, y, z) => W.gems.push({ x, y, z });
   const addSlime = (p) => { const a = D() * TAU; W.slimes.push({ p: p.i, x: p.x + Math.cos(a) * p.r * 0.5, z: p.z + Math.sin(a) * p.r * 0.5 }); };
   const addFlag = (p, ox, oz) => { const f = { p: p.i, ox, oz, x: p.x + ox, y: p.y, z: p.z + oz }; W.flags.push(f); p.flag = W.flags.length - 1; };
 
@@ -118,10 +117,6 @@ export function buildWorld(code) {
       if (kind === "spring") W.springs.push({ p: p.i });
       if (kind === "static" && p.r >= 2.4 && i > 2 && R() < Z.slime) addSlime(p);
       if (kind === "static" && D() < 0.6) scatter(p, zi, 1);
-      // gems: an arc of three between platforms, or one over a platform you can't arc to
-      if (cur.kind !== "mover" && kind !== "mover" && kind !== "lift" && cur.kind !== "lift") {
-        for (let k = 1; k <= 3; k++) { const t = k / 4; addGem(lerp(cur.bx, p.bx, t), lerp(cur.by, p.by, t) + 1.5 + Math.sin(Math.PI * t) * 1.1, lerp(cur.bz, p.bz, t)); }
-      } else addGem(p.x, p.y + 1.4, p.z);
       prevKind = kind;
       cur = p;
     }
@@ -143,7 +138,6 @@ export function buildWorld(code) {
       W.shards.push({ i: shardNo++, x: isl.x, y: isl.y + 1.9, z: isl.z, col: Z.col, p: isl.i });
       addSlime(isl);
       if (zi >= 2) addSlime(isl);
-      for (let k = 0; k < 6; k++) { const a = (k / 6) * TAU; addGem(isl.x + Math.cos(a) * 2.4, isl.y + 0.9, isl.z + Math.sin(a) * 2.4); }
     } else {
       // twelve pillars round the middle; the golden one (the gate) faces the way you arrive
       const pr = 3.4, N = 12;

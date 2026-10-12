@@ -257,7 +257,7 @@ const GAME_SEED = [
   { slug: "kitchen",   name: "Kitchen Rush",      description: "Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.", min: 1, max: 8, icon: "🍳", active: 1 },
   { slug: "bomb",      name: "Bomb Blast",        description: "Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.", min: 1, max: 4, icon: "💣", active: 1 },
   { slug: "manor",     name: "Station 13",        description: "A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.", min: 1, max: 8, icon: "🏥", active: 1 },
-  { slug: "sunshard",  name: "Sunshard Islands",  description: "A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.", min: 1, max: 8, icon: "🏝️", active: 1 },
+  { slug: "sunshard",  name: "Sunshard Jump",     description: "A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.", min: 1, max: 8, icon: "🏝️", active: 1 },
 ];
 
 // Columns added after the first release. A table created before one of these

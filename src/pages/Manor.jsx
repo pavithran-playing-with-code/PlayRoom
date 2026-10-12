@@ -237,10 +237,10 @@ export default function Manor() {
           <S13Hud h={h} />
           {coarse && (
             <div className="s13-tb">
-              <button type="button" className={h.run ? "on" : ""} onPointerDown={press(() => { runOn.current = !runOn.current; })}>RUN</button>
-              <button type="button" className={h.fl ? "on" : ""} onPointerDown={press(toggleLight)}>LIGHT</button>
-              <button type="button" className={h.use ? "on" : ""} onPointerDown={press(interact)}>USE</button>
-              <button type="button" onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); pause(true); }}>||</button>
+              <button type="button" className={`s13-use${h.use ? " on" : ""}`} onPointerDown={press(interact)}>USE</button>
+              <button type="button" className={`s13-run${h.run ? " on" : ""}`} onPointerDown={press(() => { runOn.current = !runOn.current; })}>RUN</button>
+              <button type="button" className={`s13-light${h.fl ? " on" : ""}`} onPointerDown={press(toggleLight)}>LIGHT</button>
+              <button type="button" className="s13-pause" onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); pause(true); }}>||</button>
             </div>
           )}
         </>

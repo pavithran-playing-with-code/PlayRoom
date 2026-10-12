@@ -158,23 +158,53 @@ export function createRailScene(T, merge) {
   const dropChunk = (c) => { scene.remove(c.g); for (const geo of c.g.userData.geos || []) geo.dispose(); };
 
   // ── the runner (and friends, see-through) ──
+  // A street kid, Subway Surfers style: a backwards cap, a hoodie in your
+  // colour (hood down, a pocket in front), jeans, big sneakers, a backpack and
+  // headphones. The camera is behind, so the back — cap, hood, pack — carries
+  // the look. Legs swing from the hip and arms from the shoulder (poseHero).
   function mkHero(colour, ghost) {
     const g = new T.Group(), inner = new T.Group(); g.add(inner);
-    const M = (c, o) => mk(c, Object.assign({ shininess: 40 }, ghost ? { transparent: true, opacity: 0.45, depthWrite: false } : {}, o || {}));
-    const body = mesh(G(new T.SphereGeometry(0.5, 16, 12)), M(colour), 0, 0.95, 0, 1, 1.1, 0.95);
-    const belly = mesh(G(new T.SphereGeometry(0.36, 12, 10)), M(0xffe2c4), 0, 0.85, -0.22, 0.95, 1, 0.55);
-    const visor = mesh(G(new T.SphereGeometry(0.3, 12, 10)), M(0x10203a, { shininess: 120, specular: 0xaabbcc }), 0, 1.22, -0.3, 1.15, 0.75, 0.6);
-    const shine = mesh(G(new T.SphereGeometry(0.07, 8, 6)), keep(new T.MeshBasicMaterial({ color: 0xffffff, transparent: !!ghost, opacity: ghost ? 0.5 : 1 })), 0.12, 1.3, -0.55);
-    const ant = mesh(G(new T.CylinderGeometry(0.03, 0.03, 0.35, 5)), M(0x2a3140), 0, 1.72, 0), tip = mesh(G(new T.SphereGeometry(0.09, 8, 6)), keep(new T.MeshBasicMaterial({ color: 0xffe14a })), 0, 1.93, 0);
-    const pack = mesh(G(new T.BoxGeometry(0.55, 0.65, 0.3)), M(0x37c8e6), 0, 1.0, 0.47);
-    inner.add(body, belly, visor, shine, ant, tip, pack);
+    const M = (c, o) => mk(c, Object.assign({ shininess: 30 }, ghost ? { transparent: true, opacity: 0.45, depthWrite: false } : {}, o || {}));
+    const SKIN = 0xf2c39a, HAIR = 0x3a2416, JEANS = 0x2f4f8f, CAP = 0xffd23d, SHOE = 0xff3b5c, SOLE = 0xffffff, PACK = 0x37c8e6, DARK = 0x1b2233;
+    const hood = M(colour), skin = M(SKIN);
+    // the hoodie: a body a little wider at the hips, the hood rolled down at the back, a pocket in front
+    const torso = mesh(G(new T.CylinderGeometry(0.31, 0.36, 0.68, 12)), hood, 0, 1.17, 0, 1, 1, 0.78);
+    const hem = mesh(G(new T.CylinderGeometry(0.37, 0.37, 0.09, 12)), M(new T.Color(colour).multiplyScalar(0.75).getHex()), 0, 0.86, 0, 1, 1, 0.8);
+    const hoodBack = mesh(G(new T.SphereGeometry(0.24, 12, 8)), hood, 0, 1.5, 0.2, 1.25, 0.7, 0.8);
+    const pocket = mesh(G(new T.BoxGeometry(0.4, 0.17, 0.05)), M(new T.Color(colour).multiplyScalar(0.8).getHex()), 0, 1.0, -0.29);
+    const strings = [-0.07, 0.07].map((sx) => mesh(G(new T.CylinderGeometry(0.015, 0.015, 0.2, 4)), M(0xffffff), sx, 1.38, -0.28));
+    // the head: a face toward the track, hair, and the cap on backwards (its peak is what you see)
+    const head = mesh(G(new T.SphereGeometry(0.27, 16, 12)), skin, 0, 1.8, 0, 1, 1.05, 1);
+    const neck = mesh(G(new T.CylinderGeometry(0.1, 0.11, 0.14, 8)), skin, 0, 1.56, 0);
+    const hair = mesh(G(new T.SphereGeometry(0.28, 14, 10)), M(HAIR), 0, 1.79, 0.05, 1.02, 0.95, 0.98);
+    const cap = mesh(G(new T.SphereGeometry(0.285, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2)), M(CAP), 0, 1.86, 0, 1, 0.75, 1);
+    const peak = mesh(G(new T.BoxGeometry(0.34, 0.035, 0.24)), M(CAP), 0, 1.87, 0.33);
+    const button = mesh(G(new T.SphereGeometry(0.04, 6, 4)), M(SHOE), 0, 2.07, 0);
+    const eyes = [-0.09, 0.09].map((sx) => mesh(G(new T.SphereGeometry(0.035, 6, 5)), M(DARK), sx, 1.83, -0.25));
+    const smile = mesh(G(new T.TorusGeometry(0.06, 0.012, 4, 8, Math.PI)), M(0x9a3a2a), 0, 1.73, -0.255);
+    smile.rotation.z = Math.PI;
+    // headphones: a band over the cap and a cup on each ear
+    const band = mesh(G(new T.TorusGeometry(0.3, 0.025, 4, 14, Math.PI)), M(DARK), 0, 1.8, 0);
+    const cups = [-1, 1].map((sx) => mesh(G(new T.CylinderGeometry(0.09, 0.09, 0.07, 10).rotateZ(Math.PI / 2)), M(SHOE), sx * 0.28, 1.8, 0));
+    // the backpack: a pack, a flap, two straps over the shoulders
+    const pack = mesh(G(new T.BoxGeometry(0.46, 0.5, 0.22)), M(PACK), 0, 1.2, 0.36);
+    const flap = mesh(G(new T.BoxGeometry(0.47, 0.17, 0.235)), M(new T.Color(PACK).multiplyScalar(0.8).getHex()), 0, 1.4, 0.36);
+    const straps = [-0.17, 0.17].map((sx) => mesh(G(new T.BoxGeometry(0.06, 0.55, 0.05)), M(DARK), sx, 1.2, -0.27));
+    inner.add(torso, hem, hoodBack, pocket, ...strings, neck, head, hair, cap, peak, button, ...eyes, smile, band, ...cups, pack, flap, ...straps);
     const legs = [], arms = [];
     for (const sx of [-1, 1]) {
-      const p = new T.Group(); p.position.set(sx * 0.2, 0.5, 0);
-      p.add(mesh(G(new T.CylinderGeometry(0.11, 0.11, 0.5, 8)), M(0x10203a), 0, -0.22, 0), mesh(G(new T.SphereGeometry(0.17, 8, 6)), M(0x37c8e6), 0, -0.46, -0.06, 1, 0.6, 1.5));
+      // a leg from the hip: jeans, a turned-up cuff, a big sneaker with a white sole
+      const p = new T.Group(); p.position.set(sx * 0.16, 0.84, 0);
+      p.add(mesh(G(new T.CylinderGeometry(0.12, 0.11, 0.62, 8)), M(JEANS), 0, -0.3, 0),
+        mesh(G(new T.CylinderGeometry(0.125, 0.125, 0.07, 8)), M(0x4f6faf), 0, -0.58, 0),
+        mesh(G(new T.BoxGeometry(0.22, 0.15, 0.38)), M(SHOE), 0, -0.68, -0.06),
+        mesh(G(new T.BoxGeometry(0.235, 0.05, 0.4)), M(SOLE), 0, -0.77, -0.06));
       inner.add(p); legs.push(p);
-      const a = new T.Group(); a.position.set(sx * 0.56, 1.08, 0);
-      a.add(mesh(G(new T.CylinderGeometry(0.09, 0.09, 0.45, 8)), M(colour), 0, -0.2, 0), mesh(G(new T.SphereGeometry(0.12, 8, 6)), M(0xffe2c4), 0, -0.45, 0));
+      // an arm from the shoulder: a sleeve, a cuff, a hand
+      const a = new T.Group(); a.position.set(sx * 0.42, 1.43, 0);
+      a.add(mesh(G(new T.CylinderGeometry(0.095, 0.085, 0.46, 8)), hood, 0, -0.22, 0),
+        mesh(G(new T.CylinderGeometry(0.09, 0.09, 0.06, 8)), M(new T.Color(colour).multiplyScalar(0.75).getHex()), 0, -0.45, 0),
+        mesh(G(new T.SphereGeometry(0.09, 8, 6)), skin, 0, -0.53, 0));
       inner.add(a); arms.push(a);
     }
     const sh = new T.Mesh(G(new T.PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2)), keep(new T.MeshBasicMaterial({ map: glow, color: 0x000000, transparent: true, opacity: ghost ? 0.2 : 0.45, depthWrite: false })));

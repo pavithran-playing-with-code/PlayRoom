@@ -15,7 +15,7 @@ const OBJECTIVE_PAIRS = { mahjong: 24, memory: 10 };
 
 // Boards a together side has to clear for the match to be a win. Must match
 // GOAL in src/components/games/coopBoards.js (scripts/check-coop.mjs proves it).
-// Sunshard Islands: pairs_matched is 1 once the side has lit the temple.
+// Sunshard Jump: pairs_matched is 1 once the side has lit the temple.
 const COOP_GOAL = { maze: 1, memory: 1, mahjong: 1, numbers: 5, pipes: 3, sunshard: 1 };
 // Word Rush together: words solved as a side, more for a longer clock and a
 // bigger side. = wordGoal in coopBoards.js.

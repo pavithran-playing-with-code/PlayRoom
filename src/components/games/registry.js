@@ -215,8 +215,8 @@ export const GAMES = [
     Component: ManorGame,
   },
   {
-    slug: "sunshard", name: "Sunshard Islands", icon: "🏝️",
-    blurb: "A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.",
+    slug: "sunshard", name: "Sunshard Jump", icon: "🏝️",
+    blurb: "A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.",
     minPlayers: 1, maxPlayers: 8, tag: "Adventure", col: "var(--sky)",
     coopMax: 4, defaultDuration: 300,
     coopLabel: "one shard count — light the temple together",

@@ -1,6 +1,6 @@
 // src/components/games/sunshardSim.js
-// Sunshard Islands: one player's run — the explorer, the platforms as this
-// player sees them (crumbling stones, slimes and gems are each player's own),
+// Sunshard Jump: one player's run — the explorer, the platforms as this
+// player sees them (crumbling stones and slimes are each player's own),
 // and the rules. No three.js and no React: scripts/check-sunshard.mjs drives a
 // bot through it.
 //
@@ -16,7 +16,7 @@ import { TAU, clamp, moverAt, SHARDS } from "./sunshardWorld.js";
 
 export const RUN = 7.4, GLIDE_RUN = 8.6, GRAVITY = 26, JUMP = 10.6, DOUBLE = 9.6, GLIDE_FALL = 2.5;
 export const COYOTE = 0.1, BUFFER = 0.14, SPRING = 17.5, LIFT_UP = 7.5;
-export const SPIN_S = 0.4, SPIN_R = 2.3, SPIN_CD = 0.6, HEARTS = 3, INV_S = 1.6;
+export const HEARTS = 3, INV_S = 1.6;
 const PR = 0.45, HH = 1.25;
 
 export function newRun(W) {
@@ -24,26 +24,19 @@ export function newRun(W) {
   return {
     T: 0,
     pl: { x: 0, y: 0, z: 0, vx: 0, vz: 0, vy: 0, onG: false, gp: null, coyote: 0, jumps: 0, gliding: false, face: 0,
-      hp: HEARTS, inv: 0, atk: 0, atkCd: 0, stun: 0, speed: 0, sq: 0 },
+      hp: HEARTS, inv: 0, stun: 0, speed: 0, sq: 0 },
     jumpBuf: 0, jumpHeld: false,
     plats: W.plats.map((p) => ({ x: p.x, y: p.y, z: p.z, dx: 0, dz: 0, solid: true, state: 0, t: 0, vy: 0, shake: 0 })),
-    gems: new Uint8Array(W.gems.length), extraGems: [],
     shards: new Set(),
     slimes: W.slimes.map((s) => ({ ...s, y: W.plats[s.p].y, tx: s.x, tz: s.z, t: Math.random() * 5, alive: true, dir: 0 })),
     flags: new Set([0]),
     ckpt: { x: hub.x, y: hub.y, z: hub.z },
-    zone: -2, gemCount: 0, gateOpen: false, gateT: 0, finished: false, maxPath: 0, hits: 0, springs: W.springs.map(() => 0),
+    zone: -2, gateOpen: false, gateT: 0, finished: false, maxPath: 0, hits: 0, springs: W.springs.map(() => 0),
   };
 }
 
 export const pressJump = (S) => { if (!S.jumpHeld) S.jumpBuf = BUFFER; S.jumpHeld = true; };
 export const releaseJump = (S) => { S.jumpHeld = false; };
-export function spin(S) {
-  const P = S.pl;
-  if (P.atkCd > 0 || P.stun > 0) return false;
-  P.atk = SPIN_S; P.atkCd = SPIN_CD;
-  return true;
-}
 export function respawn(S) {
   const P = S.pl;
   Object.assign(P, { x: S.ckpt.x, y: S.ckpt.y + 0.2, z: S.ckpt.z, vx: 0, vz: 0, vy: 0, onG: false, gp: null, hp: HEARTS, inv: 1, stun: 0 });
@@ -71,14 +64,14 @@ function platforms(S, W, dt) {
 
 // One step. inp: { mx, mz } — where to go, on the ground, already turned to
 // the camera (length ≤ 1). team: the team's shards (together), or null.
-// Returns the events of the step: [{ k: "jump" | "dbl" | "land" | "gem" | "shard" | … }].
+// Returns the events of the step: [{ k: "jump" | "dbl" | "land" | "shard" | … }].
 export function step(S, W, inp, dt, team = null) {
   const P = S.pl;
   S.ev = [];
   S.T += dt;
   platforms(S, W, dt);
   if (S.gateOpen) S.gateT = Math.min(1, S.gateT + dt * 0.5);
-  P.inv = Math.max(0, P.inv - dt); P.atkCd = Math.max(0, P.atkCd - dt); P.atk = Math.max(0, P.atk - dt);
+  P.inv = Math.max(0, P.inv - dt);
   P.stun = Math.max(0, P.stun - dt); P.coyote = Math.max(0, P.coyote - dt); S.jumpBuf = Math.max(0, S.jumpBuf - dt);
   if (P.gp !== null && P.onG) { const q = S.plats[P.gp]; P.x += q.dx; P.z += q.dz; }
   if (S.finished) { P.vx *= 0.8; P.vz *= 0.8; }
@@ -88,7 +81,7 @@ export function step(S, W, inp, dt, team = null) {
   const il = Math.hypot(ix, iz);
   if (il > 1) { ix /= il; iz /= il; }
   if (S.finished) { ix = 0; iz = 0; }
-  const top = (P.gliding ? GLIDE_RUN : RUN) * (P.atk > 0 ? 0.65 : 1);
+  const top = P.gliding ? GLIDE_RUN : RUN;
   if (P.stun <= 0) {
     const tx = ix * top, tz = iz * top, acc = P.onG ? 64 : P.gliding ? 20 : 34;
     const dvx = tx - P.vx, dvz = tz - P.vz, dl = Math.hypot(dvx, dvz), mx = acc * dt;
@@ -164,17 +157,6 @@ export function step(S, W, inp, dt, team = null) {
     }
     S.springs[k] = Math.max(0, S.springs[k] - dt * 4);
   });
-  // gems
-  for (let i = 0; i < W.gems.length; i++) {
-    if (S.gems[i]) continue;
-    const g = W.gems[i], dx = g.x - P.x, dy = g.y - (P.y + 0.6), dz = g.z - P.z;
-    if (dx * dx + dy * dy + dz * dz < 1.3) { S.gems[i] = 1; S.gemCount++; S.ev.push({ k: "gem", x: g.x, y: g.y, z: g.z }); }
-  }
-  for (const g of S.extraGems) {
-    if (g.got) continue;
-    const dx = g.x - P.x, dy = g.y - (P.y + 0.6), dz = g.z - P.z;
-    if (dx * dx + dy * dy + dz * dz < 1.3) { g.got = true; S.gemCount++; S.ev.push({ k: "gem", x: g.x, y: g.y, z: g.z }); }
-  }
   // shards
   const have = shardsHave(S, team);
   for (const s of W.shards) {
@@ -187,18 +169,12 @@ export function step(S, W, inp, dt, team = null) {
     }
   }
   if (have.size >= SHARDS && !S.gateOpen) { S.gateOpen = true; S.gateT = 0; S.ev.push({ k: "gate" }); }
-  // slimes: spin them, land on them — or they knock you about
+  // slimes: jump on them — or they knock you about
   for (const s of S.slimes) {
     if (!s.alive) continue;
     const dx = P.x - s.x, dz = P.z - s.z, dxz = Math.hypot(dx, dz), dy = P.y - s.y;
-    const kill = () => {
-      s.alive = false;
-      S.ev.push({ k: "stomp", x: s.x, y: s.y, z: s.z });
-      for (let k = 0; k < 2; k++) S.extraGems.push({ x: s.x + (Math.random() - 0.5), y: s.y + 1, z: s.z + (Math.random() - 0.5), got: false });
-    };
-    if (P.atk > 0 && dxz < SPIN_R && Math.abs(dy) < 1.6) { kill(); continue; }
     if (dxz < 0.95 && dy > -0.6 && dy < 1.1) {
-      if (P.vy < -2 && dy > 0.35) { kill(); P.vy = 10; P.jumps = 1; P.own = false; P.onG = false; P.gp = null; P.sq = -0.5; }
+      if (P.vy < -2 && dy > 0.35) { s.alive = false; S.ev.push({ k: "stomp", x: s.x, y: s.y, z: s.z }); P.vy = 10; P.jumps = 1; P.own = false; P.onG = false; P.gp = null; P.sq = -0.5; }
       else if (P.inv <= 0) { const l = Math.max(dxz, 0.01); hurt(S, dx / l, dz / l); }
     }
   }
@@ -247,13 +223,13 @@ export function progress(S, W, team = null) {
   return { shards: have, path: S.maxPath, finished: S.finished };
 }
 
-// The score the room ranks (race): 100 a platform reached, 500 a shard, 5 a
-// gem; finishing adds 10,000 and 10 for every second left — the first home
+// The score the room ranks (race): 100 a platform reached, 500 a shard;
+// finishing adds 10,000 and 10 for every second left — the first home
 // is ahead of the second, and both are ahead of anyone still climbing.
 // (S.finishLeft: the seconds left on the clock when you got home.)
 export function score(S, W, team = null) {
   const pr = progress(S, W, team);
-  let s = pr.path * 100 + pr.shards * 500 + S.gemCount * 5;
+  let s = pr.path * 100 + pr.shards * 500;
   if (S.finished) s += 10000 + Math.max(0, Math.round(S.finishLeft || 0)) * 10;
   return Math.min(25000, s);
 }

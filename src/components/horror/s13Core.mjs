@@ -99,6 +99,13 @@ export const isLit = (st, lit, x, y) => lit.has(zoneAt(st, x, y));
 // The building, its furniture and its dead, from a seed. Only the clutter
 // changes between runs: a prop is kept only if every floor tile stays
 // reachable and no corridor tile becomes a dead end.
+//
+// What lies on the floor — the dead, a bin or a wheelchair on its side — is
+// knee-high, and with no jump a knee-high thing that stops you reads as the
+// game being stuck. So those are LOW: drawn, but you (and it) walk past them;
+// the tile stays floor. Beds, shelves, gurneys, carts and benches stand
+// where they are.
+export const isLow = (k, o) => k === "body" || ((k === "trash" || k === "wheel") && !!o && o.s === "tip");
 export function genStation(seed) {
   const R = rng((Number(seed) || 1) * 7 + 130013);
   const pick = (a) => a[(R() * a.length) | 0];
@@ -130,8 +137,10 @@ export function genStation(seed) {
     return n;
   };
   // a prop only if it leaves no dead end in a corridor and nothing cut off
+  const lowAt = new Set();
   const tb = (x, y, k, o) => {
-    if (g[y][x] !== FLOOR) return false;
+    if (g[y][x] !== FLOOR || lowAt.has(x + y * N)) return false;
+    if (isLow(k, o)) { lowAt.add(x + y * N); furn.push({ x, y, k, low: 1, ...(o || {}) }); return true; }
     g[y][x] = FURN;
     const dead = D4.some(([a, b]) => {
       const xx = x + a, yy = y + b;
@@ -189,7 +198,9 @@ export function genStation(seed) {
 export function placeItems(st, seed, sides = [{ key: "solo", need: NEED }], players = 1) {
   const R = rng((Number(seed) || 1) * 13 + 77777);
   const { g, zn, doors } = st;
-  const f = shuffle(floors(g), R);
+  // not on top of the dead: a fuse or a locker on a body would be hidden in it
+  const low = new Set(st.furn.filter((q) => q.low).map((q) => q.x + q.y * N));
+  const f = shuffle(floors(g).filter((c) => !low.has(c[0] + c[1] * N)), R);
   const items = [];
   const taken = new Set();
   const free = (c) => !taken.has(c[0] + c[1] * N);

@@ -256,7 +256,7 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('kitchen', 'Kitchen Rush', 'Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.', 1, 8, CONVERT(UNHEX('F09F8DB3') USING utf8mb4), 1, 220),
   ('bomb', 'Bomb Blast', 'Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.', 1, 4, CONVERT(UNHEX('F09F92A3') USING utf8mb4), 1, 230),
   ('manor', 'Station 13', 'A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.', 1, 8, CONVERT(UNHEX('F09F8FA5') USING utf8mb4), 1, 240),
-  ('sunshard', 'Sunshard Islands', 'A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.', 1, 8, CONVERT(UNHEX('F09F8F9DEFB88F') USING utf8mb4), 1, 250)
+  ('sunshard', 'Sunshard Jump', 'A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.', 1, 8, CONVERT(UNHEX('F09F8F9DEFB88F') USING utf8mb4), 1, 250)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
   min_players = VALUES(min_players), max_players = VALUES(max_players),

@@ -192,7 +192,7 @@ function initSocket(httpServer) {
       });
     });
 
-    // Sunshard Islands: where my explorer is and what they're doing — so
+    // Sunshard Jump: where my explorer is and what they're doing — so
     // everyone draws everyone on the same islands — plus my shards (a bit
     // each: together, any of us taking one counts for all), gems, how far
     // along I am and whether I'm home, and (together) which of my ropes are

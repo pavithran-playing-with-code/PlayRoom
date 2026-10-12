@@ -269,9 +269,9 @@ export default function ManorGame({ roomCode, currentUser, spectatorWatching = n
           <S13Hud h={h} />
           {coarse && (
             <div className="s13-tb">
-              <button type="button" className={h.run ? "on" : ""} onPointerDown={press(() => { runOn.current = !runOn.current; })}>RUN</button>
-              <button type="button" className={h.fl ? "on" : ""} onPointerDown={press(doLight)}>LIGHT</button>
-              <button type="button" className={h.use ? "on" : ""} onPointerDown={press(doUse)}>USE</button>
+              <button type="button" className={`s13-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>USE</button>
+              <button type="button" className={`s13-run${h.run ? " on" : ""}`} onPointerDown={press(() => { runOn.current = !runOn.current; })}>RUN</button>
+              <button type="button" className={`s13-light${h.fl ? " on" : ""}`} onPointerDown={press(doLight)}>LIGHT</button>
             </div>
           )}
         </>

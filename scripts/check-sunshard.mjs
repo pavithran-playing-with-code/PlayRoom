@@ -1,4 +1,4 @@
-// scripts/check-sunshard.mjs — Sunshard Islands' level and rules, with no browser.
+// scripts/check-sunshard.mjs — Sunshard Jump's level and rules, with no browser.
 //
 //   node scripts/check-sunshard.mjs
 //
@@ -15,7 +15,7 @@ const src = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src",
 const Wm = await import(pathToFileURL(path.join(src, "sunshardWorld.js")).href);
 const Sm = await import(pathToFileURL(path.join(src, "sunshardSim.js")).href);
 const { buildWorld, levelCode, SHARDS, ZONES } = Wm;
-const { newRun, step, pressJump, releaseJump, spin, score, RUN, JUMP, GRAVITY, tether, tiedTo, LEASH, TAUT_S } = Sm;
+const { newRun, step, pressJump, releaseJump, score, RUN, JUMP, GRAVITY, tether, tiedTo, LEASH, TAUT_S } = Sm;
 
 let fails = 0;
 const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`); };
@@ -81,9 +81,13 @@ check("no platform sits inside another", overlaps === 0, `${overlaps}`);
     for (let i = 0; i < 160; i++) { step(S5, Ws, {}, dt); top5 = Math.max(top5, S5.pl.y - sp.y); }
     check("a mushroom throws you ~5.9 m, holding jump or not", top5 > 5.5, top5.toFixed(2));
   }
-  // spin
-  const S4 = newRun(W);
-  check("spin attack, then a cooldown", spin(S4) && !spin(S4));
+  // no coins and no spin: it's all jumping — a slime is beaten by landing on it
+  check("no gems in the level", !("gems" in W) && !("gemCount" in newRun(W)));
+  check("no spin attack", !("spin" in Sm));
+  const S4 = newRun(W), sl = S4.slimes[0];
+  Object.assign(S4.pl, { x: sl.x, y: sl.y + 0.8, z: sl.z, vy: -6, onG: false, gp: null });
+  const ev4 = step(S4, W, {}, 1 / 120);
+  check("land on a slime and it's gone, and you bounce", !sl.alive && ev4.some((e) => e.k === "stomp") && S4.pl.vy > 5);
 }
 
 // ── a bot plays it ───────────────────────────────────────────────────────────
@@ -154,8 +158,8 @@ function bot(Wb, team = null, maxS = 900, rope = null) {
       }
       S.inLift = false;
     }
-    // slimes close by: spin
-    if (S.slimes.some((s) => s.alive && Math.hypot(s.x - P.x, s.z - P.z) < 2.0 && Math.abs(s.y - P.y) < 1.4)) spin(S);
+    // a slime in the way: hop onto it (a stomp beats it)
+    if (P.onG && S.slimes.some((s) => s.alive && Math.hypot(s.x - P.x, s.z - P.z) < 1.9 && Math.abs(s.y - P.y) < 1.2)) { releaseJump(S); pressJump(S); }
     const preX = P.x, preY = P.y, preZ = P.z;
     if (process.env.SS_TRACE && cur.kind === process.env.SS_TRACE && tgt && (Math.round(t * 120) % 6 === 0) && traced < 400) {
       traced++;

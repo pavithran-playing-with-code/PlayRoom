@@ -1,5 +1,5 @@
 // src/components/games/sunshardScene.js
-// Sunshard Islands: the 3D scene (three.js r128). It draws the level that
+// Sunshard Jump: the 3D scene (three.js r128). It draws the level that
 // sunshardWorld.js made and the run that sunshardSim.js keeps — it decides
 // nothing. Low-poly and flat-shaded: Phong with flatShading and no specular,
 // 10-sided cylinders and cones, soft shadows from one sun that follows you.
@@ -13,7 +13,17 @@
 import { ZONES, PAL0, TAU, clamp, lerp } from "./sunshardWorld.js";
 
 const BEAM_H = 140;
-const SKY = [{ t: 0, top: 0x3d9bff, bot: 0xbfe8ff }, { t: 0.3, top: 0x5a9cf5, bot: 0xffe6c4 }, { t: 0.62, top: 0x7a5ab8, bot: 0xffa77a }, { t: 1, top: 0x1a1a4a, bot: 0x6a4a8a }];
+// Each zone has its own sky, as Rail Runner's stretches do: reach the next
+// zone and the whole look eases over to it (the hub shares the first's).
+//   top / bot: the sky's top and horizon (the fog takes the horizon);
+//   hemi / sun: light strengths; sunC: the sun's colour; stars: 0..1
+const THEMES = [
+  { top: 0x3d9bff, bot: 0xbfe8ff, hemi: 0.8, sun: 0.95, sunC: 0xfff1d6, stars: 0, near: 45, far: 190 },   // Meadow Hop: a clear morning
+  { top: 0xf0884a, bot: 0xffd9a0, hemi: 0.75, sun: 0.9, sunC: 0xffc27a, stars: 0, near: 40, far: 180 },   // Sandy Steps: a hot sunset
+  { top: 0x7fb6e8, bot: 0xeef8ff, hemi: 0.9, sun: 0.7, sunC: 0xe8f4ff, stars: 0, near: 30, far: 150 },    // Frost Ridge: a pale, misty cold
+  { top: 0x3a1430, bot: 0xd2553a, hemi: 0.55, sun: 0.75, sunC: 0xff8a5a, stars: 0.25, near: 35, far: 170 }, // Ember Cliffs: a red dusk
+  { top: 0x0e1240, bot: 0x5a4a9a, hemi: 0.5, sun: 0.55, sunC: 0xffd89a, stars: 1, near: 50, far: 220 },  // Sky Temple: night, and stars
+];
 export const MATE = [0x37c8e6, 0xa678ff, 0x62d36c, 0xff8fc7, 0xffd24a, 0xf4efe6, 0xff9f43];
 
 export function createScene(THREE, W, opts = {}) {
@@ -51,16 +61,18 @@ export function createScene(THREE, W, opts = {}) {
   const stars = new THREE.Points(starG, keep(new THREE.PointsMaterial({ size: 2.4, sizeAttenuation: false, color: 0xffffff, transparent: true, opacity: 0, fog: false, depthWrite: false })));
   scene.add(stars);
   const _c1 = new THREE.Color(), _c2 = new THREE.Color();
-  function setSky(p) {
-    let i = 0;
-    while (i < SKY.length - 2 && p > SKY[i + 1].t) i++;
-    const a = SKY[i], b = SKY[i + 1], k = clamp((p - a.t) / (b.t - a.t), 0, 1);
-    skyU.top.value.setHex(a.top).lerp(_c1.setHex(b.top), k);
-    skyU.bot.value.setHex(a.bot).lerp(_c2.setHex(b.bot), k);
+  let skyAt = null;
+  function setSky(zone, dt) {
+    const th = THEMES[clamp(zone, 0, THEMES.length - 1)];
+    const k = skyAt === null ? 1 : 1 - Math.exp(-dt * 1.6);        // about two seconds to turn over
+    skyAt = zone;
+    skyU.top.value.lerp(_c1.setHex(th.top), k);
+    skyU.bot.value.lerp(_c2.setHex(th.bot), k);
     scene.fog.color.copy(skyU.bot.value);
-    stars.material.opacity = clamp((p - 0.55) / 0.4, 0, 1);
-    hemi.intensity = 0.8 - p * 0.25; sun.intensity = 0.95 - p * 0.4;
-    sun.color.setHex(p < 0.5 ? 0xfff1d6 : 0xffc89a);
+    scene.fog.near += (th.near - scene.fog.near) * k; scene.fog.far += (th.far - scene.fog.far) * k;
+    stars.material.opacity += (th.stars - stars.material.opacity) * k;
+    hemi.intensity += (th.hemi - hemi.intensity) * k; sun.intensity += (th.sun - sun.intensity) * k;
+    sun.color.lerp(_c1.setHex(th.sunC), k);
   }
 
   // ── materials ──────────────────────────────────────────────────────────────
@@ -163,10 +175,6 @@ export function createScene(THREE, W, opts = {}) {
     const h = new THREE.Mesh(G("bud", () => new THREE.SphereGeometry(0.14, 7, 5)), M(FL[f.c])); h.position.y = 0.32;
     g.add(s, h); g.position.set(f.x, 0, f.z); world.add(g);
   }
-  // gems: the level's, plus a pool for the ones slimes drop
-  const gemGeo = G("gem", () => new THREE.OctahedronGeometry(0.3, 0)), gemMat = M(0xffd24a, { emissive: 0x9a6a00 });
-  const gemMesh = W.gems.map((g) => { const m = new THREE.Mesh(gemGeo, gemMat); m.position.set(g.x, g.y, g.z); world.add(m); return m; });
-  const dropMesh = Array.from({ length: 40 }, () => { const m = new THREE.Mesh(gemGeo, gemMat); m.visible = false; world.add(m); return m; });
   // flags
   const flagMesh = W.flags.map((f) => {
     const g = new THREE.Group();
@@ -298,7 +306,7 @@ export function createScene(THREE, W, opts = {}) {
     h.hero.position.set(st.x, st.y, st.z);
     h.face = st.face;
     h.sq = st.sq !== undefined ? st.sq : h.sq + (0 - h.sq) * Math.min(1, dt * 9);
-    if (st.atk) h.hero.rotation.y += 26 * dt; else h.hero.rotation.y = st.face;
+    h.hero.rotation.y = st.face;
     h.phase += st.speed * dt * 1.6;
     const run = st.onG ? Math.min(1, st.speed / 6) : 0;
     h.bodyG.position.y = Math.abs(Math.sin(h.phase)) * 0.1 * run;
@@ -381,7 +389,7 @@ export function createScene(THREE, W, opts = {}) {
 
   // ── camera ─────────────────────────────────────────────────────────────────
   let camInit = false, tmpK = 0, shake = 0;
-  function cameraFollow(P, yaw, pitch, dt) {
+  function cameraFollow(P, yaw, pitch, dt, zone) {
     const inTemple = W.temple && Math.hypot(P.x - W.temple.x, P.z - W.temple.z) < 5.4 && Math.abs(P.y - W.temple.y) < 3.5;
     tmpK += ((inTemple ? 1 : 0) - tmpK) * Math.min(1, dt * 4);
     const pe = lerp(pitch, Math.max(pitch, 0.8), tmpK), cp = Math.cos(pe), dist = lerp(8.5 * (P.gliding ? 1.15 : 1), 6.5, tmpK);
@@ -397,7 +405,7 @@ export function createScene(THREE, W, opts = {}) {
     camera.fov += (fov - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();
     sun.position.set(P.x + 22, P.y + 38, P.z + 14); sun.target.position.set(P.x, P.y, P.z); sun.target.updateMatrixWorld();
     sky.position.copy(camera.position); stars.position.copy(camera.position);
-    setSky(clamp(P.y / W.topY, 0, 1));
+    setSky(zone, dt);
   }
 
   // ── one frame ──────────────────────────────────────────────────────────────
@@ -411,12 +419,6 @@ export function createScene(THREE, W, opts = {}) {
       if (q.state === 0 && m.scale.x < 1) m.scale.setScalar(Math.min(1, m.scale.x + dt * 4));
       m.position.set(q.x + (q.state === 1 ? (Math.random() - 0.5) * 0.12 : 0), q.y, q.z + (q.state === 1 ? (Math.random() - 0.5) * 0.12 : 0));
     }
-    // gems
-    for (let i = 0; i < W.gems.length; i++) {
-      const m = gemMesh[i]; m.visible = !S.gems[i];
-      if (m.visible) { m.rotation.y += dt * 2.2; m.position.y = W.gems[i].y + Math.sin(T * 2.4 + i) * 0.12; }
-    }
-    S.extraGems.forEach((g, k) => { const m = dropMesh[k]; if (!m) return; m.visible = !g.got; if (m.visible) { m.position.set(g.x, g.y + Math.sin(T * 2.4 + k) * 0.12, g.z); m.rotation.y += dt * 2.2; } });
     // shards: gone once yours (or, together, the team's)
     const have = team ? new Set([...S.shards, ...team]) : S.shards;
     for (const sm of shardMesh) {
@@ -454,7 +456,7 @@ export function createScene(THREE, W, opts = {}) {
     for (const l of W.lifts) if (Math.hypot(P.x - l.x, P.z - l.z) < l.r && P.y > l.y0 - 0.3 && P.y < l.y0 + l.h && Math.random() < dt * 20) emit(l.x + (Math.random() - 0.5) * 2, P.y - 0.4, l.z + (Math.random() - 0.5) * 2, 0, 3, 0, 0.5, 0xcfeaff);
     for (const q of S.plats) if (q.state === 1 && Math.random() < 0.4) emit(q.x + (Math.random() - 0.5) * 2, q.y, q.z + (Math.random() - 0.5) * 2, 0, 1, 0, 0.6, 0xd8b080);
     // you
-    pose(H, { x: P.x, y: P.y, z: P.z, face: P.face, speed: P.speed, onG: P.onG, vy: P.vy, vx: P.vx, vz: P.vz, gliding: P.gliding, atk: P.atk > 0, inv: P.inv > 0, sq: P.sq }, dt, T, S.plats);
+    pose(H, { x: P.x, y: P.y, z: P.z, face: P.face, speed: P.speed, onG: P.onG, vy: P.vy, vx: P.vx, vz: P.vz, gliding: P.gliding, inv: P.inv > 0, sq: P.sq }, dt, T, S.plats);
     // everyone else
     const seen = new Set();
     for (const r of remotes) {
@@ -476,7 +478,7 @@ export function createScene(THREE, W, opts = {}) {
     }
     for (const [k, R] of ropeMesh) if (!used.has(k)) { dropRope(R); ropeMesh.delete(k); }
     updParticles(dt); updRings(dt);
-    cameraFollow(P, yaw, pitch, dt);
+    cameraFollow(P, yaw, pitch, dt, S.zone);
     renderer.render(scene, camera);
   }
 

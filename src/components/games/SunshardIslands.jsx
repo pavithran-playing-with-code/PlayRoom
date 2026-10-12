@@ -1,8 +1,12 @@
 // src/components/games/SunshardIslands.jsx
-// Sunshard Islands: a third-person 3D platformer. Hop across floating
-// islands, collect the 5 Sunshards (one at the end of each zone) and bring
-// them to the Sky Temple. Falling never kills you — you're back at the last
+// Sunshard Jump: a third-person 3D platformer, all jumping. Hop across
+// floating islands, collect the 5 Sunshards (one at the end of each zone) and
+// bring them to the Sky Temple. Each zone has its own sky. Slimes are beaten
+// by landing on them. Falling never kills you — you're back at the last
 // flag — so it stays fun.
+//
+// On a phone the screen is split: the left half is the joystick (it starts
+// wherever your thumb lands), the right half turns the camera.
 //
 // Everyone in a room plays the same islands (sunshardWorld.js, from the
 // room's seed). Each phone runs its own explorer (sunshardSim.js) and tells
@@ -11,7 +15,7 @@
 // between reports, in their own colour with their name over them. Explorers
 // pass through each other.
 //
-//   Race (a normal room): shards and gems are your own. First to light the
+//   Race (a normal room): shards are your own. First to light the
 //   temple wins; if the clock runs out first, whoever got furthest (score).
 //   Together (a co-op room): one shard count for the side — any of you can
 //   take a shard for everyone, the gate opens at five between you, and when
@@ -31,7 +35,7 @@ import { useSocket } from "../../utils/SocketContext";
 import { useUprightTouch, toGame } from "../horror/LandscapeGate";
 import { team as teamOf, plural } from "./coopTeam";
 import { buildWorld, levelCode, ZONES, SHARDS, clamp } from "./sunshardWorld.js";
-import { newRun, step, pressJump, releaseJump, spin, respawn, score, shardsHave, tether, tiedTo, ropeState, LEASH } from "./sunshardSim.js";
+import { newRun, step, pressJump, releaseJump, respawn, score, shardsHave, tether, tiedTo, ropeState, LEASH } from "./sunshardSim.js";
 import { MATE, createScene } from "./sunshardScene";
 
 const START_S = 3;
@@ -75,10 +79,9 @@ function makeAudio() {
   const seq = (fs, gap, d, v) => fs.forEach((f, i) => setTimeout(() => tone(f, d, "triangle", v), i * gap));
   const sfx = {
     jump: () => tone(380, 0.16, "sine", 0.14, 640), dbl: () => tone(520, 0.2, "triangle", 0.14, 980), land: () => tone(130, 0.12, "sine", 0.18, 60),
-    gem: (n) => tone(880 + Math.min(n, 8) * 70, 0.14, "triangle", 0.12),
     shard: () => seq([523, 659, 784, 1046, 1318], 90, 0.4, 0.14),
     hurt: () => tone(240, 0.3, "sawtooth", 0.14, 70), stomp: () => tone(320, 0.16, "square", 0.1, 140), spring: () => tone(260, 0.28, "sine", 0.16, 1000),
-    spin: () => tone(220, 0.2, "sawtooth", 0.07, 110), flag: () => seq([660, 880], 110, 0.25, 0.12), crumble: () => tone(90, 0.3, "sawtooth", 0.08, 40),
+    flag: () => seq([660, 880], 110, 0.25, 0.12), crumble: () => tone(90, 0.3, "sawtooth", 0.08, 40),
     tie: () => seq([660, 990], 90, 0.2, 0.1), snap: () => tone(900, 0.25, "square", 0.09, 160),
     win: () => seq([523, 659, 784, 1046, 784, 1046, 1318], 150, 0.45, 0.15), beep: (hi) => tone(hi ? 880 : 440, hi ? 0.45 : 0.18, "square", 0.12),
   };
@@ -157,11 +160,6 @@ export default function SunshardIslands(props) {
   const live = (elapsedNow) => !overRef.current && !isSpectator && elapsedNow >= START_S;
   const elapsed = () => (performance.now() - anchor.current) / 1000;
   const doJump = useCallback(() => { audio.current.init(); if (live(elapsed())) pressJump(run.current); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const doSpin = useCallback(() => {
-    audio.current.init();
-    if (!live(elapsed())) return;
-    if (spin(run.current)) { audio.current.sfx.spin(); const P = run.current.pl; sceneRef.current && sceneRef.current.fx.ring(P.x, P.y + 0.4, P.z, 0xffe28a, 3.6); }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isSpectator) return undefined;
@@ -172,7 +170,6 @@ export default function SunshardIslands(props) {
       keys.current[c] = true;
       audio.current.init();
       if (c === "Space") doJump();
-      if (c === "KeyF" || c === "KeyK" || c === "KeyJ") doSpin();
       if (c === "KeyM") setMuted((m) => !m);
       if (c === "KeyR" && live(elapsed())) { respawn(run.current); }
     };
@@ -180,43 +177,43 @@ export default function SunshardIslands(props) {
     const blur = () => { keys.current = {}; releaseJump(run.current); joy.current = { x: 0, y: 0 }; };
     window.addEventListener("keydown", dn); window.addEventListener("keyup", up); window.addEventListener("blur", blur);
     return () => { window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up); window.removeEventListener("blur", blur); };
-  }, [isSpectator, doJump, doSpin]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isSpectator, doJump]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // the joystick: its middle and the finger, both turned into the game's frame
-  const stickRef = useRef(null), knobRef = useRef(null), stickId = useRef(null), stickC = useRef({ x: 0, y: 0 });
-  const stickMove = (e) => {
-    const p = toGame(e, rot.current), c = stickC.current;
+  // The screen, split in two for thumbs: a touch on the left half is the
+  // joystick — measured from wherever the thumb landed, so it needn't find
+  // the ring — and a touch on the right half turns the camera. A mouse drags
+  // the camera anywhere (the keys move).
+  const knobRef = useRef(null), stickId = useRef(null), stickC = useRef({ x: 0, y: 0 });
+  const stickMove = (p) => {
+    const c = stickC.current;
     let dx = p.x - c.x, dy = p.y - c.y;
     const l = Math.hypot(dx, dy), m = 46;
     if (l > m) { dx *= m / l; dy *= m / l; }
     if (knobRef.current) knobRef.current.style.transform = `translate(${dx}px,${dy}px)`;
     joy.current = { x: dx / m, y: dy / m };
   };
-  const stickDown = (e) => {
-    e.preventDefault(); e.stopPropagation();
-    audio.current.init();
-    stickId.current = e.pointerId;
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
-    const r = e.currentTarget.getBoundingClientRect();
-    stickC.current = toGame({ clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }, rot.current);
-    stickMove(e);
-  };
-  const stickUp = (e) => {
-    if (e.pointerId !== stickId.current) return;
+  const stickUp = () => {
     stickId.current = null; joy.current = { x: 0, y: 0 };
     if (knobRef.current) knobRef.current.style.transform = "";
   };
-  // drag anywhere else: turn the camera
   const drag = useRef(null);
   const padDown = (e) => {
     audio.current.init();
     if (e.pointerType === "touch" && !touchUi) setTouchUi(true);
-    if (e.target.closest && e.target.closest(".ss-btn, .ss-stick, .gf-float")) return;
+    if (e.target.closest && e.target.closest(".ss-btn, .gf-float")) return;
     const p = toGame(e, rot.current);
-    drag.current = { id: e.pointerId, x: p.x, y: p.y };
+    if (e.pointerType !== "mouse" && p.x < size.current.w / 2) {
+      if (stickId.current !== null) return;               // one thumb on the stick at a time
+      e.preventDefault();
+      stickId.current = e.pointerId; stickC.current = p; stickMove(p);
+    } else {
+      if (drag.current) return;
+      drag.current = { id: e.pointerId, x: p.x, y: p.y };
+    }
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
   };
   const padMove = (e) => {
+    if (e.pointerId === stickId.current) { stickMove(toGame(e, rot.current)); return; }
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
     const p = toGame(e, rot.current);
@@ -224,7 +221,10 @@ export default function SunshardIslands(props) {
     cam.current.pitch = clamp(cam.current.pitch + (p.y - d.y) * 0.004, -0.05, 1.3);
     d.x = p.x; d.y = p.y;
   };
-  const padUp = (e) => { if (drag.current && drag.current.id === e.pointerId) drag.current = null; };
+  const padUp = (e) => {
+    if (e.pointerId === stickId.current) stickUp();
+    if (drag.current && drag.current.id === e.pointerId) drag.current = null;
+  };
 
   // ── everyone else, from the room ───────────────────────────────────────────
   const toastRef = useRef(null);
@@ -250,7 +250,7 @@ export default function SunshardIslands(props) {
   }, [socket, myId, seated, coop]);
 
   // ── the HUD, and the moments ───────────────────────────────────────────────
-  const [hud, setHud] = useState({ hp: 3, have: 0, haveSet: [], gems: 0, compass: "", raceT: 0, rank: [], count: START_S, finished: false, teamDone: false });
+  const [hud, setHud] = useState({ hp: 3, have: 0, haveSet: [], compass: "", raceT: 0, rank: [], count: START_S, finished: false, teamDone: false });
   const [banner, setBanner] = useState(null);
   const [toast, setToast] = useState(null);
   const [flash, setFlash] = useState(0);
@@ -280,6 +280,7 @@ export default function SunshardIslands(props) {
       scene = createScene(THREE, W, { color: HUES[mySlot % HUES.length] });
     } catch (e) { setNoGl(true); return undefined; }
     sceneRef.current = scene;
+    window.__ss = () => ({ run: run.current, cam: cam.current, W });          // for tests, like Station 13's __s13
     const host = hostRef.current;
     host.insertBefore(scene.canvas, host.firstChild);
     scene.canvas.className = "ss-canvas";
@@ -289,7 +290,7 @@ export default function SunshardIslands(props) {
     const s0 = W.shards[0];
     cam.current.yaw = Math.atan2(-(s0.x - S.pl.x), -(s0.z - S.pl.z));
     const myHue = HUES[mySlot % HUES.length], tiedOnce = new Set();
-    let raf, last = performance.now(), sent = 0, lastHud = 0, beeped = -1, gemStreak = 0, gemT = 0, sizeW = 0, sizeH = 0, started = false;
+    let raf, last = performance.now(), sent = 0, lastHud = 0, beeped = -1, sizeW = 0, sizeH = 0, started = false;
     const frame = (now) => {
       raf = requestAnimationFrame(frame);
       if (document.hidden) { last = now; return; }
@@ -301,7 +302,7 @@ export default function SunshardIslands(props) {
       const el = (now - anchor.current) / 1000, go = el >= START_S;
       if (size.current.w !== sizeW || size.current.h !== sizeH) { sizeW = size.current.w; sizeH = size.current.h; scene.resize(sizeW, sizeH); }
       if (!go) { const n = Math.floor(el); if (n !== beeped && n >= 0) { beeped = n; A.sfx.beep(false); } }
-      else if (!started) { started = true; A.sfx.beep(true); A.play(true); shout("Sunshard Islands", "Follow the golden arrow"); }
+      else if (!started) { started = true; A.sfx.beep(true); A.play(true); shout("Sunshard Jump", "Follow the golden arrow"); }
       // where to go, turned to the camera
       const k = keys.current, c = cam.current;
       if (k.KeyQ) c.yaw += 1.9 * dt;
@@ -328,13 +329,11 @@ export default function SunshardIslands(props) {
         if (anchors.length && go) evs.push(...tether(S, W, anchors, bx, bz, dt / 2));
       }
       const fx = scene.fx, P = S.pl;
-      gemT -= dt; if (gemT <= 0) gemStreak = 0;
       const tiedNew = [], tiedAgain = [];       // tied to two at once: one toast
       for (const e of evs) {
         if (e.k === "jump") { A.sfx.jump(); fx.burst(P.x, P.y + 0.1, P.z, 6, 0xffffff, 2, 0.5); }
         else if (e.k === "dbl") { A.sfx.dbl(); fx.ring(P.x, P.y + 0.1, P.z, 0xbff0ff, 2.8); }
         else if (e.k === "land") { A.sfx.land(); fx.burst(P.x, P.y + 0.1, P.z, 8, 0xdddddd, 2.6, 0.6); }
-        else if (e.k === "gem") { gemStreak++; gemT = 1.2; A.sfx.gem(gemStreak); fx.burst(e.x, e.y, e.z, 6, 0xffe066, 2.4, 1); }
         else if (e.k === "shard") {
           A.sfx.shard(); fx.ring(e.x, e.y, e.z, e.col, 7); fx.burst(e.x, e.y, e.z, 50, e.col, 9, 5); fx.shake(0.4);
           shout(`Sunshard ${e.count} / ${SHARDS}`, e.count < SHARDS ? `Next: ${ZONES[Math.min(e.count, SHARDS - 1)].name}` : "The temple gate is open!");
@@ -378,7 +377,7 @@ export default function SunshardIslands(props) {
         const age = Math.min(0.15, (now - r.at) / 1000), d = r.d, kk = Math.min(1, dt * 12);
         d.x += (r.x + r.vx * age - d.x) * kk; d.y += (r.y + (r.g ? 0 : r.vy * age) - d.y) * kk; d.z += (r.z + r.vz * age - d.z) * kk;
         let df = r.f - d.face; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2; d.face += df * kk;
-        rs.push({ id: r.id, name: r.name, col: r.col, x: d.x, y: d.y, z: d.z, face: d.face, speed: Math.hypot(r.vx, r.vz), onG: !!r.g, vy: r.vy, vx: r.vx, vz: r.vz, gliding: !!r.gl, atk: !!r.a, inv: !!r.iv });
+        rs.push({ id: r.id, name: r.name, col: r.col, x: d.x, y: d.y, z: d.z, face: d.face, speed: Math.hypot(r.vx, r.vz), onG: !!r.g, vy: r.vy, vx: r.vx, vz: r.vz, gliding: !!r.gl, inv: !!r.iv });
       }
       // the ropes, tail to tail down the line: mine from my run, a friend's
       // to the next friend from what that friend says (rp: prev / next tied)
@@ -409,9 +408,9 @@ export default function SunshardIslands(props) {
         sent = now;
         const r1 = (v) => Math.round(v * 100) / 100;
         socket.emit("isl:pos", { code: roomCode, x: r1(P.x), y: r1(P.y), z: r1(P.z), f: r1(P.face), vx: r1(P.vx), vy: r1(P.vy), vz: r1(P.vz),
-          g: P.onG ? 1 : 0, gl: P.gliding ? 1 : 0, a: P.atk > 0 ? 1 : 0, iv: P.inv > 0 ? 1 : 0, hp: P.hp,
+          g: P.onG ? 1 : 0, gl: P.gliding ? 1 : 0, iv: P.inv > 0 ? 1 : 0, hp: P.hp,
           rp: coop ? tiedTo(chain, myId).reduce((m, id) => m | (ropeState(S, id) ? (id < myId ? 1 : 2) : 0), 0) : 0,
-          sh: bits(S.shards), gm: S.gemCount, p: S.maxPath, fin: S.finished ? Math.round((el - START_S) * 10) / 10 : null });
+          sh: bits(S.shards), p: S.maxPath, fin: S.finished ? Math.round((el - START_S) * 10) / 10 : null });
       }
       if (now - lastHud > 120) {
         lastHud = now;
@@ -423,7 +422,7 @@ export default function SunshardIslands(props) {
         const me = { id: myId, name: "You", col: null, sh: S.shards.size, p: S.maxPath, fin: S.finished ? el : null, me: true };
         const all = [me, ...[...remotes.current.values()].map((r) => ({ id: r.id, name: r.name, col: r.col, sh: fromBits(r.sh).size, p: r.p, fin: r.fin }))];
         all.sort((a, b) => (a.fin != null) !== (b.fin != null) ? (a.fin != null ? -1 : 1) : a.fin != null ? a.fin - b.fin : b.sh - a.sh || b.p - a.p);
-        setHud({ hp: P.hp, have: have.size, haveSet: [...have], gems: S.gemCount, compass, raceT: Math.max(0, el - START_S), rank: all.slice(0, 5),
+        setHud({ hp: P.hp, have: have.size, haveSet: [...have], compass, raceT: Math.max(0, el - START_S), rank: all.slice(0, 5),
           count: el < START_S + 1 ? el : null, finished: S.finished, teamDone, mine: S.shards.size });
       }
     };
@@ -434,6 +433,7 @@ export default function SunshardIslands(props) {
       try { host.removeChild(scene.canvas); } catch { /* gone */ }
       scene.dispose();
       sceneRef.current = null;
+      delete window.__ss;
     };
   }, [THREE, isSpectator, W, socket, roomCode, coop, myId, durationSeconds, setScore, say, shout, mySlot]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -446,7 +446,7 @@ export default function SunshardIslands(props) {
   return (
     <>
       <GameFrame
-        gameName="Sunshard Islands" badge="🏝️ SUNSHARD ISLANDS"
+        gameName="Sunshard Jump" badge="🏝️ SUNSHARD JUMP"
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={isSpectator ? [{ label: "Score", value: Number(spectatorWatching?.score ?? 0).toLocaleString() }] : []}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
@@ -476,7 +476,7 @@ export default function SunshardIslands(props) {
                   </div>
                   <div className="ss-compass"><span className="ss-arrow" ref={arrowRef}><b /></span><span>{hud.compass}</span></div>
                 </div>
-                <div className="ss-stats"><div><span className="ss-gemn">{hud.gems}</span> gems</div><small>{fmt(hud.raceT)}{best ? ` · best ${fmt(best)}` : ""}</small></div>
+                <div className="ss-stats"><small>{fmt(hud.raceT)}{best ? ` · best ${fmt(best)}` : ""}</small></div>
                 {hud.rank.length > 1 && (
                   <ol className="ss-rank" aria-label={coop ? "Your team" : "The race"}>
                     {hud.rank.map((r, i) => (
@@ -500,11 +500,7 @@ export default function SunshardIslands(props) {
               </div>
               {touchUi && (
                 <>
-                  <div className="ss-stick" ref={stickRef} onPointerDown={stickDown} onPointerMove={(e) => { if (e.pointerId === stickId.current) stickMove(e); }}
-                    onPointerUp={stickUp} onPointerCancel={stickUp} aria-label="Move">
-                    <div className="ss-knob" ref={knobRef} />
-                  </div>
-                  <button type="button" className="ss-btn ss-spin" aria-label="Spin attack" onPointerDown={press(doSpin)}>SPIN</button>
+                  <div className="ss-stick" aria-hidden="true"><div className="ss-knob" ref={knobRef} /></div>
                   <button type="button" className="ss-btn ss-jump" aria-label="Jump (hold to glide)"
                     onPointerDown={press(doJump)} onPointerUp={() => releaseJump(run.current)} onPointerCancel={() => releaseJump(run.current)}>JUMP</button>
                 </>
@@ -515,7 +511,7 @@ export default function SunshardIslands(props) {
       </GameFrame>
       {eng.gameOver && !isSpectator && (
         <GameOver eng={eng} me={currentUser}
-          extra={`${run.current.finished ? `Home in ${fmt((durationSeconds - (run.current.finishLeft || 0)) - START_S)}` : `${plural(hud.have, "shard")}`} · ${run.current.gemCount} / ${W.gems.length} gems${best ? ` · best ${fmt(best)}` : ""}`}
+          extra={`${run.current.finished ? `Home in ${fmt((durationSeconds - (run.current.finishLeft || 0)) - START_S)}` : `${plural(hud.have, "shard")}`}${best ? ` · best ${fmt(best)}` : ""}`}
           together={coop ? { reached: teamDoneRef.current, goal: "light the Sky Temple", unit: "shards", mates } : null} />
       )}
     </>

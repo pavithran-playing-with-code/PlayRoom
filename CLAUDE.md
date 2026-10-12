@@ -188,9 +188,12 @@ There is no test runner. What works:
   Hiding where it saw you go in is no hiding — the original does the same.
   `check-manor.mjs` has a bot get out of most seeded runs;
   `check-manor-world.js` tests the server with a fake database.
-- **Sunshard Islands** is a 3D platformer (three.js r128, a lazy chunk):
-  islands from `sunshardWorld.js`, rules in `sunshardSim.js`, drawing in
-  `sunshardScene.js`. Each phone relays its explorer (`isl:pos`); together,
+- **Sunshard Jump** (slug `sunshard`) is a 3D platformer, all jumping —
+  no coins, no attack; a slime is beaten by landing on it (three.js r128,
+  a lazy chunk): islands from `sunshardWorld.js`, rules in `sunshardSim.js`,
+  drawing in `sunshardScene.js` (a sky per zone, `THEMES`). On a phone the
+  left half of the screen is the joystick, the right half the camera.
+  Each phone relays its explorer (`isl:pos`); together,
   the shard bits are unioned, one of you home wins for all, and you're tied
   tail to tail in seat order (`tether`: each phone holds back only its own
   explorer, never in the air; the rope snaps and re-ties).

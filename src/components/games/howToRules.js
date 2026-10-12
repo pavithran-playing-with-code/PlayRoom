@@ -170,10 +170,10 @@ export const HOW_TO = {
     tip: "Aim to send coins into the corner pockets, not straight at them.",
   },
   manor: {
-    name: "Nana's Lullaby",
-    goal: "Find your keys, then get out the front door — there's no map.",
-    steps: ["Nana's note gives a riddle for each key's room. A sign over every doorway names the room beyond.", "Each key sits in a music box: follow the tune — louder is closer, and it comes from the way to go.", "While Nana hums, you can move. When the humming stops, freeze — she hears every step.", "Use: open doors, hide in beds and wardrobes, flip light switches. ✏️ chalks the wall in front of you (friends see it too).", "With every key the lights die and she stops humming for good — she hears every step. Run for the front door!"],
-    tip: "Learn the way back to the hall as you go: you'll need it at the end.",
+    name: "Station 13",
+    goal: "Find 4 fuses, bring the power back, and get out through the elevator.",
+    steps: ["Follow the green signs. Every fuse you take brings the lights back to another part of the building.", "It hunts by sound and sight: running is loud, the flashlight shows you, the dark hides you. Lit areas are safe to read, not safe to stand in.", "When it notices you, break its line of sight — round a corner, through a door.", "USE hides you in a locker. It can still find you if it saw you go in.", "Your flashlight drains, faster when it's close. Batteries lie about. With 4 fuses, run for the elevator."],
+    tip: "Walk when you can. A running step carries three times as far.",
   },
 };
 

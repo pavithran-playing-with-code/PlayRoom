@@ -174,16 +174,22 @@ There is no test runner. What works:
   everyone else's car is eased toward that and drawn with the same effects.
   Laps follow the room clock (`lapsFor`). The score sync still decides the
   result.
-- **Nana's Lullaby** (slug `manor`) has no map, on purpose: the Entrance
-  Hall is the middle room of the bottom row with the front door in its
-  wall (`hallOf`, `frontDoor` in `manorCore.mjs`), a sign over every
-  doorway names the room beyond, Nana's note gives a riddle per key
-  (`RIDDLES`), and each key's music box is followed by ear (`tuneFor`:
-  louder by the walk, panned toward the next visible step). Chalk marks
-  are shared (`manor:chalk`). A side with every key is `loud` — she hears
-  them anywhere — and together the house goes dark (`huntNight`). Caught
-  online, you wake deep in the house (`house.respawn`), never by the door.
-  `check-manor.mjs` has a bot find every key by the tune alone.
+- **Station 13** (slug `manor`) is a first-person hospital horror in
+  three.js r128 (a lazy chunk), ported from a single-file original: the
+  rules are `src/components/horror/s13Core.mjs` (the layout from the seed,
+  `genStation`; the monster, `stepMonster`: asleep, patrol, investigate,
+  notice — a stare you can break — chase, rear and lunge), shared by the
+  solo run (`s13Sim.js`, `pages/Manor.jsx`), the room's phones
+  (`s13Client.js`) and the server; `s13Scene.js` draws, `s13Audio.js`
+  sounds. Online the server runs the monsters (`config/manorWorld.js`,
+  `monstersFor`: 1–3 for 8 players); each phone moves itself and reports
+  (`manor:me`), lockers are asked for (`manor:use`). Each side hunts its
+  own 4 fuses in its colour (together: one set), every fuse lights two
+  zones for everyone, the first side into the elevator wins. Caught online,
+  you're back in the Main Hall in a moment with the monsters sent off.
+  Hiding where it saw you go in is no hiding — the original does the same.
+  `check-manor.mjs` has a bot get out of most seeded runs;
+  `check-manor-world.js` tests the server with a fake database.
 - **Sunshard Islands** is a 3D platformer (three.js r128, a lazy chunk):
   islands from `sunshardWorld.js`, rules in `sunshardSim.js`, drawing in
   `sunshardScene.js`. Each phone relays its explorer (`isl:pos`); together,

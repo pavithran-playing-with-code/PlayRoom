@@ -84,7 +84,7 @@ const MIN_PER_TEAM = 2;
 const MIN_TEAM_PLAYERS = MIN_PER_TEAM * 2;
 
 // Co-op: everyone on one side against the game itself. Only the games with a
-// side to be on — Hollow Manor and the together games (config/togetherWorld.js)
+// side to be on — Station 13 and the together games (config/togetherWorld.js)
 // — and a world for more than four gets crowded.
 // maze: one maze, a key, a door (MazeRunner.jsx); and the shared boards
 // (config/coopBoard.js): Memory, Mahjong, Number Rush, Pipes, Word Rush; and
@@ -440,8 +440,8 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
     );
     push(req, req.params.code, "room:started", { code: req.params.code });
     await announcePlaying(req, room.id, req.params.code, true);
-    // Hollow Manor's house is run by the server: build it now, so its clock
-    // and its ghosts start with the match rather than with the first phone.
+    // Station 13's hospital is run by the server: build it now, so its clock
+    // and its monsters start with the match rather than with the first phone.
     manor.worldFor(req.params.code).catch((e) => console.error("manor start:", e.message));
     together.worldFor(req.params.code).catch((e) => console.error("together start:", e.message));
     res.json({ success: true, message: "Game started!" });
@@ -526,8 +526,8 @@ router.patch("/:code/score", verifyToken, async (req, res, next) => {
     );
     if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
     const roomId = rooms[0].id;
-    // Hollow Manor's scores are kept by the server, from what happened in the
-    // house. A phone posting one would be a phone deciding its own result.
+    // Station 13's scores are kept by the server, from what happened in the
+    // building. A phone posting one would be a phone deciding its own result.
     if (serverScored(rooms[0].game_slug))
       return res.status(409).json({ success: false, message: "This game's scores are kept by the server." });
 
@@ -774,10 +774,10 @@ router.post("/:code/leave", verifyToken, async (req, res, next) => {
     const sid = req.body && typeof req.body.sid === "string" ? req.body.sid : null;
     if (heldElsewhere(req.app.get("io"), req.user.id, req.params.code, sid)) return res.json({ success: true, kept: true });
 
-    // Walking out of Hollow Manor mid-match. The house is the server's, not
+    // Walking out of Station 13 mid-match. The building is the server's, not
     // the host's, so nobody else's match ends with you. Your seat stays, so
-    // the result is still written down: you count as caught (and in co-op,
-    // that loses it for everyone — the page warns before you go). The same
+    // the result is still written down: your side's score so far (in co-op,
+    // your friends play on, and what you found together counts). The same
     // for the together games: your side cooks / defuses / defends on without you.
     if (serverScored(room.game_slug) && room.status === "in_progress" && !mine[0].is_spectator) {
       if (room.game_slug === manor.GAME) manor.forfeit(req.params.code, req.user.id);

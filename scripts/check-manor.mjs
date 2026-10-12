@@ -1,722 +1,230 @@
-// scripts/check-manor.mjs — the rules of NANA'S LULLABY, with no browser.
+// scripts/check-manor.mjs — the rules of STATION 13 (slug "manor"), with no browser.
 //
 //   node scripts/check-manor.mjs
 //
-// The house must always be finishable (every key and the front door
-// reachable) and learnable without a map (the hall in the middle of the
-// bottom row, every key in a room of its own), Nana must behave as the page
-// tells you she does — doors, hiding spots, the run at the end and all — a
-// bot following nothing but the music boxes must find every key, and a bot
-// that walks the rooms, opening doors as it goes, must be able to get out.
+// The hospital must always be finishable (every fuse, battery, locker and the
+// elevator reachable from the Main Hall) and the same on every phone for a
+// seed; the monster must behave as the page says it does (asleep at first,
+// it notices you, stares, chases, loses you, hears a run and not a creep,
+// finds you in a locker if it lingers); and a bot that plays like a person —
+// walk to the fuses, break its sight and creep off, out the elevator — must
+// get out of most runs, and of every run while the monster sleeps.
 import {
-  HURDLE, BEAM, FLOOR, WALL, DOOR, SPOT, INTRO_S, nightSize, dmap, floors, los, newNight, tick, begin,
-  jump, doAction, actionLabel, toggleCrouch, toggleLight, toggleRun, mvOK, lit, seesYou, ghostSpeed, chalk, canChalk,
-} from "../src/components/horror/manorSim.js";
-import {
-  rng, newGhost, ghostTarget, stepGhost, buildHouse,
-  newHum, stepHum, HUM_S, LISTEN_S, LISTEN_GRACE, HEAR_R, roomAt, GRACE_S, sendAway, stepLamps, lampSwitches,
-  hallRoom, spawnOf, RIDDLES, ROOM_KINDS, MARKS_MAX, toggleMark, huntNight, tuneAt,
-} from "../src/components/horror/manorCore.mjs";
+  N, NEED, START, EXIT, SLEEP_S, NOTICE_S, LOSE_S, NOISE_RUN, HIDE_FIND_S, POW, LIT_START, WALK,
+  genStation, placeItems, placeMonsters, monstersFor, dmap, canAt, los, litZones, zoneAt, stepMonster, newMonster, setTarget,
+  newPlayer, stepPlayer, drainTorch, lockerNear, atExit, rng,
+} from "../src/components/horror/s13Core.mjs";
+import { newRun, tick, interact } from "../src/components/horror/s13Sim.js";
 
 let fails = 0;
 const check = (name, ok, extra = "") => {
   if (!ok) fails++;
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`);
 };
-const DT = 1 / 60;
-const still = { ix: 0, iy: 0, turn: 0, shift: false };
-const run = (s, secs, inp = still) => { for (let t = 0; t < secs; t += DT) tick(s, inp, DT); };
+const DT = 1 / 30;
 
-// Through the front door and standing in the Entrance Hall, with the thing
-// parked harmlessly inside a wall unless a test wants it.
-function inside(seed = 1, night = 1) {
-  const s = newNight(seed, night);
-  begin(s);
-  run(s, 1);
-  s.events.length = 0;
-  s.grace = 0;                    // the moment's grace after the door locks: its own check below
-  return s;
-}
-const park = (s) => { s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9; };
-
-// ── the house ────────────────────────────────────────────────────────────────
+// ── the building ─────────────────────────────────────────────────────────────
 {
-  let ok = true, why = "", minRelics = 99, sameAll = true;
-  for (let seed = 1; seed <= 150; seed++) {
-    for (let night = 1; night <= 7; night++) {
-      const s = newNight(seed, night), { N } = s;
-      if (JSON.stringify(newNight(seed, night).g) !== JSON.stringify(s.g)) sameAll = false;
-      if (N !== nightSize(night).N || N % 8 !== 1) { ok = false; why = `size ${N}`; }
-      const e = s.exitT, d = dmap(s.g, N, e.x, N - 2);
-      const isDoor = (x, y) => x === e.x && y === e.y;
-      const open = floors(s.g, N).filter(([x, y]) => !isDoor(x, y));
-      if (open.some(([x, y]) => d[x + y * N] < 0)) { ok = false; why = `seed ${seed} night ${night}: sealed room`; }
-      for (let i = 0; i < N; i++) {
-        for (const [x, y] of [[i, 0], [i, N - 1], [0, i], [N - 1, i]]) {
-          if ((s.g[y][x] === FLOOR || s.g[y][x] === DOOR) && !isDoor(x, y)) { ok = false; why = `seed ${seed} night ${night}: hole in the outer wall at ${x},${y}`; }
-        }
-      }
-      // the front door: in the bottom wall of the Entrance Hall, the middle room of the bottom row
-      const RN = (N - 1) / 8, hall = hallRoom(RN);
-      if (e.y !== N - 1 || roomAt(N, e.x + 0.5, N - 1.5) !== hall || s.rooms[hall] !== 0) { ok = false; why = `seed ${seed} night ${night}: the front door isn't in the Entrance Hall`; }
-      // doors sit in the walls between rooms; hiding spots stand in a room, with floor beside them
-      for (const k of s.env.doors) {
-        const x = k % N, y = (k / N) | 0;
-        if (x % 8 && y % 8) { ok = false; why = `door inside a room at ${x},${y}`; }
-        if (s.g[y][x] !== DOOR) { ok = false; why = `door at ${x},${y} not shut to start`; }
-      }
-      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-        if (s.g[y][x] !== SPOT) continue;
-        if (!(x % 8 && y % 8)) { ok = false; why = `hiding spot in a wall at ${x},${y}`; }
-        for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) {
-          if ((a || b) && s.g[y + b][x + a] !== FLOOR) { ok = false; why = `hiding spot at ${x},${y} touches something at its side or corner — a gap you can't pass`; }
-        }
-      }
-      if (s.g[e.y][e.x] !== FLOOR) { ok = false; why = `seed ${seed} night ${night}: the front door isn't open to walk in by`; }
-      for (const r of s.relics) if (d[(r.x | 0) + (r.y | 0) * N] < 9) { ok = false; why = `relic too near the start`; }
-      // no map: every key in a room of its own, never the hall, with a riddle for that room
-      const keyRooms = s.relics.map((r) => roomAt(N, r.x, r.y));
-      if (new Set(keyRooms).size !== keyRooms.length || keyRooms.includes(hall)) { ok = false; why = `seed ${seed} night ${night}: keys share a room, or one is in the hall`; }
-      if (s.riddles.length !== s.relics.length || s.riddles.some((q, i) => q !== RIDDLES[s.rooms[keyRooms[i]]])) { ok = false; why = `seed ${seed} night ${night}: a riddle for the wrong room`; }
-      minRelics = Math.min(minRelics, s.relics.length);
-      if (Object.values(s.obst).some((o) => o !== HURDLE)) { ok = false; why = "a low beam (there's no crouch any more)"; }
-      if (!s.spots.length) { ok = false; why = "nowhere to hide"; }
-      for (const k in s.obst) {
-        const x = k % N, y = (k / N) | 0, g = s.g;
-        const doorway = (!g[y][x - 1] && !g[y][x + 1] && g[y - 1][x] && g[y + 1][x]) || (!g[y - 1][x] && !g[y + 1][x] && g[y][x - 1] && g[y][x + 1]);
-        if (!doorway || (x % 8 && y % 8) || s.env.doors.has(+k)) { ok = false; why = `obstacle at ${x},${y} not in an open doorway`; }
-      }
-      for (const r of [...s.relics, ...s.cells]) if ((r.x | 0) % 8 === 0 || (r.y | 0) % 8 === 0) { ok = false; why = `a pickup in a doorway`; }
-      if (s.need !== s.relics.length) { ok = false; why = `need ${s.need} vs ${s.relics.length} relics`; }
+  let bad = [], same = true;
+  for (let seed = 1; seed <= 300; seed++) {
+    const st = genStation(seed);
+    const { items, lockers } = placeItems(st, seed, [{ key: "a", need: NEED }, { key: "b", need: NEED }], 2);
+    const d = dmap(st.g, START.x | 0, START.y | 0);
+    const reach = (x, y) => d[(x | 0) + (y | 0) * N] >= 0;
+    const exitNear = [[-1, 0], [0, -1], [0, 1]].some(([a, b]) => reach(EXIT.x + a, EXIT.y + b));
+    if (!canAt(st.g, START.x, START.y)) bad.push(`${seed}: start in a wall`);
+    if (!items.every((it) => reach(it.x, it.y))) bad.push(`${seed}: an item out of reach`);
+    if (!lockers.every((l) => reach(l.x, l.y))) bad.push(`${seed}: a locker out of reach`);
+    if (!exitNear) bad.push(`${seed}: no way to the elevator`);
+    if (lockers.length !== 14) bad.push(`${seed}: ${lockers.length} lockers`);
+    if (items.filter((it) => it.t === "f" && it.side === "a").length !== NEED || items.filter((it) => it.t === "f" && it.side === "b").length !== NEED) bad.push(`${seed}: fuses`);
+    if (seed % 50 === 0) {
+      const again = genStation(seed);
+      if (JSON.stringify(again.g) !== JSON.stringify(st.g) || JSON.stringify(placeItems(again, seed).items) !== JSON.stringify(placeItems(st, seed).items)) same = false;
     }
   }
-  check("1050 houses: one piece, walled in, the front door in the Entrance Hall, doors in the walls, hiding spots in the rooms, a key per room with its riddle", ok, why);
-  check("the same seed builds the same house", sameAll);
-  check("every house has relics to find", minRelics >= 3, `fewest ${minRelics}`);
-  check("small houses: 3×3 rooms for two nights, then 4×4, never more", nightSize(1).N === 25 && nightSize(2).N === 25 && nightSize(3).N === 33 && nightSize(9).N === 33);
-  check("a riddle for every kind of room", RIDDLES.length === ROOM_KINDS.length && RIDDLES.every((q) => q.length > 10));
-  // online houses: the same shape, everyone starting inside the front door
-  let online = true, owhy = "";
-  for (let seed = 1; seed <= 200; seed++) for (const n of [1, 3, 6, 8]) {
-    const sides = Array.from({ length: n }, (_, i) => ({ key: "p" + i, need: 3 }));
-    const h = buildHouse(seed, { players: n, sides });
-    const RN = (h.N - 1) / 8, sp = spawnOf(h.N);
-    if (h.spawn.x !== sp.x || h.spawn.y !== sp.y || roomAt(h.N, sp.x, sp.y) !== hallRoom(RN) || h.g[h.exitT.y][h.exitT.x] !== WALL) { online = false; owhy = `house ${seed} x${n}: the start isn't inside the front door`; }
-    if (h.relics.some((r) => roomAt(h.N, r.x, r.y) === hallRoom(RN))) { online = false; owhy = `house ${seed} x${n}: a key in the hall`; }
-    const d = dmap(h.g, h.N, sp.x | 0, sp.y | 0);
-    if (d[(h.respawn.x | 0) + (h.respawn.y | 0) * h.N] < 12) { online = false; owhy = `house ${seed} x${n}: caught, you'd wake up near the front door`; }
-    if (n <= 6 ? h.N !== 25 : h.N !== 33) { online = false; owhy = `house x${n}: size ${h.N}`; }
-  }
-  check("800 online houses: start inside the front door, no keys in the hall, caught you wake up far from the door, 3×3 (4×4 for 7+)", online, owhy);
+  check("300 seeds: every fuse, battery, locker and the elevator reachable from the Main Hall", !bad.length, bad.slice(0, 4).join("; "));
+  check("a seed is the same building on every phone", same);
+  const a = genStation(7), b = genStation(8);
+  check("…and different seeds are different buildings", JSON.stringify(a.g) !== JSON.stringify(b.g) || JSON.stringify(placeItems(a, 7).items) !== JSON.stringify(placeItems(b, 8).items));
+  check("the Main Hall is where you start", zoneAt(a, START.x, START.y) === "hall");
+  check("it's lit from the start; each fuse lights two more zones; all four light them all",
+    LIT_START.every((z) => litZones(0).has(z)) && litZones(1).size === litZones(0).size + 2 && POW.every((z) => litZones(NEED).has(z)));
+  check("more players, more batteries", placeItems(a, 7, undefined, 4).items.filter((i) => i.t === "b").length > placeItems(a, 7).items.filter((i) => i.t === "b").length);
+  check("monsters: 1 to 3 players one, 4 to 6 two, 7 or 8 three", [1, 3, 4, 6, 7, 8].map(monstersFor).join() === "1,1,2,2,3,3");
+  const ms = placeMonsters(a, 7, 3);
+  check("…and they start apart, far from the Main Hall", ms.length === 3 && ms.every((m) => Math.hypot(m.x - START.x, m.y - START.y) > 8));
 }
 
-// ── going in ─────────────────────────────────────────────────────────────────
+// ── your body ────────────────────────────────────────────────────────────────
 {
-  const s = newNight(3, 1);
-  check("a night opens on Nana's note: a riddle for each key", s.mode === "intro" && s.introT === INTRO_S && s.riddles.length === s.need);
-  run(s, INTRO_S + 0.1);
-  check("the dark falls by itself after the countdown", s.mode === "play" && s.P.entering);
-  const t = newNight(3, 1);
-  begin(t);
-  check("or when you tap", t.mode === "play");
-  let secs = 0;
-  while (t.P.entering && secs < 5) { tick(t, still, DT); secs += DT; }
-  check("you walk yourself in through the front door", !t.P.entering && t.P.y <= t.N - 1.9 && roomAt(t.N, t.P.x, t.P.y) === hallRoom((t.N - 1) / 8), `${secs.toFixed(2)}s`);
-  check("and it slams shut behind you", t.g[t.exitT.y][t.exitT.x] === WALL && t.events.some((e) => e.name === "gateSlam"));
-  check("the thing is held a moment when it slams", t.G.stun > 2.5);
-}
-
-// ── walking ──────────────────────────────────────────────────────────────────
-{
-  const s = inside(5);
-  park(s);
-  s.P.fa = Math.PI / 2;                   // face the shut front door
-  const y0 = s.P.y;
-  run(s, 1, { ...still, iy: -1 });
-  check("walls stop you", s.P.y <= s.N - 1 - 0.28 + 1e-9 && s.P.y >= y0, `y ${s.P.y.toFixed(2)}`);
-
-  // nothing to jump in Nana's house: every doorway is clear
-  let clear = true;
-  for (let night = 1; night <= 6; night++) for (let seed = 1; seed <= 20; seed++) if (Object.keys(newNight(seed, night).obst).length) clear = false;
-  check("no barricades: every doorway in Nana's house is clear", clear);
-
-  const j = inside(5); park(j);
-  toggleCrouch(j);
-  jump(j);
-  check("no jumping from a crouch", j.P.vz === 0);
-}
-
-// ── stamina, noise, light ────────────────────────────────────────────────────
-{
-  const s = inside(7); park(s);
-  toggleRun(s);
-  run(s, 3, { ...still, iy: -1, turn: 0.3 });
-  check("running drains stamina", s.P.stam < 0.5, s.P.stam.toFixed(2));
-  run(s, 3, { ...still, iy: -1, turn: 0.3 });
-  check("run it dry and you are tired for a moment", s.P.stam >= 0 && (s.P.stamCool > -1));
-  toggleRun(s);
-  run(s, 3);
-  check("standing still gets it back", s.P.stam > 0.9);
-
-  const n = inside(7); park(n);
-  run(n, 0.2, { ...still, iy: -1, shift: true });
-  check("running is loud (8 tiles)", n.P.noiseR === 8);
-  run(n, 0.2, { ...still, iy: -1 });
-  check("walking is quieter (3)", n.P.noiseR === 3);
-  toggleCrouch(n); run(n, 0.5, { ...still, iy: -1 });
-  check("creeping is nearly silent (1)", n.P.noiseR === 1);
-  toggleCrouch(n); run(n, 0.3);
-  check("standing still is silent", n.P.noiseR === 0);
-
-  // no batteries any more: the light never dies
-  const b = inside(8); park(b);
-  run(b, 60);
-  check("your light never dies, and there are no batteries to hunt for", b.P.bat === 1 && lit(b) && b.cells.length === 0);
-}
-
-// ── the thing ────────────────────────────────────────────────────────────────
-// Put it in a long straight hall with you, and watch. Rooms are only 7 wide,
-// so the hall is cut: a row through two rooms, cleared of furniture, with the
-// doorway between them open.
-function hall(seed = 11) {
-  const s = inside(seed);
-  const y = 4, x0 = 1, x1 = 13;
-  for (let x = x0; x <= x1; x++) { s.g[y][x] = FLOOR; delete s.obst[x + y * s.N]; }
-  Object.assign(s.P, { x: x0 + 0.5, y: y + 0.5 });
-  s.G.x = x0 + 8.5; s.G.y = y + 0.5; s.G.st = "patrol"; s.G.stun = 0;
-  s.P.fa = 0; s.P.lastTile = -1;
-  return { s, y, x0, x1 };
-}
-{
-  const { s } = hall();
-  check("(set-up) torch on, 8 tiles apart down a hall: out of sight", !seesYou(s));
-  s.G.x -= 3.5;
-  check("4.5 tiles with the torch on: it sees you", seesYou(s));
-  toggleLight(s);
-  check("torch off at the same distance: it does not", !seesYou(s));
-  toggleLight(s);
-  run(s, DT);
-  check("when it first sees you it freezes a beat — your warning", s.G.st === "hunt" && s.G.stun > 1 && s.events.some((e) => e.name === "spotted"));
-  const gx = s.G.x;
-  run(s, 0.9);
-  check("…and does not move while frozen", Math.abs(s.G.x - gx) < 1e-9);
-  run(s, 0.5);
-  check("then it comes", s.G.x < gx);
-  check("hunting speed is 2.2, plus a little per relic and per night", Math.abs(ghostSpeed(s) - 2.2) < 1e-9);
-  s.count = 3; s.night = 2;
-  check("…faster with relics taken and nights survived", Math.abs(ghostSpeed(s) - (2.2 + 0.36 + 0.08)) < 1e-9);
-  s.count = 9; s.night = 9;
-  check("…but never faster than you can run", ghostSpeed(s) === 3 && 3 < 4.2);
-  s.count = 0; s.night = 1;
-  run(s, 4);
-  check("stand in the open and it gets you", s.mode === "dead" && s.events.some((e) => e.name === "caught"));
-
-  // lost you: break the line for 5 seconds
-  const h2 = hall(40).s;
-  h2.G.x -= 4;                          // 4 tiles: inside torch range
-  run(h2, DT);
-  h2.G.stun = 0;
-  check("(set-up) hunting", h2.G.st === "hunt");
-  Object.assign(h2.P, { x: h2.far[0] + 0.5, y: h2.far[1] + 0.5 });   // far away, rooms between
-  h2.G.stun = 1e9;                      // hold it still so only sight matters
-  run(h2, 5.2);
-  check("out of sight for five seconds, it loses you", h2.G.st === "search" && /lost you/.test(h2.msg), h2.G.st);
-
-  // noise: a patrolling thing within 8 tiles hears you run
-  const h3 = hall(60).s;
-  toggleLight(h3);
-  h3.G.x = h3.P.x + 6; h3.G.st = "patrol";
-  h3.g[h3.G.y | 0][(h3.P.x | 0) + 3] = WALL;  // a wall between, so it cannot see
-  run(h3, 0.1, { ...still, iy: -1, shift: true, turn: 0 });
-  check("run within earshot and it comes looking", h3.G.st === "search");
-}
-
-// ── your light ───────────────────────────────────────────────────────────────
-{
-  const s = inside(21); park(s);
-  check("your light starts on", lit(s));
-  toggleLight(s);
-  check("F (or the Light button) turns it off", !lit(s) && /Light off/.test(s.msg));
-  // Nana four tiles away down a clear hall: she sees you lit, not in the dark
-  const { s: h } = hall(80);
-  h.G.st = "patrol"; h.G.stun = 0; h.G.x = h.P.x + 4;
-  const d = Math.hypot(h.G.x - h.P.x, h.G.y - h.P.y);
-  const litSees = seesYou(h);
-  toggleLight(h);
-  const darkSees = seesYou(h);
-  check("with your light on she sees you down the hall; off, she doesn't", litSees && !darkSees, `${d.toFixed(1)} tiles`);
-  toggleLight(h);
-  check("…and on again", lit(h) && /Light on/.test(h.msg));
-}
-
-// ── the rooms' lights ────────────────────────────────────────────────────────
-{
-  // she's parked in the far corner: (0.5, 0.5) would be inside a room
-  const away = (q) => { q.G.x = q.N - 0.5; q.G.y = q.N - 0.5; q.G.stun = 1e9; };
-  // stand at a room's switch, facing it
-  const atSwitch = (q, room = null) => {
-    for (const [k, v] of q.env.switches) {
-      if (room !== null && v.room !== room) continue;
-      const wx = k % q.N, wy = Math.floor(k / q.N);
-      Object.assign(q.P, { x: v.fx + 0.5, y: v.fy + 0.5, fa: Math.atan2(wy - v.fy, wx - v.fx), lastTile: -1 });
-      return v.room;
-    }
-    return null;
-  };
-  const s = inside(90); away(s);
-  const rooms = [...s.env.switches.values()].map((v) => v.room).sort((a, b) => a - b);
-  const placed = [...s.env.switches.entries()].every(([k, v]) => s.g[Math.floor(k / s.N)][k % s.N] === WALL && s.g[v.fy][v.fx] === FLOOR
-    && roomAt(s.N, v.fx + 0.5, v.fy + 0.5) === v.room && Math.abs(k % s.N - v.fx) + Math.abs(Math.floor(k / s.N) - v.fy) === 1);
-  check("every room has one light switch, on a wall beside a floor tile in it", rooms.join() === "0,1,2,3,4,5,6,7,8" && placed);
-  let allRooms = true, why = "";
-  for (let seed = 1; seed <= 150; seed++) for (const night of [1, 3, 5]) {
-    const q = newNight(seed, night);
-    if (q.env.switches.size !== q.lamps.length) { allRooms = false; why = `seed ${seed} night ${night}: ${q.env.switches.size} of ${q.lamps.length}`; }
-  }
-  for (let seed = 1; seed <= 150; seed++) for (const n of [1, 2, 4]) {
-    const hh = buildHouse(seed, { players: Array.from({ length: n }, (_, i) => ({ id: i + 1 })), sides: [{ key: "a", members: Array.from({ length: n }, (_, i) => i + 1) }] });
-    const sw = lampSwitches(hh.g, hh.N, new Set(hh.doors), hh.exitT);
-    if (sw.size !== hh.lamps.length) { allRooms = false; why = `house ${seed} x${n}: ${sw.size} of ${hh.lamps.length}`; }
-  }
-  check("…in every room of every house: 450 solo nights, 450 online houses", allRooms, why);
-  check("every room's light starts off", s.lamps.length === 9 && s.lamps.every((v) => v === 0));
-  const room = atSwitch(s);
-  check("facing the switch: Use says Lights on", actionLabel(s) === "Lights on", String(actionLabel(s)));
-  s.P.fa += Math.PI;
-  check("…turned away from it: not the switch", actionLabel(s) !== "Lights on" && actionLabel(s) !== "Lights off", String(actionLabel(s)));
-  s.P.fa -= Math.PI;
-  doAction(s);
-  check("…Use: that room's light is on", s.lamps[room] === 1 && s.lamps.filter(Boolean).length === 1 && actionLabel(s) === "Lights off");
-  // off to another room: it stays on
-  const other = [...s.env.switches.values()].find((v) => v.room !== room);
-  Object.assign(s.P, { x: other.fx + 0.5, y: other.fy + 0.5, lastTile: -1 });
-  run(s, 2);
-  check("…and stays on when you go to another room", s.lamps[room] === 1 && roomAt(s.N, s.P.x, s.P.y) !== room);
-  // a lit room shows you like your own light: off, she still sees you there
-  const { s: h } = hall(90);
-  away(h);
-  const hr = roomAt(h.N, h.P.x, h.P.y);
-  h.lamps[hr] = 1;
-  toggleLight(h);
-  h.G.x = h.P.x + 4; h.G.y = h.P.y; h.G.stun = 0;
-  check("in a lit room she sees you even with your own light off", seesYou(h));
-  h.lamps[hr] = 0;
-  check("…and in the dark she doesn't", !seesYou(h));
-  // she walks in: the light goes out
-  const t = newNight(91, 1); begin(t); run(t, 1); t.grace = 0;
-  const r = atSwitch(t);
-  doAction(t);
-  away(t);
-  stepLamps(t.lamps, t.N, [t.G]);
-  check("(set-up) she's elsewhere: the light stays on", t.lamps[r] === 1);
-  const RN = 3;
-  t.G.x = (r % RN) * 8 + 4.5; t.G.y = Math.floor(r / RN) * 8 + 4.5;
-  run(t, DT);
-  check("she walks into the lit room: the light goes out, and you're told", t.lamps[r] === 0 && /lights go out/i.test(t.msg) && t.events.some((e) => e.name === "flicker"));
-  t.G.stun = 1e9;
-  atSwitch(t, r);
-  doAction(t);
-  run(t, 1);
-  check("…you can switch it on again with her still in there", t.lamps[r] === 1);
-}
-
-// ── chased: light off and stand still, and she loses you ──────────────────
-{
-  const chase = (seed, lightOn) => {
-    const { s } = hall(seed);
-    s.hum.on = true; s.hum.t = 999;
-    s.G.x = s.P.x + 8; s.G.st = "hunt"; s.G.prey = 1; s.G.lose = 0; s.G.stun = 0;
-    ghostTarget(s.G, s.env, s.P.x | 0, s.P.y | 0);
-    if (s.P.light !== lightOn) toggleLight(s);
-    run(s, 2.3);
-    return s;
-  };
-  const dark = chase(85, false);
-  check("chased, light off, standing still in the dark: she loses you and wanders off", dark.G.st === "patrol" && dark.G.prey === null && dark.mode === "play", dark.G.st);
-  const lit = chase(85, true);
-  check("…with your light on, she's still after you", lit.G.st === "hunt", lit.G.st);
-}
-
-// ── a moment's grace when the door locks ─────────────────────────────────────
-{
-  const s = newNight(97, 1); begin(s);
-  run(s, 1);
-  check("the door locks behind you: a moment's grace", s.grace > GRACE_S - 1.2 && s.grace <= GRACE_S, s.grace.toFixed(2));
-  s.G.x = s.P.x; s.G.y = s.P.y; s.G.stun = 0; s.G.st = "patrol";
-  run(s, 1);
-  check("…she can't catch you in it", s.mode === "play");
-  run(s, GRACE_S);
-  s.G.x = s.P.x; s.G.y = s.P.y; s.G.stun = 0;
-  run(s, 0.5);
-  check("…and after it, she can", s.mode === "dead");
-  // sent away: to the far side of the house from you
-  const h = inside(98), from = { x: h.P.x, y: h.P.y };
-  h.G.x = from.x; h.G.y = from.y - 2;
-  sendAway(h.G, h.env, from, h.rand);
-  const gone = Math.hypot(h.G.x - from.x, h.G.y - from.y);
-  check("sent away: she ends up on the far side of the house", gone > h.N * 0.7 && h.g[h.G.y | 0][h.G.x | 0] === FLOOR, `${gone.toFixed(1)} tiles`);
-}
-
-// ── doors ────────────────────────────────────────────────────────────────────
-// A shut door in front of you, both ways.
-function atDoor(seed = 41) {
-  const s = inside(seed); park(s);
-  const N = s.N;
-  const k = [...s.env.doors][0], x = k % N, y = (k / N) | 0;
-  const horiz = x % 8 === 0;                       // a door in an up-and-down wall: walk through along x
-  Object.assign(s.P, horiz ? { x: x - 0.5, y: y + 0.5, fa: 0 } : { x: x + 0.5, y: y - 0.5, fa: Math.PI / 2 });
-  return { s, x, y, horiz };
-}
-{
-  const { s, x, y, horiz } = atDoor();
-  check("facing a shut door, Use says Open", actionLabel(s) === "Open");
-  const p0 = { ...s.P };
-  run(s, 1, { ...still, iy: -1 });
-  check("a shut door stops you", horiz ? s.P.x < x : s.P.y < y);
-  Object.assign(s.P, { x: p0.x, y: p0.y });
-  doAction(s);
-  check("Use opens it, with a creak", s.g[y][x] === FLOOR && s.events.some((e) => e.name === "creak"));
-  run(s, DT);
-  check("…and opening it is loud — as loud as a landing", s.P.noiseR >= 6);
-  check("an open door: Use says Close", actionLabel(s) === "Close");
-  doAction(s);
-  check("Use shuts it again", s.g[y][x] === DOOR && /Door shut/.test(s.msg));
-  doAction(s);
-  run(s, 1, { ...still, iy: -1 });
-  check("through the open door", horiz ? s.P.x > x + 1 : s.P.y > y + 1);
-  s.P.fa += Math.PI;                               // turn round: the door behind you
-  run(s, 0.6, { ...still, iy: -1 });
-  const back = actionLabel(s);
-  s.P.x = horiz ? x + 0.5 : s.P.x; s.P.y = horiz ? s.P.y : y + 0.5;      // stand in the doorway
-  check("you cannot shut a door you are standing in", actionLabel(s) !== "Close", `behind you: ${back}`);
-
-  // the ghost: a shut door costs it a moment, and you hear it
-  const d = atDoor(43);
-  const { s: g, x: gx, y: gy, horiz: gh } = d;
-  Object.assign(g.P, gh ? { x: gx - 3.5 } : { y: gy - 3.5 });
-  g.G.stun = 0; g.G.st = "search"; g.G.wait = -99;
-  Object.assign(g.G, gh ? { x: gx + 1.5, y: gy + 0.5 } : { x: gx + 0.5, y: gy + 1.5 });
-  g.G.tx = 0; g.G.dm = dmap(g.g, g.N, gh ? gx - 2 : gx, gh ? gy : gy - 2);
+  const st = genStation(11);
+  const P = newPlayer();
   let t = 0;
-  while (g.g[gy][gx] === DOOR && t < 3) { tick(g, still, DT); t += DT; }
-  check("the thing opens a shut door in its way", g.g[gy][gx] === FLOOR, `${t.toFixed(2)}s`);
-  check("…stopping to do it (1.1s), with a creak you can hear", g.G.stun > 1 && g.events.some((e) => e.name === "creak"));
+  while (!P.tired && t < 20) { stepPlayer(P, st, { ix: 0, iz: 1, run: true }, DT); P.x = START.x; P.y = START.y; t += DT; }
+  check("running empties your stamina in about five seconds", P.tired && t > 4.5 && t < 5.5, `${t.toFixed(1)}s`);
+  stepPlayer(P, st, { ix: 0, iz: 1, run: true }, DT);
+  check("…winded, you can only walk", !P.run && P.moving);
+  for (let i = 0; i < 60; i++) stepPlayer(P, st, {}, DT);
+  check("…until it comes back", !P.tired);
+  const T = newPlayer();
+  for (let i = 0; i < 30 * 60; i++) drainTorch(T, DT, 0);
+  check("the flashlight drains, about 25% a minute when calm", T.bat > 70 && T.bat < 78, T.bat.toFixed(1));
+  const T2 = newPlayer();
+  for (let i = 0; i < 30 * 60; i++) drainTorch(T2, DT, 4);
+  check("…faster when it's close", T2.bat < T.bat - 5, T2.bat.toFixed(1));
+  const W = newPlayer(START.x, START.y, 0);
+  for (let i = 0; i < 30 * 30; i++) stepPlayer(W, st, { ix: 0, iz: 1 }, DT);
+  check("you can't walk through walls", canAt(st.g, W.x, W.y));
 }
 
-// ── hiding spots ─────────────────────────────────────────────────────────────
-// Stand beside a table, bed or wardrobe, facing it.
-function atSpot(seed = 51) {
-  for (let sd = seed; sd < seed + 50; sd++) {
-    const s = inside(sd); park(s);
-    const N = s.N;
-    for (let y = 1; y < N - 1; y++) for (let x = 1; x < N - 1; x++) {
-      if (s.g[y][x] !== SPOT) continue;
-      for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (s.g[y + b][x + a] !== FLOOR) continue;
-        Object.assign(s.P, { x: x + a + 0.5, y: y + b + 0.5, fa: Math.atan2(-b, -a) });
-        return { s, x, y, out: [x + a, y + b], dir: [a, b] };
-      }
-    }
+// ── the monster ──────────────────────────────────────────────────────────────
+// A clear straight run of floor, to test sight and hearing on.
+function corridor(st) {
+  for (let y = 1; y < 25; y++) for (let x = 1; x < N - 12; x++) {
+    let ok = true;
+    for (let k = 0; k < 12 && ok; k++) ok = canAt(st.g, x + k + 0.5, y + 0.5);
+    if (ok) return { x: x + 0.5, y: y + 0.5 };
   }
-  throw new Error("no hiding spot");
+  return null;
 }
 {
-  const { s, x, y, out } = atSpot();
-  check("facing a table, bed or wardrobe, Use says Hide", actionLabel(s) === "Hide");
-  doAction(s);
-  check("Use takes you in", !!s.P.hiding && (s.P.x | 0) === x && (s.P.y | 0) === y && ["table", "bed", "wardrobe"].includes(s.P.hiding.kind));
-  check("…and it did not see you, so it is not coming", !s.P.hiding.ghost && /cannot find you/.test(s.msg));
-  check("hidden, Use says Leave", actionLabel(s) === "Leave");
-  run(s, 0.5, { ...still, iy: -1, shift: true });
-  check("hiding, you cannot walk off, and you make no sound", (s.P.x | 0) === x && s.P.noiseR === 0);
-  jump(s);
-  check("…nor jump", s.P.vz === 0);
-  s.G.stun = 0; s.G.st = "patrol";
-  s.G.x = out[0] + 0.5 + (out[0] === x ? 3 : 0); s.G.y = out[1] + 0.5 + (out[1] === y ? 3 : 0);
-  run(s, 0.8);
-  check("it walks right past", s.mode === "play" && !seesYou(s));
-  // standing right beside you, for a long time: still nothing
-  s.G.stun = 0; s.G.x = out[0] + 0.5; s.G.y = out[1] + 0.5;
-  run(s, 8);
-  check("hidden, you are safe: it can stand right beside you and never catch you", s.mode === "play");
-  const l = atSpot(51).s;
-  doAction(l);
-  doAction(l);
-  check("Use again lets you out where you stood", !l.P.hiding && Math.abs(l.P.x - (out[0] + 0.5)) < 1e-9 && Math.abs(l.P.y - (out[1] + 0.5)) < 1e-9);
+  const st = genStation(21), rand = rng(5);
+  const c = corridor(st);
+  const lit = litZones(NEED), dark = new Set();
+  const me = (o = {}) => ({ id: 1, x: c.x + 9, y: c.y, fl: false, hid: false, moving: false, run: false, ...o });
+  const awake = (o = {}) => Object.assign(newMonster(c.x, c.y), { st: "patrol", dm: null, ...o });
 
-  // hide in front of it: it searches the spot, then gives up
-  const w = atSpot(51), ws = w.s;
-  const [ox, oy] = w.out;
-  const away = [[1, 0], [-1, 0], [0, 1], [0, -1]].find(([a, b]) =>
-    [1, 2, 3].every((k) => (ox + a * k) % 8 !== 0 && (oy + b * k) % 8 !== 0 && ox + a * k > 0 && oy + b * k > 0 && ws.g[oy + b * k][ox + a * k] !== SPOT));
-  for (const k of [1, 2, 3]) ws.g[oy + away[1] * k][ox + away[0] * k] = FLOOR;   // nothing between
-  ws.G.stun = 0; ws.G.st = "patrol";
-  ws.G.x = ox + 0.5 + away[0] * 3; ws.G.y = oy + 0.5 + away[1] * 3;
-  run(ws, DT);
-  ws.G.stun = 0;
-  check("(set-up) it is hunting you", ws.G.st === "hunt");
-  doAction(ws);
-  check("hide while it watches and it knows where you went", !!ws.P.hiding && ws.P.hiding.ghost === ws.G && /saw you/.test(ws.msg));
-  let t = 0, came = false;
-  while (ws.P.hiding && ws.P.hiding.ghost && t < 15) {
-    tick(ws, still, DT); t += DT;
-    if (Math.hypot(ws.G.x - (ox + 0.5), ws.G.y - (oy + 0.5)) < 1.2) came = true;
-  }
-  check("…it comes to the spot and searches it", came);
-  check("…then gives up, and you live", ws.mode === "play" && !ws.P.hiding.ghost && /gives up/.test(ws.msg), `${t.toFixed(1)}s`);
-  run(ws, 3);
-  check("…and goes away", ws.mode === "play" && ws.G.st !== "hunt");
+  const s = newMonster(c.x, c.y);
+  let woke = 0;
+  for (let t = 0; t < SLEEP_S + 1 && s.st === "sleep"; t += DT) { stepMonster(s, st, [me()], DT, rand, { lit, fuses: 0 }); woke = t; }
+  check("asleep at first, for about half a minute", s.st === "patrol" && woke > SLEEP_S - 1, `${woke.toFixed(1)}s`);
+  const s2 = newMonster(c.x, c.y);
+  stepMonster(s2, st, [me()], DT, rand, { lit, fuses: 1 });
+  check("…or until the first fuse comes out", s2.st === "patrol");
+
+  const zl = zoneAt(st, c.x + 9, c.y);
+  const seenLit = awake(), ev = [];
+  stepMonster(seenLit, st, [me()], DT, rand, { lit: new Set([zl]), fuses: 0 }, (n) => ev.push(n));
+  check("in the light it sees you nine tiles off", seenLit.st === "notice" && ev.includes("notice"));
+  const dk = awake();
+  stepMonster(dk, st, [me()], DT, rand, { lit: dark, fuses: 0 });
+  check("…in the dark with your light off it doesn't", dk.st === "patrol");
+  const tc = awake();
+  stepMonster(tc, st, [me({ x: c.x + 7, fl: true })], DT, rand, { lit: dark, fuses: 0 });
+  check("…your flashlight shows you seven tiles off in the dark", tc.st === "notice");
+  const hd = awake();
+  stepMonster(hd, st, [me({ x: c.x + 2, hid: true })], DT, rand, { lit: new Set([zl]), fuses: 0 });
+  check("…in a locker you're not seen", hd.st === "patrol");
+
+  // the stare, then the chase
+  const n = awake();
+  const ev2 = [];
+  for (let t = 0; t < NOTICE_S + 0.3; t += DT) stepMonster(n, st, [me()], DT, rand, { lit: new Set([zl]), fuses: 0 }, (x) => ev2.push(x));
+  check("it stares a few seconds, then chases", n.st === "chase" && ev2.includes("chase"));
+  // break its line of sight while it stares, and it gives up the stare
+  const b = awake();
+  stepMonster(b, st, [me()], DT, rand, { lit: new Set([zl]), fuses: 0 });
+  for (let t = 0; t < 1.6; t += DT) stepMonster(b, st, [me({ hid: true })], DT, rand, { lit: new Set([zl]), fuses: 0 });
+  check("…break its sight while it stares and it only comes to look", b.st === "invest");
+  // out of sight in a chase: it loses you
+  const ch = awake({ st: "chase", prey: 1 });
+  setTarget(ch, st, (c.x + 11) | 0, c.y | 0);
+  let lostAt = 0;
+  for (let t = 0; t < LOSE_S + 2 && ch.st === "chase"; t += DT) { stepMonster(ch, st, [me({ hid: true, x: c.x + 11 })], DT, rand, { lit: dark, fuses: 0 }); lostAt = t; }
+  check("out of sight it loses you", ch.st !== "chase", `${lostAt.toFixed(1)}s`);
+
+  // hearing
+  const hr = awake(); const ev3 = [];
+  stepMonster(hr, st, [me({ x: c.x + NOISE_RUN - 1, moving: true, run: true })], DT, rand, { lit: dark, fuses: 0 }, (x) => ev3.push(x));
+  check("it hears you run six tiles off", hr.st === "invest" && ev3.includes("heard"));
+  const wk = awake();
+  stepMonster(wk, st, [me({ x: c.x + 4, moving: true })], DT, rand, { lit: dark, fuses: 0 });
+  check("…not a walk four tiles off", wk.st === "patrol");
+  const sd = awake();
+  stepMonster(sd, st, [me({ x: c.x + 5 })], DT, rand, { lit: dark, fuses: 0 });
+  check("…nor standing still in the dark five tiles off", sd.st === "patrol");
+
+  // close in a chase: it rears, then lunges, and that catches you
+  const at = awake({ st: "chase", prey: 1 });
+  setTarget(at, st, (c.x + 2) | 0, c.y | 0);
+  const ev4 = []; let got = null;
+  for (let t = 0; t < 3 && !got; t += DT) got = stepMonster(at, st, [me({ x: c.x + 2 })], DT, rand, { lit, fuses: 0 }, (x) => ev4.push(x));
+  check("close in a chase it rears up, lunges, and catches you", ev4.includes("rear") && got && got.id === 1 && !got.hidden);
+  // a locker: it finds you if it lingers right by you
+  const lg = awake({ st: "invest", dm: null });
+  let found = null, ft = 0;
+  for (let t = 0; t < HIDE_FIND_S + 1 && !found; t += DT) { lg.x = c.x; found = stepMonster(lg, st, [me({ x: c.x + 1, hid: true })], DT, rand, { lit: dark, fuses: 0 }); ft = t; }
+  check("lingering right by your locker, it finds you", found && found.hidden, `${ft.toFixed(1)}s`);
 }
 
-// ── scares ───────────────────────────────────────────────────────────────────
+// ── solo: standing still is no plan ──────────────────────────────────────────
 {
-  const s = inside(62); park(s);
-  const seen = new Set();
-  const g0 = { ...s.G };
-  for (let t = 0; t < 900; t += DT) {
-    tick(s, still, DT);
-    for (const e of s.events) seen.add(e.name);
-    s.events.length = 0;
-    if (s.flick > 0) seen.add("flicker-on");
-    if (s.bodies.length) seen.add("body");
-    s.P.fa += DT * 0.4;                          // look about, so a body has somewhere to drop
-  }
-  check("left alone, the house tries all three scares", seen.has("flicker-on") && seen.has("whisper") && seen.has("body"),
-    [...seen].join(","));
-  check("…and none of them moves the thing or touches the rules", s.G.x === g0.x && s.G.y === g0.y && s.mode === "play");
-  const h = hall(71).s;
-  h.G.x -= 4;
-  run(h, DT);
-  h.scareT = 0;
-  h.G.stun = 1e9;
-  const sc = h.scareT;
-  tick(h, still, DT);
-  check("no scares while it is hunting you", h.G.st === "hunt" && h.scareT <= sc && !h.flick && !h.bodies.length);
-}
-
-// ── relics and the gate ──────────────────────────────────────────────────────
-{
-  const s = inside(31); park(s);
-  const r0 = s.relics[0];
-  Object.assign(s.P, { x: r0.x, y: r0.y });
-  run(s, DT);
-  check("walk onto a relic and it is yours", r0.got && s.count === 1 && s.events.some((e) => e.name === "relic"));
-  check("taking one: its music box stops, and she comes to see — wherever she is", s.G.st === "search" && s.G.tx === (r0.x | 0) && /music box stops/.test(s.msg));
-  const e = s.exitT, stand = { x: e.x + 0.5, y: e.y - 0.5 };
-  Object.assign(s.P, { ...stand }); s.msgT = 0;
-  run(s, DT);
-  check("the front door stays locked until you have all three keys", s.mode === "play" && /locked/.test(s.msg));
-  for (const r of s.relics) r.got = true;
-  s.count = s.need;
-  run(s, DT);
-  check("with every relic, it lets you out", s.mode === "won" && s.events.some((ev) => ev.name === "win"));
-}
-
-// ── the last key: the lights die, she stops humming, and hunts ──────────────
-{
-  const s = inside(33); park(s);
-  s.lamps.fill(1);
-  for (const r of s.relics.slice(1)) { r.got = true; s.count++; }
-  const r = s.relics[0];
-  Object.assign(s.P, { x: r.x, y: r.y });
-  run(s, DT);
-  check("the last key: the lights die and the humming stops for good", s.finale && s.hum.hunt && !s.hum.on && s.lamps.every((v) => v === 0) && s.events.some((e) => e.name === "finale"));
-  check("…you're told to run", /RUN/.test(s.msg));
-  run(s, 60);
-  check("…and she never hums again", !s.hum.on && s.hum.hunt);
-  // she hears every step, from anywhere, through walls
-  const N = s.N, G = newGhost(1.5, 1.5);
-  ghostTarget(G, s.env, 1, 1);
-  const loud = { id: 1, x: N - 2.5, y: N - 3.5, lit: false, cr: 0, noiseR: 3, hid: null, loud: true };
-  stepGhost(G, s.env, [loud], 0.1, s.rand, 0, () => {}, s.hum);
-  check("…she hears every step, across the house and through walls", G.st === "hunt" && G.prey === 1);
-  const G2 = newGhost(1.5, 1.5);
-  ghostTarget(G2, s.env, 1, 1);
-  stepGhost(G2, s.env, [{ ...loud, noiseR: 0 }], 0.1, s.rand, 0, () => {}, s.hum);
-  check("…but not if you stand still", G2.st !== "hunt");
-  const G3 = newGhost(1.5, 1.5);
-  ghostTarget(G3, s.env, 1, 1);
-  stepGhost(G3, s.env, [{ ...loud, hid: { ghost: null } }], 0.1, s.rand, 0, () => {}, s.hum);
-  check("…nor while you're hidden", G3.st !== "hunt");
-  check("…and she doesn't stand still listening: she moves", (() => { const G4 = newGhost(2.5, 1.5); ghostTarget(G4, s.env, 5, 1); const x0 = G4.x; stepGhost(G4, s.env, [], 0.5, s.rand, 0, () => {}, s.hum); return G4.x !== x0 || G4.y !== 1.5; })());
-}
-
-// ── chalk ────────────────────────────────────────────────────────────────────
-{
-  const s = inside(44); park(s);
-  s.P.fa = Math.PI / 2;                       // the wall with the front door in it
-  check("facing a wall, you can chalk it", canChalk(s));
-  chalk(s);
-  const k = s.marks[0];
-  check("…a mark on the tile in front of you", s.marks.length === 1 && s.g[(k / s.N) | 0][k % s.N] === WALL && s.events.some((e) => e.name === "chalk"));
-  chalk(s);
-  check("…again, and it's rubbed out", s.marks.length === 0);
-  s.P.fa = -Math.PI / 2;                      // up the hall: open floor ahead
-  s.P.y = s.N - 3.5;
-  check("facing open floor: nothing to chalk", !canChalk(s) || (() => { const k2 = s.marks.length; chalk(s); const ok = s.marks.length === k2 + 1; chalk(s); return ok; })());
-  const m = [];
-  for (let i = 0; i < MARKS_MAX + 5; i++) toggleMark(m, i);
-  check(`at most ${MARKS_MAX} marks: the oldest goes`, m.length === MARKS_MAX && m[0] === 5);
-}
-
-// ── the music boxes: following nothing but the tune finds every key ─────────
-// The bot hears only what the page plays: which way the nearest key's tune
-// comes from (tuneAt: a point a few steps along the walk to it). It never
-// looks at where the keys are.
-function byEar(seed, night) {
-  const s = newNight(seed, night);
-  begin(s);
-  s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9;
+  const s = newRun(5);
   let t = 0;
-  while (s.mode === "play" && s.count < s.need && t < 300) {
-    if (s.P.entering) { tick(s, still, DT); t += DT; continue; }
-    const tn = s.tune;
-    if (!tn) return { ok: false, t, why: "heard nothing" };
-    const w = tuneAt(s.fields[tn.i], s.N, s.P.x, s.P.y, s.g);
-    const aim = w.d <= 1 ? s.relics[tn.i] : w;
-    s.P.fa = Math.atan2(aim.y - s.P.y, aim.x - s.P.x);
-    if (actionLabel(s) === "Open") doAction(s);
-    tick(s, { ...still, iy: -1 }, DT);
-    t += DT;
-  }
-  return { ok: s.count >= s.need, t, why: `${s.count} of ${s.need} keys` };
-}
-{
-  let ok = true, why = "";
-  for (let seed = 1; seed <= 60; seed++) for (const night of [1, 3]) {
-    const r = byEar(seed, night);
-    if (!r.ok) { ok = false; why = `seed ${seed} night ${night}: ${r.why}`; }
-  }
-  check("120 nights: following only the music boxes finds every key", ok, why);
-  const s = inside(12); park(s);
-  const tn = s.tune;
-  check("the nearest key's tune is playing from the start", !!tn && tn.vol > 0 && tn.vol <= 1 && Math.abs(tn.pan) <= 1);
+  while (s.mode === "play" && t < 400) { tick(s, { ix: 0, iz: 0 }, DT); t += DT; }
+  check("solo: wait in the Main Hall and it comes for you", s.mode === "dead", `${t.toFixed(0)}s`);
 }
 
-// ── a bot walks out, every night ─────────────────────────────────────────────
-// Thing held still; the bot follows the shortest road to the nearest relic,
-// then the gate, jumping barricades and crouching under beams. Proves every
-// house can be finished with the controls the page gives you.
-function walkOut(seed, night) {
-  const s = newNight(seed, night);
-  begin(s);
-  s.G.x = 0.5; s.G.y = 0.5; s.G.stun = 1e9;
-  const N = s.N;
-  let t = 0, lastProgress = 0, bestLeft = Infinity, target = null;
-  while (s.mode === "play" && t < 400) {
-    if (s.P.entering) { tick(s, still, DT); t += DT; continue; }
-    const px = s.P.x | 0, py = s.P.y | 0;
-    const left = s.relics.filter((r) => !r.got);
-    // Commit to one relic until it is in hand: re-choosing every frame, two
-    // relics the same distance apart had it pacing between two tiles.
-    let goal;
-    if (left.length) {
-      if (!target || target.got) {
-        const here = dmap(s.g, N, px, py);
-        target = left.slice().sort((a, b) => here[(a.x | 0) + (a.y | 0) * N] - here[(b.x | 0) + (b.y | 0) * N])[0];
-        bestLeft = Infinity;              // a new target: progress is measured afresh
+// ── solo: a bot that plays like a person ─────────────────────────────────────
+// Walks the shortest way to the nearest fuse it hasn't got, then to the
+// elevator; noticed or chased, it makes for the locker it can reach well
+// before the monster, running only while seen. (Hiding while it is onto you
+// is no hiding: it comes to where you are and finds you, as in the original.)
+function bot(seed, { monster = true, limit = 600 } = {}) {
+  const s = newRun(seed);
+  const { st } = s;
+  let t = 0, hideFor = 0, flee = null;
+  const steer = (tx, ty) => {
+    const d = dmap(st.g, tx, ty), P = s.P, gx = P.x | 0, gy = P.y | 0;
+    let best = [gx, gy], bd = d[gx + gy * N];
+    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const v = d[(gx + a) + (gy + b) * N]; if (v >= 0 && (bd < 0 || v < bd)) { bd = v; best = [gx + a, gy + b]; } }
+    const dx = best[0] + 0.5 - P.x, dy = best[1] + 0.5 - P.y;
+    if (Math.hypot(dx, dy) > 0.02) P.yaw = Math.atan2(-dx, -dy);
+    return Math.hypot(dx, dy) > 0.02 ? 1 : 0;
+  };
+  while (s.mode === "play" && t < limit) {
+    const P = s.P, M = s.M;
+    if (!monster) { M.st = "sleep"; M.sl = 1e9; }    // a fuse wakes it: put it back to sleep every frame
+    let inp = { ix: 0, iz: 0, run: false };
+    const hunted = M.st === "notice" || M.st === "chase";
+    if (P.hid) {
+      hideFor += DT;
+      if (!hunted && Math.hypot(M.x - P.x, M.y - P.y) > 6 && hideFor > 3) { interact(s); hideFor = 0; }
+    } else if (hunted && !P.hid) {
+      // hiding while it's onto you is no hiding: it comes to where you are, and
+      // finds you. Out of its sight, keep creeping away; it loses you.
+      {
+        // the locker it can reach well before the monster does
+        if (!flee || flee.until < t) {
+          const dp = dmap(st.g, P.x | 0, P.y | 0), dm = dmap(st.g, M.x | 0, M.y | 0);
+          const at = (d, l) => d[(l.x | 0) + (l.y | 0) * N];
+          const pick = s.lockers.filter((l) => at(dp, l) >= 0).sort((a, b) => (at(dp, a) - at(dm, a)) - (at(dp, b) - at(dm, b)))[0];
+          flee = { l: pick, until: t + 1 };
+        }
+        inp = { ix: 0, iz: steer(flee.l.x | 0, flee.l.y | 0), run: los(st.g, M.x, M.y, P.x, P.y) };   // out of its sight, creep: it hears a run
       }
-      goal = [target.x | 0, target.y | 0];
     } else {
-      const e = s.exitT;
-      goal = [e.x, N - 2];
-      if (target) { target = null; bestLeft = Infinity; }
+      const left = s.items.filter((it) => !it.got && it.t === "f").sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y));
+      if (left.length) { const it = left[0]; inp.iz = steer(it.x | 0, it.y | 0); if (!inp.iz) { P.yaw = Math.atan2(-(it.x - P.x), -(it.y - P.y)); inp.iz = 1; } }
+      else { inp.iz = steer(EXIT.x - 1, EXIT.y); if (!inp.iz) { P.yaw = Math.atan2(-(EXIT.x + 0.5 - P.x), -(EXIT.y + 0.5 - P.y)); inp.iz = 1; } }
     }
-    const d = dmap(s.g, N, goal[0], goal[1]);
-    let next = [px, py];
-    for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const v = d[(px + a) + (py + b) * N];
-      if (v >= 0 && v < d[next[0] + next[1] * N]) next = [px + a, py + b];
-    }
-    const tx = next[0] + 0.5, ty = next[1] + 0.5;
-    const aim = (next[0] === px && next[1] === py) ? (left.length ? [target.x, target.y] : [s.exitT.x + 0.5, s.exitT.y + 0.5]) : [tx, ty];
-    s.P.fa = Math.atan2(aim[1] - s.P.y, aim[0] - s.P.x);
-    if (s.g[next[1]][next[0]] === DOOR && actionLabel(s) === "Open") doAction(s);   // a shut door: open it
-    const ob = s.obst[next[0] + next[1] * N];
-    if (ob === HURDLE && Math.hypot(tx - s.P.x, ty - s.P.y) < 1.0) jump(s);
-    tick(s, { ...still, iy: -1 }, DT);
+    tick(s, inp, DT);
     t += DT;
-    const remaining = s.relics.filter((r) => !r.got).length * 1000 + d[(s.P.x | 0) + (s.P.y | 0) * N];
-    if (remaining < bestLeft) { bestLeft = remaining; lastProgress = t; }
-    if (t - lastProgress > 6) return { ok: false, t, why: `stuck at ${s.P.x.toFixed(2)},${s.P.y.toFixed(2)} heading for ${next}` };
   }
-  return { ok: s.mode === "won", t, why: s.mode };
+  return { mode: s.mode, t, fuses: s.fuses };
 }
 {
-  let ok = true, why = "", times = [];
-  for (let seed = 1; seed <= 40; seed++) {
-    for (let night = 1; night <= 5; night++) {
-      const r = walkOut(seed, night);
-      times.push(r.t);
-      if (!r.ok) { ok = false; why = `seed ${seed} night ${night}: ${r.why}`; }
-    }
-  }
-  times.sort((a, b) => a - b);
-  check("200 nights: a bot gets every key and out of the front door, opening doors as it goes", ok, why);
-  console.log(`      a perfect route takes ${times[0].toFixed(0)}–${times[times.length - 1].toFixed(0)}s (median ${times[times.length >> 1].toFixed(0)}s), before any detours to hide`);
-}
-
-// ── Nana's lullaby ───────────────────────────────────────────────────────────
-// She hums, then stops and listens; in the silence any step near her is heard.
-{
-  const r = rng(5);
-  const H = newHum(r);
-  const runs = { on: [], off: [] };
-  let len = 0, prev = H.on;
-  for (let t = 0; t < 600; t += 0.05) {
-    stepHum(H, 0.05, r);
-    len += 0.05;
-    if (H.on !== prev) { runs[prev ? "on" : "off"].push(len); len = 0; prev = H.on; }
-  }
-  const within = (xs, [lo, hi]) => xs.slice(1).every((x) => x >= lo - 0.06 && x <= hi + 0.06);
-  check("the lullaby: she hums a while, then stops and listens, over and over",
-    runs.on.length > 20 && runs.off.length > 20 && within(runs.on, HUM_S) && within(runs.off, LISTEN_S),
-    `${runs.on.length} hums, ${runs.off.length} silences`);
-
-  // a long corridor of floor to try her in
-  const N = 30, g = Array.from({ length: N }, (_, y) => Array.from({ length: N }, (_, x) => (y === 5 && x > 0 && x < N - 1 ? FLOOR : WALL)));
-  const env = { g, N, obst: {}, doors: new Set() };
-  const nana = () => { const G = newGhost(3.5, 5.5); ghostTarget(G, env, 25, 5); return G; };
-  const hum = (on, since) => ({ on, t: 2, since });
-  const you = (x, moving, hid = null) => ({ id: 7, x, y: 5.5, lit: true, cr: 0, noiseR: moving ? 3 : 0, hid });
-  const quiet = () => {};
-  let G = nana();
-  stepGhost(G, env, [you(12.5, false)], 0.5, r, 0, quiet, hum(true, 1));
-  check("while she hums, she walks", G.x > 3.5);
-  G = nana();
-  stepGhost(G, env, [you(12.5, false)], 0.5, r, 0, quiet, hum(false, 1.2));
-  check("when the humming stops, she stands quite still", G.x === 3.5);
-  const heard = [];
-  G = nana();
-  stepGhost(G, env, [you(12.5, true)], 0.1, r, 0, (n, e) => heard.push(n), hum(false, LISTEN_GRACE + 0.1));
-  check("move in the silence and she hears you, and comes for you", G.st === "hunt" && G.prey === 7 && heard.includes("heard") && G.tx === 12);
-  G = nana();
-  stepGhost(G, env, [you(12.5, false)], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE + 1));
-  check("freeze, and she doesn't", G.st !== "hunt");
-  G = nana();
-  stepGhost(G, env, [you(12.5, true)], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE * 0.5));
-  check("the first moment of silence is grace: time to stop", G.st !== "hunt");
-  G = nana();
-  stepGhost(G, env, [you(12.5, true, { x: 12, y: 5, ghost: null })], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE + 0.1));
-  check("hidden, she can't hear you", G.st !== "hunt");
-  G = nana();
-  stepGhost(G, env, [you(3.5 + HEAR_R + 2, true)], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE + 0.1));
-  check("…nor from the far end of the house", G.st !== "hunt");
-  G = nana();
-  check("listening, she still has you if you're right beside her", stepGhost(G, env, [you(3.7, false)], 0.1, r, 0, quiet, hum(false, 1)) === 7);
-  // walls muffle: through a wall she hears only half as far
-  const g2 = g.map((row) => row.slice());
-  g2[5][8] = WALL;
-  const env2 = { g: g2, N, obst: {}, doors: new Set() };
-  const G5 = newGhost(3.5, 5.5); ghostTarget(G5, env2, 2, 5);
-  stepGhost(G5, env2, [you(3.5 + HEAR_R * 0.75, true)], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE + 0.1));
-  const G6 = newGhost(3.5, 5.5); ghostTarget(G6, env, 2, 5);
-  stepGhost(G6, env, [you(3.5 + HEAR_R * 0.75, true)], 0.1, r, 0, quiet, hum(false, LISTEN_GRACE + 0.1));
-  check("walls muffle: in sight she hears you three-quarters of the way across; through a wall, not", G6.st === "hunt" && G5.st !== "hunt");
-  const Hh = newHum(r); huntNight(Hh);
-  check("once she hunts, the lullaby is over: no humming, no listening, no silences", !Hh.on && Hh.hunt && stepHum(Hh, 100, r) === null && !Hh.on);
-  const H2 = buildHouse(9, { players: 1, sides: [{ key: "a", need: 3 }] });
-  check("Nana's house: no barricades to jump, no batteries to find", Object.keys(H2.obst).length === 0 && H2.batts.length === 0 && H2.hum && H2.hum.on);
+  const calm = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((seed) => bot(seed, { monster: false }));
+  check("solo with the monster asleep: the bot gets every fuse and out, every time", calm.every((r) => r.mode === "won"), calm.map((r) => `${r.mode}@${r.t.toFixed(0)}`).join(" "));
+  const slow = Math.max(...calm.map((r) => r.t));
+  check("…in a few minutes' walking", slow < 300, `slowest ${slow.toFixed(0)}s at ${WALK} tiles/s`);
+  const real = Array.from({ length: 20 }, (_, i) => bot(100 + i));
+  const won = real.filter((r) => r.mode === "won").length, dead = real.filter((r) => r.mode === "dead").length;
+  check("solo with the monster: breaking its sight, then creeping, the bot gets out of most runs", won >= 10, `${won} out, ${dead} caught, of 20`);
+  check("…but not every one: it's a horror game", dead >= 1, `${dead} caught`);
+  check("…and no fuse was ever skipped on the way out", real.filter((r) => r.mode === "won").every((r) => r.fuses === NEED));
+  void atExit;
 }
 
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");

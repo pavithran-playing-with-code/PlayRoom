@@ -1,87 +1,96 @@
 // src/components/games/ManorGame.jsx
-// NANA'S LULLABY in a room: versus, teams or co-op, in one shared house.
+// STATION 13 in a room: versus, teams or together, in one shared hospital.
 //
 // Unlike every other game here this one does not use useGameEngine. Its
-// scores are not a phone's to post: the server runs the house (config/
-// manorWorld.js), decides who took what and who got out, writes the scores
-// itself and ends the match when everyone is out or caught. This page moves
+// scores are not a phone's to post: the server runs the building and its
+// monsters (config/manorWorld.js), decides who took what, who was caught and
+// who got out, writes the scores itself and ends the match. This page moves
 // your own player, reports where you are, and draws what the server says.
 //
-// The solo page (pages/Manor.jsx) shares the drawing, the sound and the
-// rules; the two-thumb controls here are the same as there.
+// The solo page (pages/Manor.jsx) shares the drawing, the sound, the rules,
+// the HUD and the controls.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSocket } from "../../utils/SocketContext";
-import { drawManor, lookBy, SPRINT_PX, STICK_R } from "../horror/manorRender";
-import { Riddles } from "../../pages/Manor";
-import { createManorAudio } from "../horror/manorAudio";
 import {
-  createClient, applyTick, stepLocal, report, doAction, actionDone, actionLabel, playing, respawning, inIntro, timeLeft, sideOfMe,
-  watchedPlayer, cycleWatch, viewState, roomNameAt, isListening, nearestGhost, finaleNow, chalk, canChalk,
-} from "../horror/manorClient";
+  createClient, applyTick, stepLocal, report, interact, actionDone, actionLabel, toggleTorch, playing, respawning, timeLeft, sideOfMe,
+  watchedPlayer, cycleWatch, viewState,
+} from "../horror/s13Client";
+import { NEED } from "../horror/s13Core.mjs";
+import { createStation } from "../horror/s13Scene";
+import { createS13Audio } from "../horror/s13Audio";
 import { useSideways, toGame } from "../horror/LandscapeGate";
+import { S13Hud, lookBy, loadSettings, coarse } from "../../pages/Manor";
 import { usePlayAgain } from "./PlayAgain";
 
 const REPORT_MS = 66;                  // ~15 a second
-const HUD_MS = 100;
+const HUD_MS = 120;
 
-
-export default function ManorGame({ roomCode, currentUser, isSpectator = false, spectatorWatching = null, onGameEnd }) {
+export default function ManorGame({ roomCode, currentUser, spectatorWatching = null, onGameEnd }) {
   const { socket } = useSocket() || {};
   const client = useRef(null);
   const audio = useRef(null);
-  const canvasRef = useRef(null);
+  const scene = useRef(null);
+  const three = useRef(null);
   const rootRef = useRef(null);
-  const view = useRef({ W: 390, H: 844, dpr: 1, safeTop: 0 });
+  const hostRef = useRef(null);
   const keys = useRef({});
   const stick = useRef(null);
-  const look = useRef(null);
+  const drag = useRef(null);
+  const runOn = useRef(false);
   const sentAt = useRef(0);
+  const settings = useRef(loadSettings());
 
   const [hud, setHud] = useState(null);
   const [over, setOver] = useState(null);
   const [gone, setGone] = useState(false);
+  const [noGl, setNoGl] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
   // A landscape game: if the screen stays upright, it draws itself sideways.
   const [rotated, sideways] = useSideways();
-  useEffect(() => { stick.current = null; look.current = null; }, [rotated]);
+  useEffect(() => { stick.current = null; drag.current = null; }, [rotated]);
 
-  const syncHud = useCallback(() => {
+  // the scene, once both the building (from the server) and three.js are here
+  const buildScene = useCallback(() => {
     const c = client.current;
-    if (!c) return;
-    const now = Date.now();
-    const side = sideOfMe(c);
-    const w = watchedPlayer(c);
-    setHud({
-      role: c.role, mode: c.mode, alive: c.alive, left: c.left, respawning: respawning(c), intro: inIntro(c, now),
-      timeLeft: timeLeft(c, now), msg: c.msg,
-      side: side && { name: side.name, color: side.color, got: side.got, need: side.need, open: side.open, escapes: side.escapes || 0, score: side.score || 0 },
-      stam: c.body.stam, bat: c.body.bat, light: c.body.light, runOn: c.body.runOn, tired: c.body.stamCool > 0,
-      crouch: c.body.crouch, watching: w && { name: w.name, color: w.color }, use: actionLabel(c, now),
-      room: roomNameAt(c, playing(c) ? c.body : w || c.body),
-      players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left })),
-      playing: playing(c), silent: isListening(c),
-      // no map, no distances: Nana's riddles for your keys, and at the end, the run
-      riddles: (c.riddles || []).map((q) => ({ text: q.text, got: q.r.got })),
-      finale: finaleNow(c), chalk: canChalk(c, now),
-      ...(() => {
-        const P = c.body, G = nearestGhost(c, P), nd = G ? Math.hypot(G.x - P.x, G.y - P.y) : 99;
-        return { close: nd < 3, hiding: !!P.hiding };
-      })(),
-    });
+    if (!c || !three.current || !hostRef.current || scene.current) return;
+    try {
+      scene.current = createStation(hostRef.current, three.current,
+        { layout: c.st, items: c.items, lockers: c.lockers, quality: settings.current.q, aware: settings.current.aw });
+    } catch (e) { setNoGl(true); }
   }, []);
 
   useEffect(() => {
     document.body.classList.add("in-game");
-    const noMenu = (e) => e.preventDefault();          // a long press is a held button, not a copy menu
+    const noMenu = (e) => e.preventDefault();
     document.addEventListener("contextmenu", noMenu);
-    audio.current = createManorAudio();
+    audio.current = createS13Audio();
+    let alive = true;
+    import("three").then((m) => { if (!alive) return; three.current = m; buildScene(); }).catch(() => { if (alive) setNoGl(true); });
     return () => {
+      alive = false;
       document.body.classList.remove("in-game");
       document.removeEventListener("contextmenu", noMenu);
       audio.current.close();
+      delete window.__s13x;
+      if (scene.current) { scene.current.dispose(); scene.current = null; }
+      if (document.pointerLockElement) document.exitPointerLock();
     };
+  }, [buildScene]);
+
+  const syncHud = useCallback(() => {
+    const c = client.current;
+    if (!c) return;
+    const now = Date.now(), side = sideOfMe(c), w = watchedPlayer(c);
+    setHud({
+      role: c.role, mode: c.mode, playing: playing(c), respawning: respawning(c), left: c.left, timeLeft: timeLeft(c, now),
+      side: side && { name: side.name, color: side.color, got: side.got, need: side.need, open: side.open, escapes: side.escapes || 0, score: side.score || 0 },
+      players: [...c.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, alive: p.alive, left: p.left })),
+      watching: w && { name: w.name, color: w.color },
+      bat: c.body.bat, stam: c.body.stam, msg: c.msg, use: actionLabel(c), fl: c.body.fl && c.body.bat > 0, run: runOn.current, area: c.area,
+      stick: stick.current && { ...stick.current },
+    });
   }, []);
 
   // ── the socket ─────────────────────────────────────────────────────────────
@@ -90,10 +99,13 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     const hello = () => socket.emit("manor:hello", roomCode);
     const onInit = (init) => {
       if (init.code !== roomCode) return;
+      if (client.current) return;                          // the building is built once
       const c = createClient(init);
       if (spectatorWatching) c.watch = Number(spectatorWatching.user_id);
       client.current = c;
+      window.__s13x = () => client.current;
       if (init.over) setOver(init.over);
+      buildScene();
       syncHud();
     };
     const onTick = (m) => {
@@ -101,66 +113,21 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       if (!c || m.c !== roomCode) return;
       for (const s of applyTick(c, m)) audio.current.play(s);
     };
-    const onOver = (o) => {
-      if (o.code !== roomCode) return;
-      if (client.current) client.current.over = o;
-      setOver(o);
-    };
-    const onUsed = (r) => {
-      const c = client.current;
-      if (!c || r.code !== roomCode) return;
-      actionDone(c, r);
-      syncHud();
-    };
-    // the house and this phone disagreed about where you are: the house wins
-    const onSnap = (m) => {
-      const c = client.current;
-      if (!c || m.code !== roomCode || c.body.hiding) return;
-      c.body.x = m.x; c.body.y = m.y;
-    };
+    const onOver = (o) => { if (o.code !== roomCode) return; if (client.current) client.current.over = o; setOver(o); if (document.pointerLockElement) document.exitPointerLock(); };
+    const onUsed = (r) => { const c = client.current; if (!c || r.code !== roomCode) return; actionDone(c, r); syncHud(); };
+    // the building and this phone disagreed about where you are: the building wins
+    const onSnap = (m) => { const c = client.current; if (!c || m.code !== roomCode || c.body.hid) return; c.body.x = m.x; c.body.y = m.y; };
     const onGone = (g) => { if (g.code === roomCode && !client.current) setGone(true); };
-    socket.on("manor:init", onInit);
-    socket.on("manor:tick", onTick);
-    socket.on("manor:over", onOver);
-    socket.on("manor:used", onUsed);
-    socket.on("manor:snap", onSnap);
-    socket.on("manor:gone", onGone);
-    socket.on("connect", hello);
+    socket.on("manor:init", onInit); socket.on("manor:tick", onTick); socket.on("manor:over", onOver);
+    socket.on("manor:used", onUsed); socket.on("manor:snap", onSnap); socket.on("manor:gone", onGone); socket.on("connect", hello);
     hello();
-    // if the first hello was lost (socket still connecting), keep asking
     const retry = setInterval(() => { if (!client.current) hello(); }, 3000);
     return () => {
       clearInterval(retry);
-      socket.off("manor:init", onInit);
-      socket.off("manor:tick", onTick);
-      socket.off("manor:over", onOver);
-      socket.off("manor:used", onUsed);
-      socket.off("manor:snap", onSnap);
-      socket.off("manor:gone", onGone);
-      socket.off("connect", hello);
+      socket.off("manor:init", onInit); socket.off("manor:tick", onTick); socket.off("manor:over", onOver);
+      socket.off("manor:used", onUsed); socket.off("manor:snap", onSnap); socket.off("manor:gone", onGone); socket.off("connect", hello);
     };
-  }, [socket, roomCode, spectatorWatching, syncHud]);
-
-  // ── the canvas ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const fit = () => {
-      const c = canvasRef.current;
-      if (!c) return;
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      // the game's own box: the screen, or the screen turned a quarter
-      const box = rootRef.current;
-      const W = box ? box.clientWidth : window.innerWidth, H = box ? box.clientHeight : window.innerHeight;
-      c.width = W * dpr; c.height = H * dpr;
-      const safeTop = rootRef.current ? parseFloat(getComputedStyle(rootRef.current).paddingTop) || 0 : 0;
-      view.current = { W, H, dpr, safeTop };
-    };
-    fit();
-    window.addEventListener("resize", fit);
-    // turning the phone (or being drawn turned) changes the box, not always the window
-    const ro = typeof ResizeObserver !== "undefined" && rootRef.current ? new ResizeObserver(fit) : null;
-    if (ro) ro.observe(rootRef.current);
-    return () => { window.removeEventListener("resize", fit); if (ro) ro.disconnect(); };
-  }, []);
+  }, [socket, roomCode, spectatorWatching, syncHud, buildScene]);
 
   // ── the loop ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -169,127 +136,89 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.05, (ts - last) / 1000 || 0);
       last = ts;
-      const c = client.current;
-      const cv = canvasRef.current;
-      if (!c || !cv) return;
-      const now = Date.now();
-
-      const k = keys.current;
-      let ix = 0, iy = 0;
-      if (k.a) ix--;
-      if (k.d) ix++;
-      if (k.w || k.ArrowUp) iy--;
-      if (k.s || k.ArrowDown) iy++;
-      const st = stick.current;
-      if (st) {
-        const dx = st.x - st.ox, dy = st.y - st.oy, l = Math.hypot(dx, dy);
-        if (l > 8) { ix = dx / Math.max(l, 1) * Math.min(1, l / STICK_R); iy = dy / Math.max(l, 1) * Math.min(1, l / STICK_R); }
-        st.run = l > SPRINT_PX;                          // pushed past the ring: sprint
-      }
-      const turn = (k.ArrowRight ? 1 : 0) - (k.ArrowLeft ? 1 : 0);
-      for (const s of stepLocal(c, { ix, iy, turn, shift: !!k.Shift || !!(st && st.run) }, dt, now)) audio.current.play(s);
-
-      if (playing(c) && !inIntro(c, now) && socket && now - sentAt.current >= REPORT_MS) {
-        sentAt.current = now;
-        socket.emit("manor:me", report(c));
-      }
-
-      // her lullaby: louder the nearer she is; nothing at all while she
-      // listens, or once she's stopped humming for good
-      const G = nearestGhost(c, c.body);
-      audio.current.humming(!inIntro(c, now) && !c.over && !isListening(c) && !c.hum.hunt, G ? Math.max(0, 1 - Math.hypot(c.body.x - G.x, c.body.y - G.y) / 18) : 0);
-      // the music box of your nearest key: louder the shorter the walk, from the way to go
-      const tn = playing(c) && !inIntro(c, now) && !c.over ? c.tune : null;
-      audio.current.tune(!!tn, tn ? tn.vol : 0, tn ? tn.pan : 0);
-      drawManor(cv.getContext("2d"), viewState(c, now), view.current, ts / 1000, playing(c) ? stick.current : null);
+      const c = client.current, sc = scene.current;
+      if (!c) return;
+      const now = Date.now(), k = keys.current, st = stick.current;
+      const ix = (k.d ? 1 : 0) - (k.a ? 1 : 0) + (st ? st.x : 0), iz = (k.w ? 1 : 0) - (k.s ? 1 : 0) - (st ? st.y : 0);
+      for (const s of stepLocal(c, { ix, iz, run: !!k.Shift || runOn.current }, dt, now)) audio.current.play(s);
+      if (playing(c) && socket && now - sentAt.current >= REPORT_MS) { sentAt.current = now; socket.emit("manor:me", report(c)); }
+      const v = viewState(c, now);
+      audio.current.tick(dt, v.P, c.monsters, c.tlv, playing(c) && !c.over);
+      if (sc) sc.frame(v, dt, ts / 1000);
       if (ts - lastHud > HUD_MS) { lastHud = ts; syncHud(); }
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, [socket, syncHud]);
 
-  // Use: doors and hiding spots. It happens here at once, and the server is asked.
-  const doUse = useCallback((c) => {
-    const r = doAction(c);
-    for (const s of r.sounds) audio.current.play(s);
-    if (r.ask && socket) socket.emit("manor:use", r.ask);
-    if (r.lamp && socket) socket.emit("manor:lamp", r.lamp);
-  }, [socket]);
-  // Chalk: the wall in front of you, for everyone to see
-  const doChalk = useCallback((c) => {
-    const ask = chalk(c);
-    if (ask) { audio.current.play({ name: "chalk" }); if (socket) socket.emit("manor:chalk", ask); }
-  }, [socket]);
+  useEffect(() => {
+    const r = () => scene.current && scene.current.resize();
+    window.addEventListener("resize", r);
+    const ro = typeof ResizeObserver !== "undefined" && rootRef.current ? new ResizeObserver(r) : null;
+    if (ro) ro.observe(rootRef.current);
+    return () => { window.removeEventListener("resize", r); if (ro) ro.disconnect(); };
+  }, []);
 
-  // ── keyboard ───────────────────────────────────────────────────────────────
+  // Use: a locker. It happens here at once, and the server is asked.
+  const doUse = useCallback((c) => { const ask = interact(c); if (ask) { audio.current.play({ name: "locker" }); if (socket) socket.emit("manor:use", ask); } }, [socket]);
+  const doLight = useCallback((c) => { toggleTorch(c); audio.current.play({ name: "click" }); }, []);
+
+  // ── keyboard and mouse ─────────────────────────────────────────────────────
   useEffect(() => {
     const down = (e) => {
       const c = client.current;
       if (!c) return;
       audio.current.start();
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(k)) e.preventDefault();
-      if (inIntro(c)) { c.skipIntro = true; return; }
-      if (!playing(c)) {
-        if (k === "ArrowLeft") cycleWatch(c, -1);
-        if (k === "ArrowRight") cycleWatch(c, 1);
-        return;
-      }
+      if (k === " ") e.preventDefault();
+      if (!playing(c)) { if (k === "ArrowLeft") cycleWatch(c, -1); if (k === "ArrowRight") cycleWatch(c, 1); return; }
       keys.current[k] = true;
-      if (k === "r") c.body.runOn = !c.body.runOn;
+      if (k === "f") doLight(c);
       if (k === "e") doUse(c);
-      if (k === "f") c.body.light = !c.body.light;
-      if (k === "c") doChalk(c);
       syncHud();
     };
     const up = (e) => { keys.current[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; };
-    const blur = () => { keys.current = {}; stick.current = null; look.current = null; };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    window.addEventListener("blur", blur);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-      window.removeEventListener("blur", blur);
+    const blur = () => { keys.current = {}; stick.current = null; drag.current = null; };
+    const mm = (e) => {
+      const c = client.current;
+      if (!c || !playing(c)) return;
+      if (document.pointerLockElement === hostRef.current) lookBy(c.body, e.movementX, e.movementY);
+      else if (drag.current && drag.current.id === "m") { lookBy(c.body, e.clientX - drag.current.x, e.clientY - drag.current.y); drag.current.x = e.clientX; drag.current.y = e.clientY; }
     };
-  }, [socket, roomCode, syncHud, doUse, doChalk]);
+    window.addEventListener("keydown", down); window.addEventListener("keyup", up); window.addEventListener("blur", blur); window.addEventListener("mousemove", mm);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); window.removeEventListener("blur", blur); window.removeEventListener("mousemove", mm); };
+  }, [syncHud, doUse, doLight]);
 
-  // ── thumbs: left moves, right looks ────────────────────────────────────────
+  // ── thumbs: left 45% moves, the rest looks ─────────────────────────────────
   const onDown = (e) => {
     const c = client.current;
     audio.current.start();
-    if (!c) return;
-    if (inIntro(c)) { c.skipIntro = true; syncHud(); return; }
-    const at = toGame(e, sideways.current);
-    if (!playing(c)) return;
-    const cv = canvasRef.current;
-    if (e.pointerType === "mouse" || at.x >= view.current.W * 0.5) {
-      if (!look.current) { look.current = { id: e.pointerId, lx: at.x, ly: at.y }; cv.setPointerCapture(e.pointerId); }
-    } else if (!stick.current) {
-      stick.current = { id: e.pointerId, ox: at.x, oy: at.y, x: at.x, y: at.y };
-      cv.setPointerCapture(e.pointerId);
+    if (!c || !playing(c)) return;
+    if (e.pointerType === "mouse") {
+      if (document.pointerLockElement !== hostRef.current) {
+        try { const r = hostRef.current.requestPointerLock && hostRef.current.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch { /* fine */ }
+        drag.current = { id: "m", x: e.clientX, y: e.clientY };
+      }
+      return;
     }
+    const at = toGame(e, sideways.current), W = rootRef.current ? rootRef.current.clientWidth : window.innerWidth;
+    if (at.x < W * 0.45) { if (!stick.current) stick.current = { id: e.pointerId, ox: at.x, oy: at.y, x: 0, y: 0 }; }
+    else if (!drag.current) drag.current = { id: e.pointerId, x: at.x, y: at.y };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
   };
   const onMove = (e) => {
-    const st = stick.current, lk = look.current, c = client.current;
-    const at = toGame(e, sideways.current);
-    if (st && e.pointerId === st.id) { st.x = at.x; st.y = at.y; }
-    if (lk && e.pointerId === lk.id && c && playing(c)) { lookBy(c.body, at.x - lk.lx, at.y - lk.ly); lk.lx = at.x; lk.ly = at.y; }
+    if (e.pointerType === "mouse") return;
+    const c = client.current, at = toGame(e, sideways.current), st = stick.current;
+    if (st && e.pointerId === st.id) { const dx = at.x - st.ox, dy = at.y - st.oy, l = Math.hypot(dx, dy) || 1, k = Math.min(1, l / 50); st.x = dx / l * k; st.y = dy / l * k; }
+    const d = drag.current;
+    if (d && d.id === e.pointerId && c && playing(c)) { lookBy(c.body, (at.x - d.x) * 1.4, (at.y - d.y) * 1.4); d.x = at.x; d.y = at.y; }
   };
   const onEnd = (e) => {
     if (stick.current && e.pointerId === stick.current.id) stick.current = null;
-    if (look.current && e.pointerId === look.current.id) look.current = null;
+    if (drag.current && (drag.current.id === e.pointerId || (e.pointerType === "mouse" && drag.current.id === "m"))) drag.current = null;
   };
-
-  // Buttons act on touch-down: a phone won't reliably make a click while the
-  // other thumb holds the joystick, and jumping a barricade mid-run is that.
-  const press = (fn) => (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    audio.current.start();
-    const c = client.current;
-    if (c && playing(c)) { fn(c); syncHud(); }
-  };
+  // buttons act on touch-down: a phone won't reliably make a click while the other thumb holds the stick
+  const press = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); audio.current.start(); const c = client.current; if (c && playing(c)) { fn(c); syncHud(); } };
   const watch = (dir) => (e) => { e.preventDefault(); e.stopPropagation(); const c = client.current; if (c) { cycleWatch(c, dir); syncHud(); } };
 
   async function leave() {
@@ -298,120 +227,87 @@ export default function ManorGame({ roomCode, currentUser, isSpectator = false, 
     try { await onGameEnd?.(); } finally { setLeaving(false); }
   }
 
-  // ── the screen ─────────────────────────────────────────────────────────────
   const h = hud;
   const clock = h ? `${Math.floor(h.timeLeft / 60000)}:${String(Math.floor(h.timeLeft / 1000) % 60).padStart(2, "0")}` : "";
-  // watching: only once you've left, or if you came to watch — being caught
-  // is a moment's wait, not the end
   const watchingNow = h && !h.playing && !h.respawning && !over;
 
   return (
-    <div className={`hm hmx${rotated ? " hm-rot" : ""}`} ref={rootRef} data-no-fun>
-      <canvas ref={canvasRef} className="hm-cv"
-        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onEnd} onPointerCancel={onEnd} />
+    <div className={`s13 s13x${rotated ? " s13-rot" : ""}`} ref={rootRef} data-no-fun>
+      <div className="s13-host" ref={hostRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onEnd} onPointerCancel={onEnd} />
 
-      {!h && !gone && (
-        <div className="hm-ov"><p>Opening the house…</p></div>
-      )}
+      {!h && !gone && !noGl && <div className="s13-ov"><p>Opening the doors…</p></div>}
+      {noGl && <div className="s13-ov"><h1 className="s13-h2">STATION 13</h1><p>This device couldn't start the 3D view (WebGL). Try another browser.</p><button onClick={leave} disabled={leaving}>Back to the lobby</button></div>}
       {gone && !over && (
-        <div className="hm-ov">
-          <h1>The house is shut</h1>
-          <p>This match has already ended.</p>
-          <button className="hm-go" onClick={leave}>Back to the lobby</button>
-        </div>
+        <div className="s13-ov"><h1 className="s13-h2">CLOSED</h1><p>This match has already ended.</p><button onClick={leave}>Back to the lobby</button></div>
       )}
 
-      {h && !h.intro && !over && (
-        <div className="hm-hud hmx-hud">
+      {h && !over && (
+        <div className="s13-obj s13x-top">
           <div className="hmx-top">
             <span className="hmx-clock">{clock}</span>
             {h.side && (
               <span className="hmx-mine" style={{ "--c": h.side.color }}>
                 {Array.from({ length: h.side.need }).map((_, i) => <i key={i} className={i < h.side.got ? "got" : ""} />)}
-                <b>{h.side.got}/{h.side.need}</b>
+                <b>{h.side.got >= h.side.need ? "Elevator!" : `Fuses ${h.side.got}/${h.side.need}`}</b>
               </span>
             )}
-            {h.side && <span className="hmx-score" title="Times out · score">🚪 {h.side.escapes} · {h.side.score}</span>}
           </div>
-          {h.playing && <div className="hm-bar stam"><i style={{ width: `${h.stam * 100}%` }} /></div>}
-          {h.room && <div className="hm-room">{h.room}</div>}
-          {h.playing && (h.finale ? <div className="hm-run">🏃 Run to the front door!</div> : <Riddles list={h.riddles} />)}
+          {h.playing && <span>{h.area}</span>}
           <div className="hmx-who">
             {h.players.map((p) => (
-              <span key={p.id} className={`hmx-p${p.alive ? "" : " dead"}`} style={{ "--c": p.color }}
-                title={p.name}>
+              <span key={p.id} className={`hmx-p${p.alive ? "" : " dead"}`} style={{ "--c": p.color }} title={p.name}>
                 <i />{p.name}{p.left ? " · left" : !p.alive ? " · caught" : ""}
               </span>
             ))}
           </div>
-          {h.playing && (
-            <button className="hmx-leave" onPointerDown={(e) => { e.stopPropagation(); setConfirmLeave(true); }}>Leave</button>
-          )}
+          {h.playing && <button className="s13x-leave" onPointerDown={(e) => { e.stopPropagation(); setConfirmLeave(true); }}>Leave</button>}
         </div>
       )}
 
-      <div className="hm-msg" style={{ opacity: h && !h.intro && h.msg && !over ? 1 : 0 }} aria-live="polite">{h && !over ? h.msg : ""}</div>
-
-      {h && h.playing && h.hiding && !over && (
-        <div className="hm-hidetext">{h.close ? "Hold still… she's right outside." : "Hidden and safe. Press Use to come out."}</div>
-      )}
-      {h && !h.intro && !over && (
+      {h && h.playing && !over && (
         <>
-          {/* while she hums you may move; when it stops, she listens */}
-          <div className="hm-humming" aria-hidden="true">{h.silent ? "🤫 Nana has gone quiet…" : "♪ Nana is humming…"}</div>
+          <S13Hud h={h} />
+          {coarse && (
+            <div className="s13-tb">
+              <button type="button" className={h.run ? "on" : ""} onPointerDown={press(() => { runOn.current = !runOn.current; })}>RUN</button>
+              <button type="button" className={h.fl ? "on" : ""} onPointerDown={press(doLight)}>LIGHT</button>
+              <button type="button" className={h.use ? "on" : ""} onPointerDown={press(doUse)}>USE</button>
+            </div>
+          )}
         </>
       )}
+      {h && !h.playing && !h.respawning && h.msg && !over && <div className="s13-sub" style={{ opacity: 1 }}>{h.msg}</div>}
 
-      {h && h.playing && !h.intro && (
-        <div className="hm-pad">
-          <button className={`hm-chalk${h.chalk ? " on" : ""}`} onPointerDown={press(doChalk)} aria-label="Chalk a mark on the wall"
-            title="Chalk a mark on the wall in front of you — your friends see it too">✏️</button>
-          {/* Use — doors, hiding, a room's light switch */}
-          <button className={`hm-use${h.use ? " on" : ""}`} onPointerDown={press(doUse)}>{h.use || "Use"}</button>
-          <button className={`hm-light${h.light ? " on" : ""}`} onPointerDown={press((c) => { c.body.light = !c.body.light; })}
-            title="Your light. Off, and standing still in the dark, she loses you">{h.light ? "Light on" : "Light off"}</button>
-        </div>
-      )}
+      {/* Caught: a moment, then back in the Main Hall. */}
+      {h && h.respawning && !over && <div className="hmx-spec"><div className="hmx-banner">Caught! Back in the Main Hall in a moment…</div></div>}
 
-      {/* Caught: a moment, then back in at the entrance. */}
-      {h && h.respawning && !over && (
-        <div className="hmx-spec"><div className="hmx-banner">Caught! Back at the entrance in a moment…</div></div>
-      )}
-
-      {/* Left, or only watching: look through someone else's eyes until the
-          clock runs out, and go whenever you like. */}
+      {/* Left, or only watching: look through someone else's eyes. */}
       {watchingNow && h && (
-        <div className="hmx-spec">
-          {h.role === "player" && h.left && (
-            <div className="hmx-banner">You left the house. <span>Watch the others, or go back to the lobby.</span></div>
-          )}
+        <div className="hmx-spec s13x-spec">
+          {h.role === "player" && h.left && <div className="hmx-banner">You left the building. <span>Watch the others, or go back to the lobby.</span></div>}
           <div className="hmx-specbar">
             <button onPointerDown={watch(-1)} aria-label="Watch the previous player">◀</button>
-            <span className="hmx-watching" style={{ "--c": h.watching?.color || "#a39a88" }}>
-              {h.watching ? <>Watching <b>{h.watching.name}</b></> : "Nobody left inside"}
-            </span>
+            <span className="hmx-watching" style={{ "--c": h.watching?.color || "#a39a88" }}>{h.watching ? <>Watching <b>{h.watching.name}</b></> : "Nobody left inside"}</span>
             <button onPointerDown={watch(1)} aria-label="Watch the next player">▶</button>
           </div>
-          <button className="hmx-out" onClick={leave} disabled={leaving}>{leaving ? "Leaving…" : "← Leave"}</button>
+          <button onClick={leave} disabled={leaving}>{leaving ? "Leaving…" : "← Leave"}</button>
         </div>
       )}
 
       {confirmLeave && (
-        <div className="hm-ov">
-          <h1>Leave the house?</h1>
-          <p>
-            {h?.mode === "coop"
-              ? "Your friends play on to the end of the clock. What you've scored together still counts."
-              : "Your score so far counts. Anyone else plays on to the end of the clock."}
-          </p>
-          <button className="hm-go" onClick={leave} disabled={leaving}>{leaving ? "Leaving…" : "Leave"}</button>
-          <button className="hm-go" onClick={() => setConfirmLeave(false)}>Stay</button>
+        <div className="s13-ov">
+          <h1 className="s13-h2">LEAVE?</h1>
+          <p>{h?.mode === "coop" ? "Your friends play on to the end of the clock. What you've scored together still counts." : "Your score so far counts. Anyone else plays on to the end of the clock."}</p>
+          <div className="s13-row">
+            <button onClick={leave} disabled={leaving}>{leaving ? "Leaving…" : "Leave"}</button>
+            <button onClick={() => setConfirmLeave(false)}>Stay</button>
+          </div>
         </div>
       )}
 
       {over && <Results over={over} me={currentUser} onExit={leave} leaving={leaving} />}
 
-      {rotated && h && !over && <div className="hm-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
+      {rotated && h && !over && <div className="s13-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
     </div>
   );
 }
@@ -436,24 +332,24 @@ function Results({ over, me, onExit, leaving }) {
   const timeUp = over.reason === "time";
   const winnerName = (w) => (over.mode === "teams" ? `${w.name} team` : w.members[0]?.name || "Someone");
   const headline = coop
-    ? (mine && mine.escapes ? "You got out!" : "Nana kept you")
-    : iWon ? (over.mode === "teams" ? `${mine.name} team wins!` : "You got out — you win!")
+    ? (mine && mine.escapes ? "ESCAPED" : timeUp ? "THE NIGHT RAN OUT" : "NOBODY GOT OUT")
+    : iWon ? (over.mode === "teams" ? `${mine.name} team wins` : "YOU ESCAPED FIRST")
     : winners.length ? `${winnerName(winners[0])} got out first`
-    : timeUp ? "The night ran out" : "Nobody got out";
+    : timeUp ? "THE NIGHT RAN OUT" : "NOBODY GOT OUT";
   const sub = coop
-    ? (mine && mine.escapes ? `Out through the front door together — ${mine.score} points.` : timeUp ? "The clock ran out before you found the way out." : "Nobody made it out.")
+    ? (mine && mine.escapes ? `Out through the elevator together — ${mine.score} points. Behind the doors, something keeps knocking.` : timeUp ? "The clock ran out before you reached the elevator." : "Nobody made it out.")
     : winners.length ? "First one out wins." : "Nobody got out before the clock ran out — nobody wins.";
   return (
-    <div className="hm-ov hmx-results">
-      <h1>{headline}</h1>
+    <div className="s13-ov hmx-results">
+      <h1 className="s13-h2">{headline}</h1>
       <p>{sub}</p>
       <div className="hmx-standings">
-        {over.sides.map((s, i) => (
+        {over.sides.map((s) => (
           <div key={s.key} className={`hmx-row${mine && s.key === mine.key ? " mine" : ""}`} style={{ "--c": s.color }}>
             <span className="hmx-place">{s.escapes ? "🏆" : "✕"}</span>
             <span className="hmx-name">
               <b>{over.mode === "free" ? s.members[0]?.name : s.name}</b>
-              <small>{s.escapes ? "Got out · " : ""}{plural(s.total, "key", "keys")}{over.mode !== "free" ? ` · ${s.members.map((m) => m.name).join(", ")}` : ""}</small>
+              <small>{s.escapes ? "Got out · " : ""}{plural(s.total, "fuse", "fuses")}{over.mode !== "free" ? ` · ${s.members.map((m) => m.name).join(", ")}` : ""}</small>
             </span>
             <span className="hmx-got">{s.score}</span>
           </div>
@@ -462,13 +358,13 @@ function Results({ over, me, onExit, leaving }) {
       {ctx && (
         <>
           {rematch && <p className="hmx-rematch">🎮 {rematch.by} started a new game — join in!</p>}
-          <button className="hm-go hm-again" onClick={playAgain} disabled={again === "busy" || leaving}>
-            {again === "busy" ? "Setting up…" : rematch ? `🔄 Join ${rematch.by}'s game` : "🔄 Play again"}
-          </button>
+          <button onClick={playAgain} disabled={again === "busy" || leaving}>{again === "busy" ? "Setting up…" : rematch ? `Join ${rematch.by}'s game` : "Play again"}</button>
           {again && again !== "busy" && <p className="hmx-rematch">{again}</p>}
         </>
       )}
-      <button className="hm-go" onClick={onExit} disabled={leaving}>{leaving ? "Saving…" : "Back to the lobby"}</button>
+      <button onClick={onExit} disabled={leaving}>{leaving ? "Saving…" : "Back to the lobby"}</button>
     </div>
   );
 }
+
+export const S13_NEED = NEED;

@@ -52,16 +52,16 @@ function decideResult({ seated, myUserId, myScore, gameSlug }) {
   return (Number(me?.pairs_matched) || 0) >= needed ? "win" : "loss";
 }
 
-// ── Hollow Manor ─────────────────────────────────────────────────────────────
-// The server keeps this game's scores itself (config/manorWorld.js). A match
-// runs the whole clock: getting out scores ESCAPE_POINTS and you go round
-// again; every relic is RELIC 100. One round's relics (at most 9, a four-
-// player co-op: MAX_RELIC_POINTS) never reach ESCAPE_POINTS, so a score of
-// ESCAPE_POINTS or more means the side got out at least once.
+// ── Station 13 (slug "manor") ────────────────────────────────────────────────
+// The server keeps this game's scores itself (config/manorWorld.js). Getting
+// out through the elevator scores ESCAPE_POINTS and ends the match; every
+// fuse is 100. A side's fuses (4, so 400 — under MAX_RELIC_POINTS) never
+// reach ESCAPE_POINTS, so a score of ESCAPE_POINTS or more means the side
+// got out.
 //
-// When the clock stops the highest score wins, a tie at the top is a draw —
-// but nobody wins without getting out: a match where nobody escaped has no
-// winner, however many relics were found. Sides are compared on their own
+// The highest score wins, a tie at the top is a draw — but nobody wins
+// without getting out: a match where nobody escaped has no winner, however
+// many fuses were found. Sides are compared on their own
 // score, not a sum over members: every member of a side carries the side's
 // score, so summing would hand the win to the bigger team.
 const ESCAPE_POINTS = 1000;

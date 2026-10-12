@@ -1,5 +1,5 @@
 // src/components/horror/LandscapeGate.jsx
-// Hollow Manor is first-person with a thumb on each side of the screen: it is
+// Station 13 is first-person with a thumb on each side of the screen: it is
 // a landscape game, whatever the phone thinks.
 //
 // Two layers, because neither works everywhere:
@@ -9,7 +9,7 @@
 //      touch; an installed app may be allowed straight away. iPhone Safari
 //      never allows it.
 //   2. Whatever the phone says, if the screen is still upright, the game
-//      draws itself turned a quarter (.hm-rot), so you just turn the phone
+//      draws itself turned a quarter (.s13-rot), so you just turn the phone
 //      and it's sideways. This is what makes it work in the installed app
 //      (manifest.json locks that to portrait, and the lock did not always
 //      take), with rotation lock on, and on an iPhone.
@@ -64,7 +64,7 @@ const sideSub = (f) => { sideSubs.add(f); return () => sideSubs.delete(f); };
 export const useDrawnSideways = () => useSyncExternalStore(sideSub, isDrawnSideways);
 
 // For a game screen: ask to turn as it opens and on the first touch, and
-// report whether the game must draw itself sideways (`.hm-rot` on the root).
+// report whether the game must draw itself sideways (`.s13-rot` on the root).
 // Returns [rotated, rotatedRef] — the ref for event handlers.
 export function useSideways() {
   const rotated = useUprightTouch();

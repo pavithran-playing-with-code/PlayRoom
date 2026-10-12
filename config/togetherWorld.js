@@ -3,7 +3,7 @@
 // Kitchen Rush, Tower Guard, Bomb Blast and Carrom are played in worlds the
 // server keeps: a kitchen two friends cook in, a castle everyone defends, an
 // arena or a board everyone is in at once. A world shared by several phones
-// can't live on any one of them, so — like Hollow Manor
+// can't live on any one of them, so — like Station 13
 // (config/manorWorld.js) — the server keeps it in memory and runs it.
 //
 // Sides (rooms.mode):

@@ -1,5 +1,5 @@
 // src/components/together/FloatStick.jsx
-// A thumb stick that sits wherever your left thumb lands — like Nana's house.
+// A thumb stick that sits wherever your left thumb lands — like Station 13.
 // It's a wide patch over the bottom left of a landscape game: touch anywhere
 // in it and the ring appears under your thumb; slide to steer; let go and
 // it's gone (a faint ring shows where to put your thumb).

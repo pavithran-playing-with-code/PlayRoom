@@ -1,112 +1,119 @@
 // src/pages/Manor.jsx
-// NANA'S LULLABY — a first-person horror page. No room, no login,
-// no navbar; the second dark door in the header leads here.
+// STATION 13, solo — a first-person horror page. No room, no login, no
+// navbar; the dark door in the header leads here.
 //
-// The rules are components/horror/manorSim.js, the pictures manorRender.js,
-// the sound manorAudio.js. This file is input, the loop, and the HUD.
-//
-// Play state lives in a ref and is ticked every frame; the HUD is mirrored
-// into React state a dozen times a second, which is plenty for two bars and
-// a line of text, and immediately after any button press.
+// The rules are components/horror/s13Sim.js (on s13Core.mjs), the pictures
+// s13Scene.js (three.js, loaded when the page opens), the sound s13Audio.js.
+// This file is input, the loop, the menus and the HUD. Play state lives in a
+// ref and is ticked every frame; the HUD is mirrored into React state a few
+// times a second.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  newNight, tick, begin, doAction, actionLabel, toggleRun, toggleLight, timeText, roomName, listening, chalk, canChalk,
-} from "../components/horror/manorSim";
-import { drawManor, lookBy, SPRINT_PX, STICK_R } from "../components/horror/manorRender";
-import { createManorAudio } from "../components/horror/manorAudio";
+import { newRun, tick, interact, toggleLight, actionLabel, timeText } from "../components/horror/s13Sim";
+import { NEED } from "../components/horror/s13Core.mjs";
+import { createStation } from "../components/horror/s13Scene";
+import { createS13Audio } from "../components/horror/s13Audio";
 import { useSideways, goLandscape, toGame } from "../components/horror/LandscapeGate";
 
-const HUD_MS = 80;
-const SHOW_CAUGHT_AFTER = 1.4;     // seconds of its face before the card
+const HUD_MS = 120;
+export const QN = ["Low", "Medium", "High"];
+export const coarse = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(pointer:coarse)").matches;
+export const store = {
+  get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* fine */ } },
+};
+// quality and the awareness cue, kept between visits (phones start on Low)
+export const loadSettings = () => { const v = store.get("s13_set", null); return { q: v && v.q != null ? v.q : coarse ? 0 : 1, aw: !v || v.aw !== false }; };
 
-// No map and no distances: Nana's riddles (ticked off as you find each key),
-// and at the end, the run.
-const hudOf = (s) => s && ({
-  riddles: s.riddles.map((text, i) => ({ text, got: s.relics[i].got })),
-  finale: s.finale, close: Math.hypot(s.G.x - s.P.x, s.G.y - s.P.y) < 3, chalk: canChalk(s),
-  mode: s.mode, night: s.night, count: s.count, need: s.need, stam: s.P.stam,
-  runOn: s.P.runOn, tired: s.P.stamCool > 0,
-  light: s.P.light, msg: s.msg, use: actionLabel(s), hiding: !!s.P.hiding, room: roomName(s),
-  silent: s.mode === "play" && !s.P.entering && listening(s),
-});
-
-// Nana's riddles, one per key: found ones crossed off.
-export function Riddles({ list }) {
-  if (!list || !list.length) return null;
-  return (
-    <div className="hm-riddles">
-      {list.map((q, i) => <div key={i} className={q.got ? "got" : ""}>📜 {q.got ? "found" : q.text}</div>)}
-    </div>
-  );
+// Look: mouse or thumb. Hiding, you can only peer out through the slits.
+export function lookBy(P, dx, dy) {
+  if (P.hid) { P.yaw -= dx * 0.002; P.pitch = Math.max(-0.4, Math.min(0.4, P.pitch - dy * 0.002)); return; }
+  P.yaw -= dx * 0.0025; P.pitch = Math.max(-1.3, Math.min(1.3, P.pitch - dy * 0.0025));
 }
 
 export default function Manor() {
   const navigate = useNavigate();
-  const sim = useRef(null);
-  const audio = useRef(null);
-  const night = useRef(1);
-  const canvasRef = useRef(null);
   const rootRef = useRef(null);
-  const view = useRef({ W: 390, H: 844, dpr: 1, safeTop: 0 });
+  const hostRef = useRef(null);
+  const sim = useRef(null);
+  const scene = useRef(null);
+  const three = useRef(null);
+  const audio = useRef(null);
   const keys = useRef({});
   const stick = useRef(null);
-  const look = useRef(null);
-  const shown = useRef(false);
+  const drag = useRef(null);
+  const runOn = useRef(false);
+  const lastMode = useRef("");
 
-  const [screen, setScreen] = useState("menu");        // menu | game | over
+  const [set, setSet] = useState(loadSettings);
+  const setRef = useRef(set);
+  setRef.current = set;
+  const [screen, setScreen] = useState("title");        // title | play | pause | dead | won
   const [hud, setHud] = useState(null);
-  const [over, setOver] = useState(null);              // { win, title, text, again }
-  const syncHud = useCallback(() => setHud(hudOf(sim.current)), []);
+  const [best, setBest] = useState(() => store.get("s13_best", null));
+  const [noGl, setNoGl] = useState(false);
+  const [ready, setReady] = useState(false);
+  const screenRef = useRef(screen);
+  screenRef.current = screen;
 
   // A landscape game: if the screen stays upright, it draws itself sideways.
   const [rotated, sideways] = useSideways();
-  useEffect(() => { stick.current = null; look.current = null; }, [rotated]);
+
+  const buildScene = useCallback((s) => {
+    if (!three.current || !hostRef.current) return;
+    if (scene.current) { scene.current.dispose(); scene.current = null; }
+    try {
+      scene.current = createStation(hostRef.current, three.current,
+        { layout: s.st, items: s.items, lockers: s.lockers, quality: setRef.current.q, aware: setRef.current.aw });
+    } catch (e) { setNoGl(true); }
+  }, []);
 
   useEffect(() => {
     document.body.classList.add("in-game");
-    const noMenu = (e) => e.preventDefault();          // a long press is a held button, not a copy menu
+    const noMenu = (e) => e.preventDefault();
     document.addEventListener("contextmenu", noMenu);
-    audio.current = createManorAudio();
+    audio.current = createS13Audio();
+    let alive = true;
+    import("three").then((m) => {
+      if (!alive) return;
+      three.current = m;
+      buildScene(newRun(1));             // the title's backdrop: a house to look round
+      setReady(true);
+    }).catch(() => { if (alive) setNoGl(true); });
     return () => {
+      alive = false;
       document.body.classList.remove("in-game");
       document.removeEventListener("contextmenu", noMenu);
-      audio.current.close();                            // or the drone follows you out
+      audio.current.close();
+      if (scene.current) scene.current.dispose();
+      if (document.pointerLockElement) document.exitPointerLock();
     };
-  }, []);
+  }, [buildScene]);
 
-  const newGame = useCallback(() => {
-    goLandscape();                                      // a tap, so the browser allows it
+  const start = useCallback(() => {
+    goLandscape();
     audio.current.start();
-    sim.current = newNight(Math.floor(Math.random() * 1e9) + 1, night.current);
-    stick.current = null;
-    look.current = null;
-    shown.current = false;
-    setOver(null);
-    setScreen("game");
-    syncHud();
-  }, [syncHud]);
+    const s = newRun(Math.floor(Math.random() * 1e9) + 1);
+    sim.current = s;
+    lastMode.current = "";
+    buildScene(s);
+    keys.current = {}; stick.current = null; drag.current = null; runOn.current = false;
+    setScreen("play");
+    if (!coarse && hostRef.current && hostRef.current.requestPointerLock) { try { const r = hostRef.current.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch { /* fine */ } }
+  }, [buildScene]);
 
-  // size the canvas to the screen
-  useEffect(() => {
-    const fit = () => {
-      const c = canvasRef.current;
-      if (!c) return;
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
-      // the game's own box: the screen, or the screen turned a quarter
-      const box = rootRef.current;
-      const W = box ? box.clientWidth : window.innerWidth, H = box ? box.clientHeight : window.innerHeight;
-      c.width = W * dpr; c.height = H * dpr;
-      const safeTop = rootRef.current ? parseFloat(getComputedStyle(rootRef.current).paddingTop) || 0 : 0;
-      view.current = { W, H, dpr, safeTop };
-    };
-    fit();
-    window.addEventListener("resize", fit);
-    // turning the phone (or being drawn turned) changes the box, not always the window
-    const ro = typeof ResizeObserver !== "undefined" && rootRef.current ? new ResizeObserver(fit) : null;
-    if (ro) ro.observe(rootRef.current);
-    return () => { window.removeEventListener("resize", fit); if (ro) ro.disconnect(); };
+  // a window for tests (the original's window.__game): the run, and a way in
+  useEffect(() => { window.__s13 = { sim: () => sim.current, start, screen: () => screenRef.current }; return () => { delete window.__s13; }; }, [start]);
+
+  const pause = useCallback((v) => {
+    if (!sim.current || sim.current.mode !== "play") return;
+    setScreen(v ? "pause" : "play");
+    if (v && document.pointerLockElement) document.exitPointerLock();
   }, []);
+  const toTitle = () => { sim.current = null; setScreen("title"); };
+
+  const changeQ = () => { const q = (set.q + 1) % 3; const n = { ...set, q }; setSet(n); store.set("s13_set", n); if (scene.current) scene.current.setQuality(q); };
+  const changeAw = () => { const n = { ...set, aw: !set.aw }; setSet(n); store.set("s13_set", n); if (scene.current) scene.current.setAware(n.aw); };
 
   // the loop
   useEffect(() => {
@@ -115,183 +122,196 @@ export default function Manor() {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.05, (ts - last) / 1000 || 0);
       last = ts;
-      const s = sim.current;
-      if (!s || screen === "menu") return;
-
-      const k = keys.current;
-      let ix = 0, iy = 0;
-      if (k.a) ix--;
-      if (k.d) ix++;
-      if (k.w || k.ArrowUp) iy--;
-      if (k.s || k.ArrowDown) iy++;
-      const st = stick.current;
-      if (st) {
-        const dx = st.x - st.ox, dy = st.y - st.oy, l = Math.hypot(dx, dy);
-        if (l > 8) { ix = dx / Math.max(l, 1) * Math.min(1, l / STICK_R); iy = dy / Math.max(l, 1) * Math.min(1, l / STICK_R); }
-        st.run = l > SPRINT_PX;                          // pushed past the ring: sprint
+      const sc = scene.current, s = sim.current;
+      if (!sc) return;
+      const t = ts / 1000;
+      if (screenRef.current === "title" || !s) { sc.title(t); return; }
+      if (screenRef.current === "play" || s.mode === "dead") {
+        const k = keys.current, st = stick.current;
+        const ix = (k.d ? 1 : 0) - (k.a ? 1 : 0) + (st ? st.x : 0), iz = (k.w ? 1 : 0) - (k.s ? 1 : 0) - (st ? st.y : 0);
+        tick(s, { ix, iz, run: !!k.Shift || runOn.current }, dt);
       }
-      const turn = (k.ArrowRight ? 1 : 0) - (k.ArrowLeft ? 1 : 0);
-      tick(s, { ix, iy, turn, shift: !!k.Shift || !!(st && st.run) }, dt);
-
-      for (const ev of s.events) audio.current.play(ev);
+      for (const e of s.events) { audio.current.play(e); if (e.name === "caught") sc.flash(); }
       s.events.length = 0;
-      // her lullaby: louder the nearer she is; nothing at all while she
-      // listens, or once she's hunting at the end
-      const near = Math.max(0, 1 - Math.hypot(s.P.x - s.G.x, s.P.y - s.G.y) / 18);
-      audio.current.humming(s.mode === "play" && !s.P.entering && !listening(s) && !s.finale, near);
-      // the music box of the nearest key: louder the shorter the walk, from the way to go
-      const tn = s.mode === "play" ? s.tune : null;
-      audio.current.tune(!!tn, tn ? tn.vol : 0, tn ? tn.pan : 0);
-
-      if (!shown.current && (s.mode === "won" || (s.mode === "dead" && s.deadT > SHOW_CAUGHT_AFTER))) {
-        shown.current = true;
-        const t = timeText(s.tm);
+      audio.current.tick(dt, s.P, [s.M], s.tlv, s.mode === "play" && screenRef.current === "play");
+      sc.frame({ mode: s.mode, P: s.P, monsters: [s.M], lit: s.lit, ready: s.fuses >= NEED, itemsGot: s.items.map((i) => i.got), tlv: s.tlv, flick: s.flick, shake: s.shake, catcher: 0 }, dt, t);
+      if (s.mode !== lastMode.current) {
+        lastMode.current = s.mode;
         if (s.mode === "won") {
-          night.current++;
-          setOver({
-            win: true, title: "You got out", again: `Night ${night.current}`,
-            text: `The front door clicks shut behind you, and the humming fades. Time in Nana's house: ${t}. Next night the house is bigger, and she is quicker.`,
-          });
-        } else {
-          setOver({
-            win: false, title: "Nana found you", again: "Try again",
-            text: `"There you are, dear." Keys found: ${s.count} of ${s.need}. Time: ${t}.`,
-          });
+          const sec = Math.floor(s.time), b = store.get("s13_best", null);
+          if (!b || sec < b) { store.set("s13_best", sec); setBest(sec); }
+          if (document.pointerLockElement) document.exitPointerLock();
+          setScreen("won");
         }
-        setScreen("over");
       }
-
-      const c = canvasRef.current;
-      if (c) drawManor(c.getContext("2d"), s, view.current, ts / 1000, stick.current);
-      if (ts - lastHud > HUD_MS) { lastHud = ts; syncHud(); }
+      if (s.mode === "dead" && s.deadT > 1.6 && screenRef.current !== "dead") { if (document.pointerLockElement) document.exitPointerLock(); setScreen("dead"); }
+      if (ts - lastHud > HUD_MS) {
+        lastHud = ts;
+        setHud({ fuses: s.fuses, area: s.area, bat: s.P.bat, stam: s.P.stam, msg: s.msg, use: actionLabel(s), fl: s.P.fl && s.P.bat > 0, run: runOn.current, stick: stick.current && { ...stick.current } });
+      }
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [screen, syncHud]);
+  }, []);
+
+  useEffect(() => {
+    const r = () => scene.current && scene.current.resize();
+    window.addEventListener("resize", r);
+    const ro = typeof ResizeObserver !== "undefined" && rootRef.current ? new ResizeObserver(r) : null;
+    if (ro) ro.observe(rootRef.current);
+    return () => { window.removeEventListener("resize", r); if (ro) ro.disconnect(); };
+  }, []);
 
   // keyboard, for a desk
   useEffect(() => {
     const down = (e) => {
-      const s = sim.current;
-      if (screen !== "game" || !s) return;
       const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(k)) e.preventDefault();
-      if (s.mode === "intro") { begin(s); return; }
+      if (k === " ") e.preventDefault();
+      if (k === "Escape" || k === "p") { if (screenRef.current === "play") pause(true); else if (screenRef.current === "pause") pause(false); return; }
+      const s = sim.current;
+      if (!s || screenRef.current !== "play") return;
       keys.current[k] = true;
-      if (k === "r") toggleRun(s);
-      if (k === "e") doAction(s);
       if (k === "f") toggleLight(s);
-      if (k === "c") chalk(s);
-      syncHud();
+      if (k === "e") interact(s);
     };
     const up = (e) => { keys.current[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; };
-    const blur = () => { keys.current = {}; stick.current = null; look.current = null; };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    window.addEventListener("blur", blur);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-      window.removeEventListener("blur", blur);
-    };
-  }, [screen, syncHud]);
+    const blur = () => { keys.current = {}; stick.current = null; drag.current = null; };
+    window.addEventListener("keydown", down); window.addEventListener("keyup", up); window.addEventListener("blur", blur);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); window.removeEventListener("blur", blur); };
+  }, [pause]);
 
-  // Left thumb moves (a joystick wherever it lands), right thumb looks.
+  // mouse look with the pointer locked (or dragged, if the lock is refused)
+  useEffect(() => {
+    const mm = (e) => {
+      const s = sim.current;
+      if (!s || screenRef.current !== "play") return;
+      if (document.pointerLockElement === hostRef.current) lookBy(s.P, e.movementX, e.movementY);
+      else if (drag.current && drag.current.id === "m") { lookBy(s.P, e.clientX - drag.current.x, e.clientY - drag.current.y); drag.current.x = e.clientX; drag.current.y = e.clientY; }
+    };
+    window.addEventListener("mousemove", mm);
+    return () => window.removeEventListener("mousemove", mm);
+  }, []);
+
+  // thumbs: the left 45% moves (a stick wherever it lands), the rest looks
   const onDown = (e) => {
     const s = sim.current;
-    if (!s) return;
-    if (s.mode === "intro") { begin(s); syncHud(); return; }
-    const c = canvasRef.current;
-    const at = toGame(e, sideways.current);
-    if (e.pointerType === "mouse" || at.x >= view.current.W * 0.5) {
-      if (!look.current) { look.current = { id: e.pointerId, lx: at.x, ly: at.y }; c.setPointerCapture(e.pointerId); }
-    } else if (!stick.current) {
-      stick.current = { id: e.pointerId, ox: at.x, oy: at.y, x: at.x, y: at.y };
-      c.setPointerCapture(e.pointerId);
+    audio.current.start();
+    if (!s || screenRef.current !== "play") return;
+    if (e.pointerType === "mouse") {
+      if (document.pointerLockElement !== hostRef.current) {
+        try { const r = hostRef.current.requestPointerLock && hostRef.current.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch { /* fine */ }
+        drag.current = { id: "m", x: e.clientX, y: e.clientY };
+      }
+      return;
     }
+    const at = toGame(e, sideways.current), W = rootRef.current ? rootRef.current.clientWidth : window.innerWidth;
+    if (at.x < W * 0.45) { if (!stick.current) stick.current = { id: e.pointerId, ox: at.x, oy: at.y, x: 0, y: 0 }; }
+    else if (!drag.current) drag.current = { id: e.pointerId, x: at.x, y: at.y };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
   };
   const onMove = (e) => {
-    const st = stick.current, lk = look.current, s = sim.current;
-    const at = toGame(e, sideways.current);
-    if (st && e.pointerId === st.id) { st.x = at.x; st.y = at.y; }
-    if (lk && e.pointerId === lk.id && s && s.mode === "play") { lookBy(s.P, at.x - lk.lx, at.y - lk.ly); lk.lx = at.x; lk.ly = at.y; }
+    if (e.pointerType === "mouse") return;
+    const s = sim.current, at = toGame(e, sideways.current), st = stick.current;
+    if (st && e.pointerId === st.id) { const dx = at.x - st.ox, dy = at.y - st.oy, l = Math.hypot(dx, dy) || 1, k = Math.min(1, l / 50); st.x = dx / l * k; st.y = dy / l * k; }
+    const d = drag.current;
+    if (d && d.id === e.pointerId && s) { lookBy(s.P, (at.x - d.x) * 1.4, (at.y - d.y) * 1.4); d.x = at.x; d.y = at.y; }
   };
   const onEnd = (e) => {
     if (stick.current && e.pointerId === stick.current.id) stick.current = null;
-    if (look.current && e.pointerId === look.current.id) look.current = null;
+    if (drag.current && (drag.current.id === e.pointerId || (e.pointerType === "mouse" && drag.current.id === "m"))) drag.current = null;
   };
+  // buttons act on touch-down: a phone won't reliably make a click while the other thumb holds the stick
+  const press = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); audio.current.start(); if (sim.current && screenRef.current === "play") fn(sim.current); };
 
-  // Buttons act on touch-down, not click: a phone does not reliably turn a
-  // tap into a click while the other thumb is holding the joystick, and
-  // jumping a barricade mid-run is exactly that.
-  const press = (fn) => (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (sim.current) { fn(sim.current); syncHud(); }
-  };
-
-  const playing = screen === "game" && hud && hud.mode === "play";
+  const h = hud;
+  const playing = screen === "play" && h;
+  const bestText = best ? `${Math.floor(best / 60)}:${String(best % 60).padStart(2, "0")}` : "none";
 
   return (
-    <div className={`hm${rotated ? " hm-rot" : ""}`} ref={rootRef} data-no-fun>
-      <canvas ref={canvasRef} className="hm-cv"
-        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onEnd} onPointerCancel={onEnd} />
+    <div className={`s13${rotated ? " s13-rot" : ""}`} ref={rootRef} data-no-fun>
+      <div className="s13-host" ref={hostRef} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onEnd} onPointerCancel={onEnd} />
 
-      {rotated && screen === "game" && <div className="hm-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
+      {playing && (
+        <>
+          <div className="s13-obj">{h.fuses < NEED ? `Fuses ${h.fuses} / ${NEED}` : "Reach the elevator"}<br /><span>{h.area}</span></div>
+          <S13Hud h={h} />
+          {coarse && (
+            <div className="s13-tb">
+              <button type="button" className={h.run ? "on" : ""} onPointerDown={press(() => { runOn.current = !runOn.current; })}>RUN</button>
+              <button type="button" className={h.fl ? "on" : ""} onPointerDown={press(toggleLight)}>LIGHT</button>
+              <button type="button" className={h.use ? "on" : ""} onPointerDown={press(interact)}>USE</button>
+              <button type="button" onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); pause(true); }}>||</button>
+            </div>
+          )}
+        </>
+      )}
 
-      <div className={`hm-hud${playing ? "" : " off"}`}>
-        <div className="hm-keys">{"●".repeat(hud?.count || 0)}{"○".repeat(Math.max(0, (hud?.need || 3) - (hud?.count || 0)))} <span>keys · night {hud?.night}</span></div>
-        <div className="hm-bar stam"><i style={{ width: `${(hud?.stam ?? 1) * 100}%` }} /></div>
-        <div className="hm-room">{hud?.room}</div>
-        {hud?.finale
-          ? <div className="hm-run">🏃 Run to the front door!</div>
-          : <Riddles list={hud?.riddles} />}
-      </div>
+      {noGl && (
+        <div className="s13-ov"><h1>STATION 13</h1><p>This device couldn't start the 3D view (WebGL). Try another browser.</p><button onClick={() => navigate("/")}>← Leave</button></div>
+      )}
 
-      {/* hidden: how it's going */}
-      <div className={`hm-hidetext${playing && hud.hiding ? "" : " off"}`}>
-        {hud?.close ? "Hold still… she's right outside." : "Hidden and safe. Press Use to come out."}
-      </div>
-
-      {/* while she hums you may move; when it stops, she listens */}
-      <div className={`hm-humming${playing ? "" : " off"}`} aria-hidden="true">{hud?.silent ? "🤫 Nana has gone quiet…" : "♪ Nana is humming…"}</div>
-
-      <div className="hm-msg" style={{ opacity: playing && hud.msg ? 1 : 0 }} aria-live="polite">{playing ? hud.msg : ""}</div>
-
-      {/* On the right: Use — doors, hiding, a room's light switch; lit when
-          there's something in front of you — the light, and chalk for the
-          wall in front of you. Running is the stick pushed out past its ring. */}
-      <div className={`hm-pad${playing ? "" : " off"}`}>
-        <button className={`hm-chalk${hud?.chalk ? " on" : ""}`} onPointerDown={press(chalk)} aria-label="Chalk a mark on the wall"
-          title="Chalk a mark on the wall in front of you">✏️</button>
-        <button className={`hm-use${hud?.use ? " on" : ""}`} onPointerDown={press(doAction)}>{hud?.use || "Use"}</button>
-        <button className={`hm-light${hud?.light ? " on" : ""}`} onPointerDown={press(toggleLight)}
-          title="Your light. Off, and standing still in the dark, she loses you">{hud?.light ? "Light on" : "Light off"}</button>
-      </div>
-
-      {screen === "menu" && (
-        <div className="hm-ov hm-nana">
-          <button className="hm-leave" onClick={() => navigate("/")}>← Leave</button>
-          <h1>Nana's Lullaby</h1>
-          <p>Sweet old Nana Elowen never left her house. She hums a lullaby as she walks the halls, and she does not like visitors.</p>
-          <p>There is no map. Her note tells you where her three keys are, in riddles; each key sits in a music box — <b>follow the tune</b>, and read the signs over the doors. While you hear her humming, you are safe to move. <b>When the humming stops, she is listening. Freeze.</b> With the last key, the humming stops for good: run for the front door.</p>
-          <button className="hm-go" onClick={newGame}>Enter the house</button>
-          <p className="hm-small">
-            Move: WASD. Look: drag the mouse or use the left and right arrows. Run: Shift or R. Use (open doors,
-            hide in beds, wardrobes and under tables, a room's light switch): E. Chalk the wall in front of you: C. A light switched on stays on — until she walks into that room.<br />
-            On a phone: left thumb moves (push it out past the ring to run), right thumb looks, and the buttons are on the right.
+      {screen === "title" && !noGl && (
+        <div className="s13-ov">
+          <button className="s13-leave" onClick={() => navigate("/")}>← Leave</button>
+          <h1>STATION 13</h1>
+          <p>The power failed at 02:14. The last train never came. The hospital's lights are failing. Where the power holds, you can see. Everywhere else, you have only your torch. Find four fuses, restart the elevator, and do not be heard.</p>
+          <div className="s13-row">
+            <button onClick={start} disabled={!ready}>{ready ? "Enter" : "Loading…"}</button>
+            <button onClick={changeQ}>Quality: {QN[set.q]}</button>
+            <button onClick={changeAw}>Awareness cue: {set.aw ? "On" : "Off"}</button>
+          </div>
+          <p className="s13-small">
+            WASD move · Mouse look · Shift run (loud) · F flashlight · E hide / use · Esc pause<br />
+            Phone: left thumb moves, right thumb looks; RUN, LIGHT, USE on the right.<br />
+            Best escape: {bestText}
           </p>
         </div>
       )}
 
-      {screen === "over" && over && (
-        <div className="hm-ov">
-          <button className="hm-leave" onClick={() => navigate("/")}>← Leave</button>
-          <h1>{over.title}</h1>
-          <p>{over.text}</p>
-          <button className="hm-go" onClick={newGame}>{over.again}</button>
+      {screen === "pause" && (
+        <div className="s13-ov">
+          <h1 className="s13-h2">PAUSED</h1>
+          <button onClick={() => pause(false)}>Resume</button>
+          <button onClick={changeQ}>Quality: {QN[set.q]}</button>
+          <button onClick={changeAw}>Awareness cue: {set.aw ? "On" : "Off"}</button>
+          <button onClick={toTitle}>Abandon</button>
         </div>
       )}
+
+      {screen === "dead" && (
+        <div className="s13-ov s13-dead">
+          <h1>YOU WERE FOUND</h1>
+          <button onClick={start}>Try again</button>
+          <button onClick={toTitle}>Back</button>
+        </div>
+      )}
+
+      {screen === "won" && (
+        <div className="s13-ov">
+          <h1>ESCAPED</h1>
+          <p>You made it out in {timeText(sim.current ? sim.current.time : 0)}. Behind the elevator doors, something keeps knocking.</p>
+          <button onClick={toTitle}>Return</button>
+        </div>
+      )}
+
+      {rotated && playing && <div className="s13-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
     </div>
+  );
+}
+
+// The battery and stamina bars, the [E] prompt, the line at the bottom, and
+// the stick under your thumb — the same in a room.
+export function S13Hud({ h }) {
+  const low = h.bat < 20;
+  return (
+    <>
+      <div className="s13-hud">
+        <div className="s13-bt"><i className={low ? "low" : ""} style={{ width: `${h.bat}%` }} /></div>
+        <div className="s13-st" style={{ opacity: h.stam < 0.98 ? 1 : 0 }}><i style={{ width: `${h.stam * 100}%` }} /></div>
+      </div>
+      <div className="s13-pr">{h.use ? (coarse ? h.use : `[E] ${h.use}`) : ""}</div>
+      <div className="s13-sub" style={{ opacity: h.msg ? 1 : 0 }}>{h.msg}</div>
+      {h.stick && <div className="s13-stick" style={{ left: h.stick.ox - 50, top: h.stick.oy - 50 }}><i style={{ transform: `translate(${h.stick.x * 40}px,${h.stick.y * 40}px)` }} /></div>}
+    </>
   );
 }

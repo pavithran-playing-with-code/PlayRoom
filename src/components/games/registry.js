@@ -238,12 +238,12 @@ export const GAMES = [
     Component: CarromGame,
   },
   {
-    slug: "manor", name: "Nana's Lullaby", icon: "👵",
-    blurb: "No map. Follow the music boxes to Nana's keys — freeze when her humming stops, then run for the door.",
+    slug: "manor", name: "Station 13", icon: "🏥",
+    blurb: "A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.",
     minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--grape)",
     coopMax: 4, defaultDuration: 300, ownsSpectating: true,
-    coopLabel: "everyone gets out, or nobody does",
-    coopNote: "You're all on one side: chalk the walls, split up to follow the music boxes, then run for the front door together when the lights die.",
+    coopLabel: "one fuse count — out through the elevator together",
+    coopNote: "You're all on one side: any of you can take a fuse for everyone. Split up, keep to the light, hide in lockers — a caught friend wakes back in the Main Hall.",
     Component: ManorGame,
   },
   {

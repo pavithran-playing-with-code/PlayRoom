@@ -1058,104 +1058,12 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .mz-down{grid-area:down}
 .mz-right{grid-area:right}
 
-/* ── HOLLOW MANOR ────────────────────────────────────────────────────────────
-   First-person, full screen, its own serif and its own dark. Played from a
-   room (components/games/ManorGame.jsx) or solo at /manor. */
-.hm{position:fixed;inset:0;z-index:200;background:#050506;color:#e9e3d3;overflow:hidden;
-  padding-top:env(safe-area-inset-top,0px);font-family:Georgia,'Times New Roman',serif;
-  touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none;
-  -webkit-tap-highlight-color:transparent}
-.hm-cv{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
-.hm-cv:active{cursor:grabbing}
-.hm .off{display:none!important}
-/* the app sets heavier weights on text and buttons; the manor is plain Georgia */
-.hm,.hm p,.hm button,.hm-hud,.hm-msg{font-weight:400}
-.hm button{font:inherit;color:#e9e3d3;background:#15121a;border:1px solid #5b1524;border-radius:6px;
-  padding:13px 30px;font-size:17px;cursor:pointer}
-.hm button:hover{background:#231019;border-color:#c81e3a}
-
-.hm-ov{position:fixed;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  text-align:center;padding:24px;background:rgba(3,3,5,.9);overflow-y:auto}
-.hm-ov h1{font-size:clamp(34px,9vw,64px);font-weight:400;font-style:italic;letter-spacing:.02em;margin:0 0 14px;
-  color:#c81e3a;text-shadow:0 0 30px rgba(200,30,58,.45);font-family:Georgia,'Times New Roman',serif}
-.hm-ov p{max-width:420px;line-height:1.65;color:#a39a88;margin:0 0 10px;font-size:15px}
-.hm-ov .hm-small{margin-top:20px;font-size:13px}
-.hm .hm-go{margin-top:18px}
-.hm .hm-leave{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);left:10px;background:none;border:0;
-  padding:10px;font-size:14px;color:#a39a88}
-.hm .hm-leave:hover{background:none;color:#e9e3d3}
-
-.hm-hud{position:fixed;top:calc(env(safe-area-inset-top,0px) + 12px);left:16px;z-index:3;pointer-events:none;font-size:15px;
-  text-shadow:0 0 6px #000}
-.hm-bar{width:110px;height:5px;background:#222;margin-top:8px;border-radius:3px;overflow:hidden}
-.hm-bar.bat{margin-top:6px}
-.hm-bar i{display:block;height:100%;width:100%;transition:width .1s}
-.hm-bar.stam i{background:#ffdca0}
-.hm-bar.bat i{background:#8fe3a8}
-
-.hm-msg{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);z-index:3;pointer-events:none;
-  text-align:center;color:#ffdca0;font-style:italic;font-size:16px;transition:opacity .4s;text-shadow:0 0 8px #000;padding:0 16px}
-/* On a phone the button grid fills the bottom-right corner, and a message
-   underneath it ran straight through the Crouch button. Lift it clear. */
-@media (max-width:600px){ .hm-msg{bottom:calc(env(safe-area-inset-bottom,0px) + 262px)} }
-
-/* Under the right thumb: Use (doors, hiding spots) and the light, side by
-   side, lifted well off the bottom edge where a phone's thumb can't reach. */
-.hm-pad{position:fixed;right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 96px);
-  z-index:4;display:grid;grid-template-columns:76px 76px;grid-template-rows:52px 76px;gap:10px;
-  grid-template-areas:". chalk" "use light"}
-.hm .hm-pad button{width:76px;height:76px;border-radius:50%;padding:0;font-size:12px;background:rgba(21,18,26,.75);touch-action:none}
-.hm .hm-pad .hm-use{grid-area:use}
-.hm .hm-pad .hm-light{grid-area:light}
-/* chalk: smaller, above the light */
-.hm .hm-pad .hm-chalk{grid-area:chalk;width:46px;height:46px;justify-self:center;align-self:end;font-size:19px}
-.hm .hm-pad .hm-chalk.on{background:rgba(236,234,224,.9);border-color:#ecead8;box-shadow:0 0 14px rgba(236,234,224,.5)}
-/* Nana's riddles, one per key; found ones crossed off */
-.hm-riddles{margin-top:6px;max-width:min(300px,44vw);font-size:12.5px;font-style:italic;line-height:1.35;color:#e2d6b8;text-shadow:0 0 6px #000,0 0 2px #000}
-.hm-riddles .got{color:#6fe6a0;opacity:.75}
-/* the run for the door */
-.hm-run{margin-top:6px;font-size:16px;font-weight:700;color:#ff6a7e;text-shadow:0 0 8px #000;animation:hmRun 1s ease-in-out infinite}
-@keyframes hmRun{50%{opacity:.55}}
-.hm-room{margin-top:6px;color:#ffdca0;font-style:italic;text-shadow:0 0 6px #000}
-/* Nana's lullaby: a soft line while she hums; when it stops, the warning */
-.hm-humming{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:3;
-  pointer-events:none;color:#f3d9b0;font-style:italic;font-size:14px;letter-spacing:.04em;text-shadow:0 0 8px #000;
-  animation:hmHum 2.4s ease-in-out infinite}
-@keyframes hmHum{0%,100%{opacity:.45;transform:translateX(-50%) translateY(0)}50%{opacity:.9;transform:translateX(-50%) translateY(-2px)}}
-/* SHE'S LISTENING: the screen stains red and pulses; the words pulse with it */
-.hm-listen{position:fixed;inset:0;z-index:5;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-  padding-top:24vh;gap:8px;text-align:center;
-  background:radial-gradient(ellipse at center,rgba(120,0,16,.12) 20%,rgba(90,0,12,.6) 100%);
-  animation:hmListenIn .3s ease-out,hmStain 1.1s ease-in-out infinite alternate}
-.hm-listen b{font-size:clamp(28px,7vw,52px);font-weight:400;letter-spacing:.14em;color:#ff3a52;
-  text-shadow:0 0 18px #f02040,0 0 3px #000;animation:hmPulse .5s infinite alternate}
-.hm-listen span{font-size:clamp(14px,3.4vw,19px);color:#ebe4d6;font-style:italic;letter-spacing:.04em;text-shadow:0 0 6px #000}
-@keyframes hmListenIn{from{opacity:0}to{opacity:1}}
-@keyframes hmStain{from{background-color:rgba(120,0,16,.12)}to{background-color:rgba(120,0,16,.26)}}
-@keyframes hmPulse{from{opacity:.6}to{opacity:1}}
-/* the readout, top left: keys, stamina, where you are, where to go, how near she is */
-.hm-keys{font-size:20px;letter-spacing:.12em;color:#ffd98a;text-shadow:0 0 6px #000}
-.hm-keys span{font-size:12px;letter-spacing:.04em;color:#a39a8c}
-.hm-hidetext{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);z-index:4;text-align:center;pointer-events:none;
-  color:#ebe4d6;font-style:italic;font-size:16px;text-shadow:0 0 8px #000}
-.hm-nana h1{color:#c81e3a;text-shadow:0 0 28px rgba(200,30,58,.45)}
-.hm-nana b{color:#ff6a7e}
-.hm-nana p{color:#a39a8c}
-.hm .hm-pad button.on{background:#ffdca0;color:#1a1208;border-color:#ffdca0;box-shadow:0 0 18px rgba(255,220,160,.6)}
-.hm .hm-pad .hm-use.on{background:#4fb3b3;color:#061414;border-color:#4fb3b3;box-shadow:0 0 18px rgba(79,179,179,.6)}
-/* the music box: small, just under the map (which is min(170px, 42% of the short side) square,
-   with a "tap for big map" line under it) */
-.hm .hm-music{position:fixed;z-index:4;right:9px;top:calc(env(safe-area-inset-top,0px) + 44px + min(170px, 42vmin));
-  width:calc(min(170px, 42vmin) + 10px);padding:6px 4px;border-radius:999px;font-size:11px;background:rgba(21,18,26,.75);
-  touch-action:none;white-space:nowrap}
-
-/* Hollow Manor in a room: the clock, your relics, who's still inside, and
-   the bar for watching once you're out of it. */
-.hmx .hmx-hud{right:16px;left:16px;max-width:calc(100% - 32px - min(140px,31vw))}
+/* ── STATION 13 in a room: the scoreboard pieces (.hmx-, from the game it
+   replaced): the clock, your side's fuses, who's inside, the watching bar
+   and the results. The game itself is .s13, further down. */
 .hmx-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .hmx-clock{font-size:17px;letter-spacing:.04em;color:#ffdca0}
 .hmx-mine{display:inline-flex;align-items:center;gap:4px}
-.hmx-score{margin-left:10px;font-size:.9em;color:#ffdca0}
 .hmx-mine i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--c);display:inline-block}
 .hmx-mine i.got{background:var(--c);box-shadow:0 0 6px var(--c)}
 .hmx-mine b{font-weight:400;margin-left:4px;color:var(--c)}
@@ -1164,23 +1072,15 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .hmx-p i{width:8px;height:8px;border-radius:50%;background:var(--c);display:inline-block}
 .hmx-p.dead{opacity:.45;text-decoration:line-through}
 .hmx-p.out{color:#8fe3a8}
-.hm .hmx-leave{pointer-events:auto;margin-top:10px;padding:6px 12px;font-size:12px;background:rgba(21,18,26,.7)}
-
 .hmx-spec{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:4;
   display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 16px}
 .hmx-banner{background:rgba(5,5,6,.78);border:1px solid #5b1524;border-radius:8px;padding:10px 16px;
   text-align:center;font-style:italic;color:#ffdca0;font-size:16px}
 .hmx-banner span{color:#a39a88;font-size:14px}
 .hmx-specbar{display:flex;align-items:center;gap:10px;background:rgba(5,5,6,.78);border-radius:999px;padding:6px}
-.hm .hmx-specbar button{width:48px;height:48px;border-radius:50%;padding:0;font-size:18px}
 .hmx-watching{min-width:150px;text-align:center;font-size:15px}
 .hmx-watching b{font-weight:400;color:var(--c)}
-.hm .hmx-out{padding:10px 26px;font-size:15px}
-
 .hmx-results{overflow-y:auto}
-/* Play again on the results: the bright one; Back to the lobby stays plain */
-.hm .hm-go.hm-again{background:#ffdca0;color:#1a1208;border-color:#ffdca0;box-shadow:0 0 18px rgba(255,220,160,.45)}
-.hm .hm-go.hm-again:disabled{opacity:.6}
 .hmx-rematch{color:#ffdca0;font-style:italic;margin:12px 0 0}
 .hmx-standings{width:100%;max-width:380px;display:flex;flex-direction:column;gap:8px;margin:6px 0 4px}
 .hmx-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;text-align:left;
@@ -1191,52 +1091,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .hmx-name b{font-weight:400;color:#e9e3d3;font-size:16px}
 .hmx-name small{color:#a39a88;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hmx-got{color:var(--c);font-size:14px}
-
-/* The screen stayed upright (installed app locked to portrait, rotation
-   lock on, an iPhone): draw the whole game turned a quarter clockwise, so the
-   phone just has to be turned. Everything "fixed" inside lays out in this
-   turned box. Pointer positions are turned back in LandscapeGate.toGame(). */
-.hm.hm-rot{inset:auto;top:0;left:100vw;width:100vh;width:100dvh;height:100vw;
-  transform:rotate(90deg);transform-origin:0 0;padding-top:0}
-.hm-rothint{position:fixed;left:50%;top:44%;z-index:6;transform:translateX(-50%);pointer-events:none;
-  padding:10px 18px;border-radius:999px;background:rgba(5,5,6,.82);color:#ffdca0;font-style:italic;font-size:15px;
-  white-space:nowrap;animation:hmHint 4.5s ease forwards}
 @keyframes hmHint{0%,70%{opacity:1}100%{opacity:0}}
-
-/* Sideways on a phone: a short screen. Buttons in two rows of three so they
-   clear the map, words kept left of the buttons, lighter headings. */
-@media (orientation: landscape) and (max-height: 520px){
-  .hm-pad{grid-template-columns:72px 72px;grid-template-rows:46px 72px;gap:8px;
-    right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 64px)}
-  .hm .hm-pad button{width:72px;height:72px;font-size:12px}
-  .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
-    font-size:15px;text-align:left;padding:0}
-  .hm-hud{top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(16px + env(safe-area-inset-left,0px));font-size:14px}
-  .hmx .hmx-hud{max-width:calc(100% - 200px)}
-  .hmx-who{margin-top:6px}
-  .hm-ov{padding:14px 20px}
-  .hm-ov h1{font-size:30px;margin-bottom:8px}
-  .hm-ov p{font-size:13px;line-height:1.5;margin-bottom:6px}
-  .hm .hm-go{margin-top:8px;padding:10px 26px}
-  .hmx-spec{bottom:calc(env(safe-area-inset-bottom,0px) + 10px)}
-}
-/* The same short-landscape layout for the drawn-sideways game: its viewport
-   is still portrait, so the media query above never matches it. */
-.hm.hm-rot .hm-pad{grid-template-columns:72px 72px;grid-template-rows:46px 72px;gap:8px;
-    right:calc(44px + env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 64px)}
-.hm.hm-rot .hm-pad button{width:72px;height:72px;font-size:12px}
-.hm.hm-rot .hm-pad button.hm-chalk{width:46px;height:46px;font-size:19px}
-.hm.hm-rot .hm-msg{left:calc(16px + env(safe-area-inset-left,0px));right:170px;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);
-    font-size:15px;text-align:left;padding:0}
-.hm.hm-rot .hm-hud{top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(16px + env(safe-area-inset-left,0px));font-size:14px}
-.hm.hm-rot .hmx-hud{max-width:calc(100% - 200px)}
-.hm.hm-rot .hmx-who{margin-top:6px}
-.hm.hm-rot .hm-ov{padding:14px 20px}
-.hm.hm-rot .hm-ov h1{font-size:30px;margin-bottom:8px}
-.hm.hm-rot .hm-ov p{font-size:13px;line-height:1.5;margin-bottom:6px}
-.hm.hm-rot .hm-go{margin-top:8px;padding:10px 26px}
-.hm.hm-rot .hmx-spec{bottom:calc(env(safe-area-inset-bottom,0px) + 10px)}
-.hm.hm-rot .hm-msg{bottom:calc(env(safe-area-inset-bottom,0px) + 14px)}
 
 /* ---------- Typing Race (.ty-) ---------- */
 /* the race: a lane each on a strip of road, a little car in each */
@@ -1662,3 +1517,70 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .call-elsewhere span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .call-elsewhere button{flex:0 0 auto;border:2px solid var(--ink);border-radius:999px;background:var(--lime);color:var(--ink);
   font-weight:800;font-size:13px;padding:5px 12px;cursor:pointer}
+/* ── STATION 13 (.s13-): the horror game — full screen, sideways on a phone ── */
+.s13{position:fixed;inset:0;z-index:50;background:#000;color:#cfd6cf;font-family:'Segoe UI',Helvetica,Arial,sans-serif;overflow:hidden;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+.s13.s13-rot{inset:auto;top:0;left:100vw;width:100vh;width:100dvh;height:100vw;transform:rotate(90deg);transform-origin:0 0}
+.s13-host{position:absolute;inset:0;touch-action:none}
+.s13-gl,.s13-nz{position:absolute;inset:0;width:100%;height:100%;display:block}
+.s13-nz{pointer-events:none;opacity:.05;mix-blend-mode:overlay}
+.s13-fx{position:absolute;inset:0;pointer-events:none}
+.s13-vig{background:radial-gradient(ellipse at center,transparent 65%,rgba(0,0,0,.55) 130%);z-index:2}
+.s13-br{background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,.92));opacity:0;z-index:2}
+.s13-dg{background:radial-gradient(ellipse at center,transparent 40%,rgba(120,0,0,.8));opacity:0;z-index:2}
+.s13-slit{background:linear-gradient(#000 0,#000 42%,transparent 42%,transparent 52%,#000 52%);z-index:3}
+.s13-flash{background:#fff;opacity:0;z-index:7}
+.s13-aw{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);transform:translateX(-50%);font-size:18px;color:#c33;opacity:0;z-index:4;
+  text-shadow:0 0 8px #000;pointer-events:none}
+.s13-rip{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0;z-index:4;pointer-events:none}
+.s13-rip i{position:absolute;left:-32px;top:calc(-1 * min(34vh,34vw));width:64px;height:14px;border-top:3px solid rgba(255,90,90,.85);border-radius:50% 50% 0 0}
+.s13-hud{position:absolute;left:calc(env(safe-area-inset-left,0px) + 22px);bottom:calc(env(safe-area-inset-bottom,0px) + 22px);z-index:4;width:54px;opacity:.9;pointer-events:none}
+.s13-bt{position:relative;width:46px;height:20px;border:2px solid #e8e6e0;border-radius:3px;padding:2px}
+.s13-bt:after{content:'';position:absolute;right:-6px;top:4px;width:4px;height:8px;background:#e8e6e0;border-radius:0 2px 2px 0}
+.s13-bt i{display:block;height:100%;width:100%;background:#e8e6e0;transition:background .3s}
+.s13-bt i.low{animation:s13low .5s steps(2) infinite}
+@keyframes s13low{0%{background:#d33}100%{background:#611}}
+.s13-st{height:3px;margin-top:8px;background:rgba(255,255,255,.15);transition:opacity .6s}
+.s13-st i{display:block;height:100%;width:100%;background:#cfcfc8}
+.s13-obj{position:absolute;left:calc(env(safe-area-inset-left,0px) + 22px);top:calc(env(safe-area-inset-top,0px) + 20px);z-index:4;font-size:14px;
+  letter-spacing:.04em;line-height:1.5;opacity:.85;text-shadow:0 1px 5px #000;pointer-events:none}
+.s13-obj span{opacity:.6}
+.s13-sub{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14vh);transform:translateX(-50%);z-index:4;max-width:80%;text-align:center;
+  font-size:17px;letter-spacing:.02em;line-height:1.4;padding:6px 16px;background:rgba(0,0,0,.4);border-radius:4px;opacity:0;transition:opacity .6s;
+  text-shadow:0 1px 4px #000;pointer-events:none}
+.s13-pr{position:absolute;left:50%;top:60%;transform:translateX(-50%);z-index:4;font-size:13px;letter-spacing:.2em;opacity:.9;pointer-events:none}
+.s13-tb{position:absolute;right:calc(env(safe-area-inset-right,0px) + 18px);bottom:calc(env(safe-area-inset-bottom,0px) + 22px);z-index:5;
+  display:grid;grid-template-columns:repeat(2,58px);gap:14px}
+.s13 .s13-tb button{width:58px;height:58px;border-radius:50%;padding:0;font-size:11px;letter-spacing:.08em;background:rgba(20,22,20,.6);touch-action:none}
+.s13 .s13-tb button.on{background:rgba(207,214,207,.85);color:#101410;border-color:#cfd6cf}
+.s13-stick{position:absolute;z-index:4;width:100px;height:100px;border-radius:50%;border:2px solid rgba(255,255,255,.25);pointer-events:none;
+  display:grid;place-items:center}
+.s13-stick i{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.3)}
+.s13 button{font:inherit;color:#cfd6cf;background:#101410;border:1px solid #556055;padding:11px 26px;cursor:pointer;letter-spacing:.2em;text-transform:uppercase}
+.s13 button:hover{background:#2a352a;border-color:#9a2a2a}
+.s13 button:disabled{opacity:.5;cursor:default}
+.s13-ov{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:30px;
+  background:rgba(0,0,0,.8);overflow:auto}
+.s13-ov h1{font-family:Georgia,'Times New Roman',serif;font-size:clamp(36px,9vw,88px);margin:0;font-weight:400;letter-spacing:.25em;color:#d4cfc4;
+  text-shadow:0 2px 30px rgba(0,0,0,.9),0 0 50px rgba(120,0,0,.35)}
+.s13-ov h1.s13-h2{font-size:clamp(30px,7vw,48px)}
+.s13-ov p{max-width:500px;font-size:13px;line-height:1.8;margin:0;opacity:.7;letter-spacing:.06em}
+.s13-ov p.s13-small{font-size:11px;opacity:.5}
+.s13-ov.s13-dead{background:rgba(40,0,0,.85)}
+.s13-ov.s13-dead h1{color:#9a1a1a}
+.s13-row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.s13 .s13-leave{position:absolute;left:calc(env(safe-area-inset-left,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 14px);padding:8px 14px;font-size:12px}
+.s13-rothint{position:absolute;left:50%;top:42%;z-index:6;transform:translateX(-50%);pointer-events:none;padding:10px 18px;border-radius:999px;
+  background:rgba(0,0,0,.7);border:1px solid #556055;color:#cfd6cf;font-size:14px;white-space:nowrap;animation:hmHint 4.5s ease forwards}
+/* short and sideways: everything a little smaller */
+@media (max-height:520px){ .s13-ov{gap:10px;padding:14px 20px} .s13-ov p{font-size:12px;line-height:1.6} .s13 button{padding:9px 18px} }
+.s13.s13-rot .s13-ov{gap:10px;padding:14px 20px}
+.s13.s13-rot .s13-ov p{font-size:12px;line-height:1.6}
+.s13.s13-rot .s13-ov h1{font-size:44px}
+
+/* Station 13 in a room: the clock, the side's fuses and who's inside sit in .s13-obj (which lets touches through to the look area) */
+.s13x .s13x-top .hmx-who{margin-top:4px}
+.s13 .s13x-leave{pointer-events:auto;margin-top:8px;padding:5px 12px;font-size:10px;background:rgba(16,20,16,.6)}
+.s13x .hmx-spec{position:absolute}
+.s13x .hmx-specbar button{width:48px;height:48px;border-radius:50%;padding:0;font-size:18px;letter-spacing:0}
+

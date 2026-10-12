@@ -1,44 +1,37 @@
-// config/manorWorld.js — NANA'S LULLABY (slug "manor") online: the house, run by the server.
+// config/manorWorld.js — STATION 13 (slug "manor") online: the hospital, run by the server.
 //
 // Every other PlayRoom game is a race on identical boards, so each phone can
-// play its own copy and only scores travel. This one is a shared house with
-// shared ghosts, and a ghost cannot live on a phone: lock that phone and the
-// ghost would freeze for everyone. So the server keeps the house for each
+// play its own copy and only scores travel. This one is a shared building
+// with shared monsters, and a monster cannot live on a phone: lock that phone
+// and it would freeze for everyone. So the server keeps the building for each
 // room in memory and runs it ten times a second.
 //
 // Who decides what:
 //   - Each phone moves its own player (so walking feels instant) and reports
-//     where it is ~15 times a second. The server refuses reports through a
-//     wall or faster than anyone can run.
-//   - The server moves the ghosts, and alone decides pickups, catches, who
-//     got out, in what order, and when the match is over. It writes scores
-//     to room_players itself; phones never post a score for this game.
-//   - Doors and hiding spots are the server's: a phone asks (manor:use) to
-//     open or shut a door or to hide, and the server checks it is standing
-//     there. A door one player shuts is shut for everyone, and for the
-//     ghosts, which stop to open it. Someone hiding is safe from the ghosts;
-//     one that watched them hide searches the spot a while, then gives up.
+//     where it is ~15 times a second — and whether its torch is on, whether
+//     it's moving or running. The server refuses reports through a wall or
+//     faster than anyone can run.
+//   - The server runs the monsters (s13Core.stepMonster: sleep, patrol,
+//     investigate, notice, chase, rear and lunge) and alone decides pickups,
+//     the power coming back, catches, who got out and when the match is over.
+//     It writes scores to room_players itself; phones never post a score.
+//   - Lockers are the server's: a phone asks (manor:use) to hide or come out,
+//     and the server checks it is standing there and the locker is free.
 //
-// There is no map: phones find keys by their music boxes, Nana's riddles and
-// the doorway signs, and chalk walls (manor:chalk — shared, the server keeps
-// the marks). A side that has every key of theirs is "loud": Nana hears them
-// move anywhere, any time — the run back to the front door. Together, the
-// whole house goes dark and she stops humming for good (huntNight).
-//
-// A match ends the moment a side gets out (every key of theirs, then the
-// front door) — they've won — or when the clock runs out, or once everyone has
-// left. Until then, being caught isn't the end: a scare, then back in at the
-// house RESPAWN_MS later (deep inside, not at the front door), keeping the keys you'd found.
-// Score = escapes × ESCAPE_POINTS + every key taken × 100.
+// The building is the same for everyone: every phone builds it from the
+// room's seed (genStation), as the server does. The fuses: each side hunts
+// its own NEED, in its own colour (together, one side: the whole team's);
+// every fuse anyone takes brings two more zones' lights back, for everyone.
+// A side with all its fuses can take the elevator: the first side out wins,
+// and that ends it — or the clock does, or everyone leaving. Caught isn't
+// the end: a scare, then back in the Main Hall RESPAWN_MS later, keeping
+// your fuses, with a moment's grace and the monsters sent away.
+// Score = escapes × ESCAPE_POINTS + every fuse taken × 100.
 //
 // Modes (rooms.mode):
-//   free   every player for themselves, own-colour relics
-//   teams  a colour per team; the team's relics and escapes are shared — any
-//          member walking out once the gate is open scores for the team
-//   coop   all together, gold relics, one score
-// The side that got out has the only score at or over ESCAPE_POINTS, so it
-// wins; if the clock ran out first, nobody did (config/matchResult.js
-// decides, from stored scores).
+//   free   every player for themselves, own-colour fuses
+//   teams  a colour per team; the team's fuses and escape are shared
+//   coop   all together, one set of fuses, one score
 const path = require("path");
 const { pathToFileURL } = require("url");
 const db = require("./db");
@@ -49,42 +42,32 @@ const { ESCAPE_POINTS } = require("./matchResult");
 const GAME = "manor";
 const TICK_MS = 100;
 const DT = TICK_MS / 1000;
-const INTRO_MS = 8000;                 // ghosts asleep while everyone reads Nana's note
-const KEEP_AFTER_MS = 120000;          // a finished house lingers for late hellos
-const RESPAWN_MS = 2400;               // caught: the scare, then back in, deep in the house
-const RELIC_POINTS = 100;
+const KEEP_AFTER_MS = 120000;          // a finished building lingers for late hellos
+const RESPAWN_MS = 2400;               // caught: the scare, then back in the Main Hall
+const FUSE_POINTS = 100;
 const SNAP_AFTER = 4;                  // reports out of step before the phone is put back
-const USE_REACH = 2.2;                 // a door or locker this near (tile centre) is in reach: a step, plus lag
+const USE_REACH = 2.2;                 // a locker this near (its tile centre) is in reach: a step, plus lag
 
-// Colours for players in a free-for-all — no reds, which belong to the demon
-// on the map — and the four team colours the waiting room already names
-// (Red, Yellow, Blue, Green; the demon's map dot has a white ring to tell it
-// from the Red team).
+// Colours for players in a free-for-all, and the four team colours the
+// waiting room already names (Red, Yellow, Blue, Green).
 const PLAYER_COLOURS = ["#4cc9f0", "#8fe36b", "#ffc53d", "#c77dff", "#ff9f43", "#2de2c8", "#ff7bd5", "#a0a8ff"];
 const TEAM_COLOURS = ["#ff5a5f", "#ffc53d", "#4cc9f0", "#3dd6c0"];
 const TEAM_NAMES = ["Red", "Yellow", "Blue", "Green"];
 const GOLD = "#ffdca0";
 
-// How many relics each side hunts for. A team's share grows with its size,
-// so the work per person stays about the same whatever the split.
-const needFor = (mode, members, players) =>
-  mode === "coop" ? 2 * players + 1 : mode === "teams" ? members + 2 : 3;
-
-// The rules in manorCore.mjs are an ES module shared with the browser. The
+// The rules in s13Core.mjs are an ES module shared with the browser. The
 // server is CommonJS, so it loads them once, asynchronously, at start-up.
 let core = null;
-const coreReady = import(pathToFileURL(path.join(__dirname, "..", "src", "components", "horror", "manorCore.mjs")).href)
+const coreReady = import(pathToFileURL(path.join(__dirname, "..", "src", "components", "horror", "s13Core.mjs")).href)
   .then((m) => { core = m; return m; });
 
-const worlds = new Map();              // room code -> house
+const worlds = new Map();              // room code -> building
 let io = null;
 
-// ── building a house ─────────────────────────────────────────────────────────
+// ── building a world ─────────────────────────────────────────────────────────
 
 function sidesFor(mode, seats) {
-  if (mode === "coop") {
-    return [{ key: "all", name: "Together", color: GOLD, members: seats.map((p) => p.user_id) }];
-  }
+  if (mode === "coop") return [{ key: "all", name: "Together", color: GOLD, members: seats.map((p) => p.user_id) }];
   if (mode === "teams") {
     const by = new Map();
     for (const p of seats) {
@@ -93,9 +76,7 @@ function sidesFor(mode, seats) {
       by.get(t).members.push(p.user_id);
     }
     return [...by.values()].sort((a, b) => (a.team || 99) - (b.team || 99)).map((s) => ({
-      ...s,
-      name: s.team ? TEAM_NAMES[(s.team - 1) % 4] : "Solo",
-      color: s.team ? TEAM_COLOURS[(s.team - 1) % 4] : PLAYER_COLOURS[7],
+      ...s, name: s.team ? TEAM_NAMES[(s.team - 1) % 4] : "Solo", color: s.team ? TEAM_COLOURS[(s.team - 1) % 4] : PLAYER_COLOURS[7],
     }));
   }
   return seats.map((p, i) => ({ key: `p${p.user_id}`, name: p.username, color: PLAYER_COLOURS[i % 8], members: [p.user_id] }));
@@ -103,45 +84,42 @@ function sidesFor(mode, seats) {
 
 function buildWorld(room, seats, elapsedMs) {
   const mode = room.mode === "teams" || room.mode === "coop" ? room.mode : "free";
-  const sides = sidesFor(mode, seats).map((s) => ({
-    ...s, need: needFor(mode, s.members.length, seats.length), got: 0, open: false, escapes: 0, total: 0,
-  }));
-  const house = core.buildHouse(room.seed, { players: seats.length, sides: sides.map((s) => ({ key: s.key, need: s.need })) });
+  const sides = sidesFor(mode, seats).map((s) => ({ ...s, need: core.NEED, got: 0, open: false, escapes: 0, total: 0 }));
+  const st = core.genStation(room.seed);
+  const { items, lockers } = core.placeItems(st, room.seed, sides.map((s) => ({ key: s.key, need: s.need })), seats.length);
+  const monsters = core.placeMonsters(st, room.seed, core.monstersFor(seats.length));
   const sideOf = new Map();
   for (const s of sides) for (const id of s.members) sideOf.set(Number(id), s);
   const players = new Map();
-  seats.forEach((p) => {
-    const id = Number(p.user_id);
-    const side = sideOf.get(id);
-    const saved = parseSaved(p.game_state);
+  seats.forEach((p, i) => {
+    const id = Number(p.user_id), side = sideOf.get(id), saved = parseSaved(p.game_state);
+    const at = startSpot(st, i);                      // side by side in the Main Hall
     players.set(id, {
       id, name: p.username, avatar: p.avatar, side: side.key, color: side.color,
-      x: house.spawn.x, y: house.spawn.y, fa: house.spawn.fa, jz: 0, cr: 0, lit: true, noiseR: 0, hiding: null,
-      at: 0, alive: !(saved && saved.left), left: !!(saved && saved.left), respawnAt: 0,
+      x: at.x, y: at.y, yaw: core.START.yaw, fl: true, moving: false, run: false, hid: null,
+      at: 0, alive: !(saved && saved.left), left: !!(saved && saved.left), respawnAt: 0, graceUntil: 0,
       caught: (saved && saved.caught) || 0,
     });
-    // a house rebuilt after a restart keeps each side's escapes and relics
-    if (saved) {
-      side.escapes = Math.max(side.escapes, saved.escapes || 0);
-      side.total = Math.max(side.total, saved.total || 0);
-    }
+    // a building rebuilt after a restart keeps each side's escapes and fuses
+    if (saved) { side.escapes = Math.max(side.escapes, saved.escapes || 0); side.total = Math.max(side.total, saved.total || 0); }
   });
-  const w = {
+  return {
     code: room.room_code, roomId: room.id, mode, seed: room.seed,
     startMs: Date.now() - elapsedMs, durMs: room.duration_seconds * 1000,
-    house, env: { g: house.g, N: house.N, obst: house.obst, doors: new Set(house.doors), switches: core.lampSwitches(house.g, house.N, new Set(house.doors), house.exitT) },
-    sides, players, pulses: [], marks: [], over: false, reason: null,
-    events: [], timer: null, lastScores: new Map(),
+    st, items, lockers, monsters, rand: core.rng((Number(room.seed) || 1) + 5150), fuses: 0, lit: core.litZones(0),
+    sides, players, over: false, reason: null, events: [], timer: null, lastScores: new Map(),
   };
-  return w;
+}
+// the start, a little apart for each player
+function startSpot(st, i) {
+  const offs = [[0, 0], [-1, 0], [1, 0], [0, -1], [-1, -1], [1, -1], [0, 1], [-2, 0]];
+  const [a, b] = offs[i % offs.length], x = core.START.x + a, y = core.START.y + b;
+  return core.canAt(st.g, x, y) ? { x, y } : { x: core.START.x, y: core.START.y };
 }
 
 function parseSaved(raw) {
   if (!raw) return null;
-  try {
-    const s = JSON.parse(raw);
-    return s && s.manor ? s.manor : null;
-  } catch { return null; }
+  try { const s = JSON.parse(raw); return s && s.manor ? s.manor : null; } catch { return null; }
 }
 
 async function loadRoom(code) {
@@ -163,9 +141,8 @@ async function loadSeats(roomId) {
   return rows;
 }
 
-// The house for a room, building it on first use. Null if the room is not a
-// running game of Nana's Lullaby. Calls at once (the room starting, phones
-// saying hello) share one build, or two houses would tick into one room.
+// The building for a room, made on first use. Null if the room is not a
+// running game of Station 13. Calls at once share one build.
 const building = new Map();
 function worldFor(code) {
   if (worlds.has(code)) return Promise.resolve(worlds.get(code));
@@ -176,7 +153,7 @@ async function buildFor(code) {
   await coreReady;
   const room = await loadRoom(code);
   if (!room || room.game_slug !== GAME || room.status !== "in_progress") return null;
-  if (worlds.has(code)) return worlds.get(code);        // built while we waited
+  if (worlds.has(code)) return worlds.get(code);
   const seats = await loadSeats(room.id);
   if (!seats.length) return null;
   const w = buildWorld(room, seats, Math.max(0, Number(room.elapsed_ms) || 0));
@@ -187,12 +164,9 @@ async function buildFor(code) {
 }
 
 // ── scoring ──────────────────────────────────────────────────────────────────
-// ESCAPE_POINTS a time out, RELIC_POINTS a relic, summed over the match. One
-// round's relics never reach ESCAPE_POINTS, so "got out at least once" is
-// score >= ESCAPE_POINTS — which is what matchResult checks.
-function scoreOf(side) {
-  return side.escapes * ESCAPE_POINTS + side.total * RELIC_POINTS;
-}
+// One round's fuses (NEED × 100) never reach ESCAPE_POINTS, so "got out at
+// least once" is score >= ESCAPE_POINTS — which is what matchResult checks.
+function scoreOf(side) { return side.escapes * ESCAPE_POINTS + side.total * FUSE_POINTS; }
 
 async function saveScores(w, force = false) {
   const jobs = [];
@@ -217,31 +191,26 @@ async function saveScores(w, force = false) {
 const ev = (w, e) => w.events.push(e);
 const sideOf = (w, p) => w.sides.find((s) => s.key === p.side);
 const living = (w) => [...w.players.values()].filter((p) => p.alive && !p.left);
-// caught: back in deep in the house (house.respawn), not by the front door
-const toSpawn = (w, p, at = w.house.respawn) => { p.x = at.x; p.y = at.y; p.fa = at.fa; p.at = 0; p.hiding = null; };
+const mostFuses = (w) => Math.max(0, ...w.sides.map((s) => s.got));
 
-// Out of it for now. Caught by a ghost: back in shortly, deep in the house.
-// Left (the Leave button, or the room's leave): out for good — and once
-// everyone has left, the match is over.
-function kill(w, id, cause) {
+// Out of it for now (caught), or for good (left — and once everyone has, it's over).
+function kill(w, id, cause, by = null) {
   const p = w.players.get(Number(id));
   if (!p || p.left || (!p.alive && cause !== "left")) return;
   p.alive = false;
-  p.hiding = null;
+  p.hid = null;
   if (cause === "left") {
-    p.left = true;
-    p.respawnAt = 0;
+    p.left = true; p.respawnAt = 0;
     ev(w, { type: "dead", id: p.id, cause });
     if ([...w.players.values()].every((q) => q.left)) finish(w, "done");
     return;
   }
   p.caught++;
   p.respawnAt = Date.now() + RESPAWN_MS;
-  ev(w, { type: "dead", id: p.id, cause });
+  ev(w, { type: "dead", id: p.id, cause, m: by });
 }
 
-// Through the far gate with the gate open: that side has won, and the match
-// is over for everyone — the results, then Play again or leave.
+// Into the elevator with all your fuses: that side has won, and it's over.
 function escape(w, p) {
   const side = sideOf(w, p);
   side.escapes++;
@@ -249,119 +218,78 @@ function escape(w, p) {
   finish(w, "escaped");
 }
 
-function hustle(w) {
-  const total = w.sides.reduce((a, s) => a + s.need, 0);
-  const got = w.sides.reduce((a, s) => a + s.got, 0);
-  return total ? 0.6 * (got / total) : 0;
-}
-
 function tick(w) {
   if (w.over) return;
   const now = Date.now();
   if (now - w.startMs >= w.durMs) { finish(w, "time"); return; }
-  const awake = now - w.startMs >= INTRO_MS;
-  // her lullaby: humming, then the silence where she listens
-  if (awake) {
-    const hum = core.stepHum(w.house.hum, DT, w.house.rand);
-    if (hum) ev(w, { type: hum });
-  }
-
-  // the just-back-in are left alone a moment; a lit room shows you like your own light
-  // ...and a side with every key is loud: she hears them move, anywhere
   const targets = living(w).filter((p) => !(p.graceUntil > now)).map((p) => ({
-    id: p.id, x: p.x, y: p.y, lit: p.lit || core.lampOn(w.house.lamps, w.house.N, p.x, p.y), cr: p.cr, noiseR: p.noiseR, hid: p.hiding,
-    loud: !!sideOf(w, p).open,
+    id: p.id, x: p.x, y: p.y, fl: p.fl, hid: p.hid != null, moving: p.moving, run: p.run,
   }));
-  if (awake) {
-    w.house.ghosts.forEach((G, gi) => {
-      const caught = core.stepGhost(G, w.env, targets, DT, w.house.rand, hustle(w), (name, extra) => {
-        if (name === "heard") ev(w, { type: "heard", g: gi, id: extra.id });
-        if (name === "spotted") ev(w, { type: "spotted", g: gi, id: extra.id });
-        if (name === "door") ev(w, { type: "door", x: extra.x, y: extra.y, open: 1, id: 0 });
-        if (name === "gaveup") ev(w, { type: "gaveup", id: extra.id });
-      }, w.house.hum);
-      if (caught != null && !w.over) {
-        kill(w, caught, "ghost");
-        // it has had its prey: off it goes, and where you wake up isn't camped
-        G.st = "patrol"; G.prey = null; G.stun = 2;
-        core.ghostPatrol(G, w.env, w.house.rand);
-      }
+  const ctx = { lit: w.lit, fuses: mostFuses(w) };
+  w.monsters.forEach((M, mi) => {
+    const got = core.stepMonster(M, w.st, targets, DT, w.rand, ctx, (name, o) => {
+      if (name === "notice" || name === "chase" || name === "rear" || name === "heard") ev(w, { type: name, m: mi, id: o.id });
+      else if (name === "lostsight" || name === "gaveup") ev(w, { type: name, m: mi, id: o.id || null });
+      else if (name === "zone") ev(w, { type: "zone", m: mi, x: Math.round(o.x * 10) / 10, y: Math.round(o.y * 10) / 10 });
+      else if (name === "door") ev(w, { type: "door", m: mi, i: o.i });
+      else if (name === "wake") ev(w, { type: "wake", m: mi });
     });
-    if (w.over) return;
-    // walking into a lit room, she puts its light out
-    core.stepLamps(w.house.lamps, w.house.N, w.house.ghosts, (room) => ev(w, { type: "lampOut", room }));
-  }
-  // the caught come back in — with her sent off to the far side of the house
-  // if she's anywhere near where they wake, and a moment's grace
+    if (got && !w.over) {
+      kill(w, got.id, "monster", mi);
+      // it has had its prey: off it goes on its rounds
+      M.st = "patrol"; M.prey = null; M.wd = 0; M.lg = 0; M.nt = 0;
+      core.pickPatrol(M, w.st, w.rand);
+      const i = targets.findIndex((t) => t.id === got.id); if (i >= 0) targets.splice(i, 1);
+    }
+  });
+  if (w.over) return;
+  // the caught come back in — in the Main Hall, with a moment's grace and the monsters sent away
   for (const p of w.players.values()) {
     if (p.alive || p.left || !p.respawnAt || now < p.respawnAt) continue;
-    p.alive = true;
-    p.respawnAt = 0;
-    toSpawn(w, p);
+    p.alive = true; p.respawnAt = 0; p.hid = null;
+    const at = startSpot(w.st, 0);
+    p.x = at.x; p.y = at.y; p.yaw = core.START.yaw; p.at = 0;
     p.graceUntil = now + core.GRACE_S * 1000;
-    for (const G of w.house.ghosts) if (Math.hypot(G.x - p.x, G.y - p.y) < 14) core.sendAway(G, w.env, w.house.respawn, w.house.rand);
-    ev(w, { type: "respawn", id: p.id, x: p.x, y: p.y, fa: p.fa, why: "caught" });
+    for (const M of w.monsters) if (M.st !== "sleep" && Math.hypot(M.x - p.x, M.y - p.y) < 14) core.sendAway(M, w.st, p, w.rand);
+    ev(w, { type: "respawn", id: p.id, x: p.x, y: p.y, yaw: p.yaw });
   }
 
   let scored = false;
   for (const p of living(w)) {
     const side = sideOf(w, p);
-    for (let i = 0; i < w.house.relics.length; i++) {
-      const r = w.house.relics[i];
-      if (r.got || r.side !== side.key || Math.hypot(r.x - p.x, r.y - p.y) >= core.PICK_R) continue;
-      r.got = true;
-      side.got++;
-      side.total++;
-      scored = true;
-      ev(w, { type: "relic", i, id: p.id, side: side.key, got: side.got, need: side.need });
-      // the music box stops, and she notices: the nearest ghost not already
-      // hunting comes to look, wherever it is
-      const free = w.house.ghosts.filter((G) => G.st !== "hunt").sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
-      if (free) { free.st = "search"; free.wait = 0; core.ghostTarget(free, w.env, p.x | 0, p.y | 0); }
-      if (side.got >= side.need && !side.open) {
-        side.open = true;
-        // together (one side), the whole house: the lights die and she stops
-        // humming for good. Against others, only this side is loud.
-        const all = w.sides.length === 1;
-        if (all) { core.huntNight(w.house.hum); w.house.lamps.fill(0); }
-        for (const G of w.house.ghosts) G.stun = Math.max(G.stun, 2);
-        ev(w, { type: "open", side: side.key, all: all ? 1 : 0 });
-      }
+    for (let i = 0; i < w.items.length; i++) {
+      const it = w.items[i];
+      if (it.got || Math.hypot(it.x - p.x, it.y - p.y) >= core.PICK_R) continue;
+      if (it.t === "f") {
+        if (it.side !== side.key) continue;            // someone else's fuse
+        it.got = true; side.got++; side.total++; w.fuses++; scored = true;
+        w.lit = core.litZones(w.fuses);
+        ev(w, { type: "fuse", i, id: p.id, side: side.key, got: side.got, need: side.need });
+        // picking one up is noisy: the nearest monster not already chasing comes to look
+        const free = w.monsters.filter((M) => M.st !== "chase" && M.st !== "sleep").sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+        if (free) { free.st = "invest"; free.wait = 0; core.setTarget(free, w.st, p.x | 0, p.y | 0); }
+        if (side.got >= side.need && !side.open) { side.open = true; ev(w, { type: "open", side: side.key }); }
+      } else { it.got = true; ev(w, { type: "battery", i, id: p.id }); }
     }
-    for (let i = 0; i < w.house.batts.length; i++) {
-      const b = w.house.batts[i];
-      if (b.got || Math.hypot(b.x - p.x, b.y - p.y) >= core.PICK_R) continue;
-      b.got = true;
-      ev(w, { type: "battery", i, id: p.id });
-    }
-    const ex = w.house.exitT.x + 0.5, ey = w.house.exitT.y + 0.5;
-    if (side.open && Math.hypot(ex - p.x, ey - p.y) < core.EXIT_R) { escape(w, p); return; }
+    if (side.open && core.atExit(p.x, p.y)) { escape(w, p); return; }
   }
-  w.pulses.forEach((q) => { q.t -= DT; });
-  w.pulses = w.pulses.filter((q) => q.t > 0);
-
   if (scored || w.events.some((e) => e.type === "dead")) saveScores(w);
   broadcast(w, now);
 }
 
+const MST = ["sleep", "patrol", "invest", "notice", "chase"];
 function broadcast(w, now) {
   const r2 = (n) => Math.round(n * 100) / 100;
   io.to(roomChannel(w.code)).emit("manor:tick", {
     c: w.code,
     t: now - w.startMs,
-    g: w.house.ghosts.map((G) => [r2(G.x), r2(G.y), G.st === "hunt" ? 1 : 0, G.stun > 0 ? 1 : 0]),
-    // state: 1 in the house, 0 caught (back shortly), 3 left for good
-    p: [...w.players.values()].map((p) => [p.id, r2(p.x), r2(p.y), r2(p.fa), r2(p.jz), r2(p.cr), p.lit ? 1 : 0,
-      p.left ? 3 : p.alive ? 1 : 0, p.caught, p.hiding ? 1 : 0]),
-    d: w.house.doors.map((k) => (w.house.g[(k / w.house.N) | 0][k % w.house.N] === core.DOOR ? 1 : 0)).join(""),
-    r: w.house.relics.map((r) => (r.got ? 1 : 0)).join(""),
-    b: w.house.batts.map((b) => (b.got ? 1 : 0)).join(""),
+    // the monsters: [x, y, state, facing x, facing y, moving, rearing, lunging, warning]
+    g: w.monsters.map((M) => [r2(M.x), r2(M.y), MST.indexOf(M.st), r2(M.vx), r2(M.vy), M.moving ? 1 : 0, M.wd > 0 ? 1 : 0, M.lg > 0 ? 1 : 0, M.nt > 0 ? 1 : 0]),
+    // state: 1 in the building, 0 caught (back shortly), 3 left for good
+    p: [...w.players.values()].map((p) => [p.id, r2(p.x), r2(p.y), r2(p.yaw), p.left ? 3 : p.alive ? 1 : 0, p.caught, p.hid != null ? 1 : 0, p.fl ? 1 : 0]),
+    r: w.items.map((it) => (it.got ? 1 : 0)).join(""),
     s: w.sides.map((s) => [s.key, s.got, s.open ? 1 : 0, s.escapes, s.total, scoreOf(s)]),
-    m: w.pulses.map((q) => [r2(q.x), r2(q.y), r2(q.t)]),
-    // the lullaby: [humming?, seconds till it changes, seconds since it did, hunting (no more humming)?]
-    h: [w.house.hum.on ? 1 : 0, r2(Math.min(w.house.hum.t, 999)), r2(w.house.hum.since), w.house.hum.hunt ? 1 : 0],
-    k: w.marks,                                // chalk marks: wall and door tiles
-    l: w.house.lamps.join(""),                 // the rooms' lights
+    f: w.fuses,
     e: w.events,
   });
   w.events = [];
@@ -374,19 +302,16 @@ async function finish(w, reason) {
   w.over = true;
   w.reason = reason;
   clearInterval(w.timer);
-  broadcast(w, Date.now());                 // last events: who was caught, who got out
+  broadcast(w, Date.now());
   try {
     await saveScores(w, true);
-    const [r] = await db.execute(
-      "UPDATE rooms SET status = 'finished', finished_at = NOW() WHERE id = ? AND status = 'in_progress'", [w.roomId]);
+    const [r] = await db.execute("UPDATE rooms SET status = 'finished', finished_at = NOW() WHERE id = ? AND status = 'in_progress'", [w.roomId]);
     if (r.affectedRows) {
       io.to(roomChannel(w.code)).emit("room:ended", { code: w.code });
       await announceStopped(w);
     }
     await recordResults(w.roomId);
-  } catch (e) {
-    console.error("manor finish:", e.message);
-  }
+  } catch (e) { console.error("manor finish:", e.message); }
   io.to(roomChannel(w.code)).emit("manor:over", standings(w));
   setTimeout(() => { if (worlds.get(w.code) === w) worlds.delete(w.code); }, KEEP_AFTER_MS).unref?.();
 }
@@ -409,33 +334,29 @@ function standings(w) {
 }
 
 // ── what a phone is told when it arrives ─────────────────────────────────────
-
+// The seed (each phone builds the same building from it), the fuses and
+// batteries, the lockers, the sides and the players.
 function initFor(w, uid, role) {
   return {
-    code: w.code, mode: w.mode, you: uid, role,
-    elapsed: Date.now() - w.startMs, duration: w.durMs, intro: INTRO_MS,
-    house: {
-      N: w.house.N, walls: core.packWalls(w.house.g), doors: w.house.doors, exitT: w.house.exitT, obst: w.house.obst,
-      rooms: w.house.rooms,
-      relics: w.house.relics.map((r) => [r.x, r.y, r.side, r.got ? 1 : 0]),
-      batts: w.house.batts.map((b) => [b.x, b.y, b.got ? 1 : 0]),
-      spawn: w.house.spawn, lamps: w.house.lamps, marks: w.marks,
-    },
+    code: w.code, mode: w.mode, you: uid, role, seed: w.seed,
+    elapsed: Date.now() - w.startMs, duration: w.durMs,
+    items: w.items.map((it) => [it.x, it.y, it.t, it.side || "", it.got ? 1 : 0]),
+    lockers: w.lockers.map((l) => [l.x, l.y, l.nx, l.ny]),
+    fuses: w.fuses,
     sides: w.sides.map((s) => ({ key: s.key, name: s.name, color: s.color, need: s.need, got: s.got, open: s.open,
       escapes: s.escapes, total: s.total, score: scoreOf(s), members: s.members.map(Number) })),
     players: [...w.players.values()].map((p) => ({
       id: p.id, name: p.name, avatar: p.avatar, side: p.side, color: p.color,
-      x: p.x, y: p.y, fa: p.fa, alive: p.alive, left: p.left, caught: p.caught,
+      x: p.x, y: p.y, yaw: p.yaw, alive: p.alive, left: p.left, caught: p.caught,
     })),
+    monsters: w.monsters.length,
     respawnMs: RESPAWN_MS,
-    hum: [w.house.hum.on ? 1 : 0, Math.min(w.house.hum.t, 999), w.house.hum.since, w.house.hum.hunt ? 1 : 0],
     over: w.over ? standings(w) : null,
   };
 }
 
 // ── sockets ──────────────────────────────────────────────────────────────────
 
-const round2 = (n) => Math.round(n * 100) / 100;
 const CODE_RE = /^[A-Z0-9]{4,8}$/;
 const num = (v, lo, hi) => { const n = Number(v); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : null; };
 
@@ -462,14 +383,14 @@ function attach(server) {
         if (!w) w = await worldFor(code);
         if (!w) return socket.emit("manor:gone", { code });
         socket.join(roomChannel(code));
-        // A seat in the room but not in the house (joined after it was
-        // built): watch it rather than play it.
+        // a seat in the room but not in the building (joined after it was made): watch it
         const r = role === "player" && w.players.has(uid) ? "player" : "spectator";
         socket.emit("manor:init", initFor(w, uid, r));
       } catch (e) { console.error("manor hello:", e.message); }
     });
 
-    // Where I am. Refused if it walks through a wall or outruns a sprint.
+    // Where I am, which way I face, my torch, whether I'm moving or running.
+    // Refused if it walks through a wall or outruns a sprint.
     socket.on("manor:me", (m) => {
       if (!m || typeof m.code !== "string") return;
       const w = worlds.get(m.code.toUpperCase());
@@ -477,138 +398,57 @@ function attach(server) {
       const p = w.players.get(uid);
       if (!p || !p.alive) return;
       const now = Date.now();
-      if (p.hiding) { p.at = now; return; }            // in a locker: going nowhere
-      const x = num(m.x, 0, w.house.N), y = num(m.y, 0, w.house.N);
-      if (x != null && y != null) {
-        // Accept it if you could have got there. If not, don't just keep the
-        // old spot — one refusal used to freeze you there for good (every
-        // later report looked like a teleport from it), and a ghost could
-        // catch that frozen "you" while you walked about somewhere else.
-        // Instead follow at running pace, and if the phone and the house
-        // still disagree a moment later, or the phone has you inside a wall
-        // or a shut door, put the phone back where the house has you.
-        const since = p.at ? Math.min(1, (now - p.at) / 1000) : 1;
-        const allowed = core.MAX_SPEED * since + 0.35;
-        const d = Math.hypot(x - p.x, y - p.y);
-        const okThere = core.canAt(w.house.g, x, y);
-        if (d <= allowed && okThere) { p.x = x; p.y = y; p.off = 0; }
-        else {
-          if (d > allowed) {
-            const k = allowed / d, nx = p.x + (x - p.x) * k, ny = p.y + (y - p.y) * k;
-            if (core.canAt(w.house.g, nx, ny)) { p.x = nx; p.y = ny; }
-          }
-          p.off = (p.off || 0) + 1;
-          if (!okThere || p.off >= SNAP_AFTER) {
-            p.off = 0;
-            socket.emit("manor:snap", { code: w.code, x: p.x, y: p.y });
-          }
-        }
+      p.yaw = num(m.yaw, -1e4, 1e4) ?? p.yaw;
+      p.fl = !!m.fl;
+      if (p.hid != null) { p.at = now; p.moving = false; p.run = false; return; }      // in a locker: going nowhere
+      p.moving = !!m.mv; p.run = !!m.run && p.moving;
+      const x = num(m.x, 0, core.N), y = num(m.y, 0, core.N);
+      if (x == null || y == null) return;
+      // Accept it if you could have got there; if not, follow at running
+      // pace, and if the phone and the building still disagree a moment
+      // later — or the phone has you inside a wall — put the phone back.
+      const since = p.at ? Math.min(1, (now - p.at) / 1000) : 1;
+      const allowed = core.MAX_SPEED * since + 0.35;
+      const d = Math.hypot(x - p.x, y - p.y), okThere = core.canAt(w.st.g, x, y);
+      if (d <= allowed && okThere) { p.x = x; p.y = y; p.off = 0; }
+      else {
+        if (d > allowed) { const k = allowed / d, nx = p.x + (x - p.x) * k, ny = p.y + (y - p.y) * k; if (core.canAt(w.st.g, nx, ny)) { p.x = nx; p.y = ny; } }
+        p.off = (p.off || 0) + 1;
+        if (!okThere || p.off >= SNAP_AFTER) { p.off = 0; socket.emit("manor:snap", { code: w.code, x: p.x, y: p.y }); }
       }
       p.at = now;
-      p.fa = num(m.fa, -1e4, 1e4) ?? p.fa;
-      p.jz = num(m.jz, 0, 1) ?? 0;
-      p.cr = num(m.cr, 0, 1) ?? 0;
-      p.lit = !!m.lit;
-      p.noiseR = num(m.n, 0, 8) ?? 0;
     });
 
-    // A room's light switch: { code, room, px, py }. Only from in that room,
-    // within reach of its switch (judged from where the phone says it is,
-    // if it could have got there — the last report can lag a step).
-    socket.on("manor:lamp", (m) => {
-      if (!m || typeof m.code !== "string") return;
-      const w = worlds.get(m.code.toUpperCase());
-      if (!w || w.over) return;
-      const p = w.players.get(uid);
-      if (!p || !p.alive || p.hiding) return;
-      let fx = p.x, fy = p.y;
-      const px = num(m.px, 0, w.house.N), py = num(m.py, 0, w.house.N);
-      if (px != null && py != null && Math.hypot(px - p.x, py - p.y) <= core.MAX_SPEED + 0.6) { fx = px; fy = py; }
-      const room = Number(m.room);
-      const sw = [...w.env.switches.entries()].find(([, v]) => v.room === room);
-      if (!sw || core.roomAt(w.house.N, fx, fy) !== room) return;
-      const N = w.house.N, wx = sw[0] % N + 0.5, wy = Math.floor(sw[0] / N) + 0.5;
-      if (Math.hypot(wx - fx, wy - fy) > USE_REACH + 0.6) return;
-      w.house.lamps[room] = w.house.lamps[room] ? 0 : 1;
-      ev(w, { type: "lamp", room, on: w.house.lamps[room], id: uid });
-    });
-
-    // Chalk: { code, k, px, py } — mark (or rub out) a wall or door tile in
-    // reach. Everyone sees the marks in the next tick.
-    socket.on("manor:chalk", (m) => {
-      if (!m || typeof m.code !== "string") return;
-      const w = worlds.get(m.code.toUpperCase());
-      if (!w || w.over) return;
-      const p = w.players.get(uid);
-      if (!p || !p.alive || p.hiding) return;
-      const N = w.house.N, k = Number(m.k);
-      if (!Number.isInteger(k) || k < 0 || k >= N * N) return;
-      const tx = k % N, ty = Math.floor(k / N), v = w.house.g[ty][tx];
-      if (v !== core.WALL && v !== core.DOOR && !w.env.doors.has(k)) return;
-      let fx = p.x, fy = p.y;
-      const px = num(m.px, 0, N), py = num(m.py, 0, N);
-      if (px != null && py != null && Math.hypot(px - p.x, py - p.y) <= core.MAX_SPEED + 0.6) { fx = px; fy = py; }
-      if (Math.hypot(tx + 0.5 - fx, ty + 0.5 - fy) > USE_REACH) return;
-      const on = core.toggleMark(w.marks, k);
-      ev(w, { type: "chalk", k, on: on ? 1 : 0, id: uid });
-    });
-
-    // Use: { code, act: open | close | hide | out, x, y }. Only the tile in
-    // reach, and only what the tile allows; the answer goes back to the asker
-    // (manor:used) and everyone sees the result in the next tick.
+    // Use: { code, act: hide | out, px, py } — a locker in reach and free, or out of yours.
     socket.on("manor:use", (m) => {
       if (!m || typeof m.code !== "string") return;
       const w = worlds.get(m.code.toUpperCase());
       if (!w || w.over) return;
       const p = w.players.get(uid);
       if (!p || !p.alive) return;
-      const reply = (ok, extra) => socket.emit("manor:used", { code: w.code, act: m.act, x: m.x, y: m.y, ok, ...extra });
+      const reply = (ok, extra) => socket.emit("manor:used", { code: w.code, act: m.act, ok, ...extra });
       if (m.act === "out") {
-        if (p.hiding) { core.leaveLocker(p); p.at = Date.now(); ev(w, { type: "locker", id: uid, in: 0 }); }
+        if (p.hid != null) { p.hid = null; p.at = Date.now(); ev(w, { type: "locker", id: uid, in: 0 }); }
         return reply(true);
       }
-      const x = num(m.x, 0, w.house.N - 1), y = num(m.y, 0, w.house.N - 1);
-      if (x == null || y == null || p.hiding) return reply(false);
-      const tx = Math.floor(x), ty = Math.floor(y), g = w.house.g;
-      // Reach is judged from where the phone says it is — the last report can
-      // lag a step behind — as long as that's somewhere it could have got to.
+      if (m.act !== "hide" || p.hid != null) return reply(false);
       let fx = p.x, fy = p.y;
-      const px = num(m.px, 0, w.house.N), py = num(m.py, 0, w.house.N);
-      if (px != null && py != null) {
-        const since = p.at ? Math.min(1, (Date.now() - p.at) / 1000) : 1;
-        if (Math.hypot(px - p.x, py - p.y) <= core.MAX_SPEED * since + 0.6) { fx = px; fy = py; }
-      }
-      if (Math.hypot(tx + 0.5 - fx, ty + 0.5 - fy) > USE_REACH) return reply(false, { why: "far" });
-      if (m.act === "open") {
-        if (g[ty][tx] !== core.DOOR) return reply(false);
-        g[ty][tx] = core.FLOOR;
-        ev(w, { type: "door", x: tx, y: ty, open: 1, id: uid });
-        return reply(true);
-      }
-      if (m.act === "close") {
-        const bodies = [...living(w).filter((q) => !q.hiding), ...w.house.ghosts];
-        if (!core.canClose(w.env, tx, ty, bodies)) return reply(false);
-        g[ty][tx] = core.DOOR;
-        ev(w, { type: "door", x: tx, y: ty, open: 0, id: uid });
-        return reply(true);
-      }
-      if (m.act === "hide") {
-        if (g[ty][tx] !== core.SPOT) return reply(false);
-        if ([...w.players.values()].some((q) => q.hiding && q.hiding.x === tx && q.hiding.y === ty)) return reply(false, { why: "taken" });
-        const seenBy = core.watcher(w.house.ghosts, w.env, p, uid);
-        core.hideIn(p, { x: tx, y: ty }, seenBy);
-        ev(w, { type: "locker", id: uid, in: 1 });
-        return reply(true, { seen: !!seenBy });
-      }
-      return reply(false);
+      const px = num(m.px, 0, core.N), py = num(m.py, 0, core.N);
+      if (px != null && py != null) { const since = p.at ? Math.min(1, (Date.now() - p.at) / 1000) : 1; if (Math.hypot(px - p.x, py - p.y) <= core.MAX_SPEED * since + 0.6) { fx = px; fy = py; } }
+      // the nearest within reach, and a free one: two lockers can stand side by side
+      let li = -1, bd = USE_REACH;
+      w.lockers.forEach((l, i) => { const d = Math.hypot(l.x - fx, l.y - fy); if (d < bd && ![...w.players.values()].some((q) => q.hid === i)) { bd = d; li = i; } });
+      if (li < 0) return reply(false, { why: w.lockers.some((l) => Math.hypot(l.x - fx, l.y - fy) < USE_REACH) ? "taken" : "far" });
+      const l = w.lockers[li];
+      p.hid = li; p.x = l.x; p.y = l.y; p.moving = false; p.run = false; p.at = Date.now();
+      ev(w, { type: "locker", id: uid, in: 1 });
+      return reply(true, { i: li });
     });
-
   });
 }
 
 // Leaving mid-match. The seat is kept so the result still counts — your
 // side's score so far — and everyone else plays on to the end of the clock.
-// When the last player has left, the match is over.
 function forfeit(code, userId) {
   const w = worlds.get(code);
   if (!w || w.over) return false;

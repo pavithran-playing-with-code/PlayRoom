@@ -90,9 +90,6 @@ const MIN_TEAM_PLAYERS = MIN_PER_TEAM * 2;
 // (config/coopBoard.js): Memory, Mahjong, Number Rush, Pipes, Word Rush; and
 // the runners, side by side with hearts to save each other (runTogether.js)
 const COOP_GAMES = new Set([manor.GAME, ...together.COOP, "maze", ...coopBoard.GAMES, "runner", "dino", "flappy", "sunshard"]);
-// Carrom is played one against one or two against two — or alone against
-// the computer — so its rooms seat exactly 1, 2 or 4, and four means teams.
-const CARROM_SEATS = [1, 2, 4];
 // Games whose scores the server keeps itself, from what happened in its world.
 const serverScored = (slug) => slug === manor.GAME || together.isTogether(slug);
 const COOP_MAX = 4;
@@ -189,8 +186,6 @@ router.post("/", verifyToken, async (req, res, next) => {
         success: false,
         message: `A team match needs room for at least ${MIN_TEAM_PLAYERS} players.`,
       });
-    if (game_slug === "carrom" && (!CARROM_SEATS.includes(cap) || (cap === 4) !== (roomMode === "teams")))
-      return res.status(400).json({ success: false, message: "Carrom is 1 against the computer, 1 v 1, or 2 v 2 in teams." });
     if (roomMode === "coop" && !COOP_GAMES.has(game_slug))
       return res.status(400).json({ success: false, message: "That game can't be played together." });
     if (roomMode === "coop" && (cap < 2 || cap > COOP_MAX))
@@ -400,12 +395,6 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
       return res.status(409).json({
         success: false,
         message: "Waiting for at least one more player to join.",
-      });
-    // A carrom board needs every seat filled: two players, or four.
-    if (room.game_slug === "carrom" && Number(seated.n) !== Number(room.max_players))
-      return res.status(409).json({
-        success: false,
-        message: `Carrom needs all ${room.max_players} players — ${seated.n} here so far.`,
       });
 
     // A team match needs everyone on a side, at least two sides, and nobody

@@ -409,12 +409,12 @@ export default function BombBlast(props) {
                 </div>
               )}
               {showLevel && (
-                <div className="cr-level pop" role="dialog" aria-label="How good should the computer be?">
+                <div className="bb-level pop" role="dialog" aria-label="How good should the computer be?">
                   <h3>🤖 How good are the computer bombers?</h3>
-                  <div className="cr-levels">
+                  <div className="bb-levels">
                     {LEVELS.map((lvl) => (
-                      <button key={lvl} className={`press cr-lvl lvl-${lvl}`} onClick={() => tg.send("level", { lvl })}>
-                        <span className="cr-face">{LEVEL_TEXT[lvl][0]}</span><b>{LEVEL_TEXT[lvl][1]}</b><small>{LEVEL_TEXT[lvl][2]}</small>
+                      <button key={lvl} className={`press bb-lvl lvl-${lvl}`} onClick={() => tg.send("level", { lvl })}>
+                        <span className="bb-face">{LEVEL_TEXT[lvl][0]}</span><b>{LEVEL_TEXT[lvl][1]}</b><small>{LEVEL_TEXT[lvl][2]}</small>
                       </button>
                     ))}
                   </div>

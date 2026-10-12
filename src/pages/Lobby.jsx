@@ -61,10 +61,7 @@ export default function Lobby() {
   // Two sides of two is the smallest team match worth the name.
   const MIN_TEAM_SEATS = 4;
   const canTeam = maxPlayers >= MIN_TEAM_SEATS;
-  // A game with set seat counts (Carrom: 1, 2 or 4) decides teams itself:
-  // four seats is two teams of two, anything else is no teams.
-  const choices = selected.seatChoices || null;
-  const teams = choices ? maxPlayers === MIN_TEAM_SEATS : teamMode && canTeam;
+  const teams = teamMode && canTeam;
   // Playing together: only games that have a side to be on, 2 up to their cap.
   const coopMax = selected.coopMax || 0;
   const canCoop = coopMax > 0 && maxPlayers >= 2 && maxPlayers <= coopMax;
@@ -72,11 +69,8 @@ export default function Lobby() {
 
   // Keep maxPlayers valid when switching games.
   useEffect(() => {
-    setMaxPlayers((mp) => {
-      if (choices && !choices.some((c) => c.n === mp)) return choices[0].n;
-      return Math.min(mp, selected.maxPlayers);
-    });
-  }, [selected.maxPlayers, choices]);
+    setMaxPlayers((mp) => Math.min(mp, selected.maxPlayers));
+  }, [selected.maxPlayers]);
 
   // Dropping below four seats leaves no room for two teams.
   useEffect(() => {
@@ -188,7 +182,7 @@ export default function Lobby() {
                 <button key={g.slug} className="press pick" data-game={g.slug}
                   aria-pressed={g.slug === game} onClick={() => setGame(g.slug)}
                   style={{ flexDirection: "column", gap: 6, padding: "14px 8px", background: g.col, borderRadius: 20 }}>
-                  <span style={{ fontSize: "1.9rem", lineHeight: 1 }}><GameIcon slug={g.slug} icon={g.icon} /></span>
+                  <span style={{ fontSize: "1.9rem", lineHeight: 1 }}><GameIcon icon={g.icon} /></span>
                   <span style={{ fontSize: ".82rem", textAlign: "center", lineHeight: 1.15 }}>{g.name}</span>
                 </button>
               ))}
@@ -211,13 +205,6 @@ export default function Lobby() {
             {/* Solo and 2 are the usual picks, so they're one tap. Past that,
                 the crew grows a face at a time up to 8 — eight numbered
                 buttons in a row was a lot of furniture for a rare choice. */}
-            {choices ? (
-              <div className="seatpick" id="seats">
-                {choices.map((c) => (
-                  <button key={c.n} className="press seat p-white" aria-pressed={maxPlayers === c.n} onClick={() => setMaxPlayers(c.n)}>{c.label}</button>
-                ))}
-              </div>
-            ) : (
             <div className="seatpick" id="seats">
               <button className="press seat p-white" aria-pressed={maxPlayers === 1}
                 onClick={() => setMaxPlayers(1)}>🧍 Solo</button>
@@ -245,11 +232,8 @@ export default function Lobby() {
                 </span>
               )}
             </div>
-            )}
             <div className="muted seathint">
-              {choices
-                ? (choices.find((c) => c.n === maxPlayers) || choices[0]).hint
-                : isSolo
+              {isSolo
                 ? "🧍 Solo — just you and the clock."
                 : `👥 ${maxPlayers} players — everyone has to join before the game can start.`}
             </div>
@@ -266,8 +250,8 @@ export default function Lobby() {
                     style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
                   🔒 Keep it private — invite only
                 </label>
-                {/* Needs four seats: two sides of two. (A game with set seats decides this itself.) */}
-                {!choices && <label className="row"
+                {/* Needs four seats: two sides of two. */}
+                <label className="row"
                   style={{ gap: 11, fontSize: ".95rem", marginBottom: coopMax ? 12 : 22,
                     cursor: canTeam ? "pointer" : "not-allowed", opacity: canTeam ? 1 : .45 }}>
                   <input type="checkbox" checked={teams} disabled={!canTeam}
@@ -277,7 +261,7 @@ export default function Lobby() {
                     ⚔️ Team match — play as sides, highest total wins
                     {!canTeam && <span className="muted"> · needs {MIN_TEAM_SEATS}+ seats</span>}
                   </span>
-                </label>}
+                </label>
                 {/* Together: one side against the game. */}
                 {coopMax > 0 && (
                   <label className="row"
@@ -317,7 +301,7 @@ export default function Lobby() {
 
             {/* What you're about to create, spelled out: game, clock, seats. */}
             <div className="lobby-sum" aria-live="polite">
-              <span className="chip" style={{ background: selected.col }}><GameIcon slug={selected.slug} icon={selected.icon} /> {selected.name}</span>
+              <span className="chip" style={{ background: selected.col }}><GameIcon icon={selected.icon} /> {selected.name}</span>
               <span className="chip c-sky">⏱️ {mins} min match</span>
               <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
               {teams && <span className="chip c-grape">⚔️ Teams</span>}
@@ -387,8 +371,8 @@ export default function Lobby() {
                   <button key={room.id} className="tile" onClick={() => quickJoin(room.room_code)}>
                     <PeekBuddy colour={col} size={54} />
                     <span className="top" style={{ background: col, height: 96 }}>
-                      <span className="ghost"><GameIcon slug={room.game_slug} icon={icon} /></span>
-                      <span className="big" style={{ fontSize: "2.8rem" }}><GameIcon slug={room.game_slug} icon={icon} /></span>
+                      <span className="ghost"><GameIcon icon={icon} /></span>
+                      <span className="big" style={{ fontSize: "2.8rem" }}><GameIcon icon={icon} /></span>
                     </span>
                     <span className="bot" style={{ display: "block" }}>
                       <h3 style={{ fontSize: "1.1rem" }}>{room.game_name}</h3>

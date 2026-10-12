@@ -239,7 +239,6 @@ const GAME_SEED = [
   { slug: "reaction",  name: "Tap Rush",          description: "Tap the lit tiles fast — rack up points against the clock!",   min: 1, max: 8, icon: "⚡", active: 1 },
   { slug: "wordrush",  name: "Word Rush",         description: "Unscramble as many words as possible before time's up!",       min: 1, max: 8, icon: "🔤", active: 1 },
   { slug: "arrows",    name: "Arrow Escape",      description: "Tap an arrow to slide it off the board, but only if its path is clear.", min: 1, max: 8, icon: "🏹", active: 1 },
-  { slug: "jigsaw",    name: "Missing Piece",     description: "Spot which piece fills the gap in the picture.",                  min: 1, max: 8, icon: "🧩", active: 1 },
   { slug: "dino",      name: "Dino Dash",         description: "Jump the cacti, duck the birds, run as far as you can.",          min: 1, max: 8, icon: "🦖", active: 1 },
   { slug: "numbers",   name: "Number Rush",       description: "Tap the numbers in order, one grid after another.",               min: 1, max: 8, icon: "🔢", active: 1 },
   { slug: "colors",    name: "Color Dash",        description: "Tap the swatch that matches the named colour, fast.",             min: 1, max: 8, icon: "🎨", active: 1 },
@@ -257,8 +256,6 @@ const GAME_SEED = [
   { slug: "piano",     name: "Piano Tiles",       description: "Tap the black tiles, never the white. Every tile is the next note of the song.", min: 1, max: 8, icon: "🎹", active: 1 },
   { slug: "kitchen",   name: "Kitchen Rush",      description: "Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.", min: 1, max: 8, icon: "🍳", active: 1 },
   { slug: "bomb",      name: "Bomb Blast",        description: "Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.", min: 1, max: 4, icon: "💣", active: 1 },
-  { slug: "tower",     name: "Tower Guard",       description: "Build towers along the road and keep the monsters off your castle. Together, defend one castle.", min: 1, max: 8, icon: "🏰", active: 1 },
-  { slug: "carrom",    name: "Carrom",            description: "Flick the striker, pocket your colour, cover the queen. Against the computer, 1 v 1, or 2 v 2.", min: 1, max: 4, icon: "⚫⚪", active: 1 },
   { slug: "manor",     name: "Station 13",        description: "A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.", min: 1, max: 8, icon: "🏥", active: 1 },
   { slug: "sunshard",  name: "Sunshard Islands",  description: "A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.", min: 1, max: 8, icon: "🏝️", active: 1 },
 ];

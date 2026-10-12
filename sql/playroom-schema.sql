@@ -238,35 +238,32 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('reaction', 'Tap Rush', 'Tap the lit tiles fast — rack up points against the clock!', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1, 40),
   ('wordrush', 'Word Rush', 'Unscramble as many words as possible before time''s up!', 1, 8, CONVERT(UNHEX('F09F94A4') USING utf8mb4), 1, 50),
   ('arrows', 'Arrow Escape', 'Tap an arrow to slide it off the board, but only if its path is clear.', 1, 8, CONVERT(UNHEX('F09F8FB9') USING utf8mb4), 1, 60),
-  ('jigsaw', 'Missing Piece', 'Spot which piece fills the gap in the picture.', 1, 8, CONVERT(UNHEX('F09FA7A9') USING utf8mb4), 1, 70),
-  ('dino', 'Dino Dash', 'Jump the cacti, duck the birds, run as far as you can.', 1, 8, CONVERT(UNHEX('F09FA696') USING utf8mb4), 1, 80),
-  ('numbers', 'Number Rush', 'Tap the numbers in order, one grid after another.', 1, 8, CONVERT(UNHEX('F09F94A2') USING utf8mb4), 1, 90),
-  ('colors', 'Color Dash', 'Tap the swatch that matches the named colour, fast.', 1, 8, CONVERT(UNHEX('F09F8EA8') USING utf8mb4), 1, 100),
-  ('pipes', 'Pipes', 'Turn the pipes until every one joins up to the source.', 1, 8, CONVERT(UNHEX('F09F9AB0') USING utf8mb4), 1, 110),
-  ('flappy', 'Flappy Dash', 'Tap to flap and squeeze through the pipes.', 1, 8, CONVERT(UNHEX('F09F90A4') USING utf8mb4), 1, 120),
-  ('slide', 'Slide Puzzle', 'Slide the tiles until 1-8 are back in order.', 1, 8, CONVERT(UNHEX('F09F9480') USING utf8mb4), 1, 130),
-  ('blocks', 'Block Blast', 'Fit the pieces in and clear whole rows and columns.', 1, 8, CONVERT(UNHEX('F09FA7B1') USING utf8mb4), 1, 140),
-  ('racer', 'Road Hopper', 'Hop across roads, rivers and railways — how far can you get?', 1, 8, CONVERT(UNHEX('F09F9094') USING utf8mb4), 1, 150),
-  ('runner', 'Rail Runner', 'Run the rails: jump the barriers, slide under the bars, dodge the trains.', 1, 8, CONVERT(UNHEX('F09F8F83') USING utf8mb4), 1, 160),
-  ('speedway', 'Speedway', 'Three laps, one road, everyone on it at once. First across the line wins.', 1, 8, CONVERT(UNHEX('F09F8F81') USING utf8mb4), 1, 170),
-  ('storm', 'Dodge Storm', 'Stay alive while the shards close in from every side.', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1, 180),
-  ('maze', 'Maze Runner', 'One way out, and it gets bigger every time you find it.', 1, 8, CONVERT(UNHEX('F09FA7AD') USING utf8mb4), 1, 190),
-  ('typing', 'Typing Race', 'Type the words as fast as you can. Same words for everyone, streaks score big.', 1, 8, CONVERT(UNHEX('E28CA8EFB88F') USING utf8mb4), 1, 200),
-  ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 210),
-  ('piano', 'Piano Tiles', 'Tap the black tiles, never the white. Every tile is the next note of the song.', 1, 8, CONVERT(UNHEX('F09F8EB9') USING utf8mb4), 1, 220),
-  ('kitchen', 'Kitchen Rush', 'Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.', 1, 8, CONVERT(UNHEX('F09F8DB3') USING utf8mb4), 1, 230),
-  ('bomb', 'Bomb Blast', 'Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.', 1, 4, CONVERT(UNHEX('F09F92A3') USING utf8mb4), 1, 240),
-  ('tower', 'Tower Guard', 'Build towers along the road and keep the monsters off your castle. Together, defend one castle.', 1, 8, CONVERT(UNHEX('F09F8FB0') USING utf8mb4), 1, 250),
-  ('carrom', 'Carrom', 'Flick the striker, pocket your colour, cover the queen. Against the computer, 1 v 1, or 2 v 2.', 1, 4, CONVERT(UNHEX('E29AABE29AAA') USING utf8mb4), 1, 260),
-  ('manor', 'Station 13', 'A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.', 1, 8, CONVERT(UNHEX('F09F8FA5') USING utf8mb4), 1, 270),
-  ('sunshard', 'Sunshard Islands', 'A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.', 1, 8, CONVERT(UNHEX('F09F8F9DEFB88F') USING utf8mb4), 1, 280)
+  ('dino', 'Dino Dash', 'Jump the cacti, duck the birds, run as far as you can.', 1, 8, CONVERT(UNHEX('F09FA696') USING utf8mb4), 1, 70),
+  ('numbers', 'Number Rush', 'Tap the numbers in order, one grid after another.', 1, 8, CONVERT(UNHEX('F09F94A2') USING utf8mb4), 1, 80),
+  ('colors', 'Color Dash', 'Tap the swatch that matches the named colour, fast.', 1, 8, CONVERT(UNHEX('F09F8EA8') USING utf8mb4), 1, 90),
+  ('pipes', 'Pipes', 'Turn the pipes until every one joins up to the source.', 1, 8, CONVERT(UNHEX('F09F9AB0') USING utf8mb4), 1, 100),
+  ('flappy', 'Flappy Dash', 'Tap to flap and squeeze through the pipes.', 1, 8, CONVERT(UNHEX('F09F90A4') USING utf8mb4), 1, 110),
+  ('slide', 'Slide Puzzle', 'Slide the tiles until 1-8 are back in order.', 1, 8, CONVERT(UNHEX('F09F9480') USING utf8mb4), 1, 120),
+  ('blocks', 'Block Blast', 'Fit the pieces in and clear whole rows and columns.', 1, 8, CONVERT(UNHEX('F09FA7B1') USING utf8mb4), 1, 130),
+  ('racer', 'Road Hopper', 'Hop across roads, rivers and railways — how far can you get?', 1, 8, CONVERT(UNHEX('F09F9094') USING utf8mb4), 1, 140),
+  ('runner', 'Rail Runner', 'Run the rails: jump the barriers, slide under the bars, dodge the trains.', 1, 8, CONVERT(UNHEX('F09F8F83') USING utf8mb4), 1, 150),
+  ('speedway', 'Speedway', 'Three laps, one road, everyone on it at once. First across the line wins.', 1, 8, CONVERT(UNHEX('F09F8F81') USING utf8mb4), 1, 160),
+  ('storm', 'Dodge Storm', 'Stay alive while the shards close in from every side.', 1, 8, CONVERT(UNHEX('E29AA1') USING utf8mb4), 1, 170),
+  ('maze', 'Maze Runner', 'One way out, and it gets bigger every time you find it.', 1, 8, CONVERT(UNHEX('F09FA7AD') USING utf8mb4), 1, 180),
+  ('typing', 'Typing Race', 'Type the words as fast as you can. Same words for everyone, streaks score big.', 1, 8, CONVERT(UNHEX('E28CA8EFB88F') USING utf8mb4), 1, 190),
+  ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 200),
+  ('piano', 'Piano Tiles', 'Tap the black tiles, never the white. Every tile is the next note of the song.', 1, 8, CONVERT(UNHEX('F09F8EB9') USING utf8mb4), 1, 210),
+  ('kitchen', 'Kitchen Rush', 'Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.', 1, 8, CONVERT(UNHEX('F09F8DB3') USING utf8mb4), 1, 220),
+  ('bomb', 'Bomb Blast', 'Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.', 1, 4, CONVERT(UNHEX('F09F92A3') USING utf8mb4), 1, 230),
+  ('manor', 'Station 13', 'A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.', 1, 8, CONVERT(UNHEX('F09F8FA5') USING utf8mb4), 1, 240),
+  ('sunshard', 'Sunshard Islands', 'A 3D island hop: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.', 1, 8, CONVERT(UNHEX('F09F8F9DEFB88F') USING utf8mb4), 1, 250)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
   min_players = VALUES(min_players), max_players = VALUES(max_players),
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 10 tables and 27 playable games.
+-- Expect 10 tables and 24 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
 SELECT slug, name, icon, max_players, sort_order FROM game_types WHERE is_active = 1 ORDER BY sort_order, id;
 

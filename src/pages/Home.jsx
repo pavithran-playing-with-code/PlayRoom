@@ -74,8 +74,8 @@ export default function Home() {
               <Link key={g.slug} to={isLoggedIn ? `/lobby?game=${g.slug}` : "/register"} className="tile">
                 <PeekBuddy colour={g.col} size={60} />
                 <span className="top" style={{ background: g.col }}>
-                  <span className="ghost"><GameIcon slug={g.slug} icon={g.icon} /></span>
-                  <span className="big"><GameIcon slug={g.slug} icon={g.icon} /></span>
+                  <span className="ghost"><GameIcon icon={g.icon} /></span>
+                  <span className="big"><GameIcon icon={g.icon} /></span>
                 </span>
                 <span className="bot" style={{ display: "block" }}>
                   <h3>{g.name}</h3>

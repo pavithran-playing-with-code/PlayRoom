@@ -510,12 +510,6 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
 .press.pick{position:relative}
 .chip.lb-together{cursor:pointer;background:#fff;margin-bottom:10px;font-size:.8rem}
 .chip.lb-together.on{background:var(--grape);color:#fff}
-.cr-clock{font-weight:900;font-size:1rem;padding:4px 10px;border-radius:999px;border:2.5px solid var(--ink);background:#fff;flex:none}
-.cr-clock.low{background:var(--coral);color:#fff;animation:hmPulse .5s infinite alternate}
-.press.cr-shoot{position:relative;overflow:hidden;min-width:150px;min-height:56px;font-weight:900;touch-action:none;--pow:0}
-.press.cr-shoot .cr-pow{position:absolute;left:0;top:0;bottom:0;width:calc(var(--pow) * 100%);
-  background:linear-gradient(90deg,#8FDB5C,#FFC53D 55%,#FF6B6B);pointer-events:none}
-.press.cr-shoot span{position:relative}
 .press.gb-help{width:36px;height:36px;padding:0;border-radius:50%;font-weight:900;font-size:1.05rem;flex:none}
 /* how to play: the card, in the lobby, the waiting room and over a game */
 .howto-t{font-family:Fredoka,sans-serif;font-weight:700;font-size:1.05rem;margin-bottom:6px}
@@ -765,26 +759,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .wr-slot.filled{border-style:solid;box-shadow:0 3px 0 var(--ink)}
 .wr-tile{border-radius:12px}
 
-/* ---------- Missing Piece ---------- */
-.pz-wrap{display:flex;flex-direction:column;align-items:center}
-.pz-wrap.side{flex-direction:row}
-.pz-frame{margin:0 auto;padding:7px;border:3px solid var(--ink);border-radius:18px;
-  background:#B8794B;box-shadow:0 5px 0 var(--ink)}
-.pz-board{display:block;width:100%;height:auto;outline:3px solid var(--ink);border-radius:2px}
-.pz-lines path{fill:none;stroke:rgba(46,33,64,.3);stroke-width:1.6}
-.pz-hole{fill:#FFF1CF;stroke:var(--ink);stroke-width:3.5;stroke-linejoin:round}
-.pz-done{fill:none;stroke:var(--lime);stroke-width:6;stroke-linejoin:round}
-.pz-fill{animation:pzPop .35s cubic-bezier(.34,1.7,.64,1);transform-box:fill-box;transform-origin:center}
-@keyframes pzPop{from{transform:scale(1.15);opacity:.4}}
-.pz-opts{display:flex;flex-wrap:wrap;justify-content:center;flex:none}
-.press.pz-opt{position:relative;padding:5px;border-radius:16px;--lift:4px;touch-action:manipulation}
-.pz-piece{display:block;width:100%;height:100%;overflow:visible}
-.pz-edge{fill:none;stroke:var(--ink);stroke-width:3.5;stroke-linejoin:round}
-.pz-letter{position:absolute;left:-9px;top:-9px;z-index:1;width:26px;height:26px;border-radius:999px;
-  display:grid;place-items:center;background:var(--sun);border:3px solid var(--ink);font-size:.8rem;line-height:1}
-.press.pz-right{background:var(--lime)}
-.press.pz-opt:disabled .pz-letter{background:var(--coral);color:#fff}
-.pz-shake{animation:pzShake .4s ease}
 /* ---------- Number Rush ---------- */
 .nr-find{display:inline-block;margin-bottom:10px;padding:4px 16px;border:3px solid var(--ink);border-radius:999px;
   background:#fff;box-shadow:0 3px 0 var(--ink);font-family:Fredoka,sans-serif;font-weight:600;font-size:1.05rem}
@@ -962,59 +936,15 @@ input::-ms-reveal,input::-ms-clear{display:none}
   font:800 1.3rem Fredoka,sans-serif;background:var(--card);white-space:nowrap;animation:drop .2s cubic-bezier(.34,1.7,.64,1)}
 .bb-banner small{display:block;font:700 .85rem Nunito,sans-serif;opacity:.7;margin-top:4px}
 
-/* ── Tower Guard (.tw-) ── */
-.tw-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.tw-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);touch-action:none;-webkit-tap-highlight-color:transparent}
-.tw-sheet{display:flex;align-items:stretch;gap:6px;width:100%;max-width:460px;padding:0 4px}
-.press.tw-buy{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 3px 6px;--lift:4px;background:var(--card);min-width:0}
-.tw-buy b{font-size:.82rem;line-height:1.1}
-.tw-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:2px 3px}
-.tw-chips i{font-style:normal;font-size:.62rem;font-weight:700;background:var(--paper2);border-radius:999px;padding:0 5px;white-space:nowrap;line-height:1.5}
-.tw-cost{font-weight:800;font-size:.8rem;background:var(--sun);border:2px solid var(--ink);border-radius:999px;padding:0 7px;margin-top:2px;white-space:nowrap}
-.press.poor{opacity:.45}
-.press.tw-x{padding:6px 11px;--lift:3px;align-self:center;flex:none}
-.tw-upsheet{flex-direction:column;gap:6px}
-.tw-info{display:flex;align-items:center;gap:6px;background:var(--paper2);border:3px solid var(--ink);border-radius:14px;padding:3px 6px}
-.tw-who{display:flex;flex-direction:column;flex:none}
-.tw-who b{font-size:.85rem;line-height:1.1}
-.tw-who small{font-size:.68rem;opacity:.8}
-.tw-info .tw-chips{flex:1;justify-content:flex-start}
-.tw-info .tw-chips i{background:#fff}
-.tw-row{display:flex;gap:6px}
-.press.tw-up{flex:1;display:flex;align-items:center;gap:6px;padding:4px 8px;--lift:4px;text-align:left;min-width:0}
-.tw-up span:not(.tw-cost){display:flex;flex-direction:column;min-width:0;flex:1}
-.tw-up b{font-size:.82rem;line-height:1.15}
-.tw-up small{font-size:.66rem;opacity:.85}
-.press.tw-sell{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 12px;--lift:4px;font-size:.85rem}
-.tw-sell small{font-size:.7rem}
-.tw-max{flex:1;display:grid;place-items:center;font-weight:800;font-size:.85rem;background:var(--sun);border:3px solid var(--ink);border-radius:14px}
-/* one height for the hint, the shop and the upgrade sheet, so the map
-   doesn't shrink and grow (and move under your thumb) as they come and go */
-.tw-dock{height:132px;width:100%;display:flex;align-items:center;justify-content:center}
-.tw-bar{display:flex;align-items:center;gap:8px;width:100%;max-width:460px;padding:0 6px}
-.tw-hint{font-size:.82rem;text-align:center;flex:1}
-.press.tw-early{padding:8px 12px;--lift:4px;font-size:.9rem;white-space:nowrap}
-.tw-early small{font-size:.72rem;opacity:.9}
-
-/* ── Carrom (.cr-) ── */
-.cr-pad{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
-  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.cr-canvas{border-radius:16px;box-shadow:0 6px 0 var(--ink);border:3px solid var(--ink);touch-action:none;-webkit-tap-highlight-color:transparent}
-.cr-help{font-size:.78rem;text-align:center}
-.cr-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 12px;width:100%;max-width:440px;padding:0 6px}
-.cr-slide{flex:1 1 100%;display:flex;align-items:center;gap:10px;font-weight:800;font-size:.9rem}
-.cr-slide input{flex:1;height:34px;accent-color:var(--brick);touch-action:pan-x}
-.cr-wait{flex:1;text-align:center;font-size:.92rem}
-.press.cr-snd{padding:8px 14px;--lift:3px}
-.cr-level{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%,380px);padding:18px 16px;text-align:center;
+/* the computer's level, picked before a game against it */
+.bb-level{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%,380px);padding:18px 16px;text-align:center;
   background:var(--card);animation:drop .2s cubic-bezier(.34,1.7,.64,1)}
-.cr-level h3{font-size:1.25rem;margin-bottom:12px}
-.cr-levels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
-.press.cr-lvl{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;--lift:4px}
-.cr-lvl b{font-size:1rem}
-.cr-lvl small{font-size:.68rem;opacity:.8;line-height:1.2}
-.cr-face{font-size:1.8rem}
+.bb-level h3{font-size:1.25rem;margin-bottom:12px}
+.bb-levels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.press.bb-lvl{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;--lift:4px}
+.bb-lvl b{font-size:1rem}
+.bb-lvl small{font-size:.68rem;opacity:.8;line-height:1.2}
+.bb-face{font-size:1.8rem}
 .press.lvl-easy{background:var(--lime)}
 .press.lvl-medium{background:var(--sun)}
 .press.lvl-hard{background:var(--coral)}

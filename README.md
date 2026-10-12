@@ -3,8 +3,8 @@
 Quick games to play with your friends, wherever they are. Make a room, send six
 letters, and race each other for two to five minutes.
 
-Fourteen games — Mahjong Solitaire, Memory Match, Speed Math, Tap Rush, Word
-Rush, Arrow Escape, Missing Piece, Dino Dash, Number Rush, Color Dash, Pipes,
+Games like Mahjong Solitaire, Memory Match, Speed Math, Tap Rush, Word
+Rush, Arrow Escape, Dino Dash, Number Rush, Color Dash, Pipes,
 Flappy Dash, Slide Puzzle and Block Drop — all built for a phone held in one
 hand. Everyone in a room gets exactly the same board, so it is a fair race
 rather than a shared screen.

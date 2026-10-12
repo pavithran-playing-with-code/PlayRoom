@@ -84,12 +84,12 @@ function manorResults(room, seated) {
 }
 
 // ── The games you play together ──────────────────────────────────────────────
-// Kitchen Rush, Bomb Blast, Tower Guard and Carrom (config/togetherWorld.js) keep
+// Kitchen Rush and Bomb Blast (config/togetherWorld.js) keep
 // their own scores, one per side, carried by every member of the side; and
 // pairs_matched is 1 once a side has reached its goal. With several sides the
 // best score wins (a tie at the top is a draw). With one side — a solo run, or
 // everybody together — there's nobody to beat: reaching the goal is the win.
-const TOGETHER_GAMES = new Set(["kitchen", "bomb", "tower", "carrom"]);
+const TOGETHER_GAMES = new Set(["kitchen", "bomb"]);
 
 function togetherResults(room, seated) {
   const out = new Map();

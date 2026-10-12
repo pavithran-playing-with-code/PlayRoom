@@ -1,8 +1,7 @@
 // config/togetherWorld.js — the games you can play TOGETHER, run by the server.
 //
-// Kitchen Rush, Tower Guard, Bomb Blast and Carrom are played in worlds the
-// server keeps: a kitchen two friends cook in, a castle everyone defends, an
-// arena or a board everyone is in at once. A world shared by several phones
+// Kitchen Rush and Bomb Blast are played in worlds the server keeps: a
+// kitchen two friends cook in, an arena everyone is in at once. A world shared by several phones
 // can't live on any one of them, so — like Station 13
 // (config/manorWorld.js) — the server keeps it in memory and runs it.
 //
@@ -14,13 +13,13 @@
 // <game>Core.mjs, shared with the phones), ticking a few times a second.
 // The server alone scores: every member of a side carries the side's score
 // in room_players, and pairs_matched is 1 once the side has reached its goal
-// (the stars, the bombs, the castle still standing) — which is what decides a
+// (the stars, the bombs) — which is what decides a
 // match with only one side in it (config/matchResult.js).
 //
-// A match ends when the clock runs out, when every side's world is over (a
-// castle fallen), or once everybody has left.
+// A match ends when the clock runs out, when every side's world is over, or
+// once everybody has left.
 //
-// A rules module that says SHARED (Carrom) is one world for the whole room,
+// A rules module that says SHARED (Bomb Blast) is one world for the whole room,
 // the sides playing against each other in it: every side gets the same
 // world, it steps once, and it's asked for each side's score by key.
 const path = require("path");
@@ -30,9 +29,9 @@ const { recordResults } = require("./recordResults");
 const { tellFriends, roomChannel, userChannel } = require("./socket");
 
 // slug -> the rules module
-const GAMES = { kitchen: "kitchenCore.mjs", bomb: "bombCore.mjs", tower: "towerCore.mjs", carrom: "carromCore.mjs" };
-// …and the ones a co-op room can be made for (Carrom is sides against each other only)
-const COOP = ["kitchen", "bomb", "tower"];
+const GAMES = { kitchen: "kitchenCore.mjs", bomb: "bombCore.mjs" };
+// …and the ones a co-op room can be made for
+const COOP = ["kitchen", "bomb"];
 const KEEP_AFTER_MS = 120000;          // a finished world lingers for late hellos
 const SAVE_MS = 1500;                  // scores reach the database at most this often
 

@@ -49,12 +49,6 @@ export const HOW_TO = {
     steps: ["Tap an arrow and it slides away along its path.", "It only moves if nothing is in front of its head.", "Clear a board to get a longer, twistier one."],
     tip: "Start with the arrows whose way out is already clear.",
   },
-  jigsaw: {
-    name: "Missing Piece",
-    goal: "Find the piece that fills the gap.",
-    steps: ["A picture has one jigsaw piece missing.", "Tap the piece that fits the hole — shape and picture both."],
-    tip: "Check the bumps and dents of the hole first, then the colours.",
-  },
   dino: {
     name: "Dino Dash",
     goal: "Run as far as you can.",
@@ -156,18 +150,6 @@ export const HOW_TO = {
     goal: "Be the last bomber standing.",
     steps: ["Move with the stick. 💣 drops a bomb.", "Blasts break bricks and knock out bombers — including you!", "Grab power-ups: 💣 more bombs, 🔥 bigger blasts, 👟 speed."],
     tip: "Drop a bomb, then get round a corner before it goes off.",
-  },
-  tower: {
-    name: "Tower Guard",
-    goal: "Stop the monsters reaching your castle.",
-    steps: ["Tap the grass beside the road to build a tower.", "🏹 archers are quick, 💣 cannons hit groups, ❄️ frost slows.", "Tap a tower to upgrade or sell it.", "Every monster stopped earns coins."],
-    tip: "Send the next wave early with Send now for a bonus.",
-  },
-  carrom: {
-    name: "Carrom",
-    goal: "Pocket all your coins first.",
-    steps: ["1 · Slide the striker along your line (drag it, or the slider).", "2 · Touch the board where you want it to go — an arrow shows the line.", "3 · Hold 🎯 Shoot: the power goes up and down — let go to shoot. 30 seconds a turn.", "Pocket your colour and you go again. Pocket the red queen, then one of yours straight after to keep her.", "Pocketing the striker is a foul."],
-    tip: "Aim to send coins into the corner pockets, not straight at them.",
   },
   manor: {
     name: "Station 13",

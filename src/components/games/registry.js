@@ -7,7 +7,6 @@ import SpeedMath from "./SpeedMath";
 import TapRush from "./TapRush";
 import WordRush from "./WordRush";
 import ArrowEscape from "./ArrowEscape";
-import MissingPiece from "./MissingPiece";
 import DinoDash from "./DinoDash";
 import NumberRush from "./NumberRush";
 import ColorDash from "./ColorDash";
@@ -25,8 +24,6 @@ import TypingRace from "./TypingRace";
 import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
 import BombBlast from "./BombBlast";
-import TowerGuard from "./TowerGuard";
-import CarromGame from "./CarromGame";
 import SunshardIslands from "./SunshardIslands";
 
 // `col` is the game's colour across the whole product — Home tile header,
@@ -39,8 +36,6 @@ import SunshardIslands from "./SunshardIslands";
 //   ownsSpectating   the game draws its own "who to watch" picker, so the
 //                    room's is not laid over the top of it
 //   coopLabel        the lobby's "Play together — …" line for this game
-//   seatChoices      the only seat counts this game can be played with, each
-//                    with its button and its line; four seats means teams
 //   coopNote         what the waiting room says to a together room
 export const GAMES = [
   {
@@ -87,12 +82,6 @@ export const GAMES = [
     blurb: "Tap an arrow to slide it off the board, but only if its path is clear.",
     minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--bubble)",
     Component: ArrowEscape,
-  },
-  {
-    slug: "jigsaw", name: "Missing Piece", icon: "🧩",
-    blurb: "A piece of the picture is gone. Spot the one that fits before your friends do.",
-    minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--peach)",
-    Component: MissingPiece,
   },
   {
     slug: "dino", name: "Dino Dash", icon: "🦖",
@@ -215,27 +204,6 @@ export const GAMES = [
     coopLabel: "all of you against two computer bombers",
     coopNote: "You're all on one side, against two computer bombers. Your flames won't hurt each other.",
     Component: BombBlast,
-  },
-  {
-    slug: "tower", name: "Tower Guard", icon: "🏰",
-    blurb: "Build towers along the road and keep the monsters off your castle. Together, defend one castle.",
-    minPlayers: 1, maxPlayers: 8, tag: "Together", col: "var(--leaf)",
-    coopMax: 4, defaultDuration: 300, ownsSpectating: true,
-    coopLabel: "one castle, a purse each",
-    coopNote: "One map, one castle: build together and keep it standing to the end. Every kill pays all of you.",
-    Component: TowerGuard,
-  },
-  {
-    slug: "carrom", name: "Carrom", icon: "⚫⚪",          // drawn as a little board by GameIcon
-    blurb: "Flick the striker, pocket your colour, cover the queen. Against the computer, 1 v 1, or 2 v 2.",
-    minPlayers: 1, maxPlayers: 4, tag: "Classic", col: "var(--brick)",
-    defaultDuration: 300, ownsSpectating: true,
-    seatChoices: [
-      { n: 1, label: "🤖 vs Computer", hint: "🤖 You against the computer — pick Easy, Medium or Hard when it starts." },
-      { n: 2, label: "👥 1 v 1", hint: "👥 You and a friend, head to head. No computer." },
-      { n: 4, label: "👥👥 2 v 2", hint: "👥👥 Two teams of two, partners opposite. Pick teams in the waiting room." },
-    ],
-    Component: CarromGame,
   },
   {
     slug: "manor", name: "Station 13", icon: "🏥",

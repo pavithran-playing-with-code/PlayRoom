@@ -473,7 +473,7 @@ function Room() {
       );
     }
     if (device === "ask" && !played) {
-      return <Notice emoji={<GameIcon slug={room?.game_slug} icon={room?.game_icon} />} title="Opening the game…" />;
+      return <Notice emoji={<GameIcon icon={room?.game_icon} />} title="Opening the game…" />;
     }
     const GameComponent = getGameComponent(room?.game_slug);
     return (
@@ -593,7 +593,7 @@ function Room() {
     return (
       <div className="wrap room-loading" style={{ "--c": g?.col || "var(--sun)" }}>
         <div className="room-loading-card pop">
-          <span className="room-loading-icon">{room ? <GameIcon slug={room.game_slug} icon={room.game_icon} /> : "🎮"}</span>
+          <span className="room-loading-icon">{room ? <GameIcon icon={room.game_icon} /> : "🎮"}</span>
           <b>{room ? `Starting ${room.game_name || g?.name || "the game"}` : "Getting the room ready"}</b>
           <span className="room-loading-dots" aria-hidden="true"><i /><i /><i /></span>
         </div>
@@ -614,7 +614,7 @@ function Room() {
         <div className="row" style={{ justifyContent: "space-between", marginBottom: 22, flexWrap: "wrap", gap: 10 }}>
           <button className="press p-white sm" onClick={exitToLobby}>← Leave</button>
           <span className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-            <span className="chip c-sun"><GameIcon slug={room?.game_slug} icon={room?.game_icon} /> {room?.game_name || "Loading…"}</span>
+            <span className="chip c-sun"><GameIcon icon={room?.game_icon} /> {room?.game_name || "Loading…"}</span>
             {mins && <span className="chip c-sky">⏱️ {mins} min match</span>}
             {isSolo && <span className="chip c-coral">🧍 Solo run</span>}
             {room?.mode === "coop" && <span className="chip c-grape">🤝 Together</span>}

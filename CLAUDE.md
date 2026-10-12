@@ -185,7 +185,10 @@ There is no test runner. What works:
   own 4 fuses in its colour (together: one set), every fuse lights two
   zones for everyone, the first side into the elevator wins. Caught online,
   you're back in the Main Hall in a moment with the monsters sent off.
-  Hiding where it saw you go in is no hiding — the original does the same.
+  In a locker with your torch off it gives up on you and goes back on its
+  rounds; torch on, it can still find you if it lingers. Floor props (the
+  dead, a tipped bin) don't block; standing ones block only their drawn box
+  (`FOOT` in s13Core, kept on the grid as `g.box`), not their whole tile.
   `check-manor.mjs` has a bot get out of most seeded runs;
   `check-manor-world.js` tests the server with a fake database.
 - **Sunshard Jump** (slug `sunshard`) is a 3D platformer, all jumping —

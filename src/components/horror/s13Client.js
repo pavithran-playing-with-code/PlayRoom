@@ -110,6 +110,7 @@ export function applyTick(c, m, now = Date.now()) {
     } else if (e.type === "chase" && e.id === c.you) say(c, "RUN.", 2);
     else if (e.type === "rear" && e.id === c.you) snd("growl");
     else if (e.type === "lostsight" && e.id === c.you) say(c, "It lost track of you.", 2.5);
+    else if (e.type === "gaveup" && e.id === c.you) say(c, "You lost it... for now.", 3);
     else if (e.type === "zone") { if (Math.hypot(e.x - B.x, e.y - B.y) > 7 && Math.random() < 0.6) snd("bangAt", { x: e.x, y: e.y }); }
     else if (e.type === "door") { const d = c.st.doors[e.i]; if (d) snd("creakAt", { x: d.x + 0.5, y: d.y + 0.5 }); }
     else if (e.type === "escaped") {
@@ -170,6 +171,7 @@ export function interact(c, now = Date.now()) {
   if (!l) return null;
   const at = { px: P.x, py: P.y };
   hideIn(P, l); P.hideAt = now;
+  if (P.fl && P.bat > 0) say(c, "Switch your light off — it will see it.", 3.5);
   return { code: c.code, act: "hide", ...at };
 }
 export function actionDone(c, r) {

@@ -427,10 +427,7 @@ export function createStation(host, THREE, opts) {
   const coneM = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, uniforms: { u: { value: 0.05 } },
     vertexShader: "varying vec3 p;void main(){p=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
     fragmentShader: "varying vec3 p;uniform float u;void main(){float d=clamp(-p.z/15.,0.,1.);gl_FragColor=vec4(vec3(1.,.95,.8)*u*(1.-d)*(.3+d),1.);}" });
-  const beam = new THREE.Group(), cone = new THREE.Mesh(coneG, coneM), DN = 70, dP = new Float32Array(DN * 3); cone.frustumCulled = false; beam.add(cone); scene.add(beam);
-  for (let i = 0; i < DN; i++) { const z = -0.5 - FR() * 13; dP.set([(FR() - 0.5) * Math.abs(z) * 0.4, (FR() - 0.5) * Math.abs(z) * 0.4, z], i * 3); }
-  const dGeo = new THREE.BufferGeometry(); dGeo.setAttribute("position", new THREE.BufferAttribute(dP, 3));
-  const dust = new THREE.Points(dGeo, new THREE.PointsMaterial({ size: 0.07, map: glowT, color: 0xfff0d0, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false })); dust.frustumCulled = false; beam.add(dust);
+  const beam = new THREE.Group(), cone = new THREE.Mesh(coneG, coneM); cone.frustumCulled = false; beam.add(cone); scene.add(beam);
   const fwS = new THREE.Vector3(0, 0, -1);
   let prT = 0, mrt = 0, bnT = 0, shT = 12, shL = 0, AW = aware, flashT = 0, deadT = 0;
 
@@ -525,11 +522,9 @@ export function createStation(host, THREE, opts) {
     nzC.style.opacity = (0.05 + dg * 0.12).toFixed(2);
     slit.style.display = P.hid && play ? "" : "none";
     flashT = Math.max(0, flashT - dt); flash.style.opacity = flashT > 0 ? 1 : 0;
-    // the torch's beam and the dust in it
+    // the torch's beam (no dust in it: the specks read as sparks floating in the light)
     if (play && torch && !P.hid) {
       beam.visible = true; beam.position.copy(cam.position); beam.lookAt(cam.position.clone().sub(fwS)); coneM.uniforms.u.value = 0.055 * (spot.intensity / 2.6);
-      for (let i = 0; i < DN; i++) { dP[i * 3] += (FR() - 0.5) * 0.004; dP[i * 3 + 1] += (FR() - 0.5) * 0.004 + 0.0015; if (Math.abs(dP[i * 3 + 1]) > Math.abs(dP[i * 3 + 2]) * 0.2) dP[i * 3 + 1] *= -0.9; }
-      dGeo.attributes.position.needsUpdate = true;
     } else beam.visible = false;
     rd.render(scene, cam);
   }

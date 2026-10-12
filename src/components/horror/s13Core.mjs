@@ -91,8 +91,30 @@ export function los(g, ax, ay, bx, by) {
   for (let i = 1; i < n; i++) { const t = i / n; const row = g[(ay + (by - ay) * t) | 0]; if (!row || row[(ax + (bx - ax) * t) | 0]) return false; }
   return true;
 }
-const solid = (g, x, y) => { const row = g[y | 0]; return !row || row[x | 0] > 0; };
-export const canAt = (g, x, y) => !(solid(g, x - R_BODY, y - R_BODY) || solid(g, x + R_BODY, y - R_BODY) || solid(g, x - R_BODY, y + R_BODY) || solid(g, x + R_BODY, y + R_BODY));
+// What a prop really takes up, in tiles: half its width across and half its
+// length along (turned with the prop), from the sizes s13Scene draws it at.
+// A wall stops your body at its tile; a prop stops it at this box, so a
+// gurney in a corridor stops you at the gurney and not a step short of it.
+// Not listed (beds, an open drawer): the whole tile.
+const FOOT = { gurney: [0.14, 0.34], cart: [0.16, 0.12], wheel: [0.1, 0.13], trash: [0.07, 0.07], plant: [0.09, 0.09], vend: [0.2, 0.16],
+  bench: [0.47, 0.14], table: [0.25, 0.47], counter: [0.5, 0.16], shelf: [0.2, 0.47], drawer: [0.15, 0.47] };
+const FOOT_PAD = 0.04;
+export const canAt = (g, x, y) => {
+  const x0 = x - R_BODY, x1 = x + R_BODY, y0 = y - R_BODY, y1 = y + R_BODY;
+  for (let ty = Math.floor(y0); ty <= Math.floor(y1); ty++) {
+    const row = g[ty];
+    if (!row) return false;
+    for (let tx = Math.floor(x0); tx <= Math.floor(x1); tx++) {
+      const v = row[tx];
+      if (v === undefined) return false;
+      if (!v) continue;
+      const b = v === FURN && g.box ? g.box.get(tx + ty * N) : null;
+      if (!b) return false;
+      if (x1 > b[0] && x0 < b[2] && y1 > b[1] && y0 < b[3]) return false;
+    }
+  }
+  return true;
+};
 export const zoneAt = (st, x, y) => (st.zn[y | 0] && st.zn[y | 0][x | 0]) || "";
 export const isLit = (st, lit, x, y) => lit.has(zoneAt(st, x, y));
 
@@ -188,6 +210,14 @@ export function genStation(seed) {
   const dc = (n, k) => { for (let i = 0; i < n; i++) { const [x, y] = fl[(R() * fl.length) | 0]; if (g[y][x] === FLOOR) deco.push({ x: x + R(), y: y + R(), k, r: R() * 6 }); } };
   dc(110, "paper"); dc(10, "chair"); dc(6, "ivfall"); dc(45, "glass"); dc(30, "pill"); dc(14, "ctile"); dc(7, "htile"); dc(10, "cable");
   // the per-run look of every human figure and prop that wants a die roll of its own
+  // each standing prop's real box (canAt), kept on the grid itself
+  g.box = new Map();
+  for (const q of furn) {
+    const f = !q.low && !(q.k === "drawer" && q.s === "open") && FOOT[q.k];
+    if (!f) continue;
+    const [hx, hz] = Math.abs(Math.sin(q.r || 0)) > 0.5 ? [f[1], f[0]] : f, cx = q.x + 0.5, cy = q.y + 0.5;
+    g.box.set(q.x + q.y * N, [cx - hx - FOOT_PAD, cy - hz - FOOT_PAD, cx + hx + FOOT_PAD, cy + hz + FOOT_PAD]);
+  }
   return { seed, g, zn, doors, furn, deco, bl, exitT: { ...EXIT }, look: Math.floor(R() * 1e9) };
 }
 
@@ -295,6 +325,15 @@ export function stepMonster(M, st, targets, dt, rand, ctx, emit = () => {}) {
   if (di >= 0 && di !== M.ld) { M.ld = di; emit("door", { i: di }); } else if (di < 0) M.ld = -1;
 
   let prey = targets.find((t) => t.id === M.prey) || null;
+  // In a locker with your light off you're gone: it gives up on you there and
+  // then and goes back to its rounds. (Light on, it can still find you.)
+  const vanished = (t) => t && t.hid && !t.fl;
+  if ((M.st === "notice" || M.st === "chase") && vanished(prey)) {
+    M.st = "patrol"; M.prey = null; M.wd = 0; M.lg = 0; M.nt = 0; M.lose = 0; M.wait = 0;
+    pickPatrol(M, st, rand);
+    emit("gaveup", { id: prey.id });
+    return null;
+  }
   // the warning: it has seen you, it stops and stares; break its sight a moment and it gives up
   if (M.st === "notice") {
     M.nt -= dt;
@@ -333,9 +372,9 @@ export function stepMonster(M, st, targets, dt, rand, ctx, emit = () => {}) {
     }
     M.rt -= dt;
   }
-  // in a locker: if it lingers right by you, it finds you
+  // in a locker with your light on: if it lingers right by you, it finds you
   for (const t of targets) {
-    if (t.hid && dist(t) < HIDE_FIND_R) { M.hold[t.id] = (M.hold[t.id] || 0) + dt; if (M.hold[t.id] > HIDE_FIND_S) { M.hold[t.id] = 0; return { id: t.id, hidden: true }; } }
+    if (t.hid && t.fl && dist(t) < HIDE_FIND_R) { M.hold[t.id] = (M.hold[t.id] || 0) + dt; if (M.hold[t.id] > HIDE_FIND_S) { M.hold[t.id] = 0; return { id: t.id, hidden: true }; } }
     else if (M.hold[t.id]) M.hold[t.id] = Math.max(0, M.hold[t.id] - dt);
   }
   prey = targets.find((t) => t.id === M.prey) || null;

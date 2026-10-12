@@ -85,6 +85,21 @@ const DT = 1 / 30;
   let crossed = false;
   for (let i = 0; i < 60 && canAt(st.g, Pw.x + 0.1, Pw.y); i++) { stepPlayer(Pw, st, { ix: 0, iz: 1 }, DT); if (Pw.x > q0.x + 0.9) crossed = true; }
   if (canAt(st.g, q0.x - 0.7, q0.y + 0.5) && canAt(st.g, q0.x + 1.5, q0.y + 0.5)) check("…walking straight at one, you carry on over it", crossed);
+  // a gurney or a cart stops you at itself, not at the edge of its tile a step short
+  let near = [], seeds = 0;
+  for (let sd = 1; sd <= 100; sd++) {
+    const s2 = genStation(sd);
+    for (const q of s2.furn.filter((f) => f.k === "gurney" || f.k === "cart")) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        if (!canAt(s2.g, q.x + 0.5 + dx * 1.2, q.y + 0.5 + dy * 1.2)) continue;      // only from a side you can stand on
+        let d = 1.2; while (d > 0 && canAt(s2.g, q.x + 0.5 + dx * (d - 0.01), q.y + 0.5 + dy * (d - 0.01))) d -= 0.01;
+        near.push(d);
+      }
+    }
+    seeds++;
+  }
+  const worst = Math.max(...near);
+  check("gurneys and carts stop you at them, not a step short", near.length > 50 && worst < 0.7, `stopped ${worst.toFixed(2)} tiles from the middle at worst (a whole tile stopped you at 0.72); ${near.length} approaches`);
 }
 
 // ── the monster ──────────────────────────────────────────────────────────────
@@ -134,8 +149,15 @@ function corridor(st) {
   // break its line of sight while it stares, and it gives up the stare
   const b = awake();
   stepMonster(b, st, [me()], DT, rand, { lit: new Set([zl]), fuses: 0 });
-  for (let t = 0; t < 1.6; t += DT) stepMonster(b, st, [me({ hid: true })], DT, rand, { lit: new Set([zl]), fuses: 0 });
-  check("…break its sight while it stares and it only comes to look", b.st === "invest");
+  for (let t = 0; t < 1.6; t += DT) stepMonster(b, st, [me({ hid: true, fl: true })], DT, rand, { lit: new Set([zl]), fuses: 0 });
+  check("…break its sight while it stares (your light still on) and it only comes to look", b.st === "invest");
+  // into a locker and your light off: it gives up on you there and then
+  for (const from of ["notice", "chase"]) {
+    const gv = awake({ st: from, prey: 1, nt: NOTICE_S }), ev5 = [];
+    setTarget(gv, st, (c.x + 9) | 0, c.y | 0);
+    stepMonster(gv, st, [me({ hid: true, fl: false })], DT, rand, { lit: new Set([zl]), fuses: 0 }, (x) => ev5.push(x));
+    check(`hidden with your light off, it stops its ${from === "notice" ? "stare" : "chase"} and goes back on its rounds`, gv.st === "patrol" && gv.prey === null && ev5.includes("gaveup"));
+  }
   // out of sight in a chase: it loses you
   const ch = awake({ st: "chase", prey: 1 });
   setTarget(ch, st, (c.x + 11) | 0, c.y | 0);
@@ -163,8 +185,12 @@ function corridor(st) {
   // a locker: it finds you if it lingers right by you
   const lg = awake({ st: "invest", dm: null });
   let found = null, ft = 0;
-  for (let t = 0; t < HIDE_FIND_S + 1 && !found; t += DT) { lg.x = c.x; found = stepMonster(lg, st, [me({ x: c.x + 1, hid: true })], DT, rand, { lit: dark, fuses: 0 }); ft = t; }
-  check("lingering right by your locker, it finds you", found && found.hidden, `${ft.toFixed(1)}s`);
+  for (let t = 0; t < HIDE_FIND_S + 1 && !found; t += DT) { lg.x = c.x; found = stepMonster(lg, st, [me({ x: c.x + 1, hid: true, fl: true })], DT, rand, { lit: dark, fuses: 0 }); ft = t; }
+  check("lingering right by your locker with your light on, it finds you", found && found.hidden, `${ft.toFixed(1)}s`);
+  const lg2 = awake({ st: "invest", dm: null });
+  let found2 = null;
+  for (let t = 0; t < HIDE_FIND_S * 3; t += DT) { lg2.x = c.x; lg2.st = "invest"; found2 = found2 || stepMonster(lg2, st, [me({ x: c.x + 1, hid: true, fl: false })], DT, rand, { lit: dark, fuses: 0 }); }
+  check("…light off, it can stand right by you and never find you", !found2);
 }
 
 // ── solo: standing still is no plan ──────────────────────────────────────────

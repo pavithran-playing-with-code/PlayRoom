@@ -38,7 +38,8 @@ export function interact(s) {
   if (!l) return;
   hideIn(P, l);
   ev(s, "locker");
-  if (s.M.st === "chase" && Math.hypot(s.M.x - P.x, s.M.y - P.y) < 9) say(s, "It knows where you are...", 3);
+  // light off in here and it loses you; light on and it can still find you
+  if (P.fl && P.bat > 0) say(s, "Switch your light off — it will see it.", 3.5);
 }
 export const actionLabel = (s) => (s.mode !== "play" ? "" : s.P.hid ? "LEAVE" : lockerNear(s.lockers, s.P.x, s.P.y) ? "HIDE" : "");
 export function toggleLight(s) { if (s.P.bat > 0) { s.P.fl = !s.P.fl; ev(s, "click"); } }

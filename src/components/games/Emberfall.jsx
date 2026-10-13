@@ -109,6 +109,7 @@ export default function Emberfall(props) {
         opponents={Object.values(eng.opponents)}
         teams={eng.teams}
         onQuit={eng.endMatch}
+        landscape
         bare
       >
         {({ w, h }) => (isSpectator

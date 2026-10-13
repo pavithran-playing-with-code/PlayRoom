@@ -503,6 +503,45 @@ router.get("/:code", verifyToken, async (req, res, next) => {
 });
 
 // PATCH /api/rooms/:code/start
+// PATCH /api/rooms/:code/settings { duration_seconds?, mode? } — the host
+// changes the match length (2 or 5 minutes, or 0: unlimited) or plays it
+// together (or not) after making the room, while it's still waiting. The
+// same rules as making it: together only for games that have it, with 2 to
+// COOP_MAX seats; teams need four. Leaving teams clears everyone's side.
+// Everyone in the room is told (room:settings) and fetches it again.
+router.patch("/:code/settings", verifyToken, async (req, res, next) => {
+  try {
+    const [rooms] = await db.execute(
+      `SELECT r.id, r.host_id, r.status, r.max_players, r.mode, r.duration_seconds, gt.slug AS game_slug
+         FROM rooms r JOIN game_types gt ON gt.id = r.game_type_id WHERE r.room_code = ?`, [req.params.code]);
+    if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
+    const room = rooms[0];
+    if (Number(room.host_id) !== Number(req.user.id)) return res.status(403).json({ success: false, message: "Only the host can change the match." });
+    if (room.status !== "waiting") return res.status(409).json({ success: false, message: "The match has already started." });
+    const body = req.body || {};
+    let duration = Number(room.duration_seconds), mode = room.mode;
+    if (body.duration_seconds !== undefined) {
+      const d = Math.floor(Number(body.duration_seconds));
+      if (!Number.isFinite(d)) return res.status(400).json({ success: false, message: "That isn't a match length." });
+      duration = d === 0 ? 0 : Math.max(120, Math.min(300, d));
+    }
+    if (body.mode !== undefined) {
+      mode = body.mode === "teams" ? "teams" : body.mode === "coop" ? "coop" : "free";
+      const cap = Number(room.max_players);
+      if (mode === "teams" && cap < MIN_TEAM_PLAYERS)
+        return res.status(400).json({ success: false, message: `A team match needs room for at least ${MIN_TEAM_PLAYERS} players.` });
+      if (mode === "coop" && !COOP_GAMES.has(room.game_slug))
+        return res.status(400).json({ success: false, message: "That game can't be played together." });
+      if (mode === "coop" && (cap < 2 || cap > COOP_MAX))
+        return res.status(400).json({ success: false, message: `Playing together takes 2 to ${COOP_MAX} players.` });
+    }
+    await db.execute("UPDATE rooms SET duration_seconds = ?, mode = ?, last_activity_at = NOW() WHERE id = ?", [duration, mode, room.id]);
+    if (room.mode === "teams" && mode !== "teams") await db.execute("UPDATE room_players SET team = NULL WHERE room_id = ?", [room.id]);
+    push(req, req.params.code, "room:settings", { code: req.params.code, duration_seconds: duration, mode });
+    res.json({ success: true, duration_seconds: duration, mode });
+  } catch (err) { next(err); }
+});
+
 router.patch("/:code/start", verifyToken, async (req, res, next) => {
   try {
     const [rooms] = await db.execute(

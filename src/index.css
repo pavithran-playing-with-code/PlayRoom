@@ -1531,3 +1531,13 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .again.dark .again-list li{background:rgba(255,255,255,.06);border:1px solid #556055;color:#cfd6cf}
 .again.dark .again-list li.on{background:rgba(143,227,107,.18);border-color:#8fe36b;color:#e6f5dc}
 .again.dark .again-note{color:#a39a88}
+
+/* ── the host's match settings in the waiting room ── */
+.room-settings{padding:14px 18px;margin-bottom:22px;display:flex;flex-direction:column;gap:12px}
+.room-settings .rs-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.room-settings .rs-label{font-weight:800}
+.room-settings .rs-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
+.room-settings .rs-opts .press.dur{width:100%;padding:10px 6px;font-size:.95rem;white-space:nowrap}
+.room-settings .rs-together{cursor:pointer;font-size:.95rem;flex-wrap:nowrap;align-items:flex-start}
+.room-settings .rs-together input{flex:none;margin-top:2px}
+.room-settings .rs-together span{flex:1;min-width:0}

@@ -51,6 +51,7 @@ function Room() {
   const [chat,      setChat]      = useState([]);
   const [chatInput, setChatInput] = useState("");
   const [error,     setError]     = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
   const [starting,  setStarting]  = useState(false);
   const [confirmStart, setConfirmStart] = useState(false);
   const [teamBusy, setTeamBusy] = useState(false);
@@ -143,6 +144,16 @@ function Room() {
       if (data.room.duration_seconds != null) setDuration(Number(data.room.duration_seconds));      // 0: unlimited
     } catch { setError("Could not load room."); }
   }, [code]);
+  // The host changes the match while it waits: its length, or Together.
+  const changeSettings = useCallback(async (patch) => {
+    setSavingSettings(true); setError("");
+    try {
+      const data = await (await api.patch(`/api/rooms/${code}/settings`, patch)).json();
+      if (!data.success) setError(data.message || "Couldn't change the match.");
+      else { setDuration(Number(data.duration_seconds)); setRoomMode(data.mode); await fetchRoom(); }
+    } catch { setError("Couldn't reach the server."); }
+    setSavingSettings(false);
+  }, [code, fetchRoom]);
 
   const poll = useCallback(async () => {
     try {
@@ -281,7 +292,9 @@ function Room() {
     socket.on("room:started", refresh);
     socket.on("room:chat", refresh);
     socket.on("room:ended", refresh);
+    socket.on("room:settings", joined);       // the host changed the length or Together
     return () => {
+      socket.off("room:settings", joined);
       socket.emit("room:leave", code);
       socket.off("room:again", onAgain);
       socket.off("room:again-go", onAgainGo);
@@ -619,6 +632,8 @@ function Room() {
 
   // ── Waiting lobby ─────────────────────────────────────────────────────────
   const mins = duration ? Math.round(duration / 60) : null;
+  const gm = GAME_MAP[room?.game_slug];
+  const canTogether = (gm?.coopMax || 0) > 0 && (room?.max_players || 2) >= 2 && (room?.max_players || 2) <= gm.coopMax;
   const seats = room?.max_players || 2;
   const g = GAME_MAP[room?.game_slug];
   const col = g?.col || "var(--mint)";
@@ -639,6 +654,30 @@ function Room() {
 
         {error && (
           <div className="note" style={{ background: "var(--coral)", color: "#fff", marginBottom: 18 }}>{error}</div>
+        )}
+
+        {/* The host can still change the match after making the room: its length,
+            and whether it's played together. Everyone sees the chips above change. */}
+        {isHost && status === "waiting" && !isSolo && (
+          <div className="pop room-settings">
+            <div className="rs-row">
+              <span className="rs-label">⏱️ Match length</span>
+              <span className="rs-opts">
+                {[[120, "2 min"], [300, "5 min"], [0, "♾️ Unlimited"]].map(([sec, label]) => (
+                  <button key={sec} type="button" className="press dur p-white" aria-pressed={duration === sec}
+                    disabled={savingSettings} onClick={() => duration !== sec && changeSettings({ duration_seconds: sec })}>{label}</button>
+                ))}
+              </span>
+            </div>
+            {canTogether && room?.mode !== "teams" && (
+              <label className="rs-row rs-together">
+                <input type="checkbox" checked={room?.mode === "coop"} disabled={savingSettings}
+                  onChange={(e) => changeSettings({ mode: e.target.checked ? "coop" : "free" })}
+                  style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
+                <span>🤝 Play together <span className="muted">— {gm?.coopLabel || "one side, against the game"}</span></span>
+              </label>
+            )}
+          </div>
         )}
 
         {/* Room code — only useful when someone else can actually join. Held back

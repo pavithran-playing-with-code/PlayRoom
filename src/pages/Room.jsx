@@ -663,8 +663,9 @@ function Room() {
             <div className="rs-row">
               <span className="rs-label">⏱️ Match length</span>
               <span className="rs-opts">
-                {[[120, "2 min"], [300, "5 min"], [0, "♾️ Unlimited"]].map(([sec, label]) => (
+                {[[120, "2 min"], [300, "5 min"], [0, "♾️"]].map(([sec, label]) => (
                   <button key={sec} type="button" className="press dur p-white" aria-pressed={duration === sec}
+                    aria-label={sec === 0 ? "Unlimited" : undefined} title={sec === 0 ? "Unlimited" : undefined}
                     disabled={savingSettings} onClick={() => duration !== sec && changeSettings({ duration_seconds: sec })}>{label}</button>
                 ))}
               </span>

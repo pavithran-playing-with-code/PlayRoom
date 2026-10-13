@@ -22,7 +22,7 @@ const CREW_COLS = ["var(--sun)", "var(--sky)", "var(--coral)", "var(--mint)",
 const DURATIONS = [
   { s: 120, label: "2 min" },
   { s: 300, label: "5 min" },
-  { s: 0, label: "♾️ Unlimited" },
+  { s: 0, label: "♾️", name: "Unlimited" },        // the icon alone: the word didn't fit a phone's button
 ];
 const lengthText = (secs) => (secs === 0 ? "no time limit" : `${Math.round(secs / 60)} min`);
 
@@ -202,7 +202,7 @@ export default function Lobby() {
             <div className="durrow">
               {DURATIONS.map((d) => (
                 <button key={d.s} className="press dur p-white" aria-pressed={duration === d.s}
-                  onClick={() => setDuration(d.s)}>
+                  aria-label={d.name} title={d.name} onClick={() => setDuration(d.s)}>
                   {d.label}
                 </button>
               ))}

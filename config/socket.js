@@ -212,6 +212,20 @@ function initSocket(httpServer) {
       });
     });
 
+    // Emberfall: everything the two phones say to each other — where each
+    // hero is, the host's enemies, world changes (public/emberfall/game.js,
+    // the NET section). Relayed whole; the server only caps the size.
+    socket.on("ef:msg", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const d = msg.d;
+      if (!d || typeof d !== "object" || Array.isArray(d)) return;
+      let size = 0;
+      try { size = JSON.stringify(d).length; } catch { return; }
+      if (size > 24000) return;
+      socket.to(roomChannel(code)).emit("ef:msg", { user_id: uid, d });
+    });
+
     socket.on("disconnect", () => {
       for (const [k, sid] of playing) {
         if (sid !== socket.id) continue;

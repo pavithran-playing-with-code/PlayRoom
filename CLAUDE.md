@@ -215,6 +215,19 @@ There is no test runner. What works:
   tail to tail in seat order (`tether`: each phone holds back only its own
   explorer, never in the air; the rope snaps and re-ties).
   `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
+- **Emberfall** (slug `emberfall`, 1–2 players) is a finished single page,
+  `public/emberfall/` (index.html, game.js, its own three.min.js), run in a
+  frame by `Emberfall.jsx`, which only relays: the page posts `send`, the
+  room gets `ef:msg` (passed on whole by `config/socket.js`, size-capped),
+  and back. The NET section of game.js is the co-op: the playing player with
+  the lowest id hosts (enemies, bosses, time, weather; a snapshot `w` ~8/s),
+  the other's enemies are puppets, its hits go to the host (`hit`), the host's
+  blows come back (`hurt`); world changes (chests, trees, smashed objects,
+  forage, towers, quest) are sent as they happen and applied without loot,
+  and a returning player asks for all of it (`hello` → `full`). Two can ride
+  one horse (seat 0 drives, seat 1 behind). Test it with two frames and a
+  relay in one headless page (`window.__ef` reaches everything); a room for it
+  needs its `game_types` row (`sql/emberfall.sql`).
 - **Video calls** (friends, up to 4) — `config/calls.js` rings and
   introduces; the media goes phone to phone (`src/utils/CallContext.js`,
   `src/components/CallLayer.jsx`). In each pair only the lower user id

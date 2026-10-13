@@ -80,7 +80,7 @@ export default function Lobby() {
 
   // Some games want a longer clock (a house takes a while to search).
   useEffect(() => {
-    if (selected.defaultDuration) setDuration(selected.defaultDuration);
+    if (selected.defaultDuration != null) setDuration(selected.defaultDuration);
   }, [selected.slug, selected.defaultDuration]);
 
   // A game you can play together starts out together: pick it and the box is

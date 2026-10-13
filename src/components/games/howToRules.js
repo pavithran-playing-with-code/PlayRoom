@@ -109,6 +109,12 @@ export const HOW_TO = {
     steps: ["Left half of the screen: the joystick (or W A S D) — put your thumb down anywhere there. Right half: drag to turn the camera.", "JUMP — and again in the air to double-jump. Hold JUMP after the double jump to glide.", "Land on a slime to knock it out. Touching one from the side costs a heart.", "Follow the golden arrow and the light beams. Blue rings move, cracked stones crumble, red mushrooms bounce you, wind vents lift you. Every zone has its own sky.", "Falling is fine: you're back at the last flag. Together: any of you can take a shard for everyone — and you're tied tail to tail, so stick close or the rope snaps."],
     tip: "First to light the temple wins.",
   },
+  emberfall: {
+    name: "Emberfall",
+    goal: "Win back the three Ember Shards from their guardians, then defeat the Cinder Colossus.",
+    steps: ["Pick a hero on the title screen, then New Journey (or Continue your last one).", "Left stick to move — push it to the edge to sprint. Drag anywhere else to look.", "ATTACK chains three hits, ROLL dodges through blows, SPIN when the blue bar is full, HEAL drinks a potion. Hold JUMP in the air to glide, or at a wall to climb.", "TALK speaks to people, opens chests and mounts horses. DO fishes, picks berries, cooks and builds a campfire. MAP lets you fast-travel to lit watchtowers.", "Together: one island, one quest — either of you can talk to Elder Maren. TALK by your friend's horse to ride behind them."],
+    tip: "A red ring on the ground is a boss about to strike: roll out of it, or roll through the blow at the last moment to counter.",
+  },
   speedway: {
     name: "Speedway",
     goal: "Win the race — 3 laps, 5 on a 3–4 minute clock, 8 on 5 minutes.",

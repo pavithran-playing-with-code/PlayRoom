@@ -11,12 +11,13 @@ const MAX_SCORE_PER_GAME = 25000;
 // "complete", so a solo run of one is recorded as `incomplete` rather than
 // being scored as a win or a loss.
 // Must match TOTAL_PAIRS in the game component — see src/components/MahjongGame.jsx.
-const OBJECTIVE_PAIRS = { mahjong: 24, memory: 10 };
+const OBJECTIVE_PAIRS = { mahjong: 24, memory: 10, emberfall: 1 };
 
 // Boards a together side has to clear for the match to be a win. Must match
 // GOAL in src/components/games/coopBoards.js (scripts/check-coop.mjs proves it).
-// Sunshard Jump: pairs_matched is 1 once the side has lit the temple.
-const COOP_GOAL = { maze: 1, memory: 1, mahjong: 1, numbers: 5, pipes: 3, sunshard: 1 };
+// Sunshard Jump: pairs_matched is 1 once the side has lit the temple;
+// Emberfall: 1 once the Cinder Colossus is down (alone, that is the win too).
+const COOP_GOAL = { maze: 1, memory: 1, mahjong: 1, numbers: 5, pipes: 3, sunshard: 1, emberfall: 1 };
 // Word Rush together: words solved as a side, more for a longer clock and a
 // bigger side. = wordGoal in coopBoards.js.
 const wordGoal = (secs, n) => Math.max(4, Math.round((3 * (Number(secs) || 120) * Math.max(1, n)) / 60));

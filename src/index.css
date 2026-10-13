@@ -1541,3 +1541,6 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .room-settings .rs-together{cursor:pointer;font-size:.95rem;flex-wrap:nowrap;align-items:flex-start}
 .room-settings .rs-together input{flex:none;margin-top:2px}
 .room-settings .rs-together span{flex:1;min-width:0}
+
+/* Emberfall: the game is its own page in a frame (public/emberfall/) */
+.ef-frame{display:block;border:0;background:#0b1522}

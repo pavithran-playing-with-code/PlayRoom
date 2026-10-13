@@ -25,6 +25,7 @@ import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
 import BombBlast from "./BombBlast";
 import SunshardIslands from "./SunshardIslands";
+import Emberfall from "./Emberfall";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -222,6 +223,15 @@ export const GAMES = [
     coopLabel: "one shard count — light the temple together",
     coopNote: "One shard count for all of you: any of you can take a Sunshard for everyone, and when one of you gets home, you all win. You're tied tail to tail — wander off and you tug each other back.",
     Component: SunshardIslands,
+  },
+  {
+    slug: "emberfall", name: "Emberfall", icon: "🔥",
+    blurb: "A 3D island adventure: pick a hero, beat three guardians for their Ember Shards, then the Cinder Colossus.",
+    minPlayers: 1, maxPlayers: 2, tag: "Adventure", col: "var(--coral)",
+    coopMax: 2, defaultDuration: 0,
+    coopLabel: "one island — the quest together",
+    coopNote: "One island for both of you: the same enemies, bosses and quest. Fight side by side, ride one horse together, and bring down the Cinder Colossus.",
+    Component: Emberfall,
   },
 ];
 

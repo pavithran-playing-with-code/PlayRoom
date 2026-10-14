@@ -213,7 +213,12 @@ There is no test runner. What works:
   Each phone relays its explorer (`isl:pos`); together,
   the shard bits are unioned, one of you home wins for all, and you're tied
   tail to tail in seat order (`tether`: each phone holds back only its own
-  explorer, never in the air; the rope snaps and re-ties).
+  explorer; a chain that never snaps, with a little slack in the air — fall
+  and you're back beside the friend you're tied to). Slimes wander by the
+  match clock, so they agree; a stomp or a crumbling stone goes to the room
+  (`isl:ev`, `killSlime` / `crumbleAt`). Light the temple and the side moves
+  on to the next island (`seed-1`, `seed-2`…, `rd` in `isl:pos`); islands'
+  points add up under the cap.
   `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
 - **Emberfall** (slug `emberfall`, 1–2 players) is a finished single page,
   `public/emberfall/index.html` (the mobile rebuild, worked on outside this

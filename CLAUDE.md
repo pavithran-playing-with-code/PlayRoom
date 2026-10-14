@@ -222,6 +222,10 @@ There is no test runner. What works:
   relays. The page speaks the same bridge as before (its "PlayRoom bridge"
   section): `ready` once loaded, `score` once a second; it takes `init`
   (ids, names, the notch), `names` and `over` (stop the game and the sound).
+  It also posts `fs` on a tap (the room page goes full screen, so a phone's
+  status bar goes — the page, not the frame, to keep the sideways turn) and
+  `leave` from its Quit; the floating clock and Leave are hidden for it
+  (GameFrame `helpOnly`), only ? stays.
   **Co-op is not in the rebuild yet**: each player plays their own island and
   `ef:msg` is ignored. The old two-player version is kept beside it as
   `index-backup-before-p6a.html` + `game.js` (and `game-backup-before-p6a.js`);

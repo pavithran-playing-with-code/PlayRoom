@@ -11,6 +11,11 @@
 //   • the page posts its score (and whether the Colossus is down) once a
 //     second; the engine syncs it like any game (pairs_matched 1 = the win)
 //   • the room's clock running out pauses the page
+//   • { ef: 'leave' } (its Quit, confirmed) leaves the room — the floating
+//     clock and Leave are hidden for this game (GameFrame helpOnly), only ? stays
+//   • { ef: 'fs' } (a tap in the page) puts this page full screen, so a phone's
+//     status bar goes; the tap's activation reaches us from the frame. The whole
+//     page, not the frame: it keeps the sideways turn for an upright phone
 // The current page (the mobile rebuild) speaks the same bridge but has no co-op
 // yet: it ignores ef:msg, so two players each play their own island. How the
 // old co-op worked (who runs the enemies, a second hero, two to a horse): the
@@ -25,6 +30,25 @@ import { team as teamOf } from "./coopTeam";
 const SRC = `${process.env.PUBLIC_URL || ""}/emberfall/index.html?embed=1`;
 // the floating clock / ? / Leave row is this tall; the page keeps its HUD under it on a phone
 const FLOAT_H = 50;
+
+// full screen for the whole page (a refusal is fine: no full screen on iPhone)
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+function enterFull() {
+  if (typeof document === "undefined" || fsEl()) return;
+  try {
+    const el = document.documentElement, f = el.requestFullscreen || el.webkitRequestFullscreen;
+    const r = f && f.call(el, { navigationUI: "hide" });
+    if (r && r.catch) r.catch(() => {});
+  } catch { /* refused */ }
+}
+function leaveFull() {
+  try {
+    if (!fsEl()) return;
+    const f = document.exitFullscreen || document.webkitExitFullscreen;
+    const r = f && f.call(document);
+    if (r && r.catch) r.catch(() => {});
+  } catch { /* fine */ }
+}
 
 // the notch and home bar, measured here: env() reads 0 inside a frame
 function safeInsets() {
@@ -55,6 +79,16 @@ export default function Emberfall(props) {
     extraState: () => ({ pairs_matched: wonRef.current ? 1 : 0 }),
   });
   const { setScore } = eng;
+  const quitRef = useRef(eng.endMatch);
+  quitRef.current = eng.endMatch;
+
+  // while it's open: any bar the phone keeps is black, not white; leaving takes full screen down
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const was = meta && meta.getAttribute("content");
+    if (meta) meta.setAttribute("content", "#000000");
+    return () => { if (meta && was != null) meta.setAttribute("content", was); leaveFull(); };
+  }, []);
 
   const frameRef = useRef(null);
   const readyRef = useRef(false);
@@ -75,6 +109,8 @@ export default function Emberfall(props) {
       const m = e.data;
       if (!m || !m.ef) return;
       if (m.ef === "ready") { readyRef.current = true; post(initMsg()); }
+      else if (m.ef === "fs") enterFull();
+      else if (m.ef === "leave") quitRef.current();
       else if (m.ef === "send") { if (socket && roomCode) socket.emit("ef:msg", { code: roomCode, d: m.d }); }
       else if (m.ef === "score") {
         if (m.won && !wonRef.current) { wonRef.current = true; setWon(true); }
@@ -113,13 +149,14 @@ export default function Emberfall(props) {
         onQuit={eng.endMatch}
         landscape
         bare
+        helpOnly={!isSpectator}
       >
         {({ w, h }) => (isSpectator
           ? <div className="muted">👀 Watching {spectatorWatching?.username} — {Number(spectatorWatching?.score ?? 0).toLocaleString()} pts</div>
           : (
             <iframe
               ref={frameRef} src={SRC} title="Emberfall" className="ef-frame"
-              style={{ width: w, height: h }} allow="autoplay; fullscreen"
+              style={{ width: w, height: h }} allow="autoplay; fullscreen" allowFullScreen
               onLoad={focus} onPointerDown={focus}
             />
           ))}

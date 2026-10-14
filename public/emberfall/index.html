@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#000000">
 <title>Emberfall</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Alegreya+Sans:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -12,7 +12,7 @@
 @supports (height:100dvh){:root{--app-w:100dvw;--app-h:100dvh;--pr-x:calc(50dvw - var(--pr-w) / 2)}}
 [hidden]{display:none!important}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-html,body{margin:0;padding:0;width:var(--app-w);height:var(--app-h);overflow:hidden;overscroll-behavior:none;background:#0b1522;font-family:var(--body);color:var(--parch);touch-action:none;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html,body{margin:0;padding:0;width:var(--app-w);height:var(--app-h);overflow:hidden;overscroll-behavior:none;background:#000;font-family:var(--body);color:var(--parch);touch-action:none;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{position:fixed;inset:0}
 canvas{position:fixed;inset:0;width:var(--app-w);height:var(--app-h);display:block;touch-action:none}
 #przone{position:fixed;left:var(--pr-x);top:var(--pr-y);width:var(--pr-w);height:var(--pr-h);border:2px dashed #ff3af0;border-radius:8px;z-index:40;pointer-events:none;font:700 11px var(--body);color:#ff3af0;display:flex;align-items:center;justify-content:center;background:rgba(255,58,240,.08)}
@@ -675,12 +675,14 @@ function mergeGeo(list){list=list.map(g=>{if(!g.index){const n=g.attributes.posi
   const P=new Float32Array(vn*3),C=new Float32Array(vn*3),I=new Uint32Array(inn);let vo=0,io=0;
   for(const g of list){P.set(g.attributes.position.array,vo*3);C.set(g.attributes.color.array,vo*3);for(let i=0;i<g.index.count;i++)I[io+i]=g.index.array[i]+vo;vo+=g.attributes.position.count;io+=g.index.count;}
   const m=new THREE.BufferGeometry();m.setAttribute('position',new THREE.BufferAttribute(P,3));m.setAttribute('color',new THREE.BufferAttribute(C,3));m.setIndex(new THREE.BufferAttribute(I,1));m.computeVertexNormals();return m;}
+// fix1: trees stand taller (TREE_LIFT more bare trunk) so the camera sees under the canopy in a forest
+const TREE_LIFT={pine:2.2,round:2.2};
 function pineFoliage(){const L=[];const tiers=[[1.75,2.2,2.2],[1.5,2.0,3.2],[1.25,1.9,4.2],[1.0,1.7,5.1],[.72,1.5,5.95],[.42,1.3,6.7]];
-  tiers.forEach(([r,h,y],i)=>{const cg=new THREE.ConeGeometry(r,h,8,1,true).rotateY(i*.7);cg.translate(0,y,0);
+  tiers.forEach(([r,h,y0],i)=>{const y=y0+TREE_LIFT.pine,cg=new THREE.ConeGeometry(r,h,8,1,true).rotateY(i*.7);cg.translate(0,y,0);
     L.push(organic(cg,r*.22,.55,1.15,y-h/2,y+h/2));});
   return mergeGeo(L);}
 function roundCanopy(){const L=[];const bl=[[0,3.5,0,1.9],[.95,4.5,.4,1.35],[-1.1,4.0,-.5,1.3],[.3,4.9,-.4,1.1],[0,5.4,0,.85]];
-  for(const [x,y,z,r] of bl){const g=new THREE.IcosahedronGeometry(r,1);g.translate(x,y,z);L.push(organic(g,r*.3,.6,1.1,y-r,y+r));}
+  for(const [x,y0,z,r] of bl){const y=y0+TREE_LIFT.round,g=new THREE.IcosahedronGeometry(r,1);g.translate(x,y,z);L.push(organic(g,r*.3,.6,1.1,y-r,y+r));}
   return mergeGeo(L);}
 function trunkGeo(rt,rb,h,y){const a=new THREE.CylinderGeometry(rt,rb,h,6,2,true);a.translate(0,y+h/2,0);organic(a,rb*.2,.7,1,y,y+h);
   const f=new THREE.ConeGeometry(rb*2.2,.7,6,1,true);f.translate(0,y+.3,0);organic(f,rb*.3,.6,.9,y,y+.7);return mergeGeo([a,f]);}
@@ -706,8 +708,8 @@ function rockGeo(){const g=new THREE.IcosahedronGeometry(1,1);const pos=g.attrib
 function buildVegetation(){
   const white=TOON({color:0xffffff});addSway(white,.0085);const whiteV=TOON({color:0xffffff,vertexColors:true});addSway(whiteV,.0085);
   // pines
-  const NP=1300,pines=[instMesh(trunkGeo(.14,.3,2.2,0),whiteV,NP,true),instMesh(pineFoliage(),whiteV,NP,true)];
-  const NR=620,rounds=[instMesh(trunkGeo(.2,.38,3.4,0),whiteV,NR,true),instMesh(roundCanopy(),whiteV,NR,true)];
+  const NP=1300,pines=[instMesh(trunkGeo(.14,.3,2.2+TREE_LIFT.pine,0),whiteV,NP,true),instMesh(pineFoliage(),whiteV,NP,true)];
+  const NR=620,rounds=[instMesh(trunkGeo(.2,.38,3.4+TREE_LIFT.round,0),whiteV,NR,true),instMesh(roundCanopy(),whiteV,NR,true)];
   const ND=140,deads=[instMesh(tr(new THREE.CylinderGeometry(.12,.3,3.4,5),0,1.7,0),white,ND,true),instMesh(tr(new THREE.CylinderGeometry(.06,.12,1.6,4).rotateZ(.8),.7,3.1,0),white,ND,true)];
   const NPALM=90,palms=[instMesh(tr(new THREE.CylinderGeometry(.18,.3,5,6).rotateZ(.12),.3,2.5,0),white,NPALM,true),instMesh(tr(new THREE.SphereGeometry(2.1,7,5).scale(1,.38,1),.55,5.1,0),white,NPALM,true)];
   const NRK=560,rocks=[instMesh(rockGeo(),whiteV,NRK,true)];
@@ -1075,8 +1077,15 @@ function fastTravel(i){
   const a=Math.atan2(VILLAGE.x-w.x,VILLAGE.z-w.z);if(w.t)cam.yaw=Math.atan2(w.t.x-w.x,w.t.z-w.z)+PI;
   fadeIn();toast('Arrived: '+w.n,2);sfx('bell');
 }
-function mount(h){const P=game.player;if(P.mount||P.dead||P.swim)return;P.mount=h;h.mounted=true;sfx('land');toast('Mounted: gallop with Shift. Press E to dismount',2.4);}
-function dismount(){const P=game.player,h=P.mount;if(!h)return;h.mounted=false;h.x=P.x+Math.cos(P.yaw)*1.6;h.z=P.z-Math.sin(P.yaw)*1.6;h.y=gh(h.x,h.z);h.yaw=P.yaw;P.mount=null;}
+const HORSE_WALK=12.5*.65,HORSE_GALLOP=19*.65;   // fix1: 35% slower than before
+function mount(h){const P=game.player;if(P.mount||P.dead||P.swim)return;P.emote=null;P.rest=false;game.lock=null;resetPose(P.c);P.mount=h;h.mounted=true;sfx('land');toast(touchDev?'Mounted: push the stick to the edge to gallop':'Mounted: gallop with Shift. Press E to dismount',2.4);}
+function dismount(){const P=game.player,h=P.mount;if(!h)return;h.mounted=false;h.x=P.x+Math.cos(P.yaw)*1.6;h.z=P.z-Math.sin(P.yaw)*1.6;h.y=gh(h.x,h.z);h.yaw=P.yaw;P.mount=null;
+  P.vx=P.vz=0;P.sp=0;P.phase=0;P.state='free';resetPose(P.c);if(h.rein)h.rein.visible=false;}
+// fix1: the hero's every joint back to standing (the riding pose turns the legs sideways, which the walk cycle never undid)
+function resetPose(c){if(!c)return;
+  for(const l of c.legs||[])l.rotation.set(0,0,0);for(const a of c.arms||[])a.rotation.set(0,0,0);
+  if(c.body){c.body.rotation.set(0,0,0);c.body.position.y=-.9;}if(c.pivot){c.pivot.rotation.set(0,0,0);c.pivot.position.y=.9;}if(c.head)c.head.rotation.set(0,0,0);
+  c.lift=0;}
 function updateOpenWorld(dt){
   const P=game.player;if(!P)return;
   if(P.mount&&(P.swim||P.dead))dismount();
@@ -1086,7 +1095,7 @@ function updateOpenWorld(dt){
     const near=Math.abs(h.x-P.x)<95&&Math.abs(h.z-P.z)<95;h.g.visible=near;
     if(!near)continue;
     h.g.position.set(h.x,h.y+(h.mounted?0:0),h.z);h.g.rotation.y=h.yaw;
-    const sp=h.mounted?clamp(Math.hypot(P.vx,P.vz)/12,0,1.4):0;
+    const sp=h.mounted?clamp(Math.hypot(P.vx,P.vz)/HORSE_WALK,0,1.4):0;
     h.legs.forEach((l,i)=>{l.rotation.x=Math.sin(h.ph+(i%2?0:PI)+(i>1?PI*.5:0))*.85*sp;});
     if(h.cl)updateWavers(h.cl,game.time,sp);
     h.g.position.y+=Math.sin(game.time*1.6+h.x)*.01+(h.mounted?Math.abs(Math.sin(h.ph))*.12*sp:0);
@@ -1218,6 +1227,23 @@ function updateFall(dt){
     const sc=k>.85?Math.max(0,1-(k-.85)/.15):1;_v.set(t.x,t.y,t.z);_s.set(t.sx*sc,t.sy*sc,t.sx*sc);_tm.compose(_v,q2,_s);
     for(const m of t.ms){m.setMatrixAt(t.i,_tm);m.instanceMatrix.needsUpdate=true;}
     if(f.age>=.9){burst(t.x,t.y+.5,t.z,0x8a6a40,14,3,.7,.14);treeImpact(t,f.a);FALL.splice(i,1);}}
+}
+/* fix1: a canopy between the camera and the hero is hidden (its trunk stays), so a forest never walls off the view */
+function treeOcclude(){
+  const P=game.player;if(!P)return;const on=game.mode==='third'&&game.st==='play';
+  const cx=camera.position.x,cz=camera.position.z,dx=P.x-cx,dz=P.z-cz,L2=dx*dx+dz*dz||1;
+  for(const t of TREES){
+    if(t.dead){t.hid=false;continue;}
+    let occ=false;
+    if(on&&Math.abs(t.x-P.x)<16&&Math.abs(t.z-P.z)<16){
+      const u=clamp(((t.x-cx)*dx+(t.z-cz)*dz)/L2,0,1),qx=cx+dx*u-t.x,qz=cz+dz*u-t.z;
+      occ=u<.96&&qx*qx+qz*qz<Math.pow(1.9*t.sx+.4,2);
+    }
+    if(occ===!!t.hid&&!(occ&&t.shake>0))continue;
+    t.hid=occ;_e.set(0,t.ry,0);_q.setFromEuler(_e);_v.set(t.x,t.y,t.z);
+    if(occ)_s.set(.001,.001,.001);else _s.set(t.sx,t.sy,t.sx);
+    _tm.compose(_v,_q,_s);t.ms[1].setMatrixAt(t.i,_tm);t.ms[1].instanceMatrix.needsUpdate=true;
+  }
 }
 /* ---- foraging ---- */
 function buildForage(){
@@ -1516,7 +1542,7 @@ function finishCollapse(o){
   dust(o.x,o.y0+1,o.z,40,6);
 }
 function treeImpact(t,a){
-  const sx=Math.sin(a),sz=Math.cos(a),reach=Math.max(3.4,3.9*t.sy),P=game.player;
+  const sx=Math.sin(a),sz=Math.cos(a),reach=Math.max(4.4,5.1*t.sy),P=game.player;   // fix1: taller trees fall further
   const tx=t.x+sx*reach,tz=t.z+sz*reach,ty=gh(tx,tz);
   burst(tx,ty+.5,tz,0x5a9a3a,16,5,.9,.16);dust(tx,ty+.3,tz,10,3);
   if(Math.hypot(tx-P.x,tz-P.z)<30)cam.shake=Math.max(cam.shake,.28);sfx('smash');
@@ -2107,7 +2133,7 @@ function makeWolf(o){
 }
 function poseHumanoid(c,s,t){
   const sp=s.sp,sw=Math.sin(s.phase)*sp*.95;
-  c.legs[0].rotation.x=sw;c.legs[1].rotation.x=-sw;
+  c.legs[0].rotation.set(sw,0,0);c.legs[1].rotation.set(-sw,0,0);c.arms[0].rotation.y=0;c.arms[1].rotation.y=0;c.pivot.rotation.y=0;c.pivot.rotation.z=0;   // fix1: no leftover riding pose
   const idle=Math.sin(t*2+(s.seed||0))*.03;
   c.arms[0].rotation.x=-sw*.8+idle;c.arms[0].rotation.z=.08;
   let ax=sw*.8+idle*-1,az=-.08,twist=0,lean=sp*.14,bodyY=Math.abs(Math.sin(s.phase))*.06*sp+idle*.3;
@@ -2381,16 +2407,19 @@ function updatePlayer(dt){
   // state machine
   if(P.state==='free'){
     const hsp=(HEROES[game.hero]||{}).spd||1;let spd=5.4*hsp,sprint=false;
-    if(P.swim)spd=3.3;else if(P.mount){spd=input.sprint?19:12.5;sprint=input.sprint;}else if(input.sprint&&moving&&P.st>2&&!game.dialog){spd=8.6*hsp;sprint=true;P.st-=17*dt;P.stDelay=.5;}
-    const tx=dirx*spd*mag,tz=dirz*spd*mag,ac=Math.min(1,dt*(P.grounded?14:5));
+    // fix1: the horse is 35% slower (walk 12.5→8.1, gallop 19→12.4) and picks up speed more gently; still faster than on foot (5.4 / 8.6)
+    if(P.swim)spd=3.3;else if(P.mount){spd=input.sprint?HORSE_GALLOP:HORSE_WALK;sprint=input.sprint;}else if(input.sprint&&moving&&P.st>2&&!game.dialog){spd=8.6*hsp;sprint=true;P.st-=17*dt;P.stDelay=.5;}
+    const tx=dirx*spd*mag,tz=dirz*spd*mag,ac=Math.min(1,dt*(P.grounded?(P.mount?8:14):5));
     P.vx+=(tx-P.vx)*ac;P.vz+=(tz-P.vz)*ac;
     if(moving){let ty=P.moveYaw;if(game.mode==='first')ty=cam.yaw;else if(game.lock&&game.lock.state!=='dead'&&!sprint)ty=Math.atan2(game.lock.x-P.x,game.lock.z-P.z);P.yaw+=angDiff(P.yaw,ty)*Math.min(1,dt*(game.mode==='first'?30:14));}
     else if(game.mode==='first')P.yaw=cam.yaw;
     else if(game.lock&&game.lock.state!=='dead'){P.yaw+=angDiff(P.yaw,Math.atan2(game.lock.x-P.x,game.lock.z-P.z))*Math.min(1,dt*10);}
-    if(input.jump>0&&P.grounded&&!P.swim&&locked&&P.st>6){P.vy=P.mount?11:8.6;P.grounded=false;P.st-=(P.mount?0:6);input.jump=0;sfx('jump');burst(P.x,P.y,P.z,0xd8c8a0,6,2,.4,.12);}
+    // fix1: a jump no longer needs stamina (sprinting with the stick at its edge drained it and swallowed jumps while running);
+    // coyote time lets it fire just after running off an edge, and input.jump (0.15 s) is the buffer that fires it on landing
+    if(input.jump>0&&(P.grounded||P.coyote>0)&&!P.swim&&locked){P.vy=P.mount?11:8.6;P.grounded=false;P.coyote=0;P.st=Math.max(0,P.st-(P.mount?0:6));input.jump=0;sfx('jump');burst(P.x,P.y,P.z,0xd8c8a0,6,2,.4,.12);}
     if(input.attack>0&&locked&&!P.swim&&P.st>=6){input.attack=0;startAttack(P);}
     else if(input.dodge>0&&locked&&P.st>=16&&!P.swim&&!P.mount){input.dodge=0;P.st-=16;P.stDelay=.6;P.state='roll';P.rollT=0;P.pd=false;let rx=moving?dirx:Math.sin(P.yaw),rz=moving?dirz:Math.cos(P.yaw);P.rdx=rx;P.rdz=rz;P.yaw=Math.atan2(rx,rz);P.iT=Math.max(P.iT,.42);sfx('roll');}
-    else if(input.special>0&&locked&&P.mp>=100&&!P.swim){input.special=0;P.mp=0;P.state='spin';P.spinT=0;P.spinHit=0;P.iT=Math.max(P.iT,.7);sfx('spin');}
+    else if(input.special>0&&locked&&P.mp>=100&&!P.swim&&!P.mount){input.special=0;P.mp=0;P.state='spin';P.spinT=0;P.spinHit=0;P.iT=Math.max(P.iT,.7);sfx('spin');}
     if(input.potion>0&&locked){input.potion=0;if(P.potCd<=0)drinkPotion();}
     P.sp=clamp(Math.hypot(P.vx,P.vz)/(P.mount?19:8.6),0,1);if(P.mount)P.sp=0;P.phase+=dt*(6+Math.hypot(P.vx,P.vz)*1.35);
   }
@@ -2430,7 +2459,10 @@ function updatePlayer(dt){
   }
   if(P.climbing){}
   else if(P.swim){P.vy=0;P.y=lerp(P.y,-.45+Math.sin(game.time*2)*.06,Math.min(1,dt*8));P.grounded=true;if(R()<.1)burst(P.x,0,P.z,0xaee8ff,2,1.5,.4,.1);}
-  else{P.vy-=24*dt;P.gliding=false;if(!P.grounded&&P.state==='free'&&P.vy<-2&&Input.down('jump')&&P.y>g2+1.2&&!game.dialog){P.vy=Math.max(P.vy,-2.4);P.gliding=true;const gs=Math.hypot(P.vx,P.vz);if(gs<6.5&&moving){P.vx+=dirx*18*dt;P.vz+=dirz*18*dt;}if(R()<.3)spark(P.x+RR(-.4,.4),P.y+1.4,P.z+RR(-.4,.4),0,-.5,0,0xffd8a0,.5,.08,0);}P.y+=P.vy*dt;if(P.y<=g2){if(!P.grounded&&P.vy<-6){burst(P.x,g2,P.z,0xd8c8a0,8,3,.4,.12);sfx('land');}P.y=g2;P.vy=0;P.grounded=true;}else if(P.y>g2+.15)P.grounded=false;else if(P.vy<=0){P.y=g2;P.grounded=true;}}
+  else{P.vy-=24*dt;P.gliding=false;if(!P.grounded&&P.state==='free'&&P.vy<-2&&Input.down('jump')&&P.y>g2+1.2&&!game.dialog){P.vy=Math.max(P.vy,-2.4);P.gliding=true;const gs=Math.hypot(P.vx,P.vz);if(gs<6.5&&moving){P.vx+=dirx*18*dt;P.vz+=dirz*18*dt;}if(R()<.3)spark(P.x+RR(-.4,.4),P.y+1.4,P.z+RR(-.4,.4),0,-.5,0,0xffd8a0,.5,.08,0);}P.y+=P.vy*dt;if(P.y<=g2){if(!P.grounded&&P.vy<-6){burst(P.x,g2,P.z,0xd8c8a0,8,3,.4,.12);sfx('land');}P.y=g2;P.vy=0;P.grounded=true;}
+    else if(P.grounded&&P.vy<=0&&P.y<=g2+.5){P.y=g2;P.vy=0;}   // fix1: running down a slope or a small step stays on the ground
+    else if(P.y>g2+.15)P.grounded=false;else if(P.vy<=0){P.y=g2;P.grounded=true;}}
+  P.coyote=P.grounded&&!P.swim?.12:Math.max(0,(P.coyote||0)-dt);
   // lava
   if(world.lava)for(const l of world.lava)if(Math.hypot(P.x-l.x,P.z-l.z)<l.r*.85&&P.y<gh(l.x,l.z)+1){P.lavaT=(P.lavaT||0)+dt;if(P.lavaT>.25){P.lavaT=0;hurtPlayer(12,l.x,l.z,'lava');}}
   // stamina/regen
@@ -2443,7 +2475,7 @@ function updatePlayer(dt){
   c.lift=P.grounded?0:clamp(-P.vy/10,-1,1);
   st.glide=P.gliding||P.climbing;poseHumanoid(c,st,game.time);applyEmote(P,c,game.time);
   let rideY=0;
-  if(P.mount){const hs=clamp(Math.hypot(P.vx,P.vz)/12,0,1.4);rideY=1.2+Math.abs(Math.sin(P.mount.ph))*.12*hs;
+  if(P.mount){const hs=clamp(Math.hypot(P.vx,P.vz)/HORSE_WALK,0,1.4);rideY=1.2+Math.abs(Math.sin(P.mount.ph))*.12*hs;
     c.legs[0].rotation.set(-.95,0,-.62);c.legs[1].rotation.set(-.95,0,.62);
     if(P.state==='free'){c.arms[0].rotation.set(-1.25,0,.12);c.arms[1].rotation.set(-1.25,0,-.12);c.pivot.rotation.x=.28+hs*.12;}}
   c.root.position.set(P.x,P.y+(P.swim?-.1:0)+rideY,P.z);
@@ -3072,7 +3104,7 @@ function victory(){
   $('end').hidden=false;if(document.pointerLockElement)document.exitPointerLock();sfx('bell');musicSting('level');
 }
 function respawn(){
-  const P=game.player;P.dead=false;P.hp=P.maxhp;P.st=P.maxst;P.state='free';P.x=0;P.z=80;P.y=gh(0,80);P.vx=P.vz=0;P.iT=2;game.coins=Math.floor(game.coins*.9);
+  const P=game.player;if(P.mount)dismount();resetPose(P.c);P.dead=false;P.hp=P.maxhp;P.st=P.maxst;P.state='free';P.x=0;P.z=80;P.y=gh(0,80);P.vx=P.vz=0;P.iT=2;game.coins=Math.floor(game.coins*.9);
   for(const e of game.enemies)if(e.state!=='dead'&&!e.boss){e.state='return';}
   $('dead').hidden=true;fadeIn();cam.yaw=Math.PI;
 }
@@ -3118,7 +3150,7 @@ const Input=(()=>{
     if(a==='digit'){if(game.dialog&&arg<2)chooseOpt(arg);return;}
     if(game.dialog){if(a==='context'||a==='jump'||a==='confirm'||a==='attack')advanceDialog();return;}
     switch(a){
-      case'jump':input.jump=.2;break;case'attack':input.attack=.3;break;case'roll':input.dodge=.3;break;case'spin':input.special=.3;break;case'heal':input.potion=.3;break;
+      case'jump':input.jump=.15;break;case'attack':input.attack=.3;break;case'roll':input.dodge=.3;break;case'spin':input.special=.3;break;case'heal':input.potion=.3;break;
       case'context':interact();break;case'do':doCtx();break;case'eat':eatFood();break;case'lock':toggleLock();break;case'view':cycleView();break;
       case'map':openPanel('map');break;
       case'emote':if(arg)doEmote(arg);else emoTray();break;
@@ -3395,10 +3427,12 @@ function updateControls(){
   const P=game.player,dlg=!!game.dialog,it=HUD.it,ca=HUD.ca,inv=game.inv||invDefault();
   const verb=it?(P.mount?'DISMOUNT':(CTX_VERB[it.kind]||'TALK')):'',ride=verb==='RIDE'||verb==='DISMOUNT',fight=!!combatTarget();
   const showIt=!dlg&&!!it&&(!fight||ride),showDo=!dlg&&!!ca&&!fight,canEat=!dlg&&!P.dead&&P.hp<P.maxhp&&((inv.cooked||0)+(inv.berry||0))>0;
-  const sig=[dlg,showIt&&verb,showDo,canEat,Input.settings.mirror].join('|');
+  const ride2=!!P.mount;   // fix1: on a horse only the stick, ATTACK, JUMP (the horse jumps), HEAL and DISMOUNT stay
+  const sig=[dlg,showIt&&verb,showDo,canEat,Input.settings.mirror,ride2].join('|');
   if(sig!==CTL.sig){CTL.sig=sig;
-    for(const id of['tAtk','tRoll','tSpec','tJump','tLock','tPot'])$(id).hidden=dlg;
-    $('joy').hidden=$('joyRest').hidden=dlg;$('tNext').hidden=!dlg;$('tEat').hidden=!canEat;
+    for(const id of['tAtk','tJump','tPot'])$(id).hidden=dlg;
+    for(const id of['tRoll','tSpec','tLock'])$(id).hidden=dlg||ride2;
+    $('joy').hidden=$('joyRest').hidden=dlg;$('tNext').hidden=!dlg;$('tEat').hidden=!canEat||ride2;
     const u=$('tUse'),d=$('tDo');u.hidden=!showIt;d.hidden=!showDo;
     if(showIt){u.querySelector('.tl').textContent=verb;u.setAttribute('aria-label',verb.charAt(0)+verb.slice(1).toLowerCase());}
     if(showIt&&showDo){ctlPlace(u,CTL.S.ctxA);ctlPlace(d,CTL.S.ctxB);}else if(showIt)ctlPlace(u,CTL.S.ctx1);else if(showDo)ctlPlace(d,CTL.S.ctx1);
@@ -3470,10 +3504,10 @@ function step(dt){
   // dialog/region/hud
   const reg=regionOf(P.x,P.z);if(reg!==lastRegion){lastRegion=reg;$('regionname').textContent=reg;if(game.st==='play'&&game.time>2)toast(reg,2.2);}
   if(game.saveT>25&&!P.dead){game.saveT=0;saveGame();}
-  updateCamera(dt);updateSky(game.T,camera.position,P);weatherLook();
+  updateCamera(dt);treeOcclude();updateSky(game.T,camera.position,P);weatherLook();
   // interaction prompt
   const pr=$('prompt'),it=(!game.dialog&&!P.dead)?(P.mount?{prompt:'Dismount'}:nearestInteract()):null,ca=ctxAction();
-  const ph=(it||ca)?promptHTML(it,ca):'';if(ph!==HUD.prompt){HUD.prompt=ph;pr.innerHTML=ph;}pr.hidden=!ph;HUD.it=it;HUD.ca=ca;
+  const ph=(it||ca)?promptHTML(it,ca):'';if(ph!==HUD.prompt){HUD.prompt=ph;pr.innerHTML=ph;}pr.hidden=!ph||(touchDev&&!!P.mount);HUD.it=it;HUD.ca=ca;
   // bars
   $('hpb').firstElementChild.style.transform='scaleX('+clamp(P.hp/P.maxhp,0,1)+')';$('hpb').lastElementChild.textContent=Math.ceil(P.hp)+' / '+P.maxhp;
   $('stb').firstElementChild.style.transform='scaleX('+clamp(P.st/P.maxst,0,1)+')';
@@ -3541,7 +3575,7 @@ $('bNew').onclick=()=>{initAudio();startGame(false);};
 $('bCont').onclick=()=>{if(store.get('ef-save',null)){initAudio();startGame(true);}};
 $('bRes').onclick=()=>setPause(false);$('bView').onclick=cycleView;
 $('bMute').onclick=()=>{initAudio();setMuted(!muted);};
-$('bQuit2').onclick=()=>toTitle();
+$('bQuit2').onclick=()=>quitOut();
 $('bResp').onclick=()=>respawn();
 $('bFree').onclick=()=>{$('end').hidden=true;};
 
@@ -3656,7 +3690,7 @@ $('bHintReset').addEventListener('click',()=>{store.set('ef-hint',false);if(!Inp
 $('bSaveS').addEventListener('click',()=>{saveGame();$('bSaveS').textContent='Saved';feed('Journey saved');});
 $('bQuitS').addEventListener('click',()=>{$('quitConfirm').hidden=false;});
 $('bQuitNo').addEventListener('click',()=>{$('quitConfirm').hidden=true;});
-$('bQuitYes').addEventListener('click',()=>{closePanel();setPause(false);toTitle();});
+$('bQuitYes').addEventListener('click',()=>{closePanel();setPause(false);quitOut();});
 // ---- pause screen and title
 $('bSet').addEventListener('click',()=>openPanel('settings'));
 $('bTSet').addEventListener('click',()=>openPanel('settings'));
@@ -3665,7 +3699,7 @@ $('bPMap').addEventListener('click',()=>{setPause(false);openPanel('map');});
 $('bSave').addEventListener('click',()=>{saveGame();$('bSave').textContent='Saved';setTimeout(()=>{$('bSave').textContent='Save';},1500);});
 $('bQuit').addEventListener('click',()=>{$('pQuitConfirm').hidden=false;});
 $('bPQuitNo').addEventListener('click',()=>{$('pQuitConfirm').hidden=true;});
-$('bPQuitYes').addEventListener('click',()=>{$('pQuitConfirm').hidden=true;toTitle();});
+$('bPQuitYes').addEventListener('click',()=>{$('pQuitConfirm').hidden=true;quitOut();});
 
 /* ================= PlayRoom bridge (phase 6a) ================= */
 /* Embedded in PlayRoom (?embed=1, inside a frame) the page speaks the messages the earlier Emberfall spoke, unchanged:
@@ -3692,6 +3726,9 @@ function netInit(m){
   st.setProperty('--sat',(+s.t||0)+'px');st.setProperty('--sar',(+s.r||0)+'px');st.setProperty('--sab',(+s.b||0)+'px');st.setProperty('--sal',(+s.l||0)+'px');
   const top=+m.top||0;if(top>62)st.setProperty('--pr-h',(top-8)+'px');   // keep our HUD under the room's floating row
   netWho();layout();
+  // fix1: Quit leaves the room here, so say so
+  for(const sp of document.querySelectorAll('#quitConfirm span,#pQuitConfirm span'))sp.textContent='Leave the room? Your journey is saved first.';
+  $('bQuitS').textContent='Leave room';$('bQuit2').textContent='Leave';
 }
 function netOver(){
   if(NET.over)return;NET.over=true;
@@ -3707,6 +3744,22 @@ if(EMBED)addEventListener('message',e=>{
   else if(m.ef==='names'){for(const p of m.peers||[])NET.names[+p.id]=p.name;netWho();}
   else if(m.ef==='over')netOver();
 });
+/* fix1: full screen, so the phone's status bar goes. In PlayRoom the room page goes full screen (it holds the sideways
+   turn for an upright phone; a full-screen frame would lose it): a tap here posts {ef:'fs'}, and the tap's activation
+   carries to the parent. On its own the page asks for itself. Every tap asks again while not full screen (after the app
+   was left, say); a refusal is ignored. */
+let fsAskT=0;
+function fsDoc(){try{return EMBED?parent.document:document;}catch(e){return null;}}
+function isFull(){const d=fsDoc();return !!(d&&(d.fullscreenElement||d.webkitFullscreenElement));}
+function askFull(){
+  const now=performance.now();if(now-fsAskT<1200||isFull())return;fsAskT=now;
+  if(EMBED){netPost({ef:'fs'});return;}
+  try{const el=document.documentElement,f=el.requestFullscreen||el.webkitRequestFullscreen;if(f){const r=f.call(el,{navigationUI:'hide'});if(r&&r.catch)r.catch(()=>{});}}catch(e){}
+}
+addEventListener('pointerdown',askFull,true);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){fsAskT=0;askFull();}});
+/* fix1: Quit (with its confirm) leaves the room in PlayRoom: the room's own Leave button is gone for Emberfall */
+function quitOut(){toTitle();if(EMBED)netPost({ef:'leave'});}
 
 /* ================= platform: layout, orientation, audio unlock, visibility, context loss, frame-rate net ================= */
 const DEBUG=(()=>{try{return new URLSearchParams(location.search).get('debug')==='1';}catch(e){return false;}})();

@@ -49,6 +49,8 @@ export default function GameFrame({
                               // strip — the clock, ?, Leave (and `floatExtra`)
                               // float over the top of the game instead
   floatExtra = null,          // node: more buttons for that floating row
+  helpOnly = false,           // bare: float only the ? — the game shows its own
+                              // time and leaves through its own menu (Emberfall)
   children,                   // node, or ({ w, h }) => node
 }) {
   const msgFill = { success: "var(--lime)", error: "var(--coral)", info: "var(--sky)" };
@@ -98,13 +100,13 @@ export default function GameFrame({
       {/* Full screen: the clock and the buttons float over the game */}
       {bare && (
         <div className="gf-float">
-          {timer && (
+          {timer && !helpOnly && (
             endless ? <span className="gf-clock" aria-label="No time limit">⏱ ∞</span>
               : <span className={`gf-clock${timer.value <= 20 ? " low" : ""}`} aria-label="Time left">⏱ {clock(timer.value)}</span>
           )}
           {floatExtra}
           {howToFor(gameName) && <button type="button" className="gf-btn" onClick={() => setHelp(true)} aria-label="How to play">?</button>}
-          <button type="button" className="gf-btn gf-leave" onClick={onQuit} aria-label="Leave">✕ Leave</button>
+          {!helpOnly && <button type="button" className="gf-btn gf-leave" onClick={onQuit} aria-label="Leave">✕ Leave</button>}
         </div>
       )}
       {/* Header: one row on a phone, roomier on bigger screens */}

@@ -1159,6 +1159,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .ss-count{position:absolute;inset:0;display:grid;place-items:center;font-weight:800;font-size:clamp(56px,18vh,120px);color:#ffe28a}
 .ss-done{position:absolute;left:50%;top:44%;transform:translateX(-50%);padding:8px 16px;border-radius:16px;background:rgba(20,30,60,.55);
   font-weight:700;font-size:17px;white-space:nowrap}
+.ss-done small{display:block;margin-top:2px;font-size:13px;font-weight:600;text-align:center;opacity:.9}
 .ss-stick{position:absolute;left:calc(env(safe-area-inset-left,0px) + 22px);bottom:20px;width:120px;height:120px;border-radius:50%;
   background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.45);display:grid;place-items:center;pointer-events:none}
 .ss-knob{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 3px 0 rgba(0,0,0,.2);pointer-events:none}

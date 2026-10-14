@@ -208,8 +208,20 @@ function initSocket(httpServer) {
         g: msg.g ? 1 : 0, gl: msg.gl ? 1 : 0, a: msg.a ? 1 : 0, iv: msg.iv ? 1 : 0, hp: Math.floor(n(msg.hp, 0, 3)),
         sh: Math.floor(n(msg.sh, 0, 31)), gm: Math.floor(n(msg.gm, 0, 999)), p: Math.floor(n(msg.p, 0, 999)),
         rp: Math.floor(n(msg.rp, 0, 3)),             // together: my ropes tied, to the one before me (1) / after (2)
+        rd: Math.floor(n(msg.rd, 0, 999)),           // which island I'm on (0 = the room's seed, then the next…)
         fin: msg.fin === null || msg.fin === undefined ? null : n(msg.fin, 0, 1e4),
       });
+    });
+
+    // Sunshard Jump: a moment on my island everyone shares — a slime I
+    // stomped, a crumbling stone I stepped on (its index in the level).
+    socket.on("isl:ev", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const k = msg.k === "stomp" || msg.k === "crumble" ? msg.k : null;
+      const i = Number(msg.i), rd = Number(msg.rd) || 0;
+      if (!k || !Number.isInteger(i) || i < 0 || i > 999 || !Number.isInteger(rd) || rd < 0 || rd > 999) return;
+      socket.to(roomChannel(code)).emit("isl:ev", { user_id: uid, k, i, rd });
     });
 
     // Emberfall: everything the two phones say to each other — where each

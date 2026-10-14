@@ -1,7 +1,9 @@
 // src/components/games/sunshardSim.js
 // Sunshard Jump: one player's run — the explorer, the platforms as this
-// player sees them (crumbling stones and slimes are each player's own),
-// and the rules. No three.js and no React: scripts/check-sunshard.mjs drives a
+// player sees them, and the rules. Slimes wander by the match clock, so they
+// are in the same place on every phone; a stomp or a stone that starts to
+// crumble is told to the room (isl:ev) and played here by killSlime /
+// crumbleAt, so friends share them. No three.js and no React: scripts/check-sunshard.mjs drives a
 // bot through it.
 //
 // Physics is simple on purpose: platforms are cylinders (a flat top, a
@@ -28,14 +30,16 @@ export function newRun(W) {
     jumpBuf: 0, jumpHeld: false,
     plats: W.plats.map((p) => ({ x: p.x, y: p.y, z: p.z, dx: 0, dz: 0, solid: true, state: 0, t: 0, vy: 0, shake: 0 })),
     shards: new Set(),
-    slimes: W.slimes.map((s) => ({ ...s, y: W.plats[s.p].y, tx: s.x, tz: s.z, t: Math.random() * 5, alive: true, dir: 0 })),
+    slimes: W.slimes.map((s, k) => ({ ...s, k, y: W.plats[s.p].y, ph: k * 1.618, t: 0, alive: true, dir: 0 })),
     flags: new Set([0]),
     ckpt: { x: hub.x, y: hub.y, z: hub.z },
     zone: -2, gateOpen: false, gateT: 0, finished: false, maxPath: 0, hits: 0, springs: W.springs.map(() => 0),
   };
 }
 
-export const pressJump = (S) => { if (!S.jumpHeld) S.jumpBuf = BUFFER; S.jumpHeld = true; };
+// every press buffers a jump: a release the phone never delivered (a finger
+// lifted during a system gesture) must not leave the jump dead
+export const pressJump = (S) => { S.jumpBuf = BUFFER; S.jumpHeld = true; };
 export const releaseJump = (S) => { S.jumpHeld = false; };
 export function respawn(S) {
   const P = S.pl;
@@ -174,11 +178,11 @@ export function step(S, W, inp, dt, team = null) {
     if (!s.alive) continue;
     const dx = P.x - s.x, dz = P.z - s.z, dxz = Math.hypot(dx, dz), dy = P.y - s.y;
     if (dxz < 0.95 && dy > -0.6 && dy < 1.1) {
-      if (P.vy < -2 && dy > 0.35) { s.alive = false; S.ev.push({ k: "stomp", x: s.x, y: s.y, z: s.z }); P.vy = 10; P.jumps = 1; P.own = false; P.onG = false; P.gp = null; P.sq = -0.5; }
+      if (P.vy < -2 && dy > 0.35) { s.alive = false; S.ev.push({ k: "stomp", i: s.k, x: s.x, y: s.y, z: s.z }); P.vy = 10; P.jumps = 1; P.own = false; P.onG = false; P.gp = null; P.sq = -0.5; }
       else if (P.inv <= 0) { const l = Math.max(dxz, 0.01); hurt(S, dx / l, dz / l); }
     }
   }
-  moveSlimes(S, W, dt);
+  moveSlimes(S, W);
   // the temple: into the glowing circle once the gate is open
   if (W.temple && S.gateOpen && !S.finished) {
     const d = Math.hypot(P.x - W.temple.x, P.z - W.temple.z);
@@ -201,19 +205,37 @@ export function hurt(S, dx, dz) {
   if (P.hp <= 0) { respawn(S); S.ev.push({ k: "respawn", ko: true }); }
 }
 
-function moveSlimes(S, W, dt) {
+// A slime wanders its island on a loop of the match clock — the same spot on
+// every phone (it used Math.random, so each phone had its own slimes).
+function moveSlimes(S, W) {
   for (const s of S.slimes) {
     if (!s.alive) continue;
-    s.t += dt;
-    const p = W.plats[s.p], q = S.plats[s.p];
-    if (Math.hypot(s.tx - s.x, s.tz - s.z) < 0.3 || Math.random() < dt * 0.15) {
-      const a = Math.random() * TAU, d = Math.random() * (p.r - 1.1);
-      s.tx = q.x + Math.cos(a) * d; s.tz = q.z + Math.sin(a) * d;
-    }
-    const dx = s.tx - s.x, dz = s.tz - s.z, l = Math.hypot(dx, dz) || 1, hop = Math.max(0, Math.sin(s.t * 5));
-    s.x += (dx / l) * 1.5 * dt * (0.4 + hop); s.z += (dz / l) * 1.5 * dt * (0.4 + hop); s.y = q.y + hop * 0.5;
-    s.dir = Math.atan2(dx, dz);
+    const p = W.plats[s.p], q = S.plats[s.p], R = Math.max(0, p.r - 1.1) * 0.7, T = S.T;
+    s.t = T + s.ph;
+    let nx, nz;
+    if (W.temple && s.p === W.temple.p) {
+      // the temple island: round the outside of the pillars, never into the gate or the circle
+      const a = T * 0.22 * (s.k % 2 ? 1 : -1) + s.ph, rr = 5.9 + 0.5 * Math.sin(T * 0.7 + s.ph);
+      nx = q.x + Math.cos(a) * rr; nz = q.z + Math.sin(a) * rr;
+    } else { nx = q.x + R * Math.sin(T * 0.45 + s.ph); nz = q.z + R * Math.sin(T * 0.31 + s.ph * 2.1); }
+    if (Math.hypot(nx - s.x, nz - s.z) > 1e-4) s.dir = Math.atan2(nx - s.x, nz - s.z);
+    s.x = nx; s.z = nz; s.y = q.y + Math.max(0, Math.sin(s.t * 5)) * 0.5;
   }
+}
+
+// A friend's moment, played into my run: a slime they stomped, a stone they
+// stepped on. Returns true when it changed something.
+export function killSlime(S, i) {
+  const s = S.slimes[i];
+  if (!s || !s.alive) return false;
+  s.alive = false;
+  return true;
+}
+export function crumbleAt(S, W, i) {
+  const p = W.plats[i], q = S.plats[i];
+  if (!p || p.kind !== "crumble" || q.state !== 0) return false;
+  q.state = 1; q.t = 0;
+  return true;
 }
 
 // How far along, for the ranking and the score: shards first, then the furthest
@@ -223,30 +245,32 @@ export function progress(S, W, team = null) {
   return { shards: have, path: S.maxPath, finished: S.finished };
 }
 
-// The score the room ranks (race): 100 a platform reached, 500 a shard;
-// finishing adds 10,000 and 10 for every second left — the first home
-// is ahead of the second, and both are ahead of anyone still climbing.
-// (S.finishLeft: the seconds left on the clock when you got home.)
+// One island's score: 60 a platform reached, 300 a shard (5,000 at most);
+// lit, it's ISLAND_PTS and 3 for every second left (up to 900) — the first
+// home is ahead of the second, and both are ahead of anyone still climbing.
+// Islands add up (the game keeps the lit ones' points), under the room's
+// 25,000 cap. (S.finishLeft: the seconds left on the clock when you got home.)
+export const ISLAND_PTS = 6000;
 export function score(S, W, team = null) {
   const pr = progress(S, W, team);
-  let s = pr.path * 100 + pr.shards * 500;
-  if (S.finished) s += 10000 + Math.max(0, Math.round(S.finishLeft || 0)) * 10;
-  return Math.min(25000, s);
+  if (S.finished) return ISLAND_PTS + Math.min(900, Math.max(0, Math.round((S.finishLeft || 0) * 3)));
+  return Math.min(ISLAND_PTS - 1000, pr.path * 60 + pr.shards * 300);
 }
 
 // ── tied together (a together room) ─────────────────────────────────────────
 // Friends are tied tail to tail in seat order, a conga line: two of you share
 // one rope, and in a bigger side the ones in the middle have a tail each way.
 // Each phone holds only its own explorer back, so it works over a relay.
-//   • on the ground you can't walk further than LEASH from a friend — you
-//     tug at each other. Only the step away is undone, never a pull toward
-//     them, so a rope can't drag anyone off an edge.
-//   • in the air, or on a moving ring, it never holds you: a rope must not
-//     stop a jump halfway across a gap.
-//   • it snaps if one of you is far off (fell back to a flag) or after
-//     TAUT_S of pulling (so a friend standing still can't trap you), and
-//     ties itself again when you're close.
-export const LEASH = 9, ROPE_SNAP = 16, TAUT_S = 3;
+//   • it's a chain: you can't get further than LEASH from a friend — on the
+//     ground, or in the air (a little slack there, AIR_SLACK, so a jump
+//     isn't cut off the moment it starts). Only the step away is undone,
+//     never a pull toward them, so it can't drag anyone off an edge.
+//   • it never snaps. A moving ring can still carry you past the end (it
+//     isn't held: a ring must not stop under you), and then you can only
+//     come back. Fall, and the game puts you back beside the friend you're
+//     tied to (SunshardIslands), so the chain stays short.
+//   • it ties itself when you're first close (the start, a late friend).
+export const LEASH = 10, AIR_SLACK = 1.5;
 export const tiedTo = (ids, me) => {
   // the friends tied to me: my neighbours in seat order
   const i = ids.indexOf(me);
@@ -266,10 +290,10 @@ export function tether(S, W, anchors, bx, bz, dt) {
       if (d3 < LEASH - 1) { r.on = true; r.taut = 0; ev.push({ k: "tie", id: a.id }); }
       continue;
     }
-    if (d3 > ROPE_SNAP || r.taut > TAUT_S) { r.on = false; r.taut = 0; ev.push({ k: "snap", id: a.id }); continue; }
     let pulled = false;
-    if (d > LEASH && P.onG && !riding) {
-      const keep = Math.max(LEASH, Math.hypot(bx - a.x, bz - a.z));
+    const lim = P.onG ? LEASH : LEASH + AIR_SLACK;
+    if (d > lim && !riding) {
+      const keep = Math.max(lim, Math.hypot(bx - a.x, bz - a.z));
       if (d > keep + 1e-6) {
         const ux = dx / d, uz = dz / d;
         P.x = a.x + ux * keep; P.z = a.z + uz * keep;

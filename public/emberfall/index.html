@@ -67,6 +67,13 @@ canvas{position:fixed;inset:0;width:var(--app-w);height:var(--app-h);display:blo
 #questchip.open .qc{max-width:100%;border-color:var(--ember)}
 #questchip.open #qtext{white-space:normal}
 #hudL.combat #questchip,#hud.in-dialog #questchip{display:none}
+/* fix4: the guide — a golden arrow to the next step, its name and distance */
+#guide{display:flex;align-items:center;gap:6px;margin-top:5px;max-width:min(240px,100%);pointer-events:none;font:700 12px/1.2 var(--nfont);color:#ffe9b8;text-shadow:0 1px 2px #000,0 0 3px #000}
+#guide.off{visibility:hidden}
+#guide .garr{flex:none;width:24px;height:24px;border-radius:50%;background:rgba(30,18,10,.62);border:1.5px solid var(--gold);display:grid;place-items:center}
+#guide .garr i{display:block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:11px solid var(--gold);margin-top:-2px}
+#gtxt{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hudL.combat #guide,#hud.in-dialog #guide{display:none}
 /* utility buttons and minimap, top-right */
 #hudL,#hudR{z-index:5}   /* above the touch layer (#look covers the right side), so the HUD's taps reach it */
 #hudR{right:calc(10px + var(--sar));top:var(--hudR-top);display:flex;flex-direction:column;align-items:flex-end;gap:8px}
@@ -321,6 +328,7 @@ body.touch #feed{left:var(--ctl-cx,50%);bottom:var(--feed-b,calc(var(--sab) + 64
    <span class="chip" title="Potions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3h5M10.5 3v5.2L5.6 16.4A3 3 0 0 0 8.2 21h7.6a3 3 0 0 0 2.6-4.6L13.5 8.2V3" fill="none" stroke="#f3e3bd" stroke-width="1.8" stroke-linejoin="round"/><path d="M7.3 14h9.4l1.1 2.4A2 2 0 0 1 16 19.5H8a2 2 0 0 1-1.8-3.1z" fill="#e5483f"/></svg><b id="pots">2</b></span>
   </div>
   <button id="questchip" aria-label="Quest objective" aria-expanded="false"><span class="qc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4M6 4h11l-2.5 4L17 12H6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/></svg><span id="qtext"></span></span></button>
+  <div id="guide" class="off" aria-live="polite"><span class="garr" aria-hidden="true"><i id="garrI"></i></span><span id="gtxt"></span></div>
  </div>
  <div class="hud" id="hudR">
   <div class="hbtns">
@@ -422,7 +430,7 @@ body.touch #feed{left:var(--ctl-cx,50%);bottom:var(--feed-b,calc(var(--sab) + 64
  <div class="panel"><b>Move</b> <kbd>W A S D</kbd> · <b>Look</b> mouse (click the screen) or <kbd>←</kbd><kbd>→</kbd> · <b>Attack</b> <kbd>Left click</kbd> / <kbd>J</kbd> · <b>Dodge roll</b> <kbd>Right click</kbd> / <kbd>K</kbd><br><b>Jump</b> <kbd>Space</kbd> (hold in the air to glide · hold against a wall to climb) · <b>Sprint</b> <kbd>Shift</kbd> · <b>Spin attack</b> <kbd>R</kbd> · <b>Heal</b> <kbd>Q</kbd> · <b>Talk / open</b> <kbd>E</kbd> · <b>Lock on</b> <kbd>F</kbd> · <b>Camera view</b> <kbd>V</kbd> (third person, first person, top-down) · <b>Map</b> <kbd>M</kbd> · <b>Do</b> <kbd>G</kbd> (fish, pick, cook, build a fire) · <b>Eat</b> <kbd>H</kbd> · <b>Bag</b> <kbd>B</kbd> · <b>Emotes</b> <kbd>T</kbd> tray, <kbd>Z</kbd><kbd>C</kbd><kbd>N</kbd> · <b>Sit/rest</b> <kbd>X</kbd> · <i>Swing at trees to chop wood</i> · <b>Pause</b> <kbd>Esc</kbd></div>
 </div>
 <div id="pause" class="ov" hidden><h2>Paused</h2>
- <div class="pgrid"><button class="main" id="bRes">Resume</button><button id="bSet">Settings</button><button id="bPBag">Bag</button><button id="bPMap">Map</button><button id="bSave">Save</button><button id="bHelp">How to play</button><button id="bQuit">Quit</button></div>
+ <div class="pgrid"><button class="main" id="bRes">Resume</button><button id="bSet">Settings</button><button id="bPBag">Bag</button><button id="bPMap">Map</button><button id="bSave">Save</button><button id="bHelp">How to play</button><button id="bGuide">Guide: On</button><button id="bQuit">Quit</button></div>
  <div class="sconfirm" id="pQuitConfirm" hidden><span>Quit to the title? Your journey is saved first.</span><button class="danger" id="bPQuitYes">Quit</button><button id="bPQuitNo">Cancel</button></div>
  <div hidden><button id="bView">View: Third person</button><button id="bMute">Sound: On</button></div>
 </div>
@@ -3046,14 +3054,75 @@ function setQuestText(){
   $('qtext').textContent=t;[...$('qsh').children].forEach((s,i)=>s.classList.toggle('on',!!game.shards[i]||S>=3));
   if(world.sockets)world.sockets.forEach((so,i)=>{const lit=S>=3;so.m.material.color.set(lit?so.col:'#2a2a2a');});
 }
-function objective(){
-  const S=game.stage;if(S===0||S===2)return{x:0,z:61};
-  if(S===3)return{x:0,z:-22};if(S===4)return null;
-  const defs=[[ARENAS.troll,0],[ARENAS.frost,1],[ARENAS.magma,2]];let best=null,bd=1e9;const P=game.player;
-  for(const [a,i] of defs){if(game.shards[i])continue;const d=Math.hypot(a.x-P.x,a.z-P.z);if(d<bd){bd=d;best={x:a.x,z:a.z};}}
-  for(const p of game.pickups)if(p.kind==='shard'){return{x:p.x,z:p.z};}
-  return best;
+/* fix4: what to do next — {x, z, label, type, next} from the live state (who's alive, what's picked up, where you are),
+   so it moves on the moment a step is done. `next` is the line for the "Next: …" toast. */
+const SHARD_BOSSES=[['troll',ARENAS.troll,'in the west woods'],['warden',ARENAS.frost,'on the north peak'],['magma',ARENAS.magma,'in the east crater']];
+function getObjective(){
+  const S=game.stage,P=game.player;if(!P)return null;
+  const elder=game.npcs.find(n=>n.id==='elder'),ex=elder?elder.x:0,ez=elder?elder.z:61;
+  if(S===0)return{x:ex,z:ez,label:'Talk to Elder Maren',type:'npc',next:'talk to Elder Maren in the village'};
+  if(S===1){
+    for(const p of game.pickups)if(p.kind==='shard')return{x:p.x,z:p.z,label:'Pick up the Ember Shard',type:'shard',next:'pick up the Ember Shard'};
+    let best=null,bd=1e9;
+    for(const [k,a,where] of SHARD_BOSSES){const def=BOSSDEF[k];if(game.shards[def.idx])continue;
+      const e=game.enemies.find(q=>q.kind===k&&q.state!=='dead'),x=e?e.x:a.x,z=e?e.z:a.z,d=Math.hypot(x-P.x,z-P.z);
+      if(d<bd){bd=d;best={x,z,label:'Defeat '+def.name,type:'boss',next:def.name+' '+where};}}
+    if(best)return best;
+  }
+  if(S<=2)return{x:ex,z:ez,label:'Return the shards to Elder Maren',type:'npc',next:'return the shards to Elder Maren'};
+  if(S===3){
+    const H=ARENAS.hollow,g=world.gate&&world.gate.box;
+    if(Math.hypot(P.x-H.x,P.z-H.z)<15)GUIDE.entered=true;
+    if(!GUIDE.entered&&g)return{x:g.x,z:g.z,label:'Enter the Hollow Gate',type:'gate',next:'enter the Hollow Gate, north of the village'};
+    const e=game.enemies.find(q=>q.kind==='colossus'&&q.state!=='dead'),def=BOSSDEF.colossus;
+    return{x:e?e.x:H.x,z:e?e.z:H.z-7,label:'Defeat '+def.name,type:'boss',next:'defeat the '+def.name};
+  }
+  // the flame burns: a beacon still dark is something left to do (optional)
+  let t0=null,td=1e9;for(const t of OW.towers)if(!t.on){const d=Math.hypot(t.x-P.x,t.z-P.z);if(d<td){td=d;t0=t;}}
+  return t0?{x:t0.x,z:t0.z,label:'Light the watchtower beacon',type:'tower',next:'light a watchtower beacon (optional)',optional:true}:null;
 }
+const objective=getObjective;   // the maps' name for it
+// the steps done so far: when this changes, a step was completed (the nearest boss changing is not a step)
+function guideSig(){let sh=0;for(const p of game.pickups)if(p.kind==='shard')sh++;let lit=0;for(const t of OW.towers)if(t.on)lit++;
+  return game.stage+'|'+game.shards.join()+'|'+sh+'|'+(GUIDE.entered?1:0)+'|'+lit;}
+// 8 Hz: the arrow and its line, the beam, and the "Next: …" toast — the page is written only when something changed
+function guideTick(){
+  const now=performance.now();if(now-GUIDE.t<125)return;GUIDE.t=now;
+  const P=game.player,o=getObjective(),sig=guideSig();
+  if(GUIDE.sig!==null&&sig!==GUIDE.sig&&o&&game.st==='play')toast('Next: '+o.next.charAt(0).toUpperCase()+o.next.slice(1),3.2);
+  GUIDE.sig=sig;
+  const fight=!!(game.boss&&game.boss.awake&&game.boss.state!=='dead'),show=GUIDE.on&&!!o&&!fight&&!game.dialog&&game.st==='play'&&!P.dead;
+  const el=$('guide');
+  if(show!==GUIDE.vis){GUIDE.vis=show;el.classList.toggle('off',!show);}
+  if(show){
+    const dx=o.x-P.x,dz=o.z-P.z,txt=o.label+' · '+Math.round(Math.hypot(dx,dz))+'m';
+    if(txt!==GUIDE.txt){GUIDE.txt=txt;$('gtxt').textContent=txt;}
+    // screen-up is the camera's heading: turn by the target's bearing less the camera's
+    let a=-(Math.atan2(dx,dz)-cam.yaw)*180/PI;a=(Math.round(a/5)*5%360+360)%360;
+    if(a!==GUIDE.ang){GUIDE.ang=a;$('garrI').style.transform='rotate('+a+'deg)';}
+  }
+  guideBeam(show?o:null);
+}
+// one tall golden beam over the target, made once and moved; it fades out as you arrive
+function guideBeam(o){
+  let m=GUIDE.beam;
+  if(!m){if(!o)return;m=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,160,10,1,true),new THREE.MeshBasicMaterial({color:0xffd27a,transparent:true,opacity:.22,blending:THREE.AdditiveBlending,depthWrite:false,fog:false,side:THREE.DoubleSide}));
+    m.renderOrder=2;m.frustumCulled=false;scene.add(m);GUIDE.beam=m;}
+  if(!o){m.visible=false;return;}
+  const P=game.player,k=clamp((Math.hypot(o.x-P.x,o.z-P.z)-8)/7,0,1);   // gone within 8 m, full from 15 m
+  m.visible=k>0;if(!m.visible)return;
+  m.position.set(o.x,gh(o.x,o.z)+80,o.z);m.material.opacity=.22*k;
+}
+function setGuide(on){GUIDE.on=on;store.set('ef-guide',on);$('bGuide').textContent='Guide: '+(on?'On':'Off');GUIDE.vis=null;GUIDE.t=0;if(!on){$('guide').classList.add('off');GUIDE.vis=false;guideBeam(null);}}
+// map marks, drawn with paths (no images, no gradients): a skull for a guardian still standing, a flame for a dark beacon
+const DASH=[3,4],NODASH=[];
+function mkSkull(c,x,y,r){c.fillStyle='#f3e3bd';c.strokeStyle='#000';c.lineWidth=1.2;c.beginPath();c.arc(x,y-r*.15,r,0,TAU);c.fill();c.stroke();c.fillRect(x-r*.55,y+r*.55,r*1.1,r*.5);
+  c.fillStyle='#2a1a10';c.beginPath();c.arc(x-r*.38,y-r*.15,r*.28,0,TAU);c.arc(x+r*.38,y-r*.15,r*.28,0,TAU);c.fill();}
+function mkFlame(c,x,y,r){c.fillStyle='#ff9a2a';c.strokeStyle='#000';c.lineWidth=1.2;c.beginPath();c.moveTo(x,y-r*1.4);c.quadraticCurveTo(x+r*1.1,y,x,y+r*.8);c.quadraticCurveTo(x-r*1.1,y,x,y-r*1.4);c.fill();c.stroke();
+  c.fillStyle='#ffe27a';c.beginPath();c.moveTo(x,y-r*.5);c.quadraticCurveTo(x+r*.5,y+r*.2,x,y+r*.6);c.quadraticCurveTo(x-r*.5,y+r*.2,x,y-r*.5);c.fill();}
+function mkGoal(c,x,y,r,label,font){const k=r*(1+Math.sin(game.time*5)*.18);
+  c.fillStyle='#ffc23a';c.strokeStyle='#3a2410';c.lineWidth=1.6;c.beginPath();c.moveTo(x,y-k*1.3);c.lineTo(x+k,y);c.lineTo(x,y+k*1.3);c.lineTo(x-k,y);c.closePath();c.fill();c.stroke();
+  if(label){c.font=font;c.textAlign='center';c.textBaseline='bottom';c.lineWidth=3;c.strokeStyle='#000';c.strokeText(label,x,y-k*1.5);c.fillStyle='#ffe27a';c.fillText(label,x,y-k*1.5);}}
 function litBrazier(){const b=world.brazier;b.lit=true;toast('The village flame is rekindled',3.2);sfx('bell');}
 function openGate(){world.gate.opening=true;sfx('gate');}
 function ensureColossus(){if(game.stage>=3&&!game.enemies.some(e=>e.kind==='colossus')&&!game.killed.has('boss-colossus'))spawnEnemy('colossus',0,-29,'boss-colossus',[0,-22]);}
@@ -3129,7 +3198,7 @@ function startGame(cont){
   if(!s)setTimeout(()=>toast('Find Elder Maren in the village',3.2),600);
 }
 function fadeIn(){const f=$('fade');f.style.transition='none';f.style.opacity=1;requestAnimationFrame(()=>requestAnimationFrame(()=>{f.style.transition='opacity .9s';f.style.opacity=0;}));}
-function toTitle(){if(PANEL.open)closePanel();game.st='title';saveGame();$('title').hidden=false;$('hud').hidden=true;$('touch').hidden=true;$('pause').hidden=true;$('dead').hidden=true;$('end').hidden=true;$('dlg').hidden=true;game.dialog=null;$('bCont').disabled=!store.get('ef-save',null);$('bCont').style.opacity=store.get('ef-save',null)?1:.45;if(document.pointerLockElement)document.exitPointerLock();}
+function toTitle(){GUIDE.sig=null;GUIDE.entered=false;guideBeam(null);if(PANEL.open)closePanel();game.st='title';saveGame();$('title').hidden=false;$('hud').hidden=true;$('touch').hidden=true;$('pause').hidden=true;$('dead').hidden=true;$('end').hidden=true;$('dlg').hidden=true;game.dialog=null;$('bCont').disabled=!store.get('ef-save',null);$('bCont').style.opacity=store.get('ef-save',null)?1:.45;if(document.pointerLockElement)document.exitPointerLock();}
 function victory(){
   game.won=true;$('endtxt').textContent=`The Cinder Colossus is no more and the Flame of Emberfall burns anew. Level ${game.lvl}, ${game.kills} foes felled, ${game.deaths} falls, ${Math.round((game.playT||0)/60)} minutes on the isle.`;
   $('end').hidden=false;if(document.pointerLockElement)document.exitPointerLock();sfx('bell');musicSting('level');
@@ -3275,6 +3344,8 @@ const Input=(()=>{
   addEventListener('touchend',allUp,{capture:true,passive:true});addEventListener('touchcancel',allUp,{capture:true,passive:true});
   return {state:input,move,ACTIONS,keys,down,fire,poll,takeLook,reset,settings,setSetting,zoom,on(a,f){(hooks[a]||(hooks[a]=[])).push(f);},get pointerLocked(){return locked;}};
 })();
+// fix4: the guide's state: on/off (saved), 8 Hz pacing, what's on screen now, the step reached, the beam
+const GUIDE={on:store.get('ef-guide',true)!==false,t:0,txt:'',ang:null,vis:null,sig:null,entered:false,beam:null};
 const keys=Input.keys;
 
 /* ================= camera ================= */
@@ -3389,6 +3460,7 @@ function hudUpdate(){
   if(HUD.qUntil&&performance.now()>HUD.qUntil)questChip(false);
   if(!cam.mapOpen){const t=performance.now();if(t-PERFX.mmT>=125){PERFX.mmT=t;drawMinimap();}}   // fix2: ~8 Hz
   if(touchDev)updateControls();
+  guideTick();
 }
 function hudAvoid(){const t=performance.now();if(t-PERFX.avT<500)return PERFX.av;PERFX.avT=t;const a=[];for(const id of['hudL','hudR']){const r=$(id).getBoundingClientRect();if(r.width)a.push(r);}return PERFX.av=a;}   // fix2: was every frame
 function drawMinimap(){
@@ -3399,9 +3471,15 @@ function drawMinimap(){
   c.save();c.rotate(th);const sc=ppw*(2*world.mapHW/256),u=(P.x+world.mapHW)/(2*world.mapHW)*256,v=(P.z+world.mapHW)/(2*world.mapHW)*256;c.scale(sc,sc);c.drawImage(world.mapCanvas,-u,-v);c.restore();
   c.save();c.rotate(th);
   for(const n of game.npcs){c.fillStyle='#ffe27a';c.beginPath();c.arc((n.x-P.x)*ppw,(n.z-P.z)*ppw,2.2,0,TAU);c.fill();}
-  for(const e of game.enemies){if(e.state==='dead')continue;const dx=(e.x-P.x)*ppw,dz=(e.z-P.z)*ppw;if(Math.hypot(dx,dz)>R0)continue;c.fillStyle=e.boss?'#ff3a2a':'#d84a3a';c.beginPath();c.arc(dx,dz,e.boss?3.6:2,0,TAU);c.fill();}
-  if(ob){let dx=(ob.x-P.x)*ppw,dz=(ob.z-P.z)*ppw;const dd=Math.hypot(dx,dz);if(dd>R0-7){dx*=(R0-7)/dd;dz*=(R0-7)/dd;}c.strokeStyle='#ffb02a';c.lineWidth=2.2;c.beginPath();c.arc(dx,dz,4.5+Math.sin(game.time*5)*1.2,0,TAU);c.stroke();}
+  for(const e of game.enemies){if(e.state==='dead'||e.boss&&e.def.idx>=0)continue;const dx=(e.x-P.x)*ppw,dz=(e.z-P.z)*ppw;if(Math.hypot(dx,dz)>R0)continue;c.fillStyle=e.boss?'#ff3a2a':'#d84a3a';c.beginPath();c.arc(dx,dz,e.boss?3.6:2,0,TAU);c.fill();}
   c.restore();
+  // fix4: marks drawn upright (their places turned with the map by hand), the goal on top
+  const cs=Math.cos(th),sn=Math.sin(th),at=(x,z)=>{const dx=(x-P.x)*ppw,dz=(z-P.z)*ppw;return [dx*cs-dz*sn,dx*sn+dz*cs];};
+  for(const e of game.enemies)if(e.boss&&e.def.idx>=0&&e.state!=='dead'){const q=at(e.x,e.z);if(Math.hypot(q[0],q[1])<R0-5)mkSkull(c,q[0],q[1],4);}
+  for(const t of OW.towers)if(!t.on){const q=at(t.x,t.z);if(Math.hypot(q[0],q[1])<R0-5)mkFlame(c,q[0],q[1],3.6);}
+  if(ob){const q=at(ob.x,ob.z),dd=Math.hypot(q[0],q[1]),inside=dd<=R0-9;if(!inside){q[0]*=(R0-9)/dd;q[1]*=(R0-9)/dd;}
+    c.setLineDash(DASH);c.strokeStyle='rgba(255,210,122,.9)';c.lineWidth=1.4;c.beginPath();c.moveTo(0,0);c.lineTo(q[0],q[1]);c.stroke();c.setLineDash(NODASH);
+    mkGoal(c,q[0],q[1],4.2,inside?ob.label:'',"700 9px 'Alegreya Sans',sans-serif");}
   c.save();c.rotate(cam.yaw-P.yaw);c.fillStyle='#fff';c.strokeStyle='#000';c.lineWidth=1.3;c.beginPath();c.moveTo(0,-6.5);c.lineTo(4.6,5.5);c.lineTo(0,2.8);c.lineTo(-4.6,5.5);c.closePath();c.fill();c.stroke();c.restore();
   const nr=R0-10,nx=Math.sin(th)*nr,ny=-Math.cos(th)*nr;   // north marker rides the rim (the map turns with the camera)
   c.fillStyle='rgba(30,18,10,.9)';c.strokeStyle='#ffd27a';c.lineWidth=1.2;c.beginPath();c.arc(nx,ny,8,0,TAU);c.fill();c.stroke();
@@ -3706,9 +3784,12 @@ function drawMapPanel(S){
   const tw=x=>(x+HW)/(2*HW)*S,tz=z=>(z+HW)/(2*HW)*S,k=S/300;
   const lab=(t,x,z,col)=>{c.font=`800 ${Math.max(11,Math.round(12*k))}px 'Cinzel',Georgia,serif`;c.textAlign='center';c.lineWidth=3;c.strokeStyle='#000';c.fillStyle=col||'#fff';c.strokeText(t,tw(x),tz(z)-8);c.fillText(t,tw(x),tz(z)-8);};
   lab('Village',VILLAGE.x,VILLAGE.z,'#ffe27a');lab('Mosswood',-100,18);lab('Frostpeak',-30,-100);lab('Ember Crater',CRT.x,CRT.z,'#ff8a3d');lab('Sunken Hollow',0,-22,'#9fe8ff');
-  for(const e of game.enemies)if(e.boss&&e.state!=='dead'){c.fillStyle='#ff3a2a';c.beginPath();c.arc(tw(e.x),tz(e.z),4.5*k+1,0,TAU);c.fill();}
-  if(ob){c.strokeStyle='#ffb02a';c.lineWidth=2.5;c.beginPath();c.arc(tw(ob.x),tz(ob.z),8*k+2,0,TAU);c.stroke();}
-  for(const t of OW.towers){const x=tw(t.x),y=tz(t.z),r=6*k+1;c.fillStyle=t.on?'#ffc23a':'#7fd8ff';c.strokeStyle='#000';c.lineWidth=1.5;c.beginPath();c.moveTo(x,y-r*1.3);c.lineTo(x+r,y);c.lineTo(x,y+r*1.3);c.lineTo(x-r,y);c.closePath();c.fill();c.stroke();}
+  // fix4: a skull on each guardian still standing (the Colossus keeps its red mark), a flame on each dark beacon,
+  // the lit ones a gold diamond; the goal on top, with a dotted line from you and its name
+  for(const e of game.enemies)if(e.boss&&e.state!=='dead'){if(e.def.idx>=0)mkSkull(c,tw(e.x),tz(e.z),5*k+1.5);else{c.fillStyle='#ff3a2a';c.beginPath();c.arc(tw(e.x),tz(e.z),4.5*k+1,0,TAU);c.fill();}}
+  for(const t of OW.towers){const x=tw(t.x),y=tz(t.z),r=6*k+1;if(!t.on){mkFlame(c,x,y,r*.8);continue;}c.fillStyle='#ffc23a';c.strokeStyle='#000';c.lineWidth=1.5;c.beginPath();c.moveTo(x,y-r*1.3);c.lineTo(x+r,y);c.lineTo(x,y+r*1.3);c.lineTo(x-r,y);c.closePath();c.fill();c.stroke();}
+  if(ob){c.setLineDash(DASH);c.strokeStyle='rgba(255,210,122,.95)';c.lineWidth=2;c.beginPath();c.moveTo(tw(P.x),tz(P.z));c.lineTo(tw(ob.x),tz(ob.z));c.stroke();c.setLineDash(NODASH);
+    mkGoal(c,tw(ob.x),tz(ob.z),7*k+2,ob.label,`800 ${Math.max(11,Math.round(12*k))}px 'Cinzel',Georgia,serif`);}
   c.save();c.translate(tw(P.x),tz(P.z));c.rotate(PI-P.yaw);const a=8*k+1;c.fillStyle='#fff';c.strokeStyle='#000';c.lineWidth=1.5;c.beginPath();c.moveTo(0,-a);c.lineTo(a*.7,a*.9);c.lineTo(0,a*.45);c.lineTo(-a*.7,a*.9);c.closePath();c.fill();c.stroke();c.restore();
 }
 function travelTo(i){
@@ -3750,6 +3831,7 @@ $('bQuitYes').addEventListener('click',()=>{closePanel();setPause(false);quitOut
 // ---- pause screen and title
 $('bSet').addEventListener('click',()=>openPanel('settings'));
 $('bHelp').addEventListener('click',()=>openPanel('help'));
+$('bGuide').addEventListener('click',()=>setGuide(!GUIDE.on));$('bGuide').textContent='Guide: '+(GUIDE.on?'On':'Off');   // fix4
 // fix3: How to play — the bars and buttons as the game draws them (their own icons and colours)
 function renderHelp(){
   const ic=id=>{const b=$(id),v=b&&b.querySelector('svg');return '<span class="hic">'+(v?v.outerHTML:'')+'</span>';};

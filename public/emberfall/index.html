@@ -248,6 +248,7 @@ body.menu-open #feed{z-index:22;top:calc(var(--pnl-top) + 4px);bottom:auto}
 #touch{position:fixed;inset:0;z-index:4;pointer-events:none}
 #joyzone,#look{position:absolute;top:0;bottom:0;pointer-events:auto;touch-action:none}
 #joyzone{left:0;width:40%}#look{right:0;width:60%}
+#joyzone,#look{z-index:1}#joy{z-index:2}.tb{z-index:3}   /* fix2: a button always gets its touch, never the pads under it */
 body.mirror #joyzone{left:auto;right:0}body.mirror #look{right:auto;left:0}
 #joy,#joyRest{position:absolute;left:0;top:0;border-radius:50%;pointer-events:none}
 #joyRest{border:2px dashed rgba(255,230,190,.3)}
@@ -443,11 +444,13 @@ const glc=$('gl'),hudc=$('hud2'),hx=hudc.getContext('2d');
 let W=innerWidth,H=innerHeight;
 const touchDev=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 let renderer,scene,camera;
+// fix2: frame bookkeeping (shadow / HUD / minimap pacing, cached layout, reused arrays, the fps readout)
+const PERFX={n:0,hudT:0,mmT:0,avT:-1e9,av:[],en:[],fpsOn:/[?&]fps=1/.test(location.search),fT:0,fN:0,fEl:null};
 // one quality: shadows on (2048 map), full grass, pixel ratio up to 2 (lowered only by the frame-rate net)
 const SHADOW_MAP=2048,GRASS_MAX=10000;
-const PIX={max:Math.min(devicePixelRatio||1,2),floor:1.25,cur:1,lowered:false};PIX.floor=Math.min(PIX.max,1.25);PIX.cur=PIX.max;
-try{renderer=new THREE.WebGLRenderer({canvas:glc,antialias:true,powerPreference:'high-performance'});}catch(e){document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font:20px sans-serif;z-index:99;background:#111;text-align:center;padding:20px">WebGL is not available in this browser, so Emberfall cannot start.</div>');throw e;}
-renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+const PIX={max:Math.min(devicePixelRatio||1,touchDev?1.5:2),floor:1.25,cur:1,lowered:false};   // fix2: 1.5 at most on a touch screenPIX.floor=Math.min(PIX.max,1.25);PIX.cur=PIX.max;
+try{renderer=new THREE.WebGLRenderer({canvas:glc,antialias:!touchDev,powerPreference:'high-performance'});}catch(e){document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font:20px sans-serif;z-index:99;background:#111;text-align:center;padding:20px">WebGL is not available in this browser, so Emberfall cannot start.</div>');throw e;}
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;   // fix2: redrawn every 2nd frame (renderFrame)
 renderer.toneMapping=THREE.NoToneMapping;
 scene=new THREE.Scene();
 /* ---- Storybook Anime look: stepped toon shading + inked outlines ---- */
@@ -471,7 +474,7 @@ transformed.z+=uW.z*swS*swH*swH*${amp};`);};
 }
 const OUTL=new THREE.ShaderMaterial({side:THREE.BackSide,uniforms:{w:{value:.011}},vertexShader:'uniform float w;void main(){gl_Position=projectionMatrix*modelViewMatrix*vec4(position+normal*w,1.);}',fragmentShader:'void main(){gl_FragColor=vec4(.24,.15,.12,1.);}'});
 camera=new THREE.PerspectiveCamera(62,1,.2,1400);
-function resize(){W=innerWidth;H=innerHeight;renderer.setPixelRatio(PIX.cur);renderer.setSize(W,H,false);const hd=Math.min(devicePixelRatio||1,2);hudc.width=Math.round(W*hd);hudc.height=Math.round(H*hd);camera.aspect=W/H;camera.updateProjectionMatrix();}
+function resize(){W=innerWidth;H=innerHeight;renderer.setPixelRatio(PIX.cur);renderer.setSize(W,H,false);const hd=Math.min(devicePixelRatio||1,1.5);hudc.width=Math.round(W*hd);hudc.height=Math.round(H*hd);PERFX.avT=-1e9;camera.aspect=W/H;camera.updateProjectionMatrix();}
 
 /* ================= terrain model ================= */
 const ISL=200;
@@ -563,8 +566,9 @@ function buildSkyAndLights(){
 }
 const SKYK={night:{top:C('#050a1c'),mid:C('#0d1a38'),bot:C('#1a2548')},day:{top:C('#2a6cff'),mid:C('#58b4ff'),bot:C('#c6ecff')},dusk:{top:C('#3a4a8a'),mid:C('#e8845a'),bot:C('#ffc27a')}};
 const _a=new THREE.Color(),_b=new THREE.Color();
+const _skyD=new THREE.Vector3();
 function updateSky(T,camPos,player){
-  const ph=T*TAU,se=Math.sin(ph),sd=new THREE.Vector3(Math.cos(ph)*.8,se,Math.cos(ph)*.45+.2).normalize();
+  const ph=T*TAU,se=Math.sin(ph),sd=_skyD.set(Math.cos(ph)*.8,se,Math.cos(ph)*.45+.2).normalize();
   const dayA=sstep(-.12,.28,se),dusk=Math.exp(-Math.pow(se/.2,2));
   light.dayAmt=dayA;light.sunElev=se;light.night=1-sstep(-.25,.05,se);
   const lerp3=(k)=>{skyU[k].value.copy(SKYK.night[k]).lerp(SKYK.day[k],dayA);_a.copy(SKYK.dusk[k]);skyU[k].value.lerp(_a,dusk*.75);};
@@ -1309,7 +1313,7 @@ function doEmote(code){const P=game.player;if(P.dead||P.mount||game.dialog||P.st
   P.rest=false;P.emote=P.emote&&P.emote.kind===k?null:{kind:k,t:0};}
 function applyEmote(P,c,t){
   if(P.emote&&(Math.hypot(input.mx,input.my)>.1||P.state!=='free'||P.hurtT>0||input.jump>0||P.mount||P.swim||!P.grounded)){P.emote=null;P.rest=false;}
-  if(!P.emote)return;const e=P.emote;e.t+=1/60;const k=e.kind;
+  if(!P.emote)return;const e=P.emote;e.t+=PERFX.dt||1/60;const k=e.kind;
   if(k==='wave'){c.arms[1].rotation.x=0;c.arms[1].rotation.z=2.55+Math.sin(game.time*11)*.25;}
   else if(k==='cheer'){c.arms[0].rotation.x=0;c.arms[1].rotation.x=0;c.arms[0].rotation.z=-2.7;c.arms[1].rotation.z=2.7;c.body.position.y=-.9+Math.abs(Math.sin(game.time*8))*.12;}
   else if(k==='dance'){const s=game.time*7;c.body.position.y=-.9+Math.abs(Math.sin(s))*.1;c.body.rotation.y=Math.sin(s*.5)*.6;c.arms[0].rotation.x=0;c.arms[1].rotation.x=0;c.arms[0].rotation.z=-1.6-Math.sin(s)*.8;c.arms[1].rotation.z=1.6+Math.sin(s+PI)*.8;c.legs[0].rotation.x=Math.sin(s)*.6;c.legs[1].rotation.x=-Math.sin(s)*.6;}
@@ -2386,12 +2390,13 @@ function nearestEnemy(maxD,fwdOnly){
   return best;
 }
 function startAttack(P){
-  const idx=P.combo>0?(P.atkIdx+1)%3:0;P.atkIdx=idx;P.atkT=0;P.hitDone=false;P.state='attack';P.st-=9;P.stDelay=.7;
+  const idx=P.combo>0?(P.atkIdx+1)%3:0;P.atkIdx=idx;P.atkT=0;P.hitDone=false;P.state='attack';P.st=Math.max(0,P.st-9);P.stDelay=.7;
   let t=game.lock&&game.lock.state!=='dead'?game.lock:nearestEnemy(5,true);
   if(t){const d=Math.hypot(t.x-P.x,t.z-P.z);P.yaw=Math.atan2(t.x-P.x,t.z-P.z);P.lungeX=Math.sin(P.yaw)*Math.min(d-1,3.4)*3;P.lungeZ=Math.cos(P.yaw)*Math.min(d-1,3.4)*3;}
   else{P.yaw=game.mode==='first'?cam.yaw:(Math.hypot(input.mx,input.my)>.1?P.moveYaw:P.yaw);P.lungeX=Math.sin(P.yaw)*3;P.lungeZ=Math.cos(P.yaw)*3;}
   sfx('swing',idx);
 }
+const _reinH=new THREE.Vector3(),_reinB=new THREE.Vector3();   // fix2: reused each frame
 function updatePlayer(dt){
   const P=game.player,c=P.c;
   P.iT-=dt;P.counter=Math.max(0,(P.counter||0)-dt);P.hurtT-=dt;P.potCd-=dt;P.flash=Math.max(0,P.flash-dt);P.combo=Math.max(0,P.combo-dt);P.stDelay-=dt;
@@ -2417,8 +2422,8 @@ function updatePlayer(dt){
     // fix1: a jump no longer needs stamina (sprinting with the stick at its edge drained it and swallowed jumps while running);
     // coyote time lets it fire just after running off an edge, and input.jump (0.15 s) is the buffer that fires it on landing
     if(input.jump>0&&(P.grounded||P.coyote>0)&&!P.swim&&locked){P.vy=P.mount?11:8.6;P.grounded=false;P.coyote=0;P.st=Math.max(0,P.st-(P.mount?0:6));input.jump=0;sfx('jump');burst(P.x,P.y,P.z,0xd8c8a0,6,2,.4,.12);}
-    if(input.attack>0&&locked&&!P.swim&&P.st>=6){input.attack=0;startAttack(P);}
-    else if(input.dodge>0&&locked&&P.st>=16&&!P.swim&&!P.mount){input.dodge=0;P.st-=16;P.stDelay=.6;P.state='roll';P.rollT=0;P.pd=false;let rx=moving?dirx:Math.sin(P.yaw),rz=moving?dirz:Math.cos(P.yaw);P.rdx=rx;P.rdz=rz;P.yaw=Math.atan2(rx,rz);P.iT=Math.max(P.iT,.42);sfx('roll');}
+    if(input.attack>0&&locked&&!P.swim){input.attack=0;startAttack(P);}   // fix2: no stamina floor (running drained it)
+    else if(input.dodge>0&&locked&&!P.swim&&!P.mount){input.dodge=0;P.st=Math.max(0,P.st-16);P.stDelay=.6;P.state='roll';P.rollT=0;P.pd=false;let rx=moving?dirx:Math.sin(P.yaw),rz=moving?dirz:Math.cos(P.yaw);P.rdx=rx;P.rdz=rz;P.yaw=Math.atan2(rx,rz);P.iT=Math.max(P.iT,.42);sfx('roll');}
     else if(input.special>0&&locked&&P.mp>=100&&!P.swim&&!P.mount){input.special=0;P.mp=0;P.state='spin';P.spinT=0;P.spinHit=0;P.iT=Math.max(P.iT,.7);sfx('spin');}
     if(input.potion>0&&locked){input.potion=0;if(P.potCd<=0)drinkPotion();}
     P.sp=clamp(Math.hypot(P.vx,P.vz)/(P.mount?19:8.6),0,1);if(P.mount)P.sp=0;P.phase+=dt*(6+Math.hypot(P.vx,P.vz)*1.35);
@@ -2427,9 +2432,9 @@ function updatePlayer(dt){
     const dur=[.44,.44,.66][P.atkIdx];P.atkT+=dt/dur;
     const lf=Math.max(0,1-P.atkT*2.2);P.vx=P.lungeX*lf;P.vz=P.lungeZ*lf;
     if(!P.hitDone&&P.atkT>=.42){P.hitDone=true;owChop();const k=P.atkIdx;heroSwing(P,k);spark3(P);if(k===2){playerHit(6.2,PI+1,.7,12);cam.shake=Math.max(cam.shake,.35);for(let i=0;i<28;i++){const a=i/28*TAU;spark(P.x+Math.sin(a)*1.2,P.y+.3,P.z+Math.cos(a)*1.2,Math.sin(a)*9,.8,Math.cos(a)*9,0xffc060,.5,.16,0);}burst(P.x,P.y+.2,P.z,0xd8c8a0,14,4,.5,.16);sfx('smash');}}
-    if(P.atkT>.55&&input.attack>0&&P.st>=6){input.attack=0;P.combo=.1;startAttack(P);}
+    if(P.atkT>.55&&input.attack>0){input.attack=0;P.combo=.1;startAttack(P);}
     else if(P.atkT>=1){P.state='free';P.combo=.5;}
-    if(input.dodge>0&&P.atkT>.5&&P.st>=16){P.state='free';}
+    if(input.dodge>0&&P.atkT>.5){P.state='free';}
     P.sp=.2;
   }
   else if(P.state==='roll'){
@@ -2479,8 +2484,8 @@ function updatePlayer(dt){
     c.legs[0].rotation.set(-.95,0,-.62);c.legs[1].rotation.set(-.95,0,.62);
     if(P.state==='free'){c.arms[0].rotation.set(-1.25,0,.12);c.arms[1].rotation.set(-1.25,0,-.12);c.pivot.rotation.x=.28+hs*.12;}}
   c.root.position.set(P.x,P.y+(P.swim?-.1:0)+rideY,P.z);
-  if(P.mount&&P.mount.rein){const h=P.mount,pa=h.rein.geometry.attributes.position,bit=new THREE.Vector3(0,2.5,2.1);h.g.updateMatrixWorld(true);c.root.updateMatrixWorld(true);
-    for(let i=0;i<2;i++){const hp=c.arms[i].localToWorld(new THREE.Vector3(0,-.62,0));const b=bit.clone();b.x=(i?1:-1)*.2;h.g.localToWorld(b);pa.setXYZ(i*2,hp.x,hp.y,hp.z);pa.setXYZ(i*2+1,b.x,b.y,b.z);}
+  if(P.mount&&P.mount.rein){const h=P.mount,pa=h.rein.geometry.attributes.position;h.g.updateMatrixWorld(true);c.root.updateMatrixWorld(true);
+    for(let i=0;i<2;i++){const hp=c.arms[i].localToWorld(_reinH.set(0,-.62,0));const b=_reinB.set((i?1:-1)*.2,2.5,2.1);h.g.localToWorld(b);pa.setXYZ(i*2,hp.x,hp.y,hp.z);pa.setXYZ(i*2+1,b.x,b.y,b.z);}
     pa.needsUpdate=true;h.rein.visible=true;}
   for(const h of OW.horses)if(h.rein&&h!==P.mount)h.rein.visible=false;c.root.rotation.y=P.yaw;setFlash(c,P.flash>0?P.flash*2.5:(P.iT>0&&P.state==='roll'?.15:0));
   c.root.visible=!(game.mode==='first'&&game.st==='play'&&false);
@@ -3150,7 +3155,7 @@ const Input=(()=>{
     if(a==='digit'){if(game.dialog&&arg<2)chooseOpt(arg);return;}
     if(game.dialog){if(a==='context'||a==='jump'||a==='confirm'||a==='attack')advanceDialog();return;}
     switch(a){
-      case'jump':input.jump=.15;break;case'attack':input.attack=.3;break;case'roll':input.dodge=.3;break;case'spin':input.special=.3;break;case'heal':input.potion=.3;break;
+      case'jump':input.jump=.3;break;case'attack':input.attack=.35;break;case'roll':input.dodge=.35;break;case'spin':input.special=.35;break;   // fix2: longer bufferscase'heal':input.potion=.3;break;
       case'context':interact();break;case'do':doCtx();break;case'eat':eatFood();break;case'lock':toggleLock();break;case'view':cycleView();break;
       case'map':openPanel('map');break;
       case'emote':if(arg)doEmote(arg);else emoTray();break;
@@ -3208,12 +3213,13 @@ const Input=(()=>{
   };
   lookOn($('look'),true);lookOn(glc,false);
   // ---- floating joystick: it appears where the thumb lands in the joystick zone, and goes home on release
-  const joy=$('joy'),knob=$('knob'),jz=$('joyzone');let jid=null,jc={x:0,y:0};
+  const joy=$('joy'),knob=$('knob'),jz=$('joyzone'),_stk={x:0,y:0};let jid=null,jc={x:0,y:0};
   const jknob=(x,y)=>{knob.style.setProperty('--kx',x+'px');knob.style.setProperty('--ky',y+'px');};
   const jmv=e=>{const R=CTL.jr;let dx=e.clientX-jc.x,dy=e.clientY-jc.y;const m=Math.hypot(dx,dy);if(m>R){dx*=R/m;dy*=R/m;}jknob(dx,dy);
-    const k=Math.min(1,m/R);stick=k<.12?{x:0,y:0}:{x:dx/R,y:dy/R};stickSprint=k>.92;joy.classList.toggle('sprint',stickSprint);};
+    const k=Math.min(1,m/R);stick=_stk;if(k<.12){_stk.x=_stk.y=0;}else{_stk.x=dx/R;_stk.y=dy/R;}const sp=k>.92;if(sp!==stickSprint){stickSprint=sp;joy.classList.toggle('sprint',sp);}};
   const jend=e=>{if(e&&e.pointerId!==jid)return;jid=null;stick=null;stickSprint=false;jknob(0,0);joy.classList.remove('on','sprint');ctlJoyHome();};
-  jz.addEventListener('pointerdown',e=>{if(jid!==null)return;e.preventDefault();jid=e.pointerId;try{jz.setPointerCapture(jid);}catch(_){}jc=ctlJoyAt(e.clientX,e.clientY);joy.classList.add('on');jmv(e);ctlFirstInput();});
+  // fix2: a new thumb takes the stick over: the old one can only still be 'down' if its lift was lost, which locked the stick out
+  jz.addEventListener('pointerdown',e=>{e.preventDefault();if(jid!==null&&jid!==e.pointerId){const old=jid;jid=null;try{jz.releasePointerCapture(old);}catch(_){}}jid=e.pointerId;try{jz.setPointerCapture(jid);}catch(_){}jc=ctlJoyAt(e.clientX,e.clientY);joy.classList.add('on');jmv(e);ctlFirstInput();});
   jz.addEventListener('pointermove',e=>{if(e.pointerId===jid)jmv(e);});
   jz.addEventListener('pointerup',jend);jz.addEventListener('pointercancel',jend);jz.addEventListener('lostpointercapture',jend);
   // ---- touch buttons: each press is held by its own pointer until it lifts; 60 ms press feedback, a haptic tick on the main ones
@@ -3242,6 +3248,7 @@ const keys=Input.keys;
 
 /* ================= camera ================= */
 const _f=new THREE.Vector3();
+const _camT=new THREE.Vector3(),_camP=new THREE.Vector3();
 function updateCamera(dt){
   const P=game.player,m=game.mode;const lk=Input.takeLook(),rawDX=lk.dx;
   if(!game.dialog){
@@ -3253,7 +3260,7 @@ function updateCamera(dt){
   else if(game.lock&&game.lock.state==='dead')game.lock=null;
   if(game.dialog&&game.dialog.npc){const n=game.dialog.npc,d=Math.atan2(n.x-P.x,n.z-P.z);cam.yaw+=angDiff(cam.yaw,d+.0)*Math.min(1,dt*2.4);}
   const hc=P.c.head,cp=P.c.cape;
-  const target=new THREE.Vector3(P.x,P.y+(m==='top'?.6:1.6)+(P.swim?-.6:0),P.z);
+  const target=_camT.set(P.x,P.y+(m==='top'?.6:1.6)+(P.swim?-.6:0),P.z);
   const sh=cam.shake>0?cam.shake:0;cam.shake=Math.max(0,cam.shake-dt*2.2);
   const fovTarget=(m==='top'?44:m==='first'?78:62)+(P.state==='roll'?5:0)+(P.sp>.8&&P.state==='free'?4:0);cam.fov=lerp(cam.fov,fovTarget,Math.min(1,dt*6));if(Math.abs(camera.fov-cam.fov)>.01){camera.fov=cam.fov;camera.updateProjectionMatrix();}
   if(m==='first'){
@@ -3264,7 +3271,7 @@ function updateCamera(dt){
     hc.visible=true;if(cp)cp.visible=true;
     const dist=cam.dist,cp2=Math.cos(cam.pitch),ox=-Math.sin(cam.yaw)*cp2*dist,oy=Math.sin(cam.pitch)*dist,oz=-Math.cos(cam.yaw)*cp2*dist;
     let t=1;for(let k=1;k<=10;k++){const q=k/10,x=target.x+ox*q,y=target.y+oy*q,z=target.z+oz*q;if(y<gh(x,z)+.6||insideSolid(x,y,z)){t=Math.max(.12,(k-1)/10);break;}}
-    const tp=new THREE.Vector3(target.x+ox*t,target.y+oy*t,target.z+oz*t);const gy=surfaceAt(tp.x,tp.z,tp.y+1)+.7;if(tp.y<gy)tp.y=gy;
+    const tp=_camP.set(target.x+ox*t,target.y+oy*t,target.z+oz*t);const gy=surfaceAt(tp.x,tp.z,tp.y+1)+.7;if(tp.y<gy)tp.y=gy;
     if(!cam.init){cam.pos.copy(tp);cam.init=true;}
     cam.pos.lerp(tp,1-Math.exp(-dt*(m==='top'?9:16)));
     camera.position.copy(cam.pos);camera.lookAt(target.x,target.y+(m==='top'?0:.2),target.z);
@@ -3337,22 +3344,25 @@ function combatTarget(){
     const d=Math.hypot(e.x-P.x,e.z-P.z);if(d<bd){bd=d;best=e;}}
   return best;
 }
+const _dwV=new WeakMap(),_dsV=new WeakMap();
+function dw(el,v){v=String(v);if(_dwV.get(el)!==v){_dwV.set(el,v);el.textContent=v;}}
+function ds(el,prop,v){let o=_dsV.get(el);if(!o){o={};_dsV.set(el,o);}if(o[prop]!==v){o[prop]=v;el.style[prop]=v;}}
 function hudUpdate(){
   const P=game.player;
   if(game.hero!==HUD.hero){HUD.hero=game.hero;const h=HEROES[game.hero]||HEROES.knight;$('heroGlyph').textContent=h.name.charAt(0);$('heroPort').style.setProperty('--hero-c',HERO_HUE[game.hero]||h.o.cape||h.o.cloth||'#8a5a34');}
   $('hpb').classList.toggle('low',!P.dead&&P.hp/P.maxhp<.25);
   const tg=combatTarget(),bx=$('boss');
-  if(tg){bx.hidden=false;bx.classList.toggle('minor',!tg.boss);const nm=tg.boss?tg.def.name:(ENAME[tg.kind]||tg.kind);if($('bname').textContent!==nm)$('bname').textContent=nm;$('bfill').style.transform='scaleX('+clamp(tg.hp/tg.maxhp,0,1)+')';}
+  if(tg){bx.hidden=false;bx.classList.toggle('minor',!tg.boss);const nm=tg.boss?tg.def.name:(ENAME[tg.kind]||tg.kind);dw($('bname'),nm);ds($('bfill'),'transform','scaleX('+Math.round(clamp(tg.hp/tg.maxhp,0,1)*400)/400+')');}
   else bx.hidden=true;
   $('hudL').classList.toggle('combat',!!tg);$('hud').classList.toggle('in-dialog',!!game.dialog);document.body.classList.toggle('map-open',!!cam.mapOpen);
   if(HUD.qUntil&&performance.now()>HUD.qUntil)questChip(false);
-  if(!cam.mapOpen)drawMinimap();
+  if(!cam.mapOpen){const t=performance.now();if(t-PERFX.mmT>=125){PERFX.mmT=t;drawMinimap();}}   // fix2: ~8 Hz
   if(touchDev)updateControls();
 }
-function hudAvoid(){const a=[];for(const id of['hudL','hudR']){const r=$(id).getBoundingClientRect();if(r.width)a.push(r);}return a;}
+function hudAvoid(){const t=performance.now();if(t-PERFX.avT<500)return PERFX.av;PERFX.avT=t;const a=[];for(const id of['hudL','hudR']){const r=$(id).getBoundingClientRect();if(r.width)a.push(r);}return PERFX.av=a;}   // fix2: was every frame
 function drawMinimap(){
   const cv=$('mmc'),P=game.player;if(!world.mapCanvas||!P)return;
-  const css=HUD.mm,dpr=Math.min(devicePixelRatio||1,3),px=Math.round(css*dpr);if(cv.width!==px){cv.width=px;cv.height=px;}
+  const css=HUD.mm,dpr=Math.min(devicePixelRatio||1,2),px=Math.round(css*dpr);if(cv.width!==px){cv.width=px;cv.height=px;}
   const c=cv.getContext('2d'),R0=css/2,ppw=R0/35,th=cam.yaw+PI,ob=objective();
   c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,css,css);c.save();c.translate(R0,R0);c.beginPath();c.arc(0,0,R0,0,TAU);c.clip();c.fillStyle='#143a5c';c.fillRect(-R0,-R0,css,css);
   c.save();c.rotate(th);const sc=ppw*(2*world.mapHW/256),u=(P.x+world.mapHW)/(2*world.mapHW)*256,v=(P.z+world.mapHW)/(2*world.mapHW)*256;c.scale(sc,sc);c.drawImage(world.mapCanvas,-u,-v);c.restore();
@@ -3437,8 +3447,8 @@ function updateControls(){
     if(showIt){u.querySelector('.tl').textContent=verb;u.setAttribute('aria-label',verb.charAt(0)+verb.slice(1).toLowerCase());}
     if(showIt&&showDo){ctlPlace(u,CTL.S.ctxA);ctlPlace(d,CTL.S.ctxB);}else if(showIt)ctlPlace(u,CTL.S.ctx1);else if(showDo)ctlPlace(d,CTL.S.ctx1);
   }
-  const pot=$('tPot');$('tPotN').textContent=game.pots;pot.classList.toggle('off',game.pots<=0);pot.classList.toggle('low',game.pots>0&&!P.dead&&P.hp/P.maxhp<.25);
-  const sp=$('tSpec');sp.style.setProperty('--p',Math.round(clamp(P.mp,0,100)));sp.classList.toggle('ready',P.mp>=100);
+  const pot=$('tPot');dw($('tPotN'),game.pots);pot.classList.toggle('off',game.pots<=0);pot.classList.toggle('low',game.pots>0&&!P.dead&&P.hp/P.maxhp<.25);
+  const sp=$('tSpec'),spP=String(Math.round(clamp(P.mp,0,100)));if(sp._p!==spP){sp._p=spP;sp.style.setProperty('--p',spP);}sp.classList.toggle('ready',P.mp>=100);
   $('tLock').classList.toggle('on',!!(game.lock&&game.lock.state!=='dead'));
 }
 
@@ -3456,8 +3466,11 @@ function regionOf(x,z){
   return'Emberfall Meadows';
 }
 function drawHUD(){
-  const dpr=hudc.width/W;hx.setTransform(dpr,0,0,dpr,0,0);hx.clearRect(0,0,W,H);
+  const dpr=hudc.width/W;hx.setTransform(dpr,0,0,dpr,0,0);if(HUD.dirty!==false){hx.clearRect(0,0,W,H);HUD.dirty=false;}
   if(game.st!=='play'&&game.st!=='pause')return;
+  // fix2: nothing over the world (no bars, numbers, bark or lock): leave the cleared canvas alone
+  if(!game.pops.length&&!(game.bark&&!game.dialog)&&!(game.lock&&game.lock.state!=='dead')&&!game.enemies.some(e=>e.state!=='dead'&&!e.boss&&(e.aggroT>0||e.state==='chase'||e.state==='windup'||e.hp<e.maxhp)))return;
+  HUD.dirty=true;
   const P=game.player,AV=cam.mapOpen?[]:hudAvoid(),inAv=(x,y)=>AV.some(r=>x>r.left-6&&x<r.right+6&&y>r.top-6&&y<r.bottom+6);
   // enemy bars
   hx.textAlign='center';
@@ -3476,14 +3489,15 @@ function drawHUD(){
 game.hurtPlayer=hurtPlayer;
 let fireT=0,smokeT=0,flyT=0,lastRegion='';
 function step(dt){
-  game.time+=dt;game.playT+=dt;updateWind(game.time);game.T=(game.T+dt/540)%1;game.saveT+=dt;
+  PERFX.dt=dt;game.time+=dt;game.playT+=dt;updateWind(game.time);game.T=(game.T+dt/540)%1;game.saveT+=dt;
   Input.poll(dt);
   const P=game.player;
   updatePlayer(dt);
   music.combat=0;
-  for(const e of game.enemies.slice()){updateEnemy(e,dt);if(e.c&&e.c.root)e.c.root.visible=(Math.abs(e.x-P.x)<75&&Math.abs(e.z-P.z)<75)||e.boss&&e.awake;if(e.state==='chase'||e.state==='windup'||e.state==='attack')music.combat=1;}
+  const _en=PERFX.en;_en.length=0;for(const e of game.enemies)_en.push(e);   // fix2: a reused copy (updateEnemy can remove one)
+  for(const e of _en){updateEnemy(e,dt);if(e.c&&e.c.root)e.c.root.visible=(Math.abs(e.x-P.x)<75&&Math.abs(e.z-P.z)<75)||e.boss&&e.awake;if(e.state==='chase'||e.state==='windup'||e.state==='attack')music.combat=1;}
   if(game.boss&&game.boss.state!=='dead')music.combat=1;else if(music.boss){music.boss=false;}
-  for(const q of game.pops)q.t+=dt;game.pops=game.pops.filter(q=>q.t<1.1);
+  {let j=0;for(const q of game.pops){q.t+=dt;if(q.t<1.1)game.pops[j++]=q;}game.pops.length=j;}   // fix2: in place
   updateProjs(dt,game);updatePickups(dt);updateParticles(dt);updateNPCs(dt);updateDialog(dt);
   for(const f of world.animated)f(dt);
   // world dynamics
@@ -3509,13 +3523,15 @@ function step(dt){
   const pr=$('prompt'),it=(!game.dialog&&!P.dead)?(P.mount?{prompt:'Dismount'}:nearestInteract()):null,ca=ctxAction();
   const ph=(it||ca)?promptHTML(it,ca):'';if(ph!==HUD.prompt){HUD.prompt=ph;pr.innerHTML=ph;}pr.hidden=!ph||(touchDev&&!!P.mount);HUD.it=it;HUD.ca=ca;
   // bars
-  $('hpb').firstElementChild.style.transform='scaleX('+clamp(P.hp/P.maxhp,0,1)+')';$('hpb').lastElementChild.textContent=Math.ceil(P.hp)+' / '+P.maxhp;
-  $('stb').firstElementChild.style.transform='scaleX('+clamp(P.st/P.maxst,0,1)+')';
-  $('mpb').firstElementChild.style.transform='scaleX('+clamp(P.mp/100,0,1)+')';$('mpb').style.boxShadow=P.mp>=100?'0 0 10px #58b7ff':'none';
-  $('xpb').firstElementChild.style.transform='scaleX('+clamp(game.xp/xpNeed(),0,1)+')';
-  $('lv').textContent=game.lvl;$('coins').textContent=game.coins;$('pots').textContent=game.pots;
-  const hrs=((game.T*24+6)%24),hh=Math.floor(hrs),mm=Math.floor((hrs-hh)*60);$('clock').textContent=(light.sunElev>0?'☀ ':'☾ ')+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');
-  game.hurtV=Math.max(0,game.hurtV-dt*2.2);const low=P.hp/P.maxhp<.3&&!P.dead?(.25+Math.sin(game.time*5)*.12):0;$('hurt').style.opacity=Math.max(game.hurtV*.9,low);
+  // fix2: every HUD write goes through dw/ds, which touch the page only when the value changed
+  const bar=k=>'scaleX('+Math.round(clamp(k,0,1)*400)/400+')';
+  ds($('hpb').firstElementChild,'transform',bar(P.hp/P.maxhp));dw($('hpb').lastElementChild,Math.ceil(P.hp)+' / '+P.maxhp);
+  ds($('stb').firstElementChild,'transform',bar(P.st/P.maxst));
+  ds($('mpb').firstElementChild,'transform',bar(P.mp/100));ds($('mpb'),'boxShadow',P.mp>=100?'0 0 10px #58b7ff':'none');
+  ds($('xpb').firstElementChild,'transform',bar(game.xp/xpNeed()));
+  dw($('lv'),game.lvl);dw($('coins'),game.coins);dw($('pots'),game.pots);
+  const hrs=((game.T*24+6)%24),hh=Math.floor(hrs),mm=Math.floor((hrs-hh)*60);dw($('clock'),(light.sunElev>0?'☀ ':'☾ ')+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0'));
+  game.hurtV=Math.max(0,game.hurtV-dt*2.2);const low=P.hp/P.maxhp<.3&&!P.dead?(.25+Math.sin(game.time*5)*.12):0;ds($('hurt'),'opacity',String(Math.round(Math.max(game.hurtV*.9,low)*50)/50));
   hudUpdate();
   updateAmbientAudio(dt);
 }
@@ -3535,8 +3551,15 @@ function titleCam(dt){
 function renderFrame(){
   waterU.time.value=game.time;waterMesh.position.set(Math.round(camera.position.x/10)*10,0,Math.round(camera.position.z/10)*10);
   const wu=waterMesh.material.uniforms;wu.fogDen.value=scene.fog.density;wu.dayA.value=light.dayAmt;wu.night.value=light.night;
-  renderer.render(scene,camera);drawHUD();
+  if((PERFX.n=(PERFX.n+1)%2)===0)renderer.shadowMap.needsUpdate=true;
+  renderer.render(scene,camera);
+  const t=performance.now();if(t-PERFX.hudT>=66){PERFX.hudT=t;drawHUD();}   // fix2: the 2D overlay ~15 times a second
+  fpsTick(t);
 }
+/* fix2: the ?fps=1 readout (top left, twice a second) */
+function fpsTick(t){if(!PERFX.fpsOn)return;
+  if(!PERFX.fEl){const d=document.createElement('div');d.style.cssText='position:fixed;left:calc(var(--sal,0px) + 4px);top:calc(var(--sat,0px) + 2px);z-index:99;font:11px/1.2 monospace;color:#aaa;text-shadow:0 1px 1px #000;pointer-events:none';document.body.appendChild(d);PERFX.fEl=d;PERFX.fT=t;}
+  PERFX.fN++;if(t-PERFX.fT>=500){PERFX.fEl.textContent=Math.round(PERFX.fN*1000/(t-PERFX.fT))+' fps · '+((t-PERFX.fT)/PERFX.fN).toFixed(1)+' ms';PERFX.fT=t;PERFX.fN=0;}}
 let lastT=performance.now();
 function frame(now){
   const ms=now-lastT,raw=clamp(ms/1000,0,.05);lastT=now;

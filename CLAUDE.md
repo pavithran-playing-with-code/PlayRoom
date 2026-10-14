@@ -177,9 +177,7 @@ There is no test runner. What works:
   send `tg:act` / `tg:me`, draw `tg:tick`, and never post a score.
   `scripts/check-together-world.js` tests the server side with a fake
   database; `check-kitchen.mjs` tests the rules. A rules module can say
-  SHARED (one world for the whole room, scored per side); none does now
-  (Bomb Blast did, and was removed — its game_types row is switched off,
-  `sql/remove-bomb-blast.sql`).
+  SHARED (one world for the whole room, scored per side); none does now.
 - **Play as a team** (rooms.mode `coop`; the lobby's checkbox, once "Play
   together") starts ticked only for games with `coopDefault` in the
   registry (Kitchen Rush, Station 13, Sunshard Jump, Emberfall). In a team

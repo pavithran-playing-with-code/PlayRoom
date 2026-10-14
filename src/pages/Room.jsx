@@ -646,7 +646,7 @@ function Room() {
           <button className="press p-white sm" onClick={exitToLobby}>← Leave</button>
           <span className="row" style={{ gap: 8, flexWrap: "wrap" }}>
             <span className="chip c-sun"><GameIcon icon={room?.game_icon} /> {room?.game_name || "Loading…"}</span>
-            {mins ? <span className="chip c-sky">⏱️ {mins} min match</span> : duration === 0 && <span className="chip c-sky">♾️ No time limit</span>}
+            {mins ? <span className="chip c-sky">⏱️ {mins} min match</span> : duration === 0 && !gm?.endless && <span className="chip c-sky">♾️ No time limit</span>}
             {isSolo && <span className="chip c-coral">🧍 Solo run</span>}
             {room?.mode === "coop" && <span className="chip c-grape">🤝 Together</span>}
           </span>
@@ -658,9 +658,10 @@ function Room() {
 
         {/* The host can still change the match after making the room: its length,
             and whether it's played together. Everyone sees the chips above change. */}
-        {isHost && status === "waiting" && !isSolo && (
+        {isHost && status === "waiting" && !isSolo && (!gm?.endless || canTogether) && (
           <div className="pop room-settings">
-            <div className="rs-row">
+            {/* an endless game (Station 13, Sunshard Jump, Emberfall) has no length to change */}
+            {!gm?.endless && <div className="rs-row">
               <span className="rs-label">⏱️ Match length</span>
               <span className="rs-opts">
                 {[[120, "2 min"], [300, "5 min"], [0, "♾️"]].map(([sec, label]) => (
@@ -669,7 +670,7 @@ function Room() {
                     disabled={savingSettings} onClick={() => duration !== sec && changeSettings({ duration_seconds: sec })}>{label}</button>
                 ))}
               </span>
-            </div>
+            </div>}
             {canTogether && room?.mode !== "teams" && (
               <label className="rs-row rs-together">
                 <input type="checkbox" checked={room?.mode === "coop"} disabled={savingSettings}

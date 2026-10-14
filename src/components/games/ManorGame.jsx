@@ -247,7 +247,7 @@ export default function ManorGame({ roomCode, currentUser, spectatorWatching = n
       {h && !over && (
         <div className="s13-obj s13x-top">
           <div className="hmx-top">
-            <span className="hmx-clock">{clock}</span>
+            {!h.endless && <span className="hmx-clock">{clock}</span>}
             {h.side && (
               <span className="hmx-mine" style={{ "--c": h.side.color }}>
                 {Array.from({ length: h.side.need }).map((_, i) => <i key={i} className={i < h.side.got ? "got" : ""} />)}

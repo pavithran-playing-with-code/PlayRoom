@@ -33,6 +33,8 @@ import Emberfall from "./Emberfall";
 //   coopMax          the game can be played together, on one side, by up
 //                    to this many (the lobby offers it; rooms.mode 'coop')
 //   defaultDuration  the clock the lobby picks when you choose this game
+//   endless          no clock at all: always unlimited, and the lobby and the
+//                    waiting room don't offer a match length
 //   ownsSpectating   the game draws its own "who to watch" picker, so the
 //                    room's is not laid over the top of it
 //   coopDefault      "Play as a team" starts ticked for this game (the games
@@ -202,7 +204,7 @@ export const GAMES = [
     slug: "manor", name: "Station 13", icon: "🏥",
     blurb: "A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.",
     minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--grape)",
-    coopMax: 4, coopDefault: true, defaultDuration: 300, ownsSpectating: true,
+    coopMax: 4, coopDefault: true, defaultDuration: 0, endless: true, ownsSpectating: true,
     coopLabel: "one fuse count — out through the elevator together",
     coopNote: "You're all on one side: any of you can take a fuse for everyone. Split up, keep to the light, hide in lockers — a caught friend wakes back in the Main Hall.",
     Component: ManorGame,
@@ -211,7 +213,7 @@ export const GAMES = [
     slug: "sunshard", name: "Sunshard Jump", icon: "🏝️",
     blurb: "A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.",
     minPlayers: 1, maxPlayers: 8, tag: "Adventure", col: "var(--sky)",
-    coopMax: 4, coopDefault: true, defaultDuration: 300,
+    coopMax: 4, coopDefault: true, defaultDuration: 0, endless: true,
     coopLabel: "one shard count — light the temple together",
     coopNote: "One shard count for all of you: any of you can take a Sunshard for everyone, and when one of you lights the temple, you all go on to the next island. You're chained together — you can't get too far apart.",
     Component: SunshardIslands,
@@ -219,10 +221,8 @@ export const GAMES = [
   {
     slug: "emberfall", name: "Emberfall", icon: "🔥",
     blurb: "A 3D island adventure: pick a hero, beat three guardians for their Ember Shards, then the Cinder Colossus.",
-    minPlayers: 1, maxPlayers: 2, tag: "Adventure", col: "var(--coral)",
-    coopMax: 2, coopDefault: true, defaultDuration: 0,
-    coopLabel: "one team — your points add up",
-    coopNote: "You're one team and your points add up. For now each of you explores your own island (playing on one island together is coming back).",
+    minPlayers: 1, maxPlayers: 1, tag: "Adventure", col: "var(--coral)",   // solo only, for now
+    defaultDuration: 0, endless: true,
     Component: Emberfall,
   },
 ];

@@ -180,8 +180,11 @@ There is no test runner. What works:
   SHARED (one world for the whole room, scored per side); none does now.
 - **Play as a team** (rooms.mode `coop`; the lobby's checkbox, once "Play
   together") starts ticked only for games with `coopDefault` in the
-  registry (Kitchen Rush, Station 13, Sunshard Jump, Emberfall). In a team
+  registry (Kitchen Rush, Station 13, Sunshard Jump). In a team
   game the top shows the team's points only, never each player's.
+- **Endless games** (`endless` in the registry: Station 13, Sunshard Jump,
+  Emberfall) have no clock: always unlimited, no length picker in the lobby
+  or the waiting room, and no ∞ drawn in the game.
 - **Speedway is live-shared**: a top-down drift racer (`driftSim.js`, the
   "Turbo Drift" look). Each phone sends its car over the socket (`race:pos`:
   position, angle, velocity, drift and boost, relayed by `config/socket.js`);
@@ -224,7 +227,8 @@ There is no test runner. What works:
   on to the next island (`seed-1`, `seed-2`…, `rd` in `isl:pos`); islands'
   points add up under the cap.
   `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
-- **Emberfall** (slug `emberfall`, 1–2 players) is a finished single page,
+- **Emberfall** (slug `emberfall`, solo only for now — the registry offers
+  one seat until co-op is ported) is a finished single page,
   `public/emberfall/index.html` (the mobile rebuild, worked on outside this
   repo as `emberfall-p*.html`; three.js from the CDN, falling back to the
   `three.min.js` beside it), run in a frame by `Emberfall.jsx`, which only

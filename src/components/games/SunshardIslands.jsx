@@ -502,7 +502,7 @@ export default function SunshardIslands(props) {
         gameName="Sunshard Jump" badge="🏝️ SUNSHARD JUMP"
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={isSpectator ? [{ label: "Score", value: Number(spectatorWatching?.score ?? 0).toLocaleString() }] : []}
-        timer={{ value: eng.timeLeft, max: durationSeconds }}
+        timer={durationSeconds ? { value: eng.timeLeft, max: durationSeconds } : null}
         opponents={Object.values(eng.opponents)}
         teams={eng.teams}
         onQuit={eng.endMatch}

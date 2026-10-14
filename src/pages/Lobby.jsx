@@ -198,26 +198,32 @@ export default function Lobby() {
               <p className="muted" style={{ fontSize: ".82rem", margin: "-12px 0 18px" }}>Games you can play as a team.</p>
             )}
 
-            <div className={label} style={stepLabel}>2 · Clock</div>
-            <div className="durrow">
-              {DURATIONS.map((d) => (
-                <button key={d.s} className="press dur p-white" aria-pressed={duration === d.s}
-                  aria-label={d.name} title={d.name} onClick={() => setDuration(d.s)}>
-                  {d.label}
-                </button>
-              ))}
-            </div>
+            {/* an endless game (Station 13, Sunshard Jump, Emberfall) has no clock to pick */}
+            {!selected.endless && (
+              <>
+                <div className={label} style={stepLabel}>2 · Clock</div>
+                <div className="durrow">
+                  {DURATIONS.map((d) => (
+                    <button key={d.s} className="press dur p-white" aria-pressed={duration === d.s}
+                      aria-label={d.name} title={d.name} onClick={() => setDuration(d.s)}>
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
 
-            <div className={label} style={stepLabel}>3 · Seats</div>
+            <div className={label} style={stepLabel}>{selected.endless ? "2" : "3"} · Seats</div>
             {/* Solo and 2 are the usual picks, so they're one tap. Past that,
                 the crew grows a face at a time up to 8 — eight numbered
                 buttons in a row was a lot of furniture for a rare choice. */}
             <div className="seatpick" id="seats">
               <button className="press seat p-white" aria-pressed={maxPlayers === 1}
                 onClick={() => setMaxPlayers(1)}>🧍 Solo</button>
-              <button className="press seat p-white" aria-pressed={maxPlayers === 2}
-                onClick={() => setMaxPlayers(2)}>👥 2</button>
-              {maxPlayers < 3 ? (
+              {/* a solo-only game (Emberfall, for now) offers just Solo */}
+              {selected.maxPlayers >= 2 && <button className="press seat p-white" aria-pressed={maxPlayers === 2}
+                onClick={() => setMaxPlayers(2)}>👥 2</button>}
+              {selected.maxPlayers < 3 ? null : maxPlayers < 3 ? (
                 <button className="press seat p-white" onClick={() => setMaxPlayers(3)}
                   aria-label="More players">➕ More</button>
               ) : (
@@ -241,7 +247,8 @@ export default function Lobby() {
             </div>
             <div className="muted seathint">
               {isSolo
-                ? "🧍 Solo — just you and the clock."
+                ? (selected.maxPlayers === 1 ? "🧍 Solo — this game is played alone for now."
+                  : selected.endless ? "🧍 Solo — no clock, play as long as you like." : "🧍 Solo — just you and the clock.")
                 : `👥 ${maxPlayers} players — everyone has to join before the game can start.`}
             </div>
 
@@ -309,7 +316,7 @@ export default function Lobby() {
             {/* What you're about to create, spelled out: game, clock, seats. */}
             <div className="lobby-sum" aria-live="polite">
               <span className="chip" style={{ background: selected.col }}><GameIcon icon={selected.icon} /> {selected.name}</span>
-              <span className="chip c-sky">{duration === 0 ? "♾️ No time limit" : `⏱️ ${length} match`}</span>
+              {!selected.endless && <span className="chip c-sky">{duration === 0 ? "♾️ No time limit" : `⏱️ ${length} match`}</span>}
               <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
               {teams && <span className="chip c-grape">⚔️ Teams</span>}
               {coop && <span className="chip c-grape">🤝 Team</span>}
@@ -317,8 +324,8 @@ export default function Lobby() {
             </div>
             <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
               {creating ? "Creating…"
-                : isSolo ? `🎯 Start solo · ${length}`
-                : `🚀 Create room · ${length}`}
+                : isSolo ? (selected.endless ? "🎯 Start solo" : `🎯 Start solo · ${length}`)
+                : selected.endless ? "🚀 Create room" : `🚀 Create room · ${length}`}
             </button>
           </div>
 

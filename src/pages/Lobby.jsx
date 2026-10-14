@@ -83,11 +83,11 @@ export default function Lobby() {
     if (selected.defaultDuration != null) setDuration(selected.defaultDuration);
   }, [selected.slug, selected.defaultDuration]);
 
-  // A game you can play together starts out together: pick it and the box is
-  // ticked (untick it to play against each other).
+  // Play as a team starts ticked only for the games made for it (coopDefault:
+  // Kitchen Rush, Station 13, Sunshard Jump, Emberfall); for the rest you tick it.
   useEffect(() => {
-    if (selected.coopMax > 0) { setCoopMode(true); setTeamMode(false); }
-  }, [selected.slug, selected.coopMax]);
+    if (selected.coopDefault) { setCoopMode(true); setTeamMode(false); } else setCoopMode(false);
+  }, [selected.slug, selected.coopDefault]);
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -181,7 +181,7 @@ export default function Lobby() {
                   setOnlyTogether(on);
                   if (on && !(selected.coopMax > 0)) setGame(GAMES.find((g) => g.coopMax > 0).slug);
                 }}>
-                🤝 Together{onlyTogether ? " ✓" : ""}
+                🤝 Play as a team{onlyTogether ? " ✓" : ""}
               </button>
             </div>
             <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 12, marginBottom: 22 }}>
@@ -195,7 +195,7 @@ export default function Lobby() {
               ))}
             </div>
             {onlyTogether && (
-              <p className="muted" style={{ fontSize: ".82rem", margin: "-12px 0 18px" }}>Games you can play on one side with friends.</p>
+              <p className="muted" style={{ fontSize: ".82rem", margin: "-12px 0 18px" }}>Games you can play as a team.</p>
             )}
 
             <div className={label} style={stepLabel}>2 · Clock</div>
@@ -278,7 +278,7 @@ export default function Lobby() {
                       onChange={(e) => { setCoopMode(e.target.checked); if (e.target.checked) setTeamMode(false); }}
                       style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
                     <span>
-                      🤝 Play together — {selected.coopLabel || "one side, against the game"}
+                      🤝 Play as a team
                       {!canCoop && <span className="muted"> · 2 to {coopMax} players</span>}
                     </span>
                   </label>
@@ -312,7 +312,7 @@ export default function Lobby() {
               <span className="chip c-sky">{duration === 0 ? "♾️ No time limit" : `⏱️ ${length} match`}</span>
               <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
               {teams && <span className="chip c-grape">⚔️ Teams</span>}
-              {coop && <span className="chip c-grape">🤝 Together</span>}
+              {coop && <span className="chip c-grape">🤝 Team</span>}
               {game === "piano" && <span className="chip c-sun">{SONGS[song].icon} {SONGS[song].name}</span>}
             </div>
             <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>

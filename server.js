@@ -243,14 +243,14 @@ async function sweepStaleRooms() {
     // An unlimited match ends when its players leave; one whose players
     // vanished (a restart forgot who had left) ends once nothing has
     // happened in it for 20 minutes, and none runs past six hours. The
-    // server-run games (Station 13, Kitchen Rush, Bomb Blast) write no
+    // server-run games (Station 13, Kitchen Rush) write no
     // activity while they run, so only the six hours applies to them.
     const [u] = await db.execute(
       `UPDATE rooms r JOIN game_types gt ON gt.id = r.game_type_id
           SET r.status = 'finished', r.finished_at = NOW()
         WHERE r.status = 'in_progress' AND r.started_at IS NOT NULL AND r.duration_seconds = 0
           AND (r.started_at < NOW() - INTERVAL 6 HOUR
-               OR (gt.slug NOT IN ('manor', 'kitchen', 'bomb')
+               OR (gt.slug NOT IN ('manor', 'kitchen')
                    AND COALESCE(r.last_activity_at, r.started_at) < NOW() - INTERVAL 20 MINUTE))`
     );
     p.affectedRows += u.affectedRows;
@@ -296,7 +296,7 @@ const server = http.createServer(app);
 const io = initSocket(server);
 app.set("io", io);
 // Hollow Manor's shared houses and their ghosts run here, on the same socket,
-// and so do the kitchens, bombs and castles of the together games.
+// and so do the kitchens of the together games.
 require("./config/manorWorld").attach(io);
 require("./config/togetherWorld").attach(io);
 // Memory, Mahjong, Number Rush and Pipes played together: one board, the
@@ -309,7 +309,7 @@ require("./config/calls").attach(io);
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Every game the app offers needs its row in game_types, or creating a room for
 // it fails with "Game type not found". Say so loudly at startup.
-const APP_GAMES = ["mahjong", "memory", "speedmath", "reaction", "wordrush", "arrows", "dino", "numbers", "colors", "pipes", "flappy", "slide", "blocks", "racer", "storm", "maze", "typing", "runner", "speedway", "piano", "kitchen", "bomb", "manor", "sunshard", "emberfall"];
+const APP_GAMES = ["mahjong", "memory", "speedmath", "reaction", "wordrush", "arrows", "dino", "numbers", "colors", "pipes", "flappy", "slide", "blocks", "racer", "storm", "maze", "typing", "runner", "speedway", "piano", "kitchen", "manor", "sunshard", "emberfall"];
 async function checkGameTypes() {
   try {
     const [rows] = await db.execute("SELECT slug FROM game_types WHERE is_active = 1");

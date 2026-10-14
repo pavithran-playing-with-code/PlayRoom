@@ -274,7 +274,7 @@ export default function RailRunner(props) {
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={[]}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
-        opponents={coop ? T.strip(scores, (n) => `${n.toLocaleString()} pts`) : oppList}
+        opponents={coop ? [] : oppList}
         teams={eng.teams}
         onQuit={eng.endMatch}
         bare

@@ -151,12 +151,6 @@ export const HOW_TO = {
     steps: ["Take food from the crates. Chop 🥬🍅🧀 on a 🔪 board.", "Grill 🥩 on a stove — take it off before it burns.", "Put everything on a plate and hand it in at SERVE.", "Walk with the stick; tap a counter or press Use."],
     tip: "Together, split the jobs: one chops, one cooks.",
   },
-  bomb: {
-    name: "Bomb Blast",
-    goal: "Be the last bomber standing.",
-    steps: ["Move with the stick. 💣 drops a bomb.", "Blasts break bricks and knock out bombers — including you!", "Grab power-ups: 💣 more bombs, 🔥 bigger blasts, 👟 speed."],
-    tip: "Drop a bomb, then get round a corner before it goes off.",
-  },
   manor: {
     name: "Station 13",
     goal: "Find 4 fuses, bring the power back, and get out through the elevator.",

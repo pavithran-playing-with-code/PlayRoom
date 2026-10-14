@@ -675,7 +675,7 @@ function Room() {
                 <input type="checkbox" checked={room?.mode === "coop"} disabled={savingSettings}
                   onChange={(e) => changeSettings({ mode: e.target.checked ? "coop" : "free" })}
                   style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
-                <span>🤝 Play together <span className="muted">— {gm?.coopLabel || "one side, against the game"}</span></span>
+                <span>🤝 Play as a team</span>
               </label>
             )}
           </div>

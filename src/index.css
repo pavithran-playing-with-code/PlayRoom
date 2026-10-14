@@ -918,37 +918,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .press.kr-use{min-width:130px;min-height:76px;font-size:1.3rem;--lift:5px;touch-action:none}
 .kr-watch{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 
-/* ── Bomb Blast (.bb-) ── */
-.bb-pad{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
-  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.bb-canvas{border:3px solid var(--ink);border-radius:14px;box-shadow:0 5px 0 var(--ink);touch-action:none;image-rendering:auto}
-.bb-controls{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;width:100%;max-width:440px;padding:0 6px}
-.gameshell.land .bb-controls{max-width:none}
-.gameshell.land .bb-mid{align-self:flex-start;color:#fff;text-shadow:0 1px 3px #000}
-.bb-stick{position:relative;width:112px;height:112px;border-radius:50%;border:3px solid var(--ink);background:var(--paper2);
-  box-shadow:inset 0 4px 0 rgba(46,33,64,.12);touch-action:none;flex:none}
-.bb-knob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;
-  background:var(--coral);border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink);pointer-events:none}
-.bb-mid{flex:1;text-align:center;font-size:.85rem;font-weight:700}
-.press.bb-bomb{width:96px;height:96px;border-radius:50%;font-size:2.6rem;background:var(--sun);--lift:5px;touch-action:none;flex:none}
-.press.bb-bomb:disabled{opacity:.4}
-.bb-banner{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);padding:14px 22px;text-align:center;
-  font:800 1.3rem Fredoka,sans-serif;background:var(--card);white-space:nowrap;animation:drop .2s cubic-bezier(.34,1.7,.64,1)}
-.bb-banner small{display:block;font:700 .85rem Nunito,sans-serif;opacity:.7;margin-top:4px}
-
-/* the computer's level, picked before a game against it */
-.bb-level{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%,380px);padding:18px 16px;text-align:center;
-  background:var(--card);animation:drop .2s cubic-bezier(.34,1.7,.64,1)}
-.bb-level h3{font-size:1.25rem;margin-bottom:12px}
-.bb-levels{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
-.press.bb-lvl{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;--lift:4px}
-.bb-lvl b{font-size:1rem}
-.bb-lvl small{font-size:.68rem;opacity:.8;line-height:1.2}
-.bb-face{font-size:1.8rem}
-.press.lvl-easy{background:var(--lime)}
-.press.lvl-medium{background:var(--sun)}
-.press.lvl-hard{background:var(--coral)}
-
 /* ── Maze Runner ──────────────────────────────────────────────────────────────
    Cells are absolutely positioned so their walls are real borders that meet
    exactly; a gapped grid would leave hairlines you could see through. */

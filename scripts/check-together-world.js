@@ -19,7 +19,7 @@ const fakeDb = {
   execute: async (sql, args) => {
     if (/^\s*SELECT rp\.is_spectator/.test(sql)) return [[{ is_spectator: spectators.has(Number(args[1])) ? 1 : 0 }]];
     // a room being started, for the "two hellos at once" check
-    if (/FROM rooms r JOIN game_types/.test(sql) && args[0] === "RACE01") { await tick(); return [[{ id: 900, room_code: "RACE01", status: "in_progress", seed: 77, mode: "free", duration_seconds: 120, elapsed_ms: 0, game_slug: "bomb" }]]; }
+    if (/FROM rooms r JOIN game_types/.test(sql) && args[0] === "RACE01") { await tick(); return [[{ id: 900, room_code: "RACE01", status: "in_progress", seed: 77, mode: "free", duration_seconds: 120, elapsed_ms: 0, game_slug: "kitchen" }]]; }
     if (/FROM room_players rp JOIN users/.test(sql) && args[0] === 900) { await tick(); return [[{ user_id: 31, team: null, game_state: null, username: "p31", avatar: "🙂" }]]; }
     writes.push({ sql: sql.replace(/\s+/g, " ").trim(), args });
     return [{ affectedRows: 1 }];

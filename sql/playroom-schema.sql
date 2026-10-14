@@ -254,17 +254,16 @@ INSERT INTO game_types (slug, name, description, min_players, max_players, icon,
   ('trivia', 'Trivia Quiz', 'Answer questions and outsmart your opponents.', 2, 4, CONVERT(UNHEX('F09FA7A0') USING utf8mb4), 0, 200),
   ('piano', 'Piano Tiles', 'Tap the black tiles, never the white. Every tile is the next note of the song.', 1, 8, CONVERT(UNHEX('F09F8EB9') USING utf8mb4), 1, 210),
   ('kitchen', 'Kitchen Rush', 'Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.', 1, 8, CONVERT(UNHEX('F09F8DB3') USING utf8mb4), 1, 220),
-  ('bomb', 'Bomb Blast', 'Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.', 1, 4, CONVERT(UNHEX('F09F92A3') USING utf8mb4), 1, 230),
-  ('manor', 'Station 13', 'A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.', 1, 8, CONVERT(UNHEX('F09F8FA5') USING utf8mb4), 1, 240),
-  ('sunshard', 'Sunshard Jump', 'A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.', 1, 8, CONVERT(UNHEX('F09F8F9DEFB88F') USING utf8mb4), 1, 250),
-  ('emberfall', 'Emberfall', 'A 3D island adventure, alone or with a friend: beat three guardians for their Ember Shards, then the Cinder Colossus.', 1, 2, CONVERT(UNHEX('F09F94A5') USING utf8mb4), 1, 260)
+  ('manor', 'Station 13', 'A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.', 1, 8, CONVERT(UNHEX('F09F8FA5') USING utf8mb4), 1, 230),
+  ('sunshard', 'Sunshard Jump', 'A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.', 1, 8, CONVERT(UNHEX('F09F8F9DEFB88F') USING utf8mb4), 1, 240),
+  ('emberfall', 'Emberfall', 'A 3D island adventure, alone or with a friend: beat three guardians for their Ember Shards, then the Cinder Colossus.', 1, 2, CONVERT(UNHEX('F09F94A5') USING utf8mb4), 1, 250)
 ON DUPLICATE KEY UPDATE
   name = VALUES(name), description = VALUES(description),
   min_players = VALUES(min_players), max_players = VALUES(max_players),
   icon = VALUES(icon), is_active = VALUES(is_active);
 
 -- ── Check it worked ──────────────────────────────────────────────────────────
--- Expect 10 tables and 25 playable games.
+-- Expect 10 tables and 24 playable games.
 SELECT COUNT(*) AS tables_created FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE();
 SELECT slug, name, icon, max_players, sort_order FROM game_types WHERE is_active = 1 ORDER BY sort_order, id;
 

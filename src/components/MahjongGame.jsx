@@ -325,7 +325,7 @@ export default function MahjongGame({
 
   const stats = coop
     ? [
-        { label: "Score", value: v.score.toLocaleString() },
+        { label: "Team", value: v.score.toLocaleString() },
         { label: "Pairs", value: `${v.pairs}/${TOTAL_PAIRS}` },
         { label: "Goal", value: v.boards >= GOAL.mahjong ? "✓" : `${v.boards}/${GOAL.mahjong}` },
       ]
@@ -348,7 +348,8 @@ export default function MahjongGame({
         isSpectator={isSpectator} spectatorName={coop ? "the team" : spectatorWatching?.username}
         stats={coop && isSpectator ? [stats[0], stats[stats.length - 1]] : stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
-        opponents={coop ? T.strip(v.by, (n) => plural(n, "pair")) : Object.values(eng.opponents)}
+        // a team plays as one: its points only, not each player's
+        opponents={coop ? [] : Object.values(eng.opponents)}
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}

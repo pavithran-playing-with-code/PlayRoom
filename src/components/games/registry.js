@@ -23,7 +23,6 @@ import ManorGame from "./ManorGame";
 import TypingRace from "./TypingRace";
 import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
-import BombBlast from "./BombBlast";
 import SunshardIslands from "./SunshardIslands";
 import Emberfall from "./Emberfall";
 
@@ -36,8 +35,10 @@ import Emberfall from "./Emberfall";
 //   defaultDuration  the clock the lobby picks when you choose this game
 //   ownsSpectating   the game draws its own "who to watch" picker, so the
 //                    room's is not laid over the top of it
-//   coopLabel        the lobby's "Play together — …" line for this game
-//   coopNote         what the waiting room says to a together room
+//   coopDefault      "Play as a team" starts ticked for this game (the games
+//                    made for it); otherwise the lobby starts it unticked
+//   coopLabel        what playing as a team means in this game (a short line)
+//   coopNote         what the waiting room says to a team room
 export const GAMES = [
   {
     slug: "mahjong", name: "Mahjong Solitaire", icon: "🀄",
@@ -192,25 +193,16 @@ export const GAMES = [
     slug: "kitchen", name: "Kitchen Rush", icon: "🍳",
     blurb: "Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.",
     minPlayers: 1, maxPlayers: 8, tag: "Together", col: "var(--peach)",
-    coopMax: 4, defaultDuration: 300, ownsSpectating: true,
+    coopMax: 4, coopDefault: true, defaultDuration: 300, ownsSpectating: true,
     coopLabel: "one kitchen, every cook in it",
     coopNote: "One kitchen for all of you: split the work — chop, cook, plate up and serve.",
     Component: KitchenRush,
   },
   {
-    slug: "bomb", name: "Bomb Blast", icon: "💣",
-    blurb: "Drop bombs, blast the bricks, grab power-ups — last bomber standing wins the round.",
-    minPlayers: 1, maxPlayers: 4, tag: "Arcade", col: "var(--coral)",
-    coopMax: 4, defaultDuration: 300, ownsSpectating: true,
-    coopLabel: "all of you against two computer bombers",
-    coopNote: "You're all on one side, against two computer bombers. Your flames won't hurt each other.",
-    Component: BombBlast,
-  },
-  {
     slug: "manor", name: "Station 13", icon: "🏥",
     blurb: "A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.",
     minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--grape)",
-    coopMax: 4, defaultDuration: 300, ownsSpectating: true,
+    coopMax: 4, coopDefault: true, defaultDuration: 300, ownsSpectating: true,
     coopLabel: "one fuse count — out through the elevator together",
     coopNote: "You're all on one side: any of you can take a fuse for everyone. Split up, keep to the light, hide in lockers — a caught friend wakes back in the Main Hall.",
     Component: ManorGame,
@@ -219,18 +211,18 @@ export const GAMES = [
     slug: "sunshard", name: "Sunshard Jump", icon: "🏝️",
     blurb: "A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.",
     minPlayers: 1, maxPlayers: 8, tag: "Adventure", col: "var(--sky)",
-    coopMax: 4, defaultDuration: 300,
+    coopMax: 4, coopDefault: true, defaultDuration: 300,
     coopLabel: "one shard count — light the temple together",
-    coopNote: "One shard count for all of you: any of you can take a Sunshard for everyone, and when one of you gets home, you all win. You're tied tail to tail — wander off and you tug each other back.",
+    coopNote: "One shard count for all of you: any of you can take a Sunshard for everyone, and when one of you lights the temple, you all go on to the next island. You're chained together — you can't get too far apart.",
     Component: SunshardIslands,
   },
   {
     slug: "emberfall", name: "Emberfall", icon: "🔥",
     blurb: "A 3D island adventure: pick a hero, beat three guardians for their Ember Shards, then the Cinder Colossus.",
     minPlayers: 1, maxPlayers: 2, tag: "Adventure", col: "var(--coral)",
-    coopMax: 2, defaultDuration: 0,
-    coopLabel: "one island — the quest together",
-    coopNote: "One island for both of you: the same enemies, bosses and quest. Fight side by side, ride one horse together, and bring down the Cinder Colossus.",
+    coopMax: 2, coopDefault: true, defaultDuration: 0,
+    coopLabel: "one team — your points add up",
+    coopNote: "You're one team and your points add up. For now each of you explores your own island (playing on one island together is coming back).",
     Component: Emberfall,
   },
 ];

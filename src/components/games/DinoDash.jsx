@@ -387,8 +387,7 @@ export default function DinoDash(props) {
   for (const o of oppList) scores[o.user_id] = Number(o.score) || 0;
   const stats = coop
     ? [{ label: "Team", value: teamTotal.toLocaleString() },
-       { label: "Goal", value: teamTotal >= goal ? "✓" : goal.toLocaleString() },
-       { label: "You", value: eng.score.toLocaleString() }]
+       { label: "Goal", value: teamTotal >= goal ? "✓" : goal.toLocaleString() }]
     : isSpectator
     ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
     : [
@@ -419,7 +418,7 @@ export default function DinoDash(props) {
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
-        opponents={coop ? T.strip(scores, (n) => `${n.toLocaleString()} pts`) : oppList}
+        opponents={coop ? [] : oppList}
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}

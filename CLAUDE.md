@@ -170,14 +170,20 @@ There is no test runner. What works:
   until a friend grabs a seeded ❤️ (`runTogether.js`). The side wins on its
   points added up against `COOP_PACE` × seconds × players — keep the client
   and server paces equal (check-coop proves it).
-- **The together games run on the server** — Kitchen Rush and Bomb Blast:
+- **The together games run on the server** — Kitchen Rush:
   `config/togetherWorld.js` keeps a world per side (one each,
   per team, or one for a co-op room) on the rules in
   `src/components/together/<game>Core.mjs`, which the phones share. Phones
   send `tg:act` / `tg:me`, draw `tg:tick`, and never post a score.
   `scripts/check-together-world.js` tests the server side with a fake
-  database; `check-kitchen.mjs` and `check-bomb.mjs` test the rules. Bomb
-  Blast is SHARED: one arena for the whole room, scored per side.
+  database; `check-kitchen.mjs` tests the rules. A rules module can say
+  SHARED (one world for the whole room, scored per side); none does now
+  (Bomb Blast did, and was removed — its game_types row is switched off,
+  `sql/remove-bomb-blast.sql`).
+- **Play as a team** (rooms.mode `coop`; the lobby's checkbox, once "Play
+  together") starts ticked only for games with `coopDefault` in the
+  registry (Kitchen Rush, Station 13, Sunshard Jump, Emberfall). In a team
+  game the top shows the team's points only, never each player's.
 - **Speedway is live-shared**: a top-down drift racer (`driftSim.js`, the
   "Turbo Drift" look). Each phone sends its car over the socket (`race:pos`:
   position, angle, velocity, drift and boost, relayed by `config/socket.js`);

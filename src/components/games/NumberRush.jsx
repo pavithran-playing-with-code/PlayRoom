@@ -15,7 +15,7 @@ import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
 import useCoopBoard, { useShows } from "./useCoopBoard";
 import { numbersRules, GOAL } from "./coopBoards";
-import { team, plural } from "./coopTeam";
+import { team } from "./coopTeam";
 import { makeBoard, HIT, MISS, clearBonus } from "./numberBoard";
 
 const CLEARED_MS = 650;    // a cleared grid, before the next
@@ -137,14 +137,15 @@ export default function NumberRush(props) {
     }
   }
 
-  const oppList = coop ? T.strip(v.by, (n) => plural(n, "number")) : Object.values(eng.opponents);
+  // a team plays as one: its points only, not each player's
+  const oppList = coop ? [] : Object.values(eng.opponents);
   // Together: the side's count; who tapped each number done, by colour.
   const showNext = coop ? (cleared ? board.n + 1 : v.next) : next;
   const hits = coop ? (cleared ? cleared.hits : v.hits) : null;
   // Watching shows the watched player's numbers, not a blank of your own.
   const stats = coop
     ? [
-        { label: "Score", value: v.score.toLocaleString() },
+        { label: "Team", value: v.score.toLocaleString() },
         { label: "Next", value: showNext > board.n ? "✓" : showNext },
         { label: "Goal", value: v.boards >= GOAL.numbers ? "✓" : `${v.boards}/${GOAL.numbers}` },
       ]

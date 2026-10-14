@@ -257,7 +257,8 @@ export default function MazeRunner(props) {
 
   const oppList = Object.values(eng.opponents);
   const stats = [
-    { label: "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
+    // together every door counts for everyone, so this is the team's score
+    { label: coop ? "Team" : "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
     { label: coop ? "Doors" : "Mazes", value: solved },
     coop ? { label: "Key", value: hasKey ? "🗝️" : "—" } : { label: "Moves", value: moves },
   ];
@@ -290,7 +291,7 @@ export default function MazeRunner(props) {
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
-        opponents={oppList}
+        opponents={coop ? [] : oppList}
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}

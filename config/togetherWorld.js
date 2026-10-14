@@ -1,6 +1,6 @@
 // config/togetherWorld.js — the games you can play TOGETHER, run by the server.
 //
-// Kitchen Rush and Bomb Blast are played in worlds the server keeps: a
+// Kitchen Rush is played in worlds the server keeps: a
 // kitchen two friends cook in, an arena everyone is in at once. A world shared by several phones
 // can't live on any one of them, so — like Station 13
 // (config/manorWorld.js) — the server keeps it in memory and runs it.
@@ -13,13 +13,13 @@
 // <game>Core.mjs, shared with the phones), ticking a few times a second.
 // The server alone scores: every member of a side carries the side's score
 // in room_players, and pairs_matched is 1 once the side has reached its goal
-// (the stars, the bombs) — which is what decides a
+// (the kitchen's stars) — which is what decides a
 // match with only one side in it (config/matchResult.js).
 //
 // A match ends when the clock runs out, when every side's world is over, or
 // once everybody has left.
 //
-// A rules module that says SHARED (Bomb Blast) is one world for the whole room,
+// A rules module that says SHARED is one world for the whole room,
 // the sides playing against each other in it: every side gets the same
 // world, it steps once, and it's asked for each side's score by key.
 const path = require("path");
@@ -29,9 +29,9 @@ const { recordResults } = require("./recordResults");
 const { tellFriends, roomChannel, userChannel } = require("./socket");
 
 // slug -> the rules module
-const GAMES = { kitchen: "kitchenCore.mjs", bomb: "bombCore.mjs" };
+const GAMES = { kitchen: "kitchenCore.mjs" };
 // …and the ones a co-op room can be made for
-const COOP = ["kitchen", "bomb"];
+const COOP = ["kitchen"];
 const KEEP_AFTER_MS = 120000;          // a finished world lingers for late hellos
 const SAVE_MS = 1500;                  // scores reach the database at most this often
 
@@ -136,7 +136,7 @@ async function loadSeats(roomId) {
 // The world for a room, building it on first use. Null unless the room is a
 // running game of one of these. Two hellos at once (a phone's connect and its
 // screen mounting) share one build: two builds meant two worlds ticking into
-// the same room, and every bomber flickering between two different arenas.
+// the same room, and every player flickering between two different worlds.
 const building = new Map();
 function worldFor(code) {
   code = String(code).toUpperCase();
@@ -213,7 +213,7 @@ function broadcast(w, now) {
   for (const s of w.sides) {
     if (!views.has(s.inst)) views.set(s.inst, w.core.view(s.inst));
     io.to(sideChannel(w.code, s.key)).emit("tg:tick", { c: w.code, side: s.key, t, v: views.get(s.inst), sc });
-    // what only one player may see (the bomb, to its defuser), when it changes
+    // what only one player may see, when it changes
     if (w.core.secret) {
       const sec = w.core.secret(s.inst);
       const key = sec ? `${sec.to}|${JSON.stringify(sec.data)}` : "";

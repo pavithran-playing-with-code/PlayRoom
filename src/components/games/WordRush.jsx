@@ -229,10 +229,11 @@ export default function WordRush(props) {
   });
 
   const v = cb.view;
-  const oppList = coop ? T.strip(v.by, (n) => plural(n, "word")) : Object.values(eng.opponents);
+  // a team plays as one: its points only, not each player's
+  const oppList = coop ? [] : Object.values(eng.opponents);
   const specScore = spectatorWatching?.score ?? 0;
   const stats = coop
-    ? [{ label: "Score", value: v.score.toLocaleString() },
+    ? [{ label: "Team", value: v.score.toLocaleString() },
        { label: "Words", value: v.solved >= goal ? "✓" : `${v.solved}/${goal}` }]
     : isSpectator
     ? [{ label: "Score", value: Number(specScore).toLocaleString() }]

@@ -530,7 +530,7 @@ export default function SunshardIslands(props) {
                   <div className="ss-compass"><span className="ss-arrow" ref={arrowRef}><b /></span><span>{hud.compass}</span></div>
                 </div>
                 <div className="ss-stats">🏝️ {round + 1}<small>{fmt(hud.raceT)}{best ? ` · best ${fmt(best)}` : ""}</small></div>
-                {hud.rank.length > 1 && (
+                {hud.rank.length > 1 && !coop && (
                   <ol className="ss-rank" aria-label={coop ? "Your team" : "The race"}>
                     {hud.rank.map((r, i) => (
                       <li key={r.id} className={r.me ? "me" : ""}>

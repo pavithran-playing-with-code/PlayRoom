@@ -58,7 +58,7 @@ export default function useTogether({ roomCode, watchId = null, onInit, onTick, 
     const onReplyMsg = (r) => { if (r.code === roomCode) cb.current.onReply?.(r); };
     const onSnapMsg = (r) => { if (r.code === roomCode) cb.current.onSnap?.(r); };
     const onGoneMsg = (g) => { if (g.code === roomCode && !live.current) setGone(true); };
-    // only for this phone: e.g. the bomb, to whoever is defusing it
+    // only for this phone: something only this player may see
     const onSecretMsg = (m) => {
       const L = live.current;
       if (!L || m.c !== roomCode || m.side !== L.side) return;

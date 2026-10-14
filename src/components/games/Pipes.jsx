@@ -17,7 +17,7 @@ import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
 import useCoopBoard, { useShows } from "./useCoopBoard";
 import { pipesRules, GOAL } from "./coopBoards";
-import { team, plural } from "./coopTeam";
+import { team } from "./coopTeam";
 import { DIRS, makeBoard, currentMasks, flow, isSolved, openings } from "./pipesBoard";
 
 const INK = "#2E2140";
@@ -182,11 +182,12 @@ export default function Pipes(props) {
   const masks = currentMasks(shownBoard, shownTurns);
   const wetSet = flow(masks, shownBoard.cols, shownBoard.rows, shownBoard.source);
 
-  const oppList = coop ? T.strip(v.by, (n) => plural(n, "turn")) : Object.values(eng.opponents);
+  // a team plays as one: its points only, not each player's
+  const oppList = coop ? [] : Object.values(eng.opponents);
   const specScore = spectatorWatching?.score ?? 0;
   const stats = coop
     ? [
-        { label: "Score", value: v.score.toLocaleString() },
+        { label: "Team", value: v.score.toLocaleString() },
         { label: "Linked", value: `${wetSet.size}/${shownBoard.n}` },
         { label: "Goal", value: v.boards >= GOAL.pipes ? "✓" : `${v.boards}/${GOAL.pipes}` },
       ]

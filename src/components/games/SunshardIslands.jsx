@@ -29,6 +29,13 @@
 //   further apart than its length, and it never snaps; fall and you're put
 //   back beside the friend you're tied to.
 //
+// Watching (a spectator): the watched player's phone sends a small frame of
+// its run ~15 times a second while anyone watches (useSpecStream) — the
+// explorer, the camera, the shards, the gate, the stones mid-crumble, the
+// slimes gone — and the watcher builds the same island from the seed and
+// draws it from over their shoulder, eased between frames; the world itself
+// (movers, slimes) runs on the match clock, as it does on every phone.
+//
 // The drawing is sunshardScene.js (three.js r128, loaded only when this game
 // opens). A landscape game, full screen (GameFrame bare): held upright the
 // whole frame is drawn turned, and every touch is turned back (toGame).
@@ -36,11 +43,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpecStream from "./useSpecStream";
 import { useSocket } from "../../utils/SocketContext";
 import { useUprightTouch, toGame } from "../horror/LandscapeGate";
 import { team as teamOf, plural } from "./coopTeam";
 import { buildWorld, levelCode, ZONES, SHARDS, clamp } from "./sunshardWorld.js";
-import { newRun, step, pressJump, releaseJump, respawn, score, shardsHave, tether, tiedTo, ropeState, LEASH, killSlime, crumbleAt } from "./sunshardSim.js";
+import { newRun, step, pressJump, releaseJump, respawn, score, shardsHave, tether, tiedTo, ropeState, LEASH, killSlime, crumbleAt, watchStep } from "./sunshardSim.js";
 import { MATE, createScene } from "./sunshardScene";
 
 const START_S = 3;
@@ -49,6 +57,7 @@ const HUES = [0xff7a4d, ...MATE];
 const SEND_MS = 100;
 const NEXT_S = 4.5;          // lit → the next island, in seconds
 const MAX_PTS = 25000;       // the room's cap for one game
+const r2 = (v) => Math.round(v * 100) / 100;
 // island 0 is the room's seed; every next one follows from it, the same on every phone
 const islandCode = (seed, round) => levelCode(seed) + (round ? "-" + round : "");
 const ZONE_HEX = ZONES.map((z) => "#" + z.col.toString(16).padStart(6, "0"));
@@ -296,6 +305,39 @@ export default function SunshardIslands(props) {
     timers.current.push(setTimeout(() => setBanner((x) => (x === b ? null : x)), 2500));
   }, []);
 
+  // ── watching: the player sends its run, the watcher follows its island ─────
+  const nextRef = useRef(0);                  // the loop's nextAt: when the next island comes
+  const specSeen = useRef(false);
+  const [specOn, setSpecOn] = useState(false);
+  const watchId = spectatorWatching?.user_id;
+  useEffect(() => { specSeen.current = false; setSpecOn(false); }, [watchId]);
+  const spec = useSpecStream({
+    roomCode, isSpectator, myId, watchId,
+    // ~300 bytes: the explorer, the camera, and what's changed on the island
+    frame: () => {
+      if (!sceneRef.current) return null;
+      const S = run.current, P = S.pl, c = cam.current, team = agreedTeam(), n = nextRef.current;
+      const cr = [];
+      S.plats.forEach((q, i) => { if (q.state) cr.push(i, q.state); });
+      return {
+        rd: roundRef.current, x: r2(P.x), y: r2(P.y), z: r2(P.z), vx: r2(P.vx), vy: r2(P.vy), vz: r2(P.vz), f: r2(P.face),
+        g: P.onG ? 1 : 0, gl: P.gliding ? 1 : 0, iv: P.inv > 0 ? 1 : 0, j: P.jumps, sq: r2(P.sq || 0), hp: P.hp,
+        yw: r2(c.yaw), pt: r2(c.pitch), zn: S.zone, sh: bits(S.shards), tm: team ? bits(team) : 0, fl: [...S.flags],
+        go: S.gateOpen ? 1 : 0, gt: r2(S.gateT), fin: S.finished ? 1 : 0, td: teamDoneRef.current ? 1 : 0, p: S.maxPath,
+        dead: S.slimes.filter((s) => !s.alive).map((s) => s.k), cr,
+        rp: coop ? tiedTo(seatedRef.current.map((p) => p.id), myId).reduce((m, id) => m | (ropeState(S, id) ? (id < myId ? 1 : 2) : 0), 0) : 0,
+        sc: Math.min(MAX_PTS, bank.current + score(S, W, team)),
+        nx: n && n !== Infinity ? Math.max(1, Math.ceil((n - performance.now()) / 1000)) : 0,
+      };
+    },
+    // the watcher: on to whichever island they're on
+    onFrame: (f) => {
+      if (!specSeen.current) { specSeen.current = true; setSpecOn(true); }
+      const rd = Number(f.rd) || 0;
+      if (rd !== roundRef.current) setRound(rd);
+    },
+  });
+
   // ── the loop ───────────────────────────────────────────────────────────────
   const hostRef = useRef(null);
   const sceneRef = useRef(null);
@@ -416,6 +458,7 @@ export default function SunshardIslands(props) {
       // lit: everyone on it goes on to the next island together, a moment later
       if (teamDone && !nextAt) { nextAt = now + NEXT_S * 1000; if (!S.finished) { S.finished = true; S.finishLeft = Math.max(0, (durationSeconds || 300) - el); } }
       if (coop && !nextAt && [...remotes.current.values()].some((r) => (r.rd || 0) > round && now - r.at < 2500)) nextAt = now + 800;
+      nextRef.current = nextAt;
       if (nextAt && now >= nextAt && !overRef.current) {
         nextAt = Infinity;
         bank.current = Math.min(MAX_PTS, bank.current + score(S, W, team));
@@ -490,9 +533,146 @@ export default function SunshardIslands(props) {
     };
   }, [THREE, isSpectator, W, round, socket, roomCode, coop, myId, durationSeconds, setScore, say, shout, mySlot]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── the watcher's loop: their island, drawn from their frames ──────────────
+  // The world runs here on the match clock (watchStep); the explorer and the
+  // camera are eased toward the latest frame, carried on by its speed for the
+  // moment since. Nothing is sent, and no sound.
+  useEffect(() => {
+    if (!THREE || !isSpectator || !hostRef.current) return undefined;
+    const wid = Number(watchId), wSlot = Math.max(0, seated.findIndex((p) => p.id === wid)), wHue = HUES[wSlot % HUES.length];
+    const wName = seated.find((p) => p.id === wid)?.name || spectatorWatching?.username || "Player";
+    let scene;
+    try {
+      scene = createScene(THREE, W, { color: wHue });
+    } catch (e) { setNoGl(true); return undefined; }
+    sceneRef.current = scene;
+    const host = hostRef.current;
+    host.insertBefore(scene.canvas, host.firstChild);
+    scene.canvas.className = "ss-canvas";
+    scene.resize(size.current.w, size.current.h);
+    const S = run.current, P = S.pl, fx = scene.fx, v = { yaw: 0, pitch: 0.42 };
+    let raf, last = performance.now(), lastHud = 0, seenAt = 0, prev = null, snap = true, sizeW = 0, sizeH = 0;
+    const here = (r) => (r.rd || 0) === round;
+    const wrap = (d) => { while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
+    const teamOfFrame = (f) => (coop ? fromBits(f.tm) : null);
+    // a new frame: the run's state as theirs, and their moments as effects
+    const apply = (f) => {
+      const had = prev ? shardsHave({ shards: fromBits(prev.sh) }, teamOfFrame(prev)) : null;
+      S.shards = fromBits(f.sh);
+      const have = shardsHave(S, teamOfFrame(f));
+      if (had && have.size > had.size) {
+        const s = W.shards.find((x) => have.has(x.i) && !had.has(x.i));
+        if (s) { fx.ring(s.x, s.y, s.z, s.col, 7); fx.burst(s.x, s.y, s.z, 50, s.col, 9, 5); }
+        shout(`Sunshard ${have.size} / ${SHARDS}`, have.size < SHARDS ? `Next: ${ZONES[Math.min(have.size, SHARDS - 1)].name}` : "The temple gate is open!");
+      }
+      S.gateOpen = !!f.go;
+      if (Math.abs(S.gateT - f.gt) > 0.2) S.gateT = f.gt;
+      if (f.fin && prev && !prev.fin && W.temple) {
+        for (let i = 0; i < 5; i++) timers.current.push(setTimeout(() => fx.burst(W.temple.x, W.temple.y + 1.5, W.temple.z, 40, [0xffe28a, 0x7fe3ff, 0xff7a4a, 0x6dff9c, 0xffffff][i], 8, 6), i * 220));
+        shout("Temple lit!", `${wName} did it — a new island next…`);
+      }
+      S.finished = !!f.fin;
+      S.zone = f.zn;
+      if ((f.fl || []).length !== S.flags.size) S.flags = new Set(f.fl);
+      for (const i of f.dead || []) killSlime(S, i);
+      // a stone mid-crumble that isn't here yet: crumbling, or (fallen) gone till it grows back
+      const cr = f.cr || [];
+      for (let k = 0; k + 1 < cr.length; k += 2) {
+        const q = S.plats[cr[k]];
+        if (!q || q.state) continue;
+        if (cr[k + 1] === 1) crumbleAt(S, W, cr[k]); else Object.assign(q, { state: 3, t: 0, solid: false });
+      }
+      if (prev) {
+        if (f.hp < prev.hp) { fx.shake(0.5); fx.burst(f.x, f.y + 0.6, f.z, 14, 0xff6a6a, 5, 2); setFlash((n) => n + 1); }
+        if (Math.hypot(f.x - prev.x, f.y - prev.y, f.z - prev.z) > 8) { snap = true; fx.burst(f.x, f.y + 0.5, f.z, 24, 0xffffff, 5, 3); }
+        else if (f.j > prev.j && !f.g) {
+          if (f.j >= 2) fx.ring(f.x, f.y + 0.1, f.z, 0xbff0ff, 2.8); else fx.burst(f.x, f.y + 0.1, f.z, 6, 0xffffff, 2, 0.5);
+        } else if (f.g && !prev.g && prev.vy < -7) fx.burst(f.x, f.y + 0.1, f.z, 8, 0xdddddd, 2.6, 0.6);
+      }
+      P.hp = f.hp; P.jumps = f.j; P.sq = f.sq;
+      prev = f;
+    };
+    const loop = (now) => {
+      raf = requestAnimationFrame(loop);
+      if (document.hidden) { last = now; return; }
+      const dt = clamp((now - last) / 1000, 0, 0.05);
+      last = Math.max(last, now);
+      const el = (now - anchor.current) / 1000;
+      if (size.current.w !== sizeW || size.current.h !== sizeH) { sizeW = size.current.w; sizeH = size.current.h; scene.resize(sizeW, sizeH); }
+      const L = spec.current;
+      // nothing yet — or their next island is on its way (onFrame moves us there)
+      if (!L || !L.f || (Number(L.f.rd) || 0) !== round) return;
+      const f = L.f;
+      if (L.at !== seenAt) { seenAt = L.at; apply(f); }
+      // the explorer: toward the frame, carried on by its speed (0.15 s at most)
+      const age = Math.min(0.15, (now - L.at) / 1000);
+      const tx = f.x + f.vx * age, ty = f.y + (f.g ? 0 : f.vy * age), tz = f.z + f.vz * age;
+      if (snap) { snap = false; Object.assign(P, { x: tx, y: ty, z: tz, face: f.f }); v.yaw = f.yw; v.pitch = f.pt; }
+      const k = Math.min(1, dt * 12), kc = Math.min(1, dt * 10);
+      P.x += (tx - P.x) * k; P.y += (ty - P.y) * k; P.z += (tz - P.z) * k;
+      P.face += wrap(f.f - P.face) * k;
+      Object.assign(P, { vx: f.vx, vy: f.vy, vz: f.vz, onG: !!f.g, gliding: !!f.gl, inv: f.iv ? 1 : 0, speed: Math.hypot(f.vx, f.vz) });
+      v.yaw += wrap(f.yw - v.yaw) * kc; v.pitch += (f.pt - v.pitch) * kc;
+      S.T = el - dt;
+      watchStep(S, W, dt);
+      const team = teamOfFrame(f);
+      // stomps on this island
+      for (const m of momentsRef.current.splice(0)) { const sl = S.slimes[m.i]; if (sl) fx.burst(sl.x, sl.y + 0.5, sl.z, 22, 0x6fe08a, 5, 3); }
+      // everyone else here (never the one watched: that's the explorer)
+      const rs = [];
+      for (const r of remotes.current.values()) {
+        if (r.id === wid || !here(r)) continue;
+        const ag = Math.min(0.15, (now - r.at) / 1000), d = r.d;
+        d.x += (r.x + r.vx * ag - d.x) * k; d.y += (r.y + (r.g ? 0 : r.vy * ag) - d.y) * k; d.z += (r.z + r.vz * ag - d.z) * k;
+        d.face += wrap(r.f - d.face) * k;
+        rs.push({ id: r.id, name: r.name, col: r.col, x: d.x, y: d.y, z: d.z, face: d.face, speed: Math.hypot(r.vx, r.vz), onG: !!r.g, vy: r.vy, vx: r.vx, vz: r.vz, gliding: !!r.gl, inv: !!r.iv });
+      }
+      // the ropes as they see them: theirs from the frame, the rest from the room
+      const ropes = [];
+      if (coop) {
+        const chain = seatedRef.current.map((p) => p.id), rem = (id) => remotes.current.get(id);
+        const fresh = (id) => id === wid || (rem(id) && here(rem(id)) && now - rem(id).at < 2500);
+        for (let i = 0; i + 1 < chain.length; i++) {
+          const a = chain[i], b = chain[i + 1];
+          if (!fresh(a) || !fresh(b)) continue;
+          const on = a === wid ? !!(f.rp & 2) : b === wid ? !!(f.rp & 1) : !!(rem(a).rp & 2);
+          ropes.push({ a: a === wid ? "me" : a, b: b === wid ? "me" : b, on, len: LEASH,
+            ca: a === wid ? wHue : rem(a).col, cb: b === wid ? wHue : rem(b).col });
+        }
+      }
+      scene.frame({ S, team, remotes: rs, ropes, yaw: v.yaw, pitch: v.pitch, dt, T: el });
+      // the compass, as theirs
+      const have = shardsHave(S, team);
+      const next = have.size < SHARDS ? W.shards.find((s) => !have.has(s.i)) : W.temple;
+      if (next && arrowRef.current) {
+        const fAng = Math.atan2(-Math.sin(v.yaw), -Math.cos(v.yaw)), dAng = Math.atan2(next.x - P.x, next.z - P.z);
+        arrowRef.current.style.transform = `rotate(${(-(dAng - fAng) * 180) / Math.PI}deg)`;
+      }
+      if (now - lastHud > 120) {
+        lastHud = now;
+        const dist = next ? Math.round(Math.hypot(next.x - P.x, next.z - P.z)) : 0;
+        const dy = next ? Math.round((have.size < SHARDS ? next.y : next.y + 1) - P.y) : 0;
+        const compass = next ? `${have.size < SHARDS ? `Sunshard ${next.i + 1}` : "Sky Temple"} · ${dist} m${Math.abs(dy) > 3 ? (dy > 0 ? " ↑" : " ↓") : ""}` : "";
+        const wr = remotes.current.get(wid);
+        const me = { id: wid, name: wName, col: wHue, rd: round, sh: S.shards.size, p: f.p || 0, fin: f.fin ? (wr && wr.fin != null ? wr.fin : 0) : null, me: true };
+        const all = [me, ...[...remotes.current.values()].filter((r) => r.id !== wid).map((r) => ({ id: r.id, name: r.name, col: r.col, rd: r.rd || 0, sh: fromBits(r.sh).size, p: r.p, fin: r.fin }))];
+        all.sort((a, b) => b.rd - a.rd || ((a.fin != null) !== (b.fin != null) ? (a.fin != null ? -1 : 1) : a.fin != null ? a.fin - b.fin : b.sh - a.sh || b.p - a.p));
+        setHud({ hp: f.hp, have: have.size, haveSet: [...have], compass, raceT: Math.max(0, el - START_S), rank: all.slice(0, 5),
+          count: round === 0 && el < START_S + 1 ? el : null, finished: !!f.fin, teamDone: !!f.td, mine: S.shards.size, next: f.nx || 0, sc: f.sc });
+      }
+    };
+    raf = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(raf);
+      try { host.removeChild(scene.canvas); } catch { /* gone */ }
+      scene.dispose();
+      sceneRef.current = null;
+    };
+  }, [THREE, isSpectator, W, round, coop, watchId, seated, shout]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── the screen ─────────────────────────────────────────────────────────────
   const count = hud.count;
-  const best = (() => { try { return Number(localStorage.getItem("sunshard-best-" + W.code)) || 0; } catch { return 0; } })();
+  const best = isSpectator ? 0 : (() => { try { return Number(localStorage.getItem("sunshard-best-" + W.code)) || 0; } catch { return 0; } })();
   const press = (fn) => (e) => { e.preventDefault(); e.stopPropagation(); try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ } fn(); };
   const mates = coop ? T.all(Object.fromEntries([[myId, hud.mine || 0], ...[...remotes.current.values()].map((r) => [r.id, fromBits(r.sh).size])])) : [];
 
@@ -501,7 +681,7 @@ export default function SunshardIslands(props) {
       <GameFrame
         gameName="Sunshard Jump" badge="🏝️ SUNSHARD JUMP"
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
-        stats={isSpectator ? [{ label: "Score", value: Number(spectatorWatching?.score ?? 0).toLocaleString() }] : []}
+        stats={isSpectator ? [{ label: "Score", value: Number(hud.sc ?? spectatorWatching?.score ?? 0).toLocaleString() }] : []}
         timer={durationSeconds ? { value: eng.timeLeft, max: durationSeconds } : null}
         opponents={Object.values(eng.opponents)}
         teams={eng.teams}
@@ -514,12 +694,14 @@ export default function SunshardIslands(props) {
         ) : null}
       >
         {({ w, h }) => {
-          if (isSpectator) return <div className="muted">👀 Watching {spectatorWatching?.username} — {Number(spectatorWatching?.score ?? 0).toLocaleString()} pts</div>;
           size.current = { w, h };
+          // a watcher's hands do nothing: no pad, no stick, no jump
+          const pad = isSpectator ? {} : { onPointerDown: padDown, onPointerMove: padMove, onPointerUp: padUp, onPointerCancel: padUp, onLostPointerCapture: padUp };
           return (
-            <div className={`ss-stage${touchUi ? " touch" : ""}`} ref={hostRef} style={{ width: w, height: h }}
-              onPointerDown={padDown} onPointerMove={padMove} onPointerUp={padUp} onPointerCancel={padUp} onLostPointerCapture={padUp} onContextMenu={(e) => e.preventDefault()}>
+            <div className={`ss-stage${touchUi && !isSpectator ? " touch" : ""}`} ref={hostRef} style={{ width: w, height: h }}
+              {...pad} onContextMenu={(e) => e.preventDefault()}>
               {!THREE && !noGl && <div className="ss-loading">Loading the islands…</div>}
+              {isSpectator && THREE && !noGl && !specOn && <div className="ss-loading">Connecting to {spectatorWatching?.username || "their"}’s island…</div>}
               {noGl && <div className="ss-loading">This game needs WebGL. Try another browser, or turn on hardware acceleration.</div>}
               <div className="ss-hud">
                 <div className="ss-hearts" aria-label={`${hud.hp} hearts`}>{[0, 1, 2].map((i) => <i key={i} className={i < hud.hp ? "" : "off"}>♥</i>)}</div>
@@ -548,10 +730,10 @@ export default function SunshardIslands(props) {
                   <div className="ss-count">{count >= START_S ? "GO!" : String(START_S - Math.floor(count))}</div>
                 )}
                 {(hud.finished || hud.teamDone) && !eng.gameOver && hud.next > 0 && (
-                  <div className="ss-done">{coop ? "🏆 The temple is lit — your team did it!" : "🏁 Temple lit!"}<small>Next island in {hud.next}…</small></div>
+                  <div className="ss-done">{coop ? `🏆 The temple is lit — ${isSpectator ? "their" : "your"} team did it!` : "🏁 Temple lit!"}<small>Next island in {hud.next}…</small></div>
                 )}
               </div>
-              {touchUi && (
+              {touchUi && !isSpectator && (
                 <>
                   <div className="ss-stick" aria-hidden="true"><div className="ss-knob" ref={knobRef} /></div>
                   <button type="button" className="ss-btn ss-jump" aria-label="Jump (hold to glide)"

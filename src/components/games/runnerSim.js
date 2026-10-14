@@ -83,7 +83,7 @@ function makeRow(s) {
   s.nextZ = z + longest + 15 + Math.min(12, z / 160) + Math.floor(r() * 7);
 }
 
-function layCourse(s) {
+export function layCourse(s) {   // exported for a spectator, who lays the course to where the runner is
   while (s.nextZ < s.z + VIEW_AHEAD) makeRow(s);
   s.rows = s.rows.filter((row) => row.z + 20 > s.z - 10);   // behind you: gone
 }

@@ -8,12 +8,18 @@
 // never goes back to zero.
 //
 // The rules live in stormSim.js. This file draws the arena and takes the input.
+//
+// A spectator draws the same arena from the player's frames (useSpecStream):
+// the shards are sent as they are, not re-simulated — the storm is stepped by
+// each phone's own frame times, so a copy would drift — and moved on by their
+// velocity between frames.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpecStream from "./useSpecStream";
 import {
-  VIEW_W, VIEW_H, PLAYER_R, newStorm, moveTo, nudge, step, totalScore,
+  VIEW_W, VIEW_H, PLAYER_R, EASE, TRAIL, newStorm, moveTo, nudge, step, totalScore,
 } from "./stormSim";
 
 const INK = "#2E2140";
@@ -23,6 +29,25 @@ const SHARD = "#FF8FC7";
 const RESTART_MS = 800;
 const KEY_STEP = 7;
 const HIT_COST = 10;               // a hit costs this; what you earned is kept
+const SPEC_SHARDS = 40;            // most shards a spectator frame carries
+const SPEC_AHEAD = 18;             // frames a watcher carries on past the last frame, at most
+const SPEC_SMOOTH = 0.5;           // how much of a correction a watcher takes a frame
+const r1 = (v) => Math.round(v * 10) / 10;
+const r2 = (v) => Math.round(v * 100) / 100;
+
+const grazeBurst = (bits, x, y) => {
+  for (let i = 0; i < 6; i++) {
+    bits.push({ x, y, vx: (Math.random() - 0.5) * 3,
+      vy: (Math.random() - 0.5) * 3, r: 2, life: 16, max: 16, colour: "#B5E655" });
+  }
+};
+const hitBurst = (bits, x, y) => {
+  for (let i = 0; i < 48; i++) {
+    bits.push({ x, y, vx: (Math.random() - 0.5) * 9,
+      vy: (Math.random() - 0.5) * 9, r: 2 + Math.random() * 3, life: 38, max: 38,
+      colour: ["#FF6B6B", "#FF8FC7", "#FFFFFF"][Math.floor(Math.random() * 3)] });
+  }
+};
 
 function draw(ctx, s, k, particles, shake) {
   ctx.setTransform(k, 0, 0, k, 0, 0);
@@ -122,6 +147,106 @@ export default function DodgeStorm(props) {
     return () => t.forEach(clearTimeout);
   }, []);
 
+  // ── Being watched. Counters the frame carries, so the watcher can tell a
+  // new graze or hit from one it has already drawn.
+  const grazed = useRef(0);
+  const hitCount = useRef(0);
+  const shardIds = useRef(new WeakMap());
+  const nextShard = useRef(1);
+  const sendFrame = () => {
+    const s = sim.current;
+    const sh = [];
+    for (const p of s.shards) {
+      if (sh.length >= SPEC_SHARDS) break;
+      let id = shardIds.current.get(p);
+      if (id == null) { id = nextShard.current++; shardIds.current.set(p, id); }
+      sh.push([id, r1(p.x), r1(p.y), r2(p.vx), r2(p.vy), r1(p.r)]);
+    }
+    return {
+      x: r1(s.x), y: r1(s.y), tx: r1(s.tx), ty: r1(s.ty), h: s.hit ? 1 : 0,
+      n: runRef.current, g: grazed.current, hi: hitCount.current,
+      sc: banked.current + totalScore(s), al: Math.floor(s.frame / 60), sh,
+    };
+  };
+
+  // The watcher's side: the newest frame, and what is on its screen now.
+  const shown = useRef(null);       // { x, y, trail, shards: Map(id → {x, y, r}) }
+  const [watched, setWatched] = useState(null);   // { sc, al, hi } for the HUD
+  const onFrame = (f) => {
+    const was = spec.current && spec.current.prev;
+    if (was) {
+      if (f.g > was.g && !f.h) grazeBurst(bits.current, f.x, f.y);
+      if (f.h && !was.h) {
+        hitBurst(bits.current, f.x, f.y);
+        shake.current = 18;
+        setMsg({ text: "Hit!", type: "error" });
+      }
+      if (f.n !== was.n) {
+        shown.current = null;       // a fresh storm: start the picture over
+        setMsg({ text: "Again!", type: "info" });
+        timers.current.push(setTimeout(() => setMsg(null), 600));
+      }
+    }
+    setWatched((v) => (v && v.sc === f.sc && v.al === f.al && v.hi === f.hi ? v : { sc: f.sc, al: f.al, hi: f.hi }));
+  };
+  const spec = useSpecStream({ roomCode, isSpectator, myId: currentUser?.id,
+    watchId: spectatorWatching?.user_id, frame: sendFrame, onFrame });
+
+  // A different player watched: nothing on screen until their first frame.
+  const watchId = spectatorWatching?.user_id;
+  useEffect(() => {
+    shown.current = null;
+    bits.current = [];
+    setWatched(null);
+    setMsg(null);
+  }, [watchId]);
+
+  useEffect(() => {
+    if (!isSpectator) return undefined;
+    let raf;
+    const frame = (now) => {
+      const L = spec.current;
+      if (L && L.f) {
+        const f = L.f;
+        const e = Math.min(SPEC_AHEAD, Math.max(0, (now - L.at) / (1000 / 60)));
+        // where the player is by now: still closing on their target, as the sim does
+        const close = Math.pow(1 - EASE, e);
+        const px = f.tx + (f.x - f.tx) * close;
+        const py = f.ty + (f.y - f.ty) * close;
+        let v = shown.current;
+        if (!v) v = shown.current = { x: px, y: py, trail: [], shards: new Map() };
+        v.x += (px - v.x) * SPEC_SMOOTH;
+        v.y += (py - v.y) * SPEC_SMOOTH;
+        if (!f.h) {
+          v.trail.push({ x: v.x, y: v.y });
+          while (v.trail.length > TRAIL) v.trail.shift();
+        }
+        // shards fly straight, so carrying them on by their velocity is exact
+        // until the next frame; a known one eases there, a new one appears
+        const next = new Map();
+        for (const [id, x, y, vx, vy, r] of f.sh || []) {
+          const tx = x + vx * e, ty = y + vy * e;
+          const old = v.shards.get(id);
+          next.set(id, old
+            ? { x: old.x + (tx - old.x) * SPEC_SMOOTH, y: old.y + (ty - old.y) * SPEC_SMOOTH, r }
+            : { x: tx, y: ty, r });
+        }
+        v.shards = next;
+        for (const p of bits.current) { p.x += p.vx; p.y += p.vy; p.life -= 1; }
+        bits.current = bits.current.filter((p) => p.life > 0);
+        shake.current *= 0.85;
+        const c = canvasRef.current;
+        if (c) {
+          draw(c.getContext("2d"), { x: v.x, y: v.y, hit: !!f.h, trail: v.trail, shards: [...v.shards.values()] },
+            view.current, bits.current, shake.current);
+        }
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [isSpectator, spec]);
+
   const onPoint = (x, y) => { if (!overRef.current && !isSpectator) moveTo(sim.current, x, y); };
 
   useEffect(() => {
@@ -154,18 +279,13 @@ export default function DodgeStorm(props) {
 
         const out = step(s, dt);
         if (out.grazes) {
-          for (let i = 0; i < 6; i++) {
-            bits.current.push({ x: s.x, y: s.y, vx: (Math.random() - 0.5) * 3,
-              vy: (Math.random() - 0.5) * 3, r: 2, life: 16, max: 16, colour: "#B5E655" });
-          }
+          grazed.current += out.grazes;
+          grazeBurst(bits.current, s.x, s.y);
         }
         if (out.hit) {
-          for (let i = 0; i < 48; i++) {
-            bits.current.push({ x: s.x, y: s.y, vx: (Math.random() - 0.5) * 9,
-              vy: (Math.random() - 0.5) * 9, r: 2 + Math.random() * 3, life: 38, max: 38,
-              colour: ["#FF6B6B", "#FF8FC7", "#FFFFFF"][Math.floor(Math.random() * 3)] });
-          }
+          hitBurst(bits.current, s.x, s.y);
           shake.current = 18;
+          hitCount.current += 1;
           setHits((n) => n + 1);
           setMsg({ text: "Hit!", type: "error" });
           const run = ++runRef.current;
@@ -198,10 +318,13 @@ export default function DodgeStorm(props) {
   }, [isSpectator, addScore, seed]);
 
   const oppList = Object.values(eng.opponents);
+  const shownScore = isSpectator ? (watched ? watched.sc : (spectatorWatching?.score ?? 0)) : eng.score;
+  const shownAlive = isSpectator ? (watched ? watched.al : 0) : survived;
+  const shownHits = isSpectator ? (watched ? watched.hi : 0) : hits;
   const stats = [
-    { label: "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
-    { label: "Alive", value: `${survived}s` },
-    ...(hits ? [{ label: "Hits", value: hits }] : []),
+    { label: "Score", value: Number(shownScore).toLocaleString() },
+    { label: "Alive", value: `${shownAlive}s` },
+    ...(shownHits ? [{ label: "Hits", value: shownHits }] : []),
   ];
 
   return (
@@ -219,8 +342,14 @@ export default function DodgeStorm(props) {
         {({ w, h }) => {
           if (isSpectator) {
             return (
-              <div className="muted">
-                👀 Watching {spectatorWatching?.username} — {Number(spectatorWatching?.score ?? 0).toLocaleString()} pts
+              <div style={{ position: "relative", width: w, height: h }}>
+                <Stage w={w} h={h} canvasRef={canvasRef} view={view} onPoint={onPoint} />
+                {!watched && (
+                  <div className="muted" style={{ position: "absolute", inset: 0, display: "grid",
+                    placeItems: "center", textAlign: "center", padding: 16, pointerEvents: "none" }}>
+                    Connecting to {spectatorWatching?.username ? `${spectatorWatching.username}'s` : "the"} storm…
+                  </div>
+                )}
               </div>
             );
           }

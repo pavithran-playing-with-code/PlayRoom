@@ -32,6 +32,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpecStream from "./useSpecStream";
 import { useSocket } from "../../utils/SocketContext";
 import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
 import {
@@ -292,6 +293,56 @@ function drawHud(ctx, w, h, S) {
   }
 }
 
+// One frame on the canvas, the same for the driver and for a friend watching
+// them: the world round `car` (as the camera `view` sees it), the effects, the
+// HUD (S, as drawHud takes it) and the confetti.
+function paint(c, w, h, G, T, view, clock, car, all, parts, conf, S) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const ctx = c.getContext("2d");
+  if (!G.grass) G.grass = makeGrass(ctx);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#10151b"; ctx.fillRect(0, 0, w, h);
+  const base = clamp(Math.min(w, h) / 760, 0.5, 1.3), z = base * view.z, sh = view.shake;
+  const ox = sh ? (Math.random() - 0.5) * sh * 2 : 0, oy = sh ? (Math.random() - 0.5) * sh * 2 : 0;
+  ctx.save();
+  ctx.translate(w / 2 + ox, h / 2 + oy); ctx.scale(z, z); ctx.translate(-view.cx, -view.cy);
+  const hw = w / 2 / z + 80, hh = h / 2 / z + 80;
+  drawTrack(ctx, T, G, clock, view.cx - hw, view.cy - hh, view.cx + hw, view.cy + hh);
+  for (const o of all.slice().sort((p, q) => p.y - q.y)) drawCar(ctx, o);
+  drawGantry(ctx, T);
+  drawParts(ctx, parts);
+  for (const o of all) {
+    ctx.save(); ctx.translate(o.x, o.y - 34); ctx.scale(1 / z, 1 / z);
+    text(ctx, o.name, 0, 0, 15, o === car ? "#fff" : "rgba(255,255,255,.75)", "center", `700 15px ${BODY}`, true);
+    ctx.restore();
+  }
+  ctx.restore();
+  // boost speed lines, the vignette, the HUD, confetti
+  if (car.boostT > 0) {
+    ctx.strokeStyle = "rgba(255,230,160,.35)"; ctx.lineWidth = 2; ctx.beginPath();
+    const cx = w / 2, cy = h / 2;
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * TAU + clock * 0.3, r0 = Math.min(w, h) * (0.3 + ((i * 37 + clock * 900) % 100) / 250), r1 = r0 + Math.min(w, h) * 0.18;
+      ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    }
+    ctx.stroke();
+  }
+  const vg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
+  vg.addColorStop(0, "rgba(8,10,16,0)"); vg.addColorStop(1, "rgba(8,10,16,.45)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
+  drawHud(ctx, w, h, S);
+  for (const p of conf) { ctx.fillStyle = p.col; ctx.fillRect(p.x * w, p.y * h, 7, 4); }
+}
+
+// The track's nearest centre point to (x, y), searched all the way round: for a
+// car first seen mid-race, which trackUpdate (it looks nearby only) can't place.
+function nearestIdx(T, x, y) {
+  let best = 1e18, bi = 0;
+  for (let i = 0; i < T.P.length; i++) { const dx = x - T.P[i].x, dy = y - T.P[i].y, d = dx * dx + dy * dy; if (d < best) { best = d; bi = i; } }
+  return bi;
+}
+
 // ── the game ─────────────────────────────────────────────────────────────────
 export default function Speedway(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
@@ -345,6 +396,35 @@ export default function Speedway(props) {
     anchor.current = performance.now() - gone * 1000;
   }
   const [hud, setHud] = useState({ place: 1, of: 1, lap: 1, finished: false, finPlace: 0, hint: true });
+
+  // ── a friend watching ──────────────────────────────────────────────────────
+  // The driver's phone, while someone watches, sends ~15 times a second what
+  // can't be worked out from the seed: their car as race:pos has it, plus the
+  // HUD (lap, its start, best, place, the banner, the shake) and, racing alone,
+  // the computer's cars. A few hundred bytes. The watcher draws the same scene
+  // round that car; everyone else's cars come from race:pos as usual.
+  const live = useRef({ place: 1, finPlace: 0, banner: null, best: 0, shake: 0 });
+  const watchId = isSpectator && spectatorWatching ? Number(spectatorWatching.user_id) : null;
+  const watchSeats = useRef(null);                      // read when the watching starts; a new players list mustn't restart it
+  watchSeats.current = { list: seated, name: spectatorWatching?.username };
+  const specFrame = () => {
+    const c = me.current, L = live.current, r1 = (v) => Math.round(v * 10) / 10, r2 = (v) => Math.round(v * 100) / 100;
+    const f = { x: r1(c.x), y: r1(c.y), a: Math.round(c.a * 1000) / 1000, vx: r1(c.vx), vy: r1(c.vy), st: r2(c.steer),
+      dr: c.drifting ? 1 : 0, sl: c.slide ? 1 : 0, ch: r2(c.charge), b: r2(c.boostT), bm: c.boostMax, br: c.braking ? 1 : 0,
+      ro: r2(c.roll || 0), lap: c.lap, ls: r2(c.lapStart), fa: c.finAt, p: c.prog, wr: r1(c.wrong),
+      pl: L.place, fp: L.finPlace, be: r2(L.best || 0), sh: r1(L.shake), mt: touch.current.on ? 1 : 0 };
+    if (L.banner && L.banner.t < 2.2) f.bn = [L.banner.title, L.banner.sub, L.banner.best ? 1 : 0, r2(L.banner.t)];
+    if (bots.current.length) {
+      f.bt = bots.current.map((b) => [r1(b.x), r1(b.y), Math.round(b.a * 1000) / 1000, r1(b.vx), r1(b.vy), r2(b.steer),
+        b.drifting ? 1 : 0, b.slide ? 1 : 0, r2(b.charge), r2(b.boostT), b.boostMax, b.braking ? 1 : 0]);
+    }
+    return f;
+  };
+  const [specOn, setSpecOn] = useState(false);          // the watcher: a first frame has come
+  const specOnRef = useRef(false);
+  useEffect(() => { specOnRef.current = false; setSpecOn(false); }, [watchId]);
+  const spec = useSpecStream({ roomCode, isSpectator, myId, watchId, frame: specFrame,
+    onFrame: () => { if (!specOnRef.current) { specOnRef.current = true; setSpecOn(true); } } });
 
   // everyone else's cars, from the room
   useEffect(() => {
@@ -548,46 +628,16 @@ export default function Speedway(props) {
       if (car.finished) finT += dt;
       A.update(car, go && !overRef.current);
 
+      // what a friend watching needs that the seed can't give them (specFrame)
+      const L = live.current;
+      L.place = place; L.finPlace = finPlace; L.banner = banner; L.best = best; L.shake = view.shake;
       // draw
       const c = canvasRef.current;
       if (c) {
-        const { w, h } = size.current, dpr = Math.min(2, window.devicePixelRatio || 1);
-        if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
-        const ctx = c.getContext("2d");
-        if (!G.grass) G.grass = makeGrass(ctx);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.fillStyle = "#10151b"; ctx.fillRect(0, 0, w, h);
-        const base = clamp(Math.min(w, h) / 760, 0.5, 1.3), z = base * view.z, sh = view.shake;
-        const ox = sh ? (Math.random() - 0.5) * sh * 2 : 0, oy = sh ? (Math.random() - 0.5) * sh * 2 : 0;
-        ctx.save();
-        ctx.translate(w / 2 + ox, h / 2 + oy); ctx.scale(z, z); ctx.translate(-view.cx, -view.cy);
-        const hw = w / 2 / z + 80, hh = h / 2 / z + 80;
-        drawTrack(ctx, T, G, clock, view.cx - hw, view.cy - hh, view.cx + hw, view.cy + hh);
-        for (const o of all.slice().sort((p, q) => p.y - q.y)) drawCar(ctx, o);
-        drawGantry(ctx, T);
-        drawParts(ctx, parts);
-        for (const o of all) {
-          ctx.save(); ctx.translate(o.x, o.y - 34); ctx.scale(1 / z, 1 / z);
-          text(ctx, o.name, 0, 0, 15, o === car ? "#fff" : "rgba(255,255,255,.75)", "center", `700 15px ${BODY}`, true);
-          ctx.restore();
-        }
-        ctx.restore();
-        // boost speed lines, the vignette, the HUD, confetti
-        if (car.boostT > 0) {
-          ctx.strokeStyle = "rgba(255,230,160,.35)"; ctx.lineWidth = 2; ctx.beginPath();
-          const cx = w / 2, cy = h / 2;
-          for (let i = 0; i < 26; i++) {
-            const a = (i / 26) * TAU + clock * 0.3, r0 = Math.min(w, h) * (0.3 + ((i * 37 + clock * 900) % 100) / 250), r1 = r0 + Math.min(w, h) * 0.18;
-            ctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); ctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
-          }
-          ctx.stroke();
-        }
-        const vg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
-        vg.addColorStop(0, "rgba(8,10,16,0)"); vg.addColorStop(1, "rgba(8,10,16,.45)");
-        ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
+        const { w, h } = size.current;
         const count = elapsed < START_S + 1 ? clamp(elapsed, 0, 4) : null;
-        drawHud(ctx, w, h, { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop: touch.current.on });
-        for (const p of conf) { ctx.fillStyle = p.col; ctx.fillRect(p.x * w, p.y * h, 7, 4); }
+        paint(c, w, h, G, T, view, clock, car, all, parts, conf,
+          { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop: touch.current.on });
       }
       if (now - lastHud > 250) {
         lastHud = now;
@@ -600,6 +650,147 @@ export default function Speedway(props) {
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, [isSpectator, addScore, socket, roomCode, T, code, laps, pace]);
+
+  // ── the watcher's loop: the driver's car from their frames ─────────────────
+  // Nothing is stepped and nothing is sent: the watched car is eased toward
+  // where its last frame said it was, carried on at its speed (and its turn)
+  // for the moments between frames, so it slides at 60 fps from 15. The camera
+  // follows it exactly as the driver's follows theirs.
+  useEffect(() => {
+    if (!isSpectator || watchId === null) return undefined;
+    const G = { path: null, grass: null, skids: [] };
+    const path = new Path2D();
+    T.P.forEach((p, i) => (i ? path.lineTo(p.x, p.y) : path.moveTo(p.x, p.y)));
+    path.closePath();
+    G.path = path;
+    const parts = [];
+    const fx = (type, x, y, a, b, c, d, e, f) => {
+      if (type === "skid") { G.skids.push(x, y, a, b, c, d, e, f); if (G.skids.length > 9000) G.skids.splice(0, 800); return; }
+      if (parts.length > 700) return;
+      parts.push({ type, x, y, vx: a, vy: b, life: c, max: c, size: d, color: e });
+    };
+    const seats = watchSeats.current, slot = Math.max(0, seats.list.findIndex((p) => p.id === watchId));
+    const car = makeCar(T, slot, { name: seats.name || seats.list[slot]?.name || "", color: COLORS[slot % COLORS.length], human: true });
+    const botCars = [];                                 // racing alone: the computer's cars, from the frames too
+    const view = { cx: car.x, cy: car.y, z: 0.8, shake: 0 };
+    const conf = [];
+    let raf, last = performance.now(), clock = 0, seenAt = null, fresh = true, place = 1, prevPlace = 0, placePop = 0;
+    let banner = null, finT = 0, finPlace = 0, best = 0, mapTop = false;
+    // ease a drawn car toward its frame, carried on `age` seconds at its speed and turn
+    const ease = (o, x, y, a, vx, vy, turn, age, k) => {
+      o.x += (x + vx * age - o.x) * k; o.y += (y + vy * age - o.y) * k;
+      o.a += ad(a + turn * age, o.a) * k;
+      o.vx += (vx - o.vx) * k; o.vy += (vy - o.vy) * k;
+    };
+
+    const frame = (now) => {
+      const dt = Math.min(1 / 30, (now - last) / 1000);
+      last = now;
+      clock += dt;
+      const elapsed = (now - anchor.current) / 1000, raceT = elapsed - START_S;
+      const S = spec.current;
+      if (S && S.at !== seenAt) {
+        // a new frame: the things that jump rather than glide
+        const f = S.f, first = seenAt === null;
+        seenAt = S.at;
+        if (fresh || Math.hypot(f.x - car.x, f.y - car.y) > 300) {           // first sight, or put back on the track
+          Object.assign(car, { x: f.x, y: f.y, a: f.a, vx: f.vx, vy: f.vy, sk: null });
+          car.idx = nearestIdx(T, f.x, f.y);
+          if (fresh) { view.cx = f.x + f.vx * 0.32; view.cy = f.y + f.vy * 0.32; }
+          fresh = false;
+        }
+        Object.assign(car, { steer: f.st, drifting: !!f.dr, slide: !!f.sl, charge: f.ch, boostT: f.b, boostMax: f.bm || 1,
+          braking: !!f.br, roll: f.ro || 0, lap: f.lap, lapStart: f.ls, prog: f.p, wrong: f.wr || 0 });
+        car.finAt = f.fa === undefined ? null : f.fa;
+        const done = car.finAt !== null;
+        if (done && !car.finished) {
+          finT = 0;
+          if (!first) for (let i = 0; i < 80; i++) conf.push({ x: Math.random(), y: -Math.random() * 0.3, vx: (Math.random() - 0.5) * 0.2, vy: 0.25 + Math.random() * 0.4, col: COLORS[i % 5] });
+        }
+        car.finished = done;
+        place = f.pl || 1; finPlace = f.fp || 0; best = f.be || 0; mapTop = !!f.mt;
+        view.shake = Math.max(view.shake, f.sh || 0);
+        if (f.bn && (!banner || banner.title !== f.bn[0] || banner.sub !== f.bn[1])) banner = { title: f.bn[0], sub: f.bn[1], best: !!f.bn[2], t: f.bn[3] };
+        const bt = f.bt || [];
+        while (botCars.length > bt.length) botCars.pop();
+        bt.forEach((b, i) => {
+          let o = botCars[i];
+          if (!o) {
+            o = makeCar(T, i + 1, { name: BOTS[i]?.name || "", color: COLORS[(i + 2) % COLORS.length], ai: true });
+            Object.assign(o, { x: b[0], y: b[1], a: b[2] }); o.idx = nearestIdx(T, b[0], b[1]);
+            botCars[i] = o;
+          }
+          Object.assign(o, { tx: b[0], ty: b[1], ta: b[2], tvx: b[3], tvy: b[4], steer: b[5], drifting: !!b[6], slide: !!b[7],
+            charge: b[8], boostT: b[9], boostMax: b[10] || 1, braking: !!b[11] });
+        });
+      }
+      // the watched car, eased toward its frame
+      const k = Math.min(1, dt * 14);
+      if (S && !fresh) {
+        const f = S.f, age = Math.min(0.25, (now - S.at) / 1000);
+        let turn = 0;
+        if (S.prev && S.prevAt !== null) turn = clamp(ad(f.a, S.prev.a) / Math.max(0.03, (S.at - S.prevAt) / 1000), -8, 8);
+        ease(car, f.x, f.y, f.a, f.vx, f.vy, turn, age, k);
+        car.boostT = Math.max(0, car.boostT - dt);
+        trackUpdate(T, car);
+        car.lap = f.lap; car.prog = f.p;                 // their phone counts their laps
+        carFx(car, dt, fx);
+        for (const o of botCars) {
+          ease(o, o.tx, o.ty, o.ta, o.tvx, o.tvy, 0, age, k);
+          o.boostT = Math.max(0, o.boostT - dt);
+          trackUpdate(T, o);
+          carFx(o, dt, fx);
+        }
+      }
+      // friends: from race:pos, eased just as the driver's phone eases them
+      const others = [];
+      for (const [id, r] of remote.current) {
+        if (id === watchId) continue;                   // that one's drawn from the frames
+        if (!r.placed) { r.idx = nearestIdx(T, r.x, r.y); r.placed = true; }
+        const age = Math.min(0.3, (now - r.at) / 1000);
+        const tx = r.tx + r.vx * age, ty = r.ty + r.vy * age, kk = Math.min(1, dt * 12);
+        r.x += (tx - r.x) * kk; r.y += (ty - r.y) * kk; r.a += ad(r.ta, r.a) * kk;
+        r.boostT = Math.max(0, r.boostT - dt);
+        trackUpdate(T, r);
+        r.prog = r.said ?? r.prog;
+        carFx(r, dt, fx);
+        others.push(r);
+      }
+      for (const o of botCars) others.push(o);
+      // particles
+      for (let i = parts.length - 1; i >= 0; i--) {
+        const p = parts[i];
+        p.life -= dt;
+        if (p.life <= 0) { parts.splice(i, 1); continue; }
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.type === "smoke" || p.type === "dust") { p.vx *= 0.96; p.vy *= 0.96; }
+      }
+      for (let i = conf.length - 1; i >= 0; i--) { const p = conf[i]; p.x += p.vx * dt; p.y += p.vy * dt; if (p.y > 1.1) conf.splice(i, 1); }
+      // the camera, as the driver's
+      const spd = Math.hypot(car.vx, car.vy);
+      view.cx += (car.x + car.vx * 0.32 - view.cx) * Math.min(1, dt * 6); view.cy += (car.y + car.vy * 0.32 - view.cy) * Math.min(1, dt * 6);
+      const tz = 1 - 0.15 * Math.min(1, spd / 650) - (car.boostT > 0 ? 0.07 : 0);
+      view.z += (tz - view.z) * Math.min(1, dt * 3);
+      view.shake *= Math.pow(0.02, dt);
+      if (prevPlace && place !== prevPlace) placePop = 1;
+      prevPlace = place;
+      placePop = Math.max(0, placePop - dt * 3);
+      if (banner) banner.t += dt;
+      if (car.finished) finT += dt;
+
+      const c = canvasRef.current;
+      if (c) {
+        const { w, h } = size.current;
+        const all = [car, ...others];
+        const count = elapsed < START_S + 1 ? clamp(elapsed, 0, 4) : null;
+        paint(c, w, h, G, T, view, clock, car, all, parts, conf,
+          { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop });
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [isSpectator, watchId, T, laps, spec]);
 
   // ── thumbs: the two halves of the track ──────────────────────────────────
   // Which fingers are down where -> left / right / both, and since when (a
@@ -657,7 +848,18 @@ export default function Speedway(props) {
       >
         {({ w, h }) => {
           if (isSpectator) {
-            return <div className="muted">👀 Watching {spectatorWatching?.username} — {Number(spectatorWatching?.score ?? 0).toLocaleString()} pts</div>;
+            size.current = { w, h };
+            return (
+              <div className="sw-pad" style={{ width: w, height: h }} onContextMenu={(e) => e.preventDefault()}>
+                <canvas ref={canvasRef} className="sw-canvas" style={{ width: w, height: h }}
+                  role="img" aria-label={`Speedway: watching ${spectatorWatching?.username || "a friend"} race`} />
+                {!specOn && (
+                  <div className="sw-hint" role="status" style={{ top: "45%", bottom: "auto", maxWidth: "calc(100% - 32px)" }}>
+                    Connecting to <b>{spectatorWatching?.username || "your friend"}</b>&rsquo;s race…
+                  </div>
+                )}
+              </div>
+            );
           }
           size.current = { w, h };
           return (

@@ -321,6 +321,16 @@ There is no test runner. What works:
   and can watch or, once `room:play-free`, play. Leaving a room from the
   other device (tab closed) keeps the seat (`heldElsewhere`, the leave
   sends its socket id). `check-calls.js` covers the call rules.
+- **Spectating** — a puzzle or board game sends its board with every move
+  (`useSpectate`, `room:live`). A real-time game (Speedway, Piano Tiles,
+  Dino Dash, Flappy Dash, Rail Runner, Road Hopper, Dodge Storm, Sunshard
+  Jump, Emberfall) streams instead (`useSpecStream`): the watcher asks for a
+  player's frames every 2s (`room:frame-want`), that player's phone sends a
+  small picture of its game ~15×/s only while asked (`room:frame`, relayed
+  volatile by `config/socket.js`), and the watcher draws the game's own scene
+  from it, eased between frames, input refused and silent. Emberfall's page
+  has a watch mode (`?embed=1&watch=1`: no input, no saving, no sound).
+  Kitchen Rush and Station 13 run on the server and draw their own watchers.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpecStream, { specLerp } from "./useSpecStream";
 import { newHopper, hop, step, score, rowAt, thingsAt, trainAt, COLS, HOP_S } from "./hopperSim.js";
 
 const SWIPE = 22;
@@ -133,8 +134,26 @@ export default function RoadHopper(props) {
     startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const { addScore } = eng;
-  const sim = useRef(null);
+  const sim = useRef(null);              // a watcher keeps the watched player's chicken in it
   if (sim.current === null) sim.current = newHopper(seed);
+  const camRef = useRef(-3);             // the eased camera, for anyone watching
+
+  // live spectating: the chicken, the camera and the course clock, ~15×/s. The
+  // traffic is the seed's and runs on h.t, so the clock is all a watcher needs
+  // for it; coins taken only near the camera.
+  const spec = useSpecStream({
+    roomCode, isSpectator, myId: currentUser?.id, watchId: spectatorWatching?.user_id,
+    frame: () => {
+      const h = sim.current, r3 = (v) => Math.round(v * 1000) / 1000, lo = Math.floor(h.cam) - 6;
+      return {
+        t: r3(h.t), r: h.row, x: r3(h.x), d: r3(h.daze), m: r3(camRef.current),
+        hp: h.hop ? [h.hop.from[0], r3(h.hop.from[1]), h.hop.to[0], h.hop.to[1], r3(h.hop.t)] : 0,
+        b: h.best, c: h.coins, k: h.crashes, l: h.last,
+        tk: [...h.taken].filter((n) => n >= lo && n < lo + 50),
+      };
+    },
+  });
+  const [seen, setSeen] = useState(false);   // the watcher: has a frame come yet
   const canvasRef = useRef(null);
   const size = useRef({ w: 300, h: 400 });
   const overRef = useRef(false);
@@ -186,6 +205,7 @@ export default function RoadHopper(props) {
       // the camera: keeps the chicken a third of the way up, eases along
       const want = Math.max(h.cam - 3, (h.hop ? h.hop.to[0] : h.row) - 3);
       cam += (want - cam) * Math.min(1, dt * 6);
+      camRef.current = cam;
       const c = canvasRef.current;
       if (c) {
         const { w, h: hh } = size.current, dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -202,8 +222,68 @@ export default function RoadHopper(props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSpectator, addScore]);
 
+  // the watcher: the same scene, from the frames. A clock of its own eases onto
+  // the player's (the frame's t, carried on since it came), so the traffic
+  // moves every frame; the chicken is put where that clock says — mid-hop, or
+  // riding its log — so nothing waits for the next frame.
+  useEffect(() => {
+    if (!isSpectator) return undefined;
+    setSeen(false);
+    let raf, last = performance.now(), cam = null, wt = null, at = null, k0 = null, c0 = null, lastHud = 0;
+    const frame = (now) => {
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+      last = Math.max(last, now);
+      const L = spec.current, h = sim.current;
+      if (L && L.f) {
+        const f = L.f;
+        if (at !== L.at) {
+          at = L.at;
+          h.taken = new Set(f.tk || []);
+          h.best = f.b; h.coins = f.c; h.crashes = f.k; h.last = f.l;
+          if (k0 === null) setSeen(true);
+          else if (f.k > k0) flash(SAY[f.l] || "Ouch!", "error");
+          else if (f.c > c0) flash("🪙 +25", "success", 700);
+          k0 = f.k; c0 = f.c;
+        }
+        const target = f.t + Math.min(1, (now - L.at) / 1000);
+        if (wt === null || Math.abs(target - wt) > 0.5) wt = target;
+        else { wt += dt; wt += (target - wt) * Math.min(1, dt * 3); }
+        const e = Math.max(-0.3, Math.min(0.3, wt - f.t));
+        h.t = wt; h.row = f.r; h.x = f.x; h.hop = null;
+        h.daze = Math.max(0, f.d - Math.max(0, e));
+        if (f.hp) {
+          const ht = Math.max(0, f.hp[4] + e);
+          if (ht < HOP_S) h.hop = { from: [f.hp[0], f.hp[1]], to: [f.hp[2], f.hp[3]], t: ht };
+          else { h.row = f.hp[2]; h.x = f.hp[3]; }
+        } else if (f.d <= 0) {
+          const r = rowAt(h.course, f.r);
+          if (r.kind === "river") h.x = f.x + r.dir * r.speed * e;      // riding a log
+        }
+        const want = specLerp(spec, (g) => g.m, now);
+        cam = cam === null ? want : cam + (want - cam) * Math.min(1, dt * 10);
+        const c = canvasRef.current;
+        if (c) {
+          const { w, h: hh } = size.current, dpr = Math.min(2, window.devicePixelRatio || 1);
+          if (c.width !== Math.round(w * dpr) || c.height !== Math.round(hh * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(hh * dpr); }
+          const ctx = c.getContext("2d");
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          drawScene(ctx, w, hh, h, cam, now / 1000);
+        }
+        if (now - lastHud > 150) { lastHud = now; setHud({ best: h.best, coins: h.coins, crashes: h.crashes }); }
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSpectator, spectatorWatching?.user_id]);
+
   const stats = isSpectator
-    ? [{ label: "Score", value: Number(spectatorWatching?.score ?? 0).toLocaleString() }]
+    ? [
+        { label: "Score", value: (seen ? score(sim.current) : Number(spectatorWatching?.score ?? 0)).toLocaleString() },
+        { label: "Rows", value: hud.best },
+        { label: "Coins", value: `🪙 ${hud.coins}` },
+      ]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
         { label: "Rows", value: hud.best },
@@ -223,9 +303,22 @@ export default function RoadHopper(props) {
         onQuit={eng.endMatch}
       >
         {({ w, h }) => {
-          if (isSpectator) return <div className="muted">👀 Watching {spectatorWatching?.username} — {Number(spectatorWatching?.score ?? 0).toLocaleString()} pts</div>;
           const cw = Math.min(w, Math.round(h * 0.68)), ch = h - 22;
           size.current = { w: cw, h: ch };
+          if (isSpectator) return (
+            <div className="rh-pad" style={{ width: w, height: h }}>
+              <div style={{ position: "relative", width: cw, height: ch }}>
+                <canvas ref={canvasRef} className="rh-canvas" style={{ width: cw, height: ch }} role="img"
+                  aria-label={`Road Hopper: watching ${spectatorWatching?.username || "a player"}`} />
+                {!seen && (
+                  <div className="muted" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 16 }}>
+                    Connecting to {spectatorWatching?.username || "the player"}'s game…
+                  </div>
+                )}
+              </div>
+              <div className="rh-help muted">👀 Watching {spectatorWatching?.username}</div>
+            </div>
+          );
           return (
             <div className="rh-pad" data-no-fun style={{ width: w, height: h }}
               onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => { touch.current = null; }}

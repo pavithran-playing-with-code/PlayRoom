@@ -11,7 +11,8 @@ import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
-import { newSong, step, tap, release, visible, score, COLS, VISIBLE } from "./pianoSim.js";
+import useSpecStream from "./useSpecStream";
+import { newSong, step, tap, release, visible, score, COLS, VISIBLE, HOLD_LINE } from "./pianoSim.js";
 import { songFor, LEVELS } from "./pianoSongs.js";
 
 const KEYS = { d: 0, f: 1, j: 2, k: 3 };
@@ -219,6 +220,47 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
   }
 }
 
+// ── watching: what a player's phone sends, and how a watcher takes it ────────
+// The tiles come from the seed, so a watcher deals the same song itself; the
+// frame says where the song is and what became of the last few tiles.
+const SPEC_BACK = 8;                   // the played tiles still drawn (visible() starts at next - 8)
+const r2 = (v) => Math.round(v * 100) / 100;
+
+function specFrame(s, fx, over) {
+  const back = [];
+  for (let k = Math.max(0, s.next - SPEC_BACK); k < s.next; k++) {
+    const t = s.tiles[k];
+    back.push([t.col, t.missed ? 1 : 0, r2(t.held), r2(t.at)]);   // col, missed, held, when
+  }
+  return {
+    p: r2(s.pos), v: r2(s.speed), t: r2(s.t), n: s.next, st: s.started ? 1 : 0,
+    z: r2(s.stunT), h: s.hold ?? -1, hi: s.hits, c: s.combo, b: s.best,
+    m: s.misses, wr: s.wrongs, pt: s.points, k: back,
+    w: fx.wrong.map((w) => [w.col, r2(w.yRow), r2(w.t)]), o: over ? 1 : 0,
+  };
+}
+
+// Put a frame's facts onto the watcher's own copy of the song.
+function applyFrame(s, f) {
+  s.pos = f.p;
+  s.next = f.n;
+  visible(s);                           // deals the song as far as the frame reaches
+  for (let j = 0; j < f.k.length; j++) {
+    const k = f.n - f.k.length + j, [col, missed, held, at] = f.k[j];
+    let t = s.tiles[k];
+    if (!t) break;
+    const twin = s.tiles[k + 1];
+    if (t.col !== col && twin && twin.y === t.y && twin.col === col) {
+      // a chord played the other way round: swap them, as tap() did
+      s.tiles[k] = twin; s.tiles[k + 1] = t;
+      twin.i = k; t.i = k + 1; t = twin;
+    }
+    t.done = !missed; t.missed = !!missed; t.held = held; t.at = at;
+  }
+  s.started = !!f.st; s.speed = f.v; s.hold = f.h >= 0 ? f.h : null;
+  s.hits = f.hi; s.combo = f.c; s.best = f.b; s.misses = f.m; s.wrongs = f.wr; s.points = f.pt;
+}
+
 // ── the game ─────────────────────────────────────────────────────────────────
 export default function PianoTiles(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
@@ -388,8 +430,82 @@ export default function PianoTiles(props) {
     return () => cancelAnimationFrame(raf);
   }, [isSpectator, addScore, tune]);
 
-  const stats = [
-    { label: "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
+  // ── watching: the player sends its song ~15×/s while someone watches; the
+  // watcher plays the same song silently from those frames, never a tap
+  const watchId = spectatorWatching?.user_id;
+  const [linked, setLinked] = useState(false);
+  const seen = useRef(null);             // the counts of the last frame, to flash a slip
+  const spec = useSpecStream({
+    roomCode, isSpectator, myId: currentUser?.id, watchId,
+    frame: () => specFrame(sim.current, fx.current, overRef.current),
+    onFrame: (f) => {
+      setLinked(true);
+      setHud({ hits: f.hi, best: f.b, misses: f.m + f.wr, combo: f.c, pts: f.pt });
+      const was = seen.current;
+      seen.current = f;
+      if (!was) return;
+      if (f.m > was.m) flash("Missed one!", "error");
+      else if (f.wr > was.wr) flash("Oops — that's white!", "error");
+      else if (f.c > was.c && f.c > 0 && f.c % 25 === 0) flash(`${f.c} in a row!`, "success");
+    },
+  });
+  useEffect(() => {
+    // a new player to watch: their song from the top, and wait for their frames
+    if (!isSpectator) return;
+    sim.current = newSong(seed);
+    seen.current = null;
+    setLinked(false);
+  }, [isSpectator, watchId, seed]);
+
+  useEffect(() => {
+    if (!isSpectator) return undefined;
+    let raf, last = performance.now(), shown = null, disp = null;
+    const frame = (now) => {
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+      last = Math.max(last, now);
+      const L = spec.current, s = sim.current;
+      if (L && L.f) {
+        const f = L.f;
+        if (shown !== L.at) { shown = L.at; applyFrame(s, f); }
+        // the song runs on between frames at the player's speed, once their
+        // moment stood still is over; a quarter second on at most
+        const raw = (now - L.at) / 1000, since = Math.min(0.25, Math.max(0, raw));
+        const moving = f.st && !f.o;
+        const target = f.p + (moving ? Math.max(0, since - f.z) * f.v : 0);
+        if (disp === null || Math.abs(target - disp) > 1.5) disp = target;
+        else {
+          if (moving && since >= f.z && raw < 0.25) disp += f.v * dt;
+          disp += (target - disp) * Math.min(1, dt * 8);   // and closes on where the frames say
+        }
+        s.pos = disp;
+        s.t = f.t + (f.o ? 0 : since);
+        s.stunT = Math.max(0, f.z - since);
+        if (s.hold !== null && s.tiles[s.hold]) {
+          const t = s.tiles[s.hold];
+          t.held = Math.max(0, Math.min(1, (s.pos + HOLD_LINE - t.y) / t.len));
+        }
+        fx.current.wrong = f.w.map(([col, yRow, t]) => ({ col, yRow, t: t + since }));
+      }
+      const c = canvasRef.current;
+      if (c) {
+        const { w, h } = size.current, dpr = Math.min(2, window.devicePixelRatio || 1);
+        if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+        const ctx = c.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawScene(ctx, s, w, h, fx.current, now / 1000, tune);
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [isSpectator, spec, tune]);
+
+  const stats = isSpectator ? [
+    { label: "Score", value: Number(linked ? hud.pts : (spectatorWatching?.score ?? 0)).toLocaleString() },
+    { label: "Tiles", value: hud.hits },
+    { label: "Combo", value: hud.combo ?? 0 },
+  ] : [
+    { label: "Score", value: Number(eng.score).toLocaleString() },
     { label: "Tiles", value: hud.hits },
     { label: "Best combo", value: hud.best },
   ];
@@ -414,11 +530,27 @@ export default function PianoTiles(props) {
         controls={controls}
       >
         {({ w, h }) => {
-          if (isSpectator) {
-            return <div className="muted">👀 Watching {spectatorWatching?.username} — {Number(spectatorWatching?.score ?? 0).toLocaleString()} pts</div>;
-          }
           const ch = Math.max(200, h - 24), cw = Math.min(w, Math.round(ch * 0.7));
           size.current = { w: cw, h: ch };
+          if (isSpectator) {
+            // the player's board as they see it, from their frames; no taps
+            return (
+              <div className="pt-pad" data-no-fun style={{ width: w, height: h }}>
+                <div style={{ position: "relative", width: cw, height: ch }}>
+                  <canvas ref={canvasRef} className="pt-canvas" style={{ width: cw, height: ch }}
+                    role="img" aria-label={`Watching ${spectatorWatching?.username || "a player"} play ${tune.name}`} />
+                  {!linked && (
+                    <div className="muted" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center",
+                      justifyContent: "center", textAlign: "center", padding: 16, borderRadius: 18,
+                      background: "rgba(255,250,240,.88)", fontWeight: 700 }}>
+                      Connecting to {spectatorWatching?.username || "the player"}'s song…
+                    </div>
+                  )}
+                </div>
+                <div className="pt-help muted">👀 Watching {spectatorWatching?.username} · {tune.name}</div>
+              </div>
+            );
+          }
           return (
             <div className="pt-pad" data-no-fun style={{ width: w, height: h }} onContextMenu={(e) => e.preventDefault()}>
               <canvas ref={canvasRef} className="pt-canvas" style={{ width: cw, height: ch }}

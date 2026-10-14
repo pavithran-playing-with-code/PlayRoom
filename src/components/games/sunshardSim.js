@@ -196,6 +196,25 @@ export function step(S, W, inp, dt, team = null) {
   return S.ev;
 }
 
+// A watcher's step: the world on the clock — movers, slimes, stones already
+// crumbling, the gate, a mushroom squashed — with nobody playing. The explorer
+// is set from the player's frames, so nothing here moves it, and a stone only
+// starts to crumble when the room says so (crumbleAt).
+export function watchStep(S, W, dt) {
+  const P = S.pl;
+  S.ev = [];
+  S.T += dt;
+  P.gp = null;
+  platforms(S, W, dt);
+  if (S.gateOpen) S.gateT = Math.min(1, S.gateT + dt * 0.5);
+  W.springs.forEach((s, k) => {
+    const q = S.plats[s.p];
+    if (Math.hypot(P.x - q.x, P.z - q.z) < 0.95 && P.y < q.y + 0.9 && P.y > q.y - 0.2 && P.vy > 8) S.springs[k] = 1;
+    S.springs[k] = Math.max(0, S.springs[k] - dt * 4);
+  });
+  moveSlimes(S, W);
+}
+
 export function hurt(S, dx, dz) {
   const P = S.pl;
   if (P.inv > 0 || S.finished) return;

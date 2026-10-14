@@ -10,15 +10,20 @@
 // knocks you down for a few seconds unless a friend flies through a ❤️ —
 // then everyone who's down is back up (runTogether.js). The side's points
 // add up.
+//
+// Watched (a spectator): the player's phone sends a small frame of its flight
+// (useSpecStream) and the watcher flies the same seeded course from it,
+// carrying the bird on at its speed between frames so it moves at 60 fps.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useRunTogether from "./useRunTogether";
+import useSpecStream from "./useSpecStream";
 import { DOWN_S, HEART_PTS, teamGoal, hearts, heartsBetween } from "./runTogether";
 import { team } from "./coopTeam";
 import {
-  VIEW_W, VIEW_H, GROUND, BIRD_X, GAP, PIPE_W, CRASH_COST, SPEED,
+  VIEW_W, VIEW_H, GROUND, BIRD_X, BIRD_RY, GAP, PIPE_W, CRASH_COST, SPEED, GRAVITY, SPACING,
   makeCourse, newBird, flap, step,
 } from "./flappySim";
 
@@ -143,7 +148,7 @@ function drawPipe(ctx, left, gapY) {
   rrect(ctx, left - 5, botY, PIPE_W + 10, lip, 6); paint(ctx, PIPE_DARK);
 }
 
-function draw(ctx, s, course, k, now, tg) {
+function draw(ctx, s, course, k, now, tg, idle = "Tap or press Space to flap!") {
   ctx.setTransform(k, 0, 0, k, 0, 0);
   // sky
   const sky = ctx.createLinearGradient(0, 0, 0, VIEW_H);
@@ -212,7 +217,7 @@ function draw(ctx, s, course, k, now, tg) {
 
   if (!s.started || s.stun > 0) {
     const down = tg && tg.down;
-    const text = !s.started ? "Tap or press Space to flap!" : down ? `💤 Down ${Math.ceil(s.stun)}s — wait for a ❤️` : `Ouch! ${CRASH_COST}`;
+    const text = !s.started ? idle : down ? `💤 Down ${Math.ceil(s.stun)}s — wait for a ❤️` : `Ouch! ${CRASH_COST}`;
     ctx.font = "600 17px Fredoka, Nunito, sans-serif";
     const w = ctx.measureText(text).width + 28;
     ctx.lineWidth = 3;
@@ -225,7 +230,7 @@ function draw(ctx, s, course, k, now, tg) {
   }
 }
 
-function Stage({ w, h, canvasRef, view, onDown }) {
+function Stage({ w, h, canvasRef, view, onDown, label = "Flappy Dash: tap to flap", children }) {
   let cssW = Math.min(w, (h * VIEW_W) / VIEW_H);
   let cssH = (cssW * VIEW_H) / VIEW_W;
   if (cssH > h) { cssH = h; cssW = (h * VIEW_W) / VIEW_H; }
@@ -234,10 +239,11 @@ function Stage({ w, h, canvasRef, view, onDown }) {
   const ph = Math.max(1, Math.round(cssH * dpr));
   useEffect(() => { view.current = pw / VIEW_W; }, [view, pw]);
   return (
-    <div className="fl-pad" style={{ width: w, height: h }} onPointerDown={onDown}
+    <div className="fl-pad" style={{ width: w, height: h, position: "relative" }} onPointerDown={onDown}
       onContextMenu={(e) => e.preventDefault()}>
       <canvas ref={canvasRef} width={pw} height={ph} className="fl-canvas"
-        style={{ width: cssW, height: cssH }} role="img" aria-label="Flappy Dash: tap to flap" />
+        style={{ width: cssW, height: cssH }} role="img" aria-label={label} />
+      {children}
     </div>
   );
 }
@@ -351,6 +357,109 @@ export default function FlappyDash(props) {
     return () => cancelAnimationFrame(raf);
   }, [isSpectator, course, addScore, coop, heartAt, tell, mates, say]);
 
+  // Being watched: a small picture of the flight, ~15 times a second. The
+  // pipes come from the seed; only the ones a crash knocked off (`g`) and
+  // where the bird is have to travel.
+  const watchId = spectatorWatching?.user_id;
+  const [specHud, setSpecHud] = useState(null);
+  const hudKey = useRef("");
+  const spec = useSpecStream({ roomCode, isSpectator, myId, watchId,
+    frame: () => {
+      const s = sim.current, list = course.list, g = [];
+      for (let i = s.first; i < list.length && list[i].x - s.x <= VIEW_W + SPACING; i++) if (list[i].gone) g.push(i);
+      const f = {
+        x: Math.round(s.x * 10) / 10, y: Math.round(s.y * 10) / 10, vy: Math.round(s.vy),
+        st: s.started ? 1 : 0, sn: Math.round(s.stun * 100) / 100,
+        fa: Math.min(9999, Math.round(performance.now() - s.flapAt)),
+        fi: s.first, g, p: Math.floor(s.points), pi: s.pipes, r: s.run, b: s.best,
+      };
+      if (coop) {
+        f.dn = tg.current.down ? 1 : 0;
+        f.hs = heartsBetween(heartAt, s.first, s.first + 4).filter((x) => !tg.current.got.has(x.k)).map((x) => x.at);
+      }
+      return f;
+    },
+    onFrame: (f) => {
+      const key = `${f.p}|${f.pi}|${f.r}|${f.b}`;
+      if (key === hudKey.current) return;
+      hudKey.current = key;
+      setSpecHud({ points: f.p, pipes: f.pi, run: f.r, best: f.b });
+    },
+  });
+  useEffect(() => { hudKey.current = ""; setSpecHud(null); }, [watchId]);
+
+  // Watching: the same scene, drawn from the latest frame carried on at the
+  // bird's own physics (scroll at SPEED, y under gravity) for the time since
+  // it came. A new frame that disagrees with where the bird was drawn is
+  // eased into over ~80ms; a big jump (a crash's hop) is taken at once, as the
+  // player saw it.
+  useEffect(() => {
+    if (!isSpectator) return undefined;
+    let raf;
+    let last = performance.now();
+    let seenAt = -1;
+    let shown = null;                 // where the bird was drawn last frame
+    let ox = 0, oy = 0;               // correction still to ease out
+    const s = newBird();
+    const floor = VIEW_H - GROUND - BIRD_RY;
+    const predict = (L, now) => {
+      const f = L.f;
+      const t = Math.min(0.3, Math.max(0, (now - L.at) / 1000));   // a stalled stream holds, it doesn't fly off
+      const stun = Math.max(0, (f.sn || 0) - t);
+      const mt = f.st ? Math.max(0, t - (f.sn || 0)) : 0;           // time spent flying, after any daze
+      const vy = f.vy + GRAVITY * mt;
+      const y = Math.min(floor, Math.max(BIRD_RY, f.y + f.vy * mt + 0.5 * GRAVITY * mt * mt));
+      return { x: f.x + SPEED * mt, y, vy: mt > 0 ? vy : f.vy, stun };
+    };
+    const frame = (now) => {
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+      last = now;
+      const L = spec.current;
+      if (L && L.f) {
+        const f = L.f;
+        const p = predict(L, now);
+        if (L.at !== seenAt) {
+          seenAt = L.at;
+          // the pipes a crash knocked off, in the stretch ahead
+          course.extend(f.x + VIEW_W + SPACING);
+          const gone = new Set(f.g || []);
+          for (let i = f.fi; i < course.list.length && course.list[i].x - f.x <= VIEW_W + SPACING; i++) {
+            course.list[i].gone = gone.has(i);
+          }
+          if (s.first < f.fi || s.first > f.fi + 2) s.first = f.fi;
+          if (shown) { ox = shown.x - p.x; oy = shown.y - p.y; }
+          if (!shown || Math.abs(ox) > 40 || Math.abs(oy) > 70) { ox = 0; oy = 0; }
+          s.flapAt = L.at - (f.fa ?? 9999);
+        }
+        const ease = Math.exp(-dt / 0.08);
+        ox *= ease; oy *= ease;
+        s.x = p.x + ox;
+        s.y = p.y + oy;
+        s.vy = p.vy;
+        s.stun = p.stun;
+        s.started = !!f.st;
+        shown = { x: s.x, y: s.y };
+        course.extend(s.x + VIEW_W + SPACING);
+        const list = course.list;
+        while (s.first < list.length && list[s.first].x - s.x + PIPE_W < -40) s.first++;
+      }
+      const c = canvasRef.current;
+      if (c) {
+        const extra = coop && L && L.f ? {
+          down: !!L.f.dn,
+          hearts: L.f.hs || [],
+          mates: mates().filter((m) => m.id !== Number(watchId))
+            .map((m) => ({ ...m, col: Tref.current.colourOf(m.id), name: Tref.current.nameOf(m.id) })),
+        } : null;
+        const who = spectatorWatching?.username || "them";
+        draw(c.getContext("2d"), s, course, view.current, now, extra, `Waiting for ${who} to flap…`);
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [isSpectator, spec, course, coop, mates, watchId, spectatorWatching?.username]);
+
   const oppList = Object.values(eng.opponents);
   const specScore = spectatorWatching?.score ?? 0;
   // together: the side's points, against the team goal
@@ -363,7 +472,11 @@ export default function FlappyDash(props) {
     ? [{ label: "Team", value: teamTotal.toLocaleString() },
        { label: "Goal", value: teamTotal >= goal ? "✓" : goal.toLocaleString() }]
     : isSpectator
-    ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
+    ? [
+        { label: "Score", value: Number(specHud ? specHud.points : specScore).toLocaleString() },
+        { label: "Pipes", value: specHud ? specHud.pipes : 0 },
+        { label: "Best run", value: specHud ? Math.max(specHud.best, specHud.run) : 0 },
+      ]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
         { label: "Pipes", value: pipes },
@@ -389,9 +502,14 @@ export default function FlappyDash(props) {
         ) : null}
       >
         {({ w, h }) => (isSpectator ? (
-          <div className="muted">
-            👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-          </div>
+          <Stage w={w} h={h} canvasRef={canvasRef} view={view}
+            label={`Watching ${spectatorWatching?.username || "a player"} fly`}>
+            {!specHud && (
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                <div className="chip">Connecting to {spectatorWatching?.username || "the player"}'s flight…</div>
+              </div>
+            )}
+          </Stage>
         ) : (
           <Stage w={w} h={h} canvasRef={canvasRef} view={view} onDown={tap} />
         ))}

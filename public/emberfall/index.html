@@ -307,6 +307,11 @@ body.touch #feed{left:var(--ctl-cx,50%);bottom:var(--feed-b,calc(var(--sab) + 64
 /* phase 2's overlay title sizes, now after the rules they override */
 #title h1{font-size:clamp(34px,min(11vw,15vh),118px)}
 #title .tag{font-size:clamp(13px,min(2.6vw,4vh),22px)}
+/* fix5: watching a friend (?watch=1): no controls, menus or overlays; a banner, and a curtain until their game arrives */
+body.watching #touch,body.watching #emo,body.watching #hint,body.watching #pnlBack,body.watching .pnl,body.watching #pause,body.watching #dead,body.watching #end,body.watching #title,body.watching #sndchip,body.watching #rotate,body.watching .hbtns,body.watching #prompt,body.watching #dlg{display:none!important}
+body.watching *{cursor:default!important}
+#watchban{position:fixed;z-index:14;left:50%;top:calc(var(--pr-y) + var(--pr-h) + 6px);transform:translateX(-50%);max-width:calc(100vw - 24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font:700 14px var(--body);letter-spacing:.3px;padding:5px 14px;border-radius:999px;background:rgba(20,12,6,.78);border:1.5px solid var(--gold);color:var(--parch);pointer-events:none}
+#watchcon{position:fixed;inset:0;z-index:13;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;background:rgba(6,10,18,.9);font:700 20px var(--body);color:var(--parch);pointer-events:none}
 </style>
 
 <canvas id="gl"></canvas><canvas id="hud2"></canvas>
@@ -451,10 +456,16 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
 const sstep=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
 const TAU=Math.PI*2,PI=Math.PI;
 const angDiff=(a,b)=>{let d=(b-a)%TAU;if(d>PI)d-=TAU;if(d<-PI)d+=TAU;return d;};
+/* fix5: watch mode (?embed=1&watch=1 in PlayRoom): this page draws a friend's game from the frames the room passes in.
+   It takes no input (every event stops here, before any other listener), plays no sound and never writes storage. */
+const WATCH=/[?&]watch=1/.test(location.search)&&/[?&]embed=1/.test(location.search)&&window.parent!==window;
+if(WATCH){document.body.classList.add('watching');
+  for(const ev of['keydown','keyup','pointerdown','pointerup','pointermove','pointercancel','mousedown','mouseup','mousemove','click','dblclick','wheel','touchstart','touchmove','touchend','touchcancel','contextmenu','gesturestart','gesturechange','selectstart'])
+    addEventListener(ev,e=>{e.stopImmediatePropagation();if(e.cancelable&&ev!=='pointerdown'&&ev!=='mousedown')e.preventDefault();},{capture:true,passive:false});}
 // storage: localStorage when the frame allows it, always mirrored in memory (PlayRoom frames may block storage)
-const store=(()=>{const mem=Object.create(null);let ls=null;try{ls=window.localStorage;ls.setItem('__ef_probe','1');ls.removeItem('__ef_probe');}catch(e){ls=null;}
+const store=(()=>{const mem=Object.create(null);let ls=null;try{ls=window.localStorage;if(!WATCH){ls.setItem('__ef_probe','1');ls.removeItem('__ef_probe');}}catch(e){ls=null;}
   return{get(k,d){try{const v=(k in mem)?mem[k]:(ls?ls.getItem(k):null);return v==null?d:JSON.parse(v);}catch(e){return d;}},
-    set(k,v){let t;try{t=JSON.stringify(v);}catch(e){return;}mem[k]=t;if(ls)try{ls.setItem(k,t);}catch(e){}},get persistent(){return !!ls;}};})();
+    set(k,v){let t;try{t=JSON.stringify(v);}catch(e){return;}mem[k]=t;if(ls&&!WATCH)try{ls.setItem(k,t);}catch(e){}},get persistent(){return !!ls;}};})();
 function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
 let RND=mulberry(20261010);
 const R=()=>RND(),RR=(a,b)=>a+(b-a)*RND();
@@ -1138,7 +1149,7 @@ function updateOpenWorld(dt){
     if(Math.abs(dx)>85||Math.abs(dz)>85){p.m.visible=false;continue;}
     p.m.visible=true;p.c.rotation.y+=dt*2;p.m.position.y=p.y+Math.sin(game.time*2.2+p.id)*.22;
     const d=Math.hypot(dx,dz);
-    if(d<1.9&&Math.abs(p.y-(P.y+1))<2.6&&!P.dead){p.got=true;p.m.visible=false;cnt++;sfx('heal');burst(p.x,p.y,p.z,0xffe27a,26,4,.9,.16,1);
+    if(d<1.9&&Math.abs(p.y-(P.y+1))<2.6&&!P.dead&&!WATCH){p.got=true;p.m.visible=false;cnt++;sfx('heal');burst(p.x,p.y,p.z,0xffe27a,26,4,.9,.16,1);
       OW.count=cnt;const e=$('sprites');if(e)e.textContent=cnt+'/'+OW.nSprites;
       if(cnt%6===0||cnt===OW.nSprites){P.maxhp+=10;P.hp=P.maxhp;P.maxst+=6;P.st=P.maxst;game.sprBonus=Math.floor(cnt/6);toast('Ember Sprite blessing! Max health and stamina rise ('+cnt+'/'+OW.nSprites+')',3.4);sfx('bell');}
       else toast('Ember Sprite '+cnt+'/'+OW.nSprites,1.4);
@@ -2934,6 +2945,7 @@ function sfxVoice(g,n,v){
   }
 }
 function initAudio(){
+  if(WATCH)return;   /* fix5: watching is silent */
   if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();G=buildGraph(AC,(Math.random()*1e9)|0,AUDIOTEST);mg=G.master;noiseBuf=G.noise;ambBeds(G);startMusic();}catch(e){console.warn('[Emberfall] audio unavailable',e);}}
   if(AC&&AC.state==='suspended'&&!NET.over)AC.resume();
 }
@@ -3150,6 +3162,7 @@ function openChest(o){
 
 /* ================= save / state ================= */
 function saveGame(){
+  if(WATCH)return;   /* fix5: a watcher's page never touches its own save */
   const P=game.player;if(!P)return;
   store.set('ef-save',{lvl:game.lvl,xp:game.xp,coins:game.coins,pots:game.pots,dmgUp:game.dmgUp,hpUp:game.hpUp,shards:game.shards,stage:game.stage,killed:[...game.killed],T:game.T,pos:[P.x,P.z],chests:world.chests.filter(c=>c.opened).map(c=>c.id),kills:game.kills,deaths:game.deaths,maxhp:P.maxhp-((HEROES[game.hero]||{}).hpAdd||0),maxst:P.maxst,playT:game.playT||0,sprites:OW.sprites.filter(p=>p.got).map(p=>p.id),towers:OW.towers.filter(t=>t.on).map(t=>t.id),inv:game.inv});
 }
@@ -3610,6 +3623,19 @@ function step(dt){
   if(game.boss&&game.boss.state!=='dead')music.combat=1;else if(music.boss){music.boss=false;}
   {let j=0;for(const q of game.pops){q.t+=dt;if(q.t<1.1)game.pops[j++]=q;}game.pops.length=j;}   // fix2: in place
   updateProjs(dt,game);updatePickups(dt);updateParticles(dt);updateNPCs(dt);updateDialog(dt);
+  worldFx(dt,P);
+  // dialog/region/hud
+  const reg=regionOf(P.x,P.z);if(reg!==lastRegion){lastRegion=reg;$('regionname').textContent=reg;if(game.st==='play'&&game.time>2)toast(reg,2.2);}
+  if(game.saveT>25&&!P.dead){game.saveT=0;saveGame();}
+  updateCamera(dt);treeOcclude();updateSky(game.T,camera.position,P);weatherLook();
+  // interaction prompt
+  const pr=$('prompt'),it=(!game.dialog&&!P.dead)?(P.mount?{prompt:'Dismount'}:nearestInteract()):null,ca=ctxAction();
+  const ph=(it||ca)?promptHTML(it,ca):'';if(ph!==HUD.prompt){HUD.prompt=ph;pr.innerHTML=ph;}pr.hidden=!ph||(touchDev&&!!P.mount);HUD.it=it;HUD.ca=ca;
+  hudBars(dt,P);
+  updateAmbientAudio(dt);
+}
+/* fix5: the world's own motion (fires, gate, lights, smoke, clouds…) and the HUD bars, shared by play and watching */
+function worldFx(dt,P){
   for(const f of world.animated)f(dt);
   // world dynamics
   for(const c of world.chests){if(c.opened&&c.open<1){c.open=Math.min(1,c.open+dt*2.2);c.lid.rotation.x=-1.9*(1-Math.pow(1-c.open,3));}}
@@ -3626,13 +3652,8 @@ function step(dt){
     for(const f of world.fires)if(Math.hypot(f.x-P.x,f.z-P.z)<45){spark(f.x+RR(-.2,.2),f.y,f.z+RR(-.2,.2),RR(-.3,.3),RR(1.5,3),RR(-.3,.3),R()<.5?0xffb04a:0xff7a2a,.8,.08,-1);}}
   if(light.night>.5){flyT-=dt;if(flyT<=0){flyT=.12;const a=R()*TAU,r=RR(4,18),x=P.x+Math.cos(a)*r,z=P.z+Math.sin(a)*r,h=gh(x,z);if(h>2&&h<20)spark(x,h+RR(.5,2.5),z,RR(-.4,.4),RR(-.1,.3),RR(-.4,.4),0xd8ff70,3,.1,0);}}
   for(const cg of cloudGroup.children){cg.position.x+=cg.userData.sp*dt;if(cg.position.x>450)cg.position.x=-450;}
-  // dialog/region/hud
-  const reg=regionOf(P.x,P.z);if(reg!==lastRegion){lastRegion=reg;$('regionname').textContent=reg;if(game.st==='play'&&game.time>2)toast(reg,2.2);}
-  if(game.saveT>25&&!P.dead){game.saveT=0;saveGame();}
-  updateCamera(dt);treeOcclude();updateSky(game.T,camera.position,P);weatherLook();
-  // interaction prompt
-  const pr=$('prompt'),it=(!game.dialog&&!P.dead)?(P.mount?{prompt:'Dismount'}:nearestInteract()):null,ca=ctxAction();
-  const ph=(it||ca)?promptHTML(it,ca):'';if(ph!==HUD.prompt){HUD.prompt=ph;pr.innerHTML=ph;}pr.hidden=!ph||(touchDev&&!!P.mount);HUD.it=it;HUD.ca=ca;
+}
+function hudBars(dt,P){
   // bars
   // fix2: every HUD write goes through dw/ds, which touch the page only when the value changed
   const bar=k=>'scaleX('+Math.round(clamp(k,0,1)*400)/400+')';
@@ -3644,7 +3665,6 @@ function step(dt){
   const hrs=((game.T*24+6)%24),hh=Math.floor(hrs),mm=Math.floor((hrs-hh)*60);dw($('clock'),(light.sunElev>0?'☀ ':'☾ ')+String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0'));
   game.hurtV=Math.max(0,game.hurtV-dt*2.2);const low=P.hp/P.maxhp<.3&&!P.dead?(.25+Math.sin(game.time*5)*.12):0;ds($('hurt'),'opacity',String(Math.round(Math.max(game.hurtV*.9,low)*50)/50));
   hudUpdate();
-  updateAmbientAudio(dt);
 }
 function titleCam(dt){
   game.time+=dt;game.T=(game.T+dt/200)%1;const a=game.time*.06+.6,P=game.player;
@@ -3676,10 +3696,11 @@ function frame(now){
   const ms=now-lastT,raw=clamp(ms/1000,0,.05);lastT=now;
   if(hiddenPause||glLost){requestAnimationFrame(frame);return;}
   if(game.st!=='load')perfSample(ms);
-  if(game.st==='play'&&(rotateShown||PANEL.open)){}
+  if(WATCH){if(game.st==='play')watchStep(raw);}   /* fix5: a watcher only follows the frames */
+  else if(game.st==='play'&&(rotateShown||PANEL.open)){}
   else if(game.st==='play'){let dt=raw;if(game.hitstop>0){game.hitstop-=raw;dt=raw*.04;}if(game.slow>0){game.slow-=raw;dt*=.4;}step(dt);}
   else if(game.st==='title')titleCam(raw);
-  netTick();
+  netTick();specTick(now);
   if(game.st==='play'||game.st==='pause')updateFeed();
   if(game.st!=='load'&&!(PANEL.open&&PANEL.drawn))renderFrame();   // behind a menu the paused world is drawn once, not every frame
   if(PANEL.open)PANEL.drawn=true;
@@ -3871,6 +3892,230 @@ $('bQuit').addEventListener('click',()=>{$('pQuitConfirm').hidden=false;});
 $('bPQuitNo').addEventListener('click',()=>{$('pQuitConfirm').hidden=true;});
 $('bPQuitYes').addEventListener('click',()=>{$('pQuitConfirm').hidden=true;quitOut();});
 
+/* ================= live spectating (fix5) ================= */
+/* The player: while PlayRoom says someone is watching ({ef:'spec-want'}, repeated), the page posts a small picture of its
+   game ({ef:'frame',f}) ~15 times a second, for 3 s after the last ask. Nobody watching: nothing is built or sent.
+   The watcher (?watch=1): the same island, built the same way at start; the hero, the camera, the enemies, their shots,
+   the boss rings and the damage numbers follow the frames (eased between them). Nothing there runs AI, takes input,
+   plays sound or saves.
+   A frame: v, st (play | pause | title…), h hero, p [x,y,z,yaw], vl [vx,vy,vz], s state, a [atkT,atkIdx,rollT,spinT,deadT],
+   sp walk speed, fl (1 swim, 2 glide, 4 climb, 8 grounded, 16 dead), ht hurt, lf lift, fx flash, em emote, mt horse (-1 none),
+   hud [hp,maxhp,st,maxst,mp,xp,lvl,coins,pots,hurtV], c [camYaw,pitch,dist,mode,shake], T time of day, rn rain,
+   q [stage, shard bits], ow [tower, sprite, chest bits], b the awake boss's id, k the killed ids,
+   e [[id,kind,x,y,z,yaw,state,hp,windup,atk,bow,recover,hit,sp,flash,deadT,awake]…] the 16 nearest and an awake boss,
+   pj [[orb?,x,y,z,vx,vy,vz,col,r]] shots, dc [[x,y,z,r,fill,col]] boss rings, po [[id,x,y,z,txt,col,big,age]] damage numbers,
+   sh [[idx,x,y,z,col]] shards lying on the ground. About 1.5–3.5 KB as JSON. */
+const SPEC={until:0,t:0,near:[],nd:[],pid:0};
+const sR1=v=>Math.round((+v||0)*10)/10,sR2=v=>Math.round((+v||0)*100)/100;
+function sBits(arr,fn){let m=0,b=1;for(let i=0;i<arr.length;i++){if(fn(arr[i]))m+=b;b*=2;}return m;}
+const WS_OWN=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+function sBit(m,i){return Math.floor((+m||0)/Math.pow(2,i))%2===1;}
+function specTick(now){
+  if(WATCH||!EMBED||now>SPEC.until||now-SPEC.t<62)return;SPEC.t=now;
+  let f;try{f=specFrame();}catch(e){return;}
+  netPost({ef:'frame',f});
+}
+function specFrame(){
+  const P=game.player;
+  if(!P||!(game.st==='play'||game.st==='pause'))return{v:1,st:game.st};
+  /* the 16 nearest enemies within 90 m (a dying one too, until it sinks), an awake boss first */
+  const N=SPEC.near,D=SPEC.nd;N.length=0;D.length=0;
+  for(const e of game.enemies){
+    const dx=e.x-P.x,dz=e.z-P.z;let d=dx*dx+dz*dz;
+    if(e.boss&&e.awake&&e.state!=='dead')d=-1;else if(d>8100)continue;
+    if(N.length>=16){if(d>=D[15])continue;N.pop();D.pop();}
+    let i=N.length;N.push(e);D.push(d);
+    while(i>0&&D[i-1]>d){N[i]=N[i-1];D[i]=D[i-1];i--;}
+    N[i]=e;D[i]=d;
+  }
+  const E=[];
+  for(const e of N){
+    let w=e.windup,a=e.atk,sp=e.sp;
+    if(e.boss){w=e.state==='windup'?(e.pat==='rain'?e.windup*.6:e.windup):-1;a=e.state==='recover'&&e.t<.25?e.t/.25:-1;sp=e.awake?Math.min(1,e.sp*3):0;}
+    E.push([e.id,e.kind,sR1(e.x),sR1(e.y),sR1(e.z),sR2(e.yaw),e.state,Math.ceil(e.hp),sR2(w),sR2(a),sR2(e.bow),sR2(e.recover),sR2(e.hit),sR2(sp),sR2(e.flash),sR2(e.deadT),e.awake?1:0]);
+  }
+  const PJ2=[];for(let i=projs.length-1;i>=0&&PJ2.length<10;i--){const p=projs[i];if(Math.abs(p.x-P.x)>50||Math.abs(p.z-P.z)>50)continue;PJ2.push([p.kind==='arrow'?0:1,sR1(p.x),sR1(p.y),sR1(p.z),sR1(p.vx),sR1(p.vy),sR1(p.vz),p.col||0xffd070,p.r||.35]);}
+  const DC=[];for(const d of decals){if(!d.visible||DC.length>=12)continue;DC.push([sR1(d.position.x),sR2(d.position.y),sR1(d.position.z),sR1(d.scale.x),sR2(d.userData.b.scale.x),d.userData.a.material.color.getHex()]);}
+  const PO=[];for(let i=game.pops.length-1;i>=0&&PO.length<6;i--){const q=game.pops[i];if(!q.sid)q.sid=++SPEC.pid;PO.push([q.sid,sR1(q.x),sR1(q.y),sR1(q.z),String(q.txt).slice(0,20),q.col,q.big?1:0,sR2(q.t)]);}
+  const SH=[];for(const p of game.pickups)if(p.kind==='shard')SH.push([p.idx,sR1(p.x),sR1(p.y),sR1(p.z),p.col||0xffffff]);
+  return{v:1,st:game.st,h:game.hero||'knight',
+    p:[sR2(P.x),sR2(P.y),sR2(P.z),sR2(P.yaw)],vl:[sR1(P.vx),sR1(P.vy),sR1(P.vz)],
+    s:P.state,a:[sR2(P.atkT),P.atkIdx|0,sR2(P.rollT),sR2(P.spinT),sR2(P.deadT)],sp:sR2(P.sp),
+    fl:(P.swim?1:0)|(P.gliding?2:0)|(P.climbing?4:0)|(P.grounded?8:0)|(P.dead?16:0),
+    ht:sR2(Math.max(0,P.hurtT)),lf:sR2(P.c.lift),fx:sR2(P.flash),em:P.emote?P.emote.kind:0,mt:P.mount?OW.horses.indexOf(P.mount):-1,
+    hud:[Math.ceil(P.hp),P.maxhp,Math.round(P.st),P.maxst,Math.round(P.mp),game.xp,game.lvl,game.coins,game.pots,sR2(game.hurtV)],
+    c:[sR2(cam.yaw),sR2(cam.pitch),sR1(cam.dist),game.mode,sR2(cam.shake)],
+    T:Math.round(game.T*1e4)/1e4,rn:sR2(WX.rain),q:[game.stage,sBits(game.shards,Boolean)],
+    ow:[sBits(OW.towers,t=>t.on),sBits(OW.sprites,p=>p.got),sBits(world.chests,c=>c.opened)],
+    b:game.boss&&game.boss.awake&&game.boss.state!=='dead'?game.boss.id:0,k:[...game.killed],e:E,pj:PJ2,dc:DC,po:PO,sh:SH};
+}
+
+const WS={f:null,at:0,fid:0,name:'',over:false,seen:false,placed:false,ban:null,con:null,bt:'',ct:'',bT:0,ow:'',q:-1,popMax:0,shards:new Map(),shSeen:new Set(),byId:new Map()};
+function watchStart(){
+  swapHero('knight');
+  const P=game.player;P.state='free';P.dead=false;
+  $('title').hidden=true;$('hud').hidden=false;$('touch').hidden=true;$('pause').hidden=true;$('dead').hidden=true;$('end').hidden=true;$('dlg').hidden=true;
+  game.st='play';game.dialog=null;game.lock=null;WX.next=1e12;
+  const b=document.createElement('div');b.id='watchban';document.body.appendChild(b);WS.ban=b;
+  const c=document.createElement('div');c.id='watchcon';document.body.appendChild(c);WS.con=c;
+  wsBanner();
+}
+function wsBanner(){
+  if(!WS.ban)return;
+  const nm=WS.name||'your friend',f=WS.f,live=!!f&&performance.now()-WS.at<4000;
+  let b='👀 Watching '+nm,c='';
+  if(WS.over)b+=' · match over';
+  if(!WS.seen)c=WS.over?'':'Connecting to '+nm+'’s game…';
+  else if(!live){if(!WS.over)c='Waiting for '+nm+'’s game…';}
+  else if(f.st!=='play'&&f.st!=='pause')c=nm+' is on the title screen…';
+  else if(f.st==='pause')b+=' · paused';
+  else if(f.fl&16)b+=' · fallen';
+  if(b!==WS.bt){WS.bt=b;WS.ban.textContent=b;}
+  if(c!==WS.ct){WS.ct=c;WS.con.textContent=c;WS.con.hidden=!c;}
+}
+function watchFrame(f){
+  if(!f||typeof f!=='object')return;
+  WS.f=f;WS.at=performance.now();WS.fid++;WS.seen=true;
+  if((f.st==='play'||f.st==='pause')&&Array.isArray(f.p)){try{watchApply(f);}catch(e){console.warn('[Emberfall] watch frame',e);}}
+  wsBanner();
+}
+/* once per frame received: everything that jumps rather than glides */
+function watchApply(f){
+  const P=game.player;
+  if(typeof f.h==='string'&&WS_OWN(HEROES,f.h)&&f.h!==game.hero){swapHero(f.h);P.c.lift=0;}
+  const cc=Array.isArray(f.c)?f.c:[0,.38,7.5,'third',0];
+  if(!WS.placed){WS.placed=true;P.x=f.p[0];P.y=f.p[1];P.z=f.p[2];P.yaw=f.p[3];cam.yaw=+cc[0]||0;cam.pitch=+cc[1]||.38;cam.dist=+cc[2]||7.5;cam.init=false;}
+  if((cc[3]==='third'||cc[3]==='first'||cc[3]==='top')&&cc[3]!==game.mode){game.mode=cc[3];cam.init=false;}
+  const u=Array.isArray(f.hud)?f.hud:[];
+  P.hp=+u[0]||0;P.maxhp=+u[1]||100;P.st=+u[2]||0;P.maxst=+u[3]||100;P.mp=+u[4]||0;
+  game.xp=+u[5]||0;game.lvl=+u[6]||1;game.coins=+u[7]||0;game.pots=+u[8]||0;game.hurtV=Math.max(game.hurtV,+u[9]||0);
+  P.state=typeof f.s==='string'?f.s:'free';
+  const fl=f.fl|0;P.swim=!!(fl&1);P.gliding=!!(fl&2);P.climbing=!!(fl&4);P.grounded=!!(fl&8);P.dead=!!(fl&16);
+  game.T=(+f.T||0)%1;WX.target=WX.rain=clamp(+f.rn||0,0,1);WX.next=1e12;
+  /* the quest, and the world's switches when they change */
+  const q=Array.isArray(f.q)?f.q:[0,0];
+  if((q[0]|0)!==game.stage||(q[1]|0)!==WS.q){WS.q=q[1]|0;game.stage=q[0]|0;game.shards=[sBit(q[1],0),sBit(q[1],1),sBit(q[1],2)];setQuestText();
+    if(game.stage>=3&&world.brazier&&!world.brazier.lit){world.brazier.lit=true;world.gate.open=1;world.gate.g.position.y=world.gate.y0-8.2;if(world.gateBoxRef){world.gateBoxRef.hw=.01;world.gateBoxRef.hd=.01;}}}
+  const ow=Array.isArray(f.ow)?f.ow:[0,0,0],owk=ow.join();
+  if(owk!==WS.ow){WS.ow=owk;
+    OW.towers.forEach((t,i)=>{const on=sBit(ow[0],i);if(on!==!!t.on){t.on=on;owPaintTower(t);}});
+    let n=0;OW.sprites.forEach((p,i)=>{const got=sBit(ow[1],i);if(got!==!!p.got){p.got=got;p.m.visible=!got;}if(got)n++;});
+    OW.count=n;const se=$('sprites');if(se)se.textContent=n+'/'+OW.nSprites;
+    world.chests.forEach((c,i)=>{const op=sBit(ow[2],i);if(op&&!c.opened)c.opened=true;else if(!op&&c.opened){c.opened=false;c.open=0;c.lid.rotation.x=0;}});}
+  /* the horse and the emote */
+  const h=f.mt>=0?OW.horses[f.mt]||null:null;
+  if(h!==(P.mount||null)){
+    if(P.mount){const o=P.mount;o.mounted=false;if(o.rein)o.rein.visible=false;o.x=P.x+Math.cos(P.yaw)*1.6;o.z=P.z-Math.sin(P.yaw)*1.6;o.y=gh(o.x,o.z);o.yaw=P.yaw;P.mount=null;}
+    resetPose(P.c);if(h){P.mount=h;h.mounted=true;}}
+  if(f.em&&!P.mount){if(!P.emote||P.emote.kind!==f.em)P.emote={kind:String(f.em),t:0};}else P.emote=null;
+  /* enemies: the page's own, matched by id (the world spawns the same ones, same ids); one it lacks (a summoned goblin,
+     the Colossus) is spawned by kind */
+  game.killed=new Set(Array.isArray(f.k)?f.k:[]);
+  const by=WS.byId;by.clear();for(const e of game.enemies)by.set(e.id,e);
+  for(const w of Array.isArray(f.e)?f.e:[]){
+    if(!Array.isArray(w)||w.length<17)continue;
+    let e=by.get(w[0]);
+    if(!e){if(w[6]==='dead'||typeof w[1]!=='string'||!(WS_OWN(BOSSDEF,w[1])||WS_OWN(ETYPES,w[1])))continue;game.killed.delete(w[0]);e=spawnEnemy(w[1],+w[2]||0,+w[4]||0,w[0],[+w[2]||0,+w[4]||0]);if(!e)continue;by.set(e.id,e);e._wS=0;}
+    e._w=w;e._wF=WS.fid;e.state=String(w[6]);e.hp=+w[7]||0;e.awake=!!w[16];
+  }
+  game.boss=f.b?by.get(f.b)||null:null;
+  /* shots: the page's pool, refilled from each frame and carried on by their velocity between frames */
+  for(let i=projs.length-1;i>=0;i--)projFree(i);
+  for(const s of Array.isArray(f.pj)?f.pj:[]){const p=fireProj({kind:s[0]?'orb':'arrow',x:+s[1],y:+s[2],z:+s[3],vx:+s[4]||0,vy:+s[5]||0,vz:+s[6]||0,col:+s[7]||0xffd070,r:+s[8]||.35,life:.35});p.m.position.set(p.x,p.y,p.z);}
+  /* boss rings */
+  for(const d of decals)d.visible=false;
+  for(const s of Array.isArray(f.dc)?f.dc:[]){const d=getDecal();if(!d)break;d.visible=true;d.userData.owner=null;d.position.set(+s[0],+s[1],+s[2]);d.scale.set(+s[3]||1,1,+s[3]||1);d.userData.r=+s[3]||1;d.userData.a.material.color.setHex(+s[5]||0xff3a2a);d.userData.b.material.color.setHex(+s[5]||0xff3a2a);decalFill(d,+s[4]||0);}
+  /* damage numbers: each once (ids only grow; a smaller one means the player's page started again) */
+  const po=Array.isArray(f.po)?f.po:[];let mx=0;for(const s of po)mx=Math.max(mx,+s[0]||0);
+  if(po.length&&mx<WS.popMax)WS.popMax=0;
+  for(let i=po.length-1;i>=0;i--){const s=po[i];if(!(+s[0]>WS.popMax))continue;game.pops.push({x:+s[1],y:+s[2],z:+s[3],txt:String(s[4]),col:String(s[5]||'#fff'),big:!!s[6],t:+s[7]||0});}
+  if(mx>WS.popMax)WS.popMax=mx;
+  /* shards on the ground */
+  const ss=WS.shSeen;ss.clear();
+  for(const s of Array.isArray(f.sh)?f.sh:[]){ss.add(s[0]);if(WS.shards.has(s[0]))continue;
+    const p=dropPickup('shard',+s[1],+s[3],+s[2]);p.idx=s[0];p.col=+s[4]||0xffffff;p.m.material.color.setHex(p.col);if(p.beam)p.beam.material.color.setHex(p.col);WS.shards.set(s[0],p);}
+  for(const [i,p] of WS.shards)if(!ss.has(i)){scene.remove(p.m);if(p.beam)scene.remove(p.beam);const j=game.pickups.indexOf(p);if(j>=0)game.pickups.splice(j,1);WS.shards.delete(i);}
+}
+/* every animation frame: ease toward the latest frame and pose everything with the game's own pose functions */
+function watchStep(dt){
+  const f=WS.f,P=game.player,now=performance.now();
+  PERFX.dt=dt;game.time+=dt;updateWind(game.time);
+  if(now-WS.bT>250){WS.bT=now;wsBanner();}
+  if(!WS.placed||!f||!(f.st==='play'||f.st==='pause')||!Array.isArray(f.p))return;
+  const age=f.st==='pause'?0:Math.min((now-WS.at)/1000,.2),k=1-Math.exp(-dt*14),ek=1-Math.exp(-dt*12);
+  /* the hero: toward where the frame puts it now (its velocity carries it on between frames) */
+  const p=f.p,v=Array.isArray(f.vl)?f.vl:[0,0,0];
+  const tx=p[0]+v[0]*age,tz=p[2]+v[2]*age,g0=gh(p[0],p[2]);
+  let ty=p[1];if(P.swim){}else if(P.grounded){if(Math.abs(p[1]-g0)<.3)ty=p[1]+gh(tx,tz)-g0;}else ty=p[1]+v[1]*age;
+  if(Math.abs(tx-P.x)>8||Math.abs(tz-P.z)>8||Math.abs(ty-P.y)>8){P.x=tx;P.y=ty;P.z=tz;cam.init=false;}
+  else{P.x+=(tx-P.x)*k;P.y+=(ty-P.y)*k;P.z+=(tz-P.z)*k;}
+  P.yaw+=angDiff(P.yaw,+p[3]||0)*k;P.vx=+v[0]||0;P.vy=+v[1]||0;P.vz=+v[2]||0;
+  const a=Array.isArray(f.a)?f.a:[0,0,0,0,0];P.atkIdx=clamp(a[1]|0,0,2);
+  P.atkT=P.state==='attack'?Math.min(1,(+a[0]||0)+age/[.44,.44,.66][P.atkIdx]):0;
+  P.rollT=P.state==='roll'?Math.min(1,(+a[2]||0)+age/.52):0;
+  P.spinT=P.state==='spin'?Math.min(1,(+a[3]||0)+age/.78):0;
+  P.deadT=(+a[4]||0)+(P.dead?age:0);
+  P.hurtT=Math.max(0,(+f.ht||0)-age);P.flash=Math.max(0,(+f.fx||0)-age);
+  P.sp+=((+f.sp||0)-P.sp)*k;P.phase+=dt*(6+Math.hypot(P.vx,P.vz)*1.35);
+  const c=P.c;
+  if(P.dead){poseHumanoid(c,{sp:0,phase:0,dead:Math.min(1,P.deadT*2.2)},game.time);c.root.position.set(P.x,P.y,P.z);c.root.rotation.y=P.yaw;setFlash(c,0);}
+  else{
+    const st={sp:P.sp,phase:P.phase,seed:0,swim:P.swim,hit:P.hurtT>0?P.hurtT/.25:0,atk:P.state==='attack'?P.atkT:-1,atkIdx:P.atkIdx,roll:P.state==='roll'?P.rollT:-1,spin:P.state==='spin'?P.spinT:-1};
+    c.lift=(c.lift||0)+((+f.lf||0)-(c.lift||0))*k;
+    st.glide=P.gliding||P.climbing;poseHumanoid(c,st,game.time);applyEmote(P,c,game.time);
+    let rideY=0;
+    if(P.mount){const hs=clamp(Math.hypot(P.vx,P.vz)/HORSE_WALK,0,1.4);rideY=1.2+Math.abs(Math.sin(P.mount.ph))*.12*hs;
+      c.legs[0].rotation.set(-.95,0,-.62);c.legs[1].rotation.set(-.95,0,.62);
+      if(P.state==='free'){c.arms[0].rotation.set(-1.25,0,.12);c.arms[1].rotation.set(-1.25,0,-.12);c.pivot.rotation.x=.28+hs*.12;}}
+    c.root.position.set(P.x,P.y+(P.swim?-.1:0)+rideY,P.z);c.root.rotation.y=P.yaw;
+    if(P.mount&&P.mount.rein){const hm=P.mount,pa=hm.rein.geometry.attributes.position;hm.g.updateMatrixWorld(true);c.root.updateMatrixWorld(true);
+      for(let i=0;i<2;i++){const hp=c.arms[i].localToWorld(_reinH.set(0,-.62,0));const b=_reinB.set((i?1:-1)*.2,2.5,2.1);hm.g.localToWorld(b);pa.setXYZ(i*2,hp.x,hp.y,hp.z);pa.setXYZ(i*2+1,b.x,b.y,b.z);}
+      pa.needsUpdate=true;hm.rein.visible=true;}
+    setFlash(c,P.flash>0?P.flash*2.5:(P.state==='roll'?.15:0));
+    updateTrail(P.trail,c,P.state==='attack'&&P.atkT>.25&&P.atkT<.75||P.state==='spin',dt,P.state==='spin'?[.5,.8,1]:(P.atkIdx===2?[1,.7,.3]:[.9,.95,1]));
+  }
+  c.root.visible=true;
+  /* enemies: the ones in the frame follow it; the rest stand where they were last seen (the killed ones are gone) */
+  for(const e of game.enemies){
+    const c2=e.c,w=e._w;
+    if(w&&e._wF===WS.fid){
+      if(!e._wS||Math.abs(w[2]-e.x)>6||Math.abs(w[4]-e.z)>6){e._wS=1;e.x=+w[2]||0;e.z=+w[4]||0;e.yaw=+w[5]||0;}
+      else{e.x+=(w[2]-e.x)*ek;e.z+=(w[4]-e.z)*ek;e.yaw+=angDiff(e.yaw,+w[5]||0)*ek;}
+      e.y=gh(e.x,e.z);e.sp+=((+w[13]||0)-e.sp)*ek;e.flash=+w[14]||0;e.hit=+w[12]||0;
+      e.phase+=dt*(5+e.sp*(e.def.spd||5)*1.8);
+      if(e.state==='dead'){e.deadT=(+w[15]||0)+age/.9;poseAny(e,{sp:0,phase:e.phase,dead:Math.min(1,e.deadT),seed:e.seed});c2.root.position.set(e.x,e.y-Math.max(0,e.deadT-1.4)*.54,e.z);setFlash(c2,0);}
+      else{const st={sp:e.sp,phase:e.phase,windup:+w[8],atk:+w[9],bow:+w[10],recover:+w[11],hit:e.hit,seed:e.seed};if(e.boss)st.atkIdx=2;poseAny(e,st);
+        c2.root.position.set(e.x,e.y,e.z);
+        setFlash(c2,e.flash>0?e.flash*(e.boss?3:3.5):(e.state==='windup'?(e.boss?.2+.15*Math.sin(game.time*28):.25+.2*Math.sin(game.time*30)):0));}
+      c2.root.rotation.y=e.yaw;c2.root.visible=true;
+      if(e.trail)updateTrail(e.trail,c2,e.state==='charge'||(e.state==='recover'&&+w[9]>=0),dt,e.def.ele==='ice'?[.5,.9,1]:[1,.6,.2]);
+    }else{
+      if(game.killed.has(e.id)){e.state='dead';c2.root.visible=false;if(e.trail)e.trail.m.visible=false;continue;}
+      if(e.state==='dead')e.hp=e.maxhp;
+      e.state='idle';e.awake=false;e.flash=0;
+      const vis=Math.abs(e.x-P.x)<75&&Math.abs(e.z-P.z)<75;c2.root.visible=vis;
+      if(vis){e.y=gh(e.x,e.z);poseAny(e,{sp:0,phase:e.phase,seed:e.seed});c2.root.position.set(e.x,e.y,e.z);c2.root.rotation.y=e.yaw;setFlash(c2,0);}
+      if(e.trail)e.trail.m.visible=false;
+    }
+  }
+  /* shots fly on between frames; damage numbers rise and fade; shards turn */
+  for(let i=projs.length-1;i>=0;i--){const q=projs[i];q.life-=dt;if(q.life<=0){projFree(i);continue;}
+    q.x+=q.vx*dt;q.y+=q.vy*dt;q.z+=q.vz*dt;q.m.position.set(q.x,q.y,q.z);
+    if(q.kind==='arrow')q.m.rotation.set(PI/2-Math.atan2(q.vy,Math.hypot(q.vx,q.vz)),Math.atan2(q.vx,q.vz),0);
+    if(R()<.6)spark(q.x,q.y,q.z,RR(-.5,.5),RR(-.5,.5),RR(-.5,.5),q.col||0xffc060,.35,.12,0);}
+  {let j=0;for(const q of game.pops){q.t+=dt;if(q.t<1.1)game.pops[j++]=q;}game.pops.length=j;}
+  for(const s of game.pickups)if(s.kind==='shard'){s.t+=dt;s.m.rotation.y+=dt*2;s.m.position.y=s.y+Math.sin(s.t*2.5)*.25;}
+  /* the camera as the player has it */
+  const cc=Array.isArray(f.c)?f.c:[0,.38,7.5,'third',0];game.lock=null;game.dialog=null;
+  cam.yaw+=angDiff(cam.yaw,+cc[0]||0)*k;cam.pitch+=((+cc[1]||0)-cam.pitch)*k;cam.dist+=((+cc[2]||7.5)-cam.dist)*k;cam.shake=Math.max(cam.shake,+cc[4]||0);
+  /* the world, the view and the HUD */
+  updateParticles(dt);updateNPCs(dt);
+  WX.next=1e12;worldFx(dt,P);
+  const reg=regionOf(P.x,P.z);if(reg!==lastRegion){lastRegion=reg;$('regionname').textContent=reg;}
+  updateCamera(dt);treeOcclude();updateSky(game.T,camera.position,P);weatherLook();
+  hudBars(dt,P);
+}
+
 /* ================= PlayRoom bridge (phase 6a) ================= */
 /* Embedded in PlayRoom (?embed=1, inside a frame) the page speaks the messages the earlier Emberfall spoke, unchanged:
      to the room:   {ef:'ready'} once loaded; {ef:'score',score,won,playing} once a second (rAF-driven, as before)
@@ -3884,7 +4129,7 @@ const NET={on:false,me:0,coop:false,names:{},scoreT:0,over:false,ready:false};
 function playing(){return game.st==='play'||game.st==='pause';}
 function netScore(){return Math.min(24000,game.kills*15+game.shards.filter(Boolean).length*800+(game.lvl-1)*100+(OW.count||0)*40+(game.won?5000:0));}
 function netPost(m){if(EMBED)try{parent.postMessage(m,location.origin);}catch(e){}}
-function netTick(){if(!EMBED)return;const now=performance.now();if(now-NET.scoreT>1000){NET.scoreT=now;netPost({ef:'score',score:netScore(),won:game.won?1:0,playing:playing()?1:0});}}
+function netTick(){if(!EMBED||WATCH)return;const now=performance.now();if(now-NET.scoreT>1000){NET.scoreT=now;netPost({ef:'score',score:netScore(),won:game.won?1:0,playing:playing()?1:0});}}
 function netReady(){NET.ready=true;netPost({ef:'ready'});}
 function netWho(){
   const others=Object.entries(NET.names).filter(([id])=>+id!==NET.me).map(([,n])=>n).filter(Boolean);
@@ -3910,9 +4155,12 @@ function netOver(){
 }
 if(EMBED)addEventListener('message',e=>{
   if(e.origin!==location.origin||e.source!==parent||!e.data||!e.data.ef)return;const m=e.data;
-  if(m.ef==='init')netInit(m);
+  if(m.ef==='frame'){if(WATCH)watchFrame(m.f);}
+  else if(m.ef==='spec-want'){if(!WATCH)SPEC.until=performance.now()+3000;}
+  else if(m.ef==='init'){netInit(m);if(WATCH&&m.watch){WS.name=String(m.watch.name||'');wsBanner();}}
+  else if(m.ef==='watch'){if(WATCH){WS.name=String(m.name||'');WS.f=null;WS.seen=false;wsBanner();}}
   else if(m.ef==='names'){for(const p of m.peers||[])NET.names[+p.id]=p.name;netWho();}
-  else if(m.ef==='over')netOver();
+  else if(m.ef==='over'){if(WATCH){WS.over=true;wsBanner();}else netOver();}
 });
 /* fix1: full screen, so the phone's status bar goes. In PlayRoom the room page goes full screen (it holds the sideways
    turn for an upright phone; a full-screen frame would lose it): a tap here posts {ef:'fs'}, and the tap's activation
@@ -3996,6 +4244,7 @@ function perfSample(ms){
 const tick=ms=>new Promise(r=>setTimeout(r,ms));
 async function boot(){
   const prog=async(p,t)=>{$('loadbar').style.transform='scaleX('+p+')';$('loadtxt').textContent=t;await tick(30);};
+  if(WATCH)portraitOK=true;   /* fix5: a watcher can't tap "play in portrait anyway"; PlayRoom turns the frame */
   layout();buildMaterials();buildSkyAndLights();await prog(.1,'Raising the mountains…');
   buildTerrain();await prog(.3,'Planting the forests…');
   buildRuins();buildVegetation();await prog(.55,'Raising the village…');
@@ -4003,9 +4252,10 @@ async function boot(){
   buildArenas();buildParticles();await prog(.9,'Lighting the embers…');
   game.player=makePlayer();game.player.c.root.visible=true;createNPCs();
   setQuestText();applyWorld(null);
-  setMuted(muted);
-  try{heroPortraits();}catch(e){console.warn(e);}paintHeroes();
-  game.st='title';toTitle();$('load').hidden=true;layout();lockLandscape();
+  setMuted(WATCH?true:muted);
+  if(!WATCH){try{heroPortraits();}catch(e){console.warn(e);}paintHeroes();}
+  if(WATCH)watchStart();else{game.st='title';toTitle();}
+  $('load').hidden=true;layout();if(!WATCH)lockLandscape();
   lastT=performance.now();requestAnimationFrame(frame);netReady();
 }
 if(touchDev){const pn=document.querySelector('#title .panel');if(pn)pn.innerHTML='<b>Move</b> left stick (push to the edge to sprint) · <b>Look</b> drag the right side · <b>ATTACK</b> chain 3 hits · <b>ROLL</b> dodge · <b>JUMP</b> (hold in air to glide, hold at a wall to climb) · <b>SPIN</b> · <b>HEAL</b> · <b>EAT</b> · <b>TALK</b> (NPCs, chests, horse) · <b>DO</b> (fish, pick, cook, campfire) · <b>LOCK</b> target · <b>MAP</b> fast travel · <b>EMOTE</b> wave / dance / cheer / sit · <b>VIEW</b> camera · swing at trees to chop wood';}

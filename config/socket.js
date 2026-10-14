@@ -144,6 +144,28 @@ function initSocket(httpServer) {
       });
     });
 
+    // Spectating a real-time game (useSpecStream): a watcher asks for a
+    // player's frames every 2s (room:frame-want), and that player's phone
+    // sends a small picture of its game ~15 times a second while anyone is
+    // asking (room:frame). Relayed only, never stored; volatile, so a slow
+    // watcher drops frames instead of queueing them and falling behind. The
+    // sender is their verified token, never the payload.
+    let lastFrameAt = 0;
+    socket.on("room:frame-want", (msg) => {
+      const code = msg && msg.code, target = Number(msg && msg.target);
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code) || !Number.isInteger(target)) return;
+      socket.to(roomChannel(code)).emit("room:frame-want", { user_id: uid, target });
+    });
+    socket.on("room:frame", (msg) => {
+      const code = msg && msg.code, f = msg && msg.f;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      if (typeof f !== "string" || f.length > 6000) return;
+      const now = Date.now();
+      if (now - lastFrameAt < 30) return;                   // ~30 a second at most per phone
+      lastFrameAt = now;
+      socket.to(roomChannel(code)).volatile.emit("room:frame", { user_id: uid, f });
+    });
+
     // Speedway: where my car is, ~10 times a second, so everyone in the room
     // sees everyone else's car on the same track — where, which way, how fast,
     // and whether it's drifting (lv: the charge, 0-3) or boosting, so it's

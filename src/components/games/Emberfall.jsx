@@ -21,14 +21,24 @@
 // yet: it ignores ef:msg, so two players each play their own island. How the
 // old co-op worked (who runs the enemies, a second hero, two to a horse): the
 // NET section of public/emberfall/game.js, kept with index-backup-before-p6a.html.
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// Watching (useSpecStream): while a friend watches, frame() pokes the page ({ ef: 'spec-want' }) and
+// relays the newest picture it posted ({ ef: 'frame', f }); the watcher loads the page with &watch=1 and
+// posts every frame that arrives into it. The page draws the player's game from them: no input, no sound,
+// no save.
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
+import useSpecStream from "./useSpecStream";
 import { useSocket } from "../../utils/SocketContext";
 import { team as teamOf } from "./coopTeam";
 
 const SRC = `${process.env.PUBLIC_URL || ""}/emberfall/index.html?embed=1`;
+const SRC_WATCH = `${SRC}&watch=1`;
+// the page answers a poke with ~3 s of frames; poke again well inside that
+const POKE_MS = 1000;
+// a frame older than this is not sent on (the page stopped: hidden, reloading)
+const STALE_MS = 1500;
 // the floating clock / ? / Leave row is this tall; the page keeps its HUD under it on a phone
 const FLOAT_H = 50;
 
@@ -97,10 +107,42 @@ export default function Emberfall(props) {
     const w = frameRef.current && frameRef.current.contentWindow;
     if (w) w.postMessage(m, window.location.origin);
   };
+  const watchName = spectatorWatching?.username || "";
+  const watchNameRef = useRef(watchName);
+  watchNameRef.current = watchName;
   const initMsg = () => ({
     ef: "init", me: { id: myId, name: currentUser?.username || "You" }, peers: seated, coop,
     safe: safeInsets(), top: FLOAT_H,
+    ...(isSpectator ? { watch: { name: watchNameRef.current } } : {}),
   });
+
+  // live spectating: the player relays the page's newest frame, the watcher posts each one into its page
+  const lastFrame = useRef({ f: null, at: 0, poked: 0 });
+  const specFrame = useCallback(() => {
+    const L = lastFrame.current, now = Date.now();
+    if (now - L.poked > POKE_MS) { L.poked = now; post({ ef: "spec-want" }); }
+    return L.f && now - L.at < STALE_MS ? L.f : null;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const specOnFrame = useCallback((f) => { if (readyRef.current) post({ ef: "frame", f }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useSpecStream({
+    roomCode, isSpectator, myId, watchId: spectatorWatching?.user_id,
+    frame: specFrame, onFrame: specOnFrame,
+  });
+
+  // the watcher's page: told who it is watching once it has loaded, and again when that changes
+  useEffect(() => {
+    if (!isSpectator) return undefined;
+    const onMsg = (e) => {
+      if (e.origin !== window.location.origin || !frameRef.current || e.source !== frameRef.current.contentWindow) return;
+      const m = e.data;
+      if (m && m.ef === "ready") { readyRef.current = true; post(initMsg()); }
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [isSpectator]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (isSpectator && readyRef.current) post({ ef: "watch", name: watchName });
+  }, [isSpectator, watchName, spectatorWatching?.user_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // the page → the room
   useEffect(() => {
@@ -109,7 +151,8 @@ export default function Emberfall(props) {
       if (e.origin !== window.location.origin || !frameRef.current || e.source !== frameRef.current.contentWindow) return;
       const m = e.data;
       if (!m || !m.ef) return;
-      if (m.ef === "ready") { readyRef.current = true; post(initMsg()); }
+      if (m.ef === "frame") { const L = lastFrame.current; L.f = m.f; L.at = Date.now(); }
+      else if (m.ef === "ready") { readyRef.current = true; post(initMsg()); }
       else if (m.ef === "fs") enterFull();
       else if (m.ef === "leave") quitRef.current();
       else if (m.ef === "send") { if (socket && roomCode) socket.emit("ef:msg", { code: roomCode, d: m.d }); }
@@ -154,7 +197,12 @@ export default function Emberfall(props) {
         noHelp={!isSpectator}
       >
         {({ w, h }) => (isSpectator
-          ? <div className="muted">👀 Watching {spectatorWatching?.username} — {Number(spectatorWatching?.score ?? 0).toLocaleString()} pts</div>
+          ? (
+            <iframe
+              ref={frameRef} src={SRC_WATCH} title={`Emberfall: watching ${watchName || "a friend"}`} className="ef-frame"
+              style={{ width: w, height: h }} tabIndex={-1}
+            />
+          )
           : (
             <iframe
               ref={frameRef} src={SRC} title="Emberfall" className="ef-frame"

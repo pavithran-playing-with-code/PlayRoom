@@ -9,15 +9,21 @@
 // Together (a co-op room): your friends run beside you, see-through. A crash
 // knocks you down for a few seconds unless a friend grabs a ❤️ — then
 // everyone who's down is back up (runTogether.js). The side's points add up.
+//
+// Watching: the player's phone sends its runner ~15 times a second while a
+// friend watches (useSpecStream); the watcher builds the same course from the
+// seed and draws the run from those frames, carried on at the runner's speed
+// between them so it scrolls smoothly.
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useRunTogether from "./useRunTogether";
+import useSpecStream from "./useSpecStream";
 import { DOWN_S, HEART_PTS, teamGoal, hearts, heartsBetween } from "./runTogether";
 import { team } from "./coopTeam";
 import {
-  VIEW_W, DINO_X, CRASH_COST, UNITS_PER_METRE,
+  VIEW_W, DINO_X, CRASH_COST, UNITS_PER_METRE, GRAVITY,
   makeCourse, newRunner, jump, releaseJump, setDuck, step, speedAfter,
 } from "./dinoSim";
 
@@ -234,7 +240,7 @@ function draw(ctx, s, course, view, now, tg) {
 
 // The canvas, sized to the board area. Every player's view is VIEW_W units
 // wide; a taller screen just shows more sky.
-function Stage({ w, h, canvasRef, view, onDown, onUp }) {
+function Stage({ w, h, canvasRef, view, onDown, onUp, children }) {
   const WH = Math.round(Math.min(340, Math.max(190, (VIEW_W * h) / Math.max(1, w))));
   let cssW = w;
   let cssH = (w * WH) / VIEW_W;
@@ -246,11 +252,12 @@ function Stage({ w, h, canvasRef, view, onDown, onUp }) {
   useLayoutEffect(() => { view.current = { WH, k: pw / VIEW_W }; }, [view, WH, pw]);
 
   return (
-    <div className="dino-pad" style={{ width: w, height: h }}
+    <div className="dino-pad" style={{ width: w, height: h, position: "relative" }}
       onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={onUp}
       onContextMenu={(e) => e.preventDefault()}>
       <canvas ref={canvasRef} width={pw} height={ph} className="dino-canvas"
         style={{ width: cssW, height: cssH }} aria-label="Dino Dash: tap to jump" role="img" />
+      {children}
     </div>
   );
 }
@@ -297,6 +304,39 @@ export default function DinoDash(props) {
 
   const [crashes, setCrashes] = useState(0);
   const [best, setBest] = useState(0);
+
+  // Watching. The player sends its runner while someone watches; the watcher
+  // keeps the latest frames (spec) and, a few times a second, the HUD's numbers.
+  const watchId = spectatorWatching?.user_id;
+  const [specHud, setSpecHud] = useState(null);
+  const hudAt = useRef(0);
+  const spec = useSpecStream({ roomCode, isSpectator, myId, watchId,
+    frame: () => {
+      const s = sim.current, T0 = tg.current;
+      const r1 = (n) => Math.round(n * 10) / 10;
+      const hit = [];
+      for (const i of s.hit) if (i >= s.first) hit.push(i);
+      const f = {
+        x: r1(s.x), r: r1(s.run), y: r1(s.y), vy: Math.round(s.vy),
+        du: s.duck ? 1 : 0, st: s.started ? 1 : 0, sn: Math.round(s.stun * 100) / 100,
+        v: s.stun > 0 || !s.started || overRef.current ? 0 : Math.round(speedAfter(s.run)),
+        p: Math.floor(s.points), cr: s.crashes, b: Math.round(s.best), fi: s.first, hit,
+      };
+      if (coop) {
+        f.dn = T0.down ? 1 : 0;
+        // hearts this runner has taken that are still on (or coming onto) the screen
+        f.hg = heartsBetween(heartAt, s.x - DINO_X - 40, s.x + VIEW_W + 400).filter((x) => T0.got.has(x.k)).map((x) => x.k);
+      }
+      return f;
+    },
+    onFrame: (f) => {
+      const now = performance.now();
+      if (specHud && specHud.id === watchId && now - hudAt.current < 300) return;
+      hudAt.current = now;
+      setSpecHud({ id: watchId, p: f.p, cr: f.cr, b: f.b });
+    },
+  });
+  const hud = specHud && specHud.id === watchId ? specHud : null;
 
   const canPlay = () => !overRef.current && !isSpectator;
   const press = useCallback(() => { if (canPlay()) jump(sim.current); }, [isSpectator]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -376,8 +416,65 @@ export default function DinoDash(props) {
     return () => { cancelAnimationFrame(raf); clearTimeout(autoStart); };
   }, [isSpectator, course, addScore, coop, heartAt, tell, mates, say]);
 
+  // The watcher's loop: the watched run, drawn from its frames. Distance runs
+  // on at the frame's speed and is eased onto where the frames say; a jump
+  // carries on under gravity. Nothing here touches the player's sim.
+  useEffect(() => {
+    if (!isSpectator) return undefined;
+    let raf;
+    let last = performance.now();
+    let lastL = null;
+    let shown = false;
+    const s = newRunner();
+    s.started = true;                // no "tap to jump" under the connecting note
+    let got = new Set();
+    const frame = (now) => {
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+      last = now;
+      const L = spec.current;
+      if (L) {
+        const f = L.f;
+        if (L !== lastL) {
+          lastL = L;
+          s.hit = new Set(f.hit || []);
+          s.first = f.fi || 0;
+          got = new Set(f.hg || []);
+        }
+        const t = Math.min(0.35, Math.max(0, (now - L.at) / 1000));   // frames stopped: stop too
+        const v = t < 0.35 ? f.v || 0 : 0;
+        const goalX = f.x + v * t;
+        let goalY = 0;
+        if (f.y > 0 || f.vy > 0) goalY = Math.max(0, f.y + f.vy * t - (GRAVITY * (f.du ? 3 : 1) * t * t) / 2);
+        if (!shown || Math.abs(goalX - s.x) > 400) { s.x = goalX; s.y = goalY; shown = true; }
+        else {
+          const ahead = s.x + v * dt;
+          s.x = ahead + (goalX - ahead) * Math.min(1, dt * 8);
+          s.y = s.y <= 0 || goalY <= 0 ? goalY : s.y + (goalY - s.y) * Math.min(1, dt * 18);
+        }
+        s.run = f.r + Math.max(0, s.x - f.x);
+        s.duck = !!f.du;
+        s.started = !!f.st;
+        s.stun = Math.max(0, (f.sn || 0) - t);
+        course.extend(s.x + VIEW_W + 400);
+      }
+      const c = canvasRef.current;
+      if (c) {
+        const extra = coop ? {
+          down: !!(L && L.f.dn),
+          hearts: heartsBetween(heartAt, s.x - DINO_X - 40, s.x + VIEW_W).filter((x) => !got.has(x.k)).map((x) => x.at),
+          mates: mates().filter((m) => m.id !== Number(watchId))
+            .map((m) => ({ ...m, col: Tref.current.colourOf(m.id), name: Tref.current.nameOf(m.id) })),
+        } : null;
+        draw(c.getContext("2d"), s, course, view.current, now, extra);
+      }
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [isSpectator, spec, watchId, course, coop, heartAt, mates]);
+
   const oppList = Object.values(eng.opponents);
-  const specScore = spectatorWatching?.score ?? 0;
+  const specScore = hud ? hud.p : spectatorWatching?.score ?? 0;
   const bestRun = Math.max(best, sim.current.run);
   // together: the side's points, against the team goal
   const seats = (players || []).filter((p) => !p.is_spectator);
@@ -389,7 +486,10 @@ export default function DinoDash(props) {
     ? [{ label: "Team", value: teamTotal.toLocaleString() },
        { label: "Goal", value: teamTotal >= goal ? "✓" : goal.toLocaleString() }]
     : isSpectator
-    ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
+    ? [
+        { label: "Score", value: Number(specScore).toLocaleString() },
+        ...(hud ? [{ label: "Best run", value: `${Math.floor(hud.b / UNITS_PER_METRE)}m` }, { label: "Crashes", value: hud.cr }] : []),
+      ]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
         { label: "Best run", value: `${Math.floor(best / UNITS_PER_METRE)}m` },
@@ -425,9 +525,13 @@ export default function DinoDash(props) {
         controls={controls}
       >
         {({ w, h }) => (isSpectator ? (
-          <div className="muted">
-            👀 Watching {spectatorWatching?.username} — {Number(specScore).toLocaleString()} pts
-          </div>
+          <Stage w={w} h={h} canvasRef={canvasRef} view={view}>
+            {!hud && (
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                <span className="chip">Connecting to {spectatorWatching?.username || "the player"}'s run…</span>
+              </div>
+            )}
+          </Stage>
         ) : (
           <Stage w={w} h={h} canvasRef={canvasRef} view={view}
             onDown={(e) => { if (e.pointerType !== "mouse" || e.button === 0) press(); }}

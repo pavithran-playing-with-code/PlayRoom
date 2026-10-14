@@ -11,8 +11,10 @@
 //   • the page posts its score (and whether the Colossus is down) once a
 //     second; the engine syncs it like any game (pairs_matched 1 = the win)
 //   • the room's clock running out pauses the page
-// Who runs the enemies, how a second hero is drawn, riding two to a horse:
-// the NET section of public/emberfall/game.js.
+// The current page (the mobile rebuild) speaks the same bridge but has no co-op
+// yet: it ignores ef:msg, so two players each play their own island. How the
+// old co-op worked (who runs the enemies, a second hero, two to a horse): the
+// NET section of public/emberfall/game.js, kept with index-backup-before-p6a.html.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";

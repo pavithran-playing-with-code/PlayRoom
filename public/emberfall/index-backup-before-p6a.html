@@ -1,0 +1,152 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Emberfall</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Alegreya+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: full-bleed WebGL scene, parchment-and-ember HUD panels hugging the edges */
+:root{--ember:#ff8a3d;--gold:#ffd27a;--parch:#f3e3bd;--bark:#3a2417;--night:#0e1a2b;--hp:#e5483f;--st:#6fd36b;--mp:#58b7ff;--disp:'Cinzel','Trajan Pro',Georgia,serif;--body:'Alegreya Sans','Segoe UI',system-ui,sans-serif;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;background:#0b1522;font-family:var(--body);color:var(--parch);touch-action:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+#hud2{pointer-events:none}
+#vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 50%,rgba(20,8,0,.5) 100%),linear-gradient(rgba(255,160,70,.07),rgba(255,160,70,.07));z-index:2}
+#hurt{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,rgba(210,20,20,.65) 100%);opacity:0;z-index:2;transition:opacity .25s}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:9;transition:opacity .6s}
+.hud{position:fixed;z-index:3;pointer-events:none}
+#bars{left:16px;top:14px;width:min(320px,52vw);display:flex;flex-direction:column;gap:6px}
+.lvl{font:800 15px var(--disp);letter-spacing:1px;color:var(--gold);text-shadow:0 2px 3px #000;display:flex;gap:10px;align-items:baseline}
+.bar{height:16px;border-radius:9px;background:rgba(10,8,6,.62);border:2px solid #7a5a35;overflow:hidden;position:relative;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.bar i{display:block;height:100%;width:100%;transform-origin:left;transition:transform .12s}
+#hpb i{background:linear-gradient(#ff7b6e,var(--hp) 55%,#a02720)}
+#hpb{height:20px}
+#stb{height:11px;width:75%}#stb i{background:linear-gradient(#a6f29f,var(--st))}
+#mpb{height:8px;width:55%}#mpb i{background:linear-gradient(#a9dcff,var(--mp))}
+#xpb{height:5px;width:100%;border-width:1px}#xpb i{background:#ffd27a}
+.bar b{position:absolute;inset:0;font:700 12px var(--body);text-align:center;line-height:16px;text-shadow:0 1px 2px #000;color:#fff}
+#hpb b{line-height:16px}
+#inv{display:flex;flex-wrap:wrap;max-width:360px;gap:2px 12px;font:700 16px var(--body);text-shadow:0 2px 3px #000;margin-top:2px}
+#inv span b{color:var(--gold)}
+#quest{right:16px;top:14px;max-width:min(280px,46vw);background:linear-gradient(rgba(36,22,12,.82),rgba(24,14,8,.82));border:2px solid #7a5a35;border-radius:12px;padding:10px 14px;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+#quest h4{margin:0 0 4px;font:800 13px var(--disp);letter-spacing:1.5px;color:var(--ember)}
+#quest p{margin:0;font-size:15px;line-height:1.25}
+#quest .sh{display:flex;gap:6px;margin-top:6px}
+#quest .sh s{width:16px;height:16px;transform:rotate(45deg) scale(.8);border:2px solid #7a5a35;background:#2a1a10;display:block}
+#quest .sh s.on{background:var(--c);box-shadow:0 0 10px var(--c);border-color:#fff}
+#prompt{left:50%;bottom:17%;transform:translateX(-50%);font:700 18px var(--body);background:rgba(20,12,6,.8);border:2px solid var(--ember);border-radius:12px;padding:7px 16px;white-space:nowrap}
+#prompt kbd{background:var(--ember);color:#2a1408;border-radius:6px;padding:1px 8px;margin-right:6px;font-family:var(--disp);font-weight:800}
+#boss{left:50%;bottom:40px;transform:translateX(-50%);width:min(620px,82vw);text-align:center}
+#boss h3{margin:0 0 4px;font:800 18px var(--disp);letter-spacing:3px;text-shadow:0 2px 4px #000}
+#boss .bar{height:18px;border-color:#a8432b}#boss .bar i{background:linear-gradient(#ff9a5c,#d0391c 55%,#7a1710)}
+#toast{left:50%;top:78px;transform:translateX(-50%);font:800 22px var(--disp);letter-spacing:2px;color:var(--gold);text-shadow:0 3px 6px #000;opacity:0;transition:opacity .4s;text-align:center;white-space:nowrap}
+#dlg{left:50%;bottom:7%;transform:translateX(-50%);width:min(680px,92vw);background:linear-gradient(rgba(44,28,16,.95),rgba(26,16,9,.95));border:3px solid #a2793f;border-radius:14px;padding:14px 20px 12px;box-shadow:0 8px 30px rgba(0,0,0,.6);pointer-events:auto;z-index:6}
+#dlg h5{margin:0 0 6px;font:800 16px var(--disp);color:var(--ember);letter-spacing:2px}
+#dlg p{margin:0;font-size:20px;line-height:1.35;min-height:54px}
+#dlg small{display:block;text-align:right;opacity:.7;margin-top:4px}
+#dlg .opts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#dlg button{font:700 17px var(--body);padding:6px 14px;border-radius:9px}
+.ov{position:fixed;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:14px;padding:18px;text-align:center;overflow:auto}
+/* centred, but a screen too short for it scrolls from the top instead of cutting the heading off */
+.ov>:first-child{margin-top:auto}.ov>:last-child{margin-bottom:auto}
+.mapopen #bars,.mapopen #quest,.mapopen #touch,.mapopen #prompt,.mapopen #menubtn,.mapopen #boss{visibility:hidden}
+#title{background:linear-gradient(rgba(6,12,24,.35),rgba(6,12,24,.1) 40%,rgba(6,12,24,.7))}
+#title h1{margin:0;font:800 clamp(48px,11vw,118px)/.95 var(--disp);letter-spacing:6px;color:#ffe3a8;text-shadow:0 0 30px #ff8a3d,0 4px 0 #8a3a14,0 10px 24px rgba(0,0,0,.7)}
+#title .tag{font:600 clamp(14px,2.6vw,22px) var(--disp);letter-spacing:5px;color:#fff;text-shadow:0 2px 8px #000}
+button{font:800 20px var(--disp);letter-spacing:2px;border:2px solid #a2793f;border-radius:12px;padding:10px 26px;background:linear-gradient(#5a3a22,#3a2417);color:var(--gold);cursor:pointer;box-shadow:0 4px 0 #1e110a}
+button:hover{background:linear-gradient(#7a5030,#4a2e1a)}
+button:active{transform:translateY(2px);box-shadow:0 2px 0 #1e110a}
+button.main{background:linear-gradient(#ffa24f,#e0661c);color:#2a1408;border-color:#ffd9a0;font-size:24px;padding:12px 40px}
+button.sel{outline:3px solid var(--gold)}
+button.hero{display:flex;flex-direction:column;align-items:center;padding:6px 10px 8px;min-width:118px;font-size:15px;letter-spacing:1px}
+button.hero img{width:104px;height:135px;object-fit:contain;margin-bottom:2px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.5));transition:transform .2s}
+button.hero:hover img,button.hero.sel img{transform:scale(1.08) translateY(-3px)}
+@media (max-height:800px){button.hero img{width:72px;height:94px}button.hero{min-width:96px}}
+button.hero.sel{background:linear-gradient(#a06a38,#5a3a22);box-shadow:0 0 0 3px var(--gold),0 4px 0 #1e110a}
+button:focus-visible{outline:3px solid #fff}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.panel{max-width:720px;background:rgba(20,12,6,.82);border:2px solid #7a5a35;border-radius:14px;padding:12px 18px;font-size:16px;line-height:1.5;text-align:left}
+.panel b{color:var(--ember)} .panel kbd{background:#4a3020;border-radius:5px;padding:0 6px;font-family:var(--disp);font-size:13px;color:var(--gold)}
+#pause,#end,#dead{background:rgba(6,10,18,.8)}
+h2{margin:0;font:800 clamp(32px,6vw,56px) var(--disp);letter-spacing:4px;color:var(--gold);text-shadow:0 3px 10px #000}
+#load{background:#0b1522;z-index:20}
+#load .bar{width:min(320px,70vw);height:12px}#load .bar i{background:var(--ember);transform:scaleX(0)}
+/* touch: stick bottom-left, actions in an arc under the right thumb, small tools in a column (upright) or a row (sideways) over the stick */
+:root{--st:0px;--sb:0px;--sl:0px;--sr:0px;--top:0px}
+#touch{position:fixed;top:var(--st);bottom:var(--sb);left:var(--sl);right:var(--sr);z-index:4;pointer-events:none}
+#look{position:absolute;inset:0;pointer-events:auto;touch-action:none}
+#joy{position:absolute;left:16px;bottom:20px;width:124px;height:124px;border-radius:50%;background:rgba(255,255,255,.1);border:3px solid rgba(255,255,255,.3);pointer-events:auto;touch-action:none}
+#knob{position:absolute;left:38px;top:38px;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.55)}
+.tb{position:absolute;border-radius:50%;pointer-events:auto;touch-action:none;padding:0;font:800 12px var(--disp);letter-spacing:0;display:flex;align-items:center;justify-content:center;opacity:.92;box-shadow:0 3px 0 #1e110a}
+#tAtk{right:18px;bottom:28px;width:84px;height:84px;font-size:14px;background:radial-gradient(#ffb36b,#e0661c);color:#2a1408}
+#tJump{right:112px;bottom:16px;width:64px;height:64px}
+#tRoll{right:112px;bottom:92px;width:56px;height:56px}
+#tSpec{right:22px;bottom:124px;width:56px;height:56px;color:#9fd8ff}
+#tLock{right:84px;bottom:160px;width:46px;height:46px;font-size:10px}
+#tUse{right:186px;bottom:36px;width:54px;height:54px;font-size:11px}
+#tDo{right:186px;bottom:100px;width:54px;height:54px;font-size:11px;background:radial-gradient(#9fe8a0,#3f9a4a);color:#10240f}
+#tPot,#tEat,#tMap,#tCam,#tEmo{left:20px;width:46px;height:46px;font-size:10px}
+#tPot{bottom:156px}#tEat{bottom:206px}#tMap{bottom:256px}#tCam{bottom:306px}#tEmo{bottom:356px}
+#emo{position:absolute;left:74px;bottom:352px;display:none;gap:8px;pointer-events:auto}
+#emo.on{display:flex}
+#emo .tb{position:static;width:54px;height:54px;font-size:10px}
+@media (max-height:560px){
+ #joy{width:112px;height:112px;bottom:14px}#knob{left:32px;top:32px}
+ #tPot,#tEat,#tMap,#tCam,#tEmo{bottom:136px}
+ #tPot{left:16px}#tEat{left:68px}#tMap{left:120px}#tCam{left:172px}#tEmo{left:224px}
+ #emo{left:16px;bottom:188px}
+}
+#mapov{position:fixed;inset:0;z-index:7;pointer-events:none}
+#mapov button{pointer-events:auto}
+#mapx{position:absolute;right:12px;top:12px;font-size:15px;padding:8px 14px}
+#mapl{position:absolute;left:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;max-height:80vh;overflow:auto;pointer-events:auto}
+#mapl b{font:700 13px var(--body);color:#ffe27a;letter-spacing:.06em}
+#mapl button{font-size:14px;padding:7px 12px;text-align:left}
+#menubtn{position:fixed;right:12px;bottom:12px;z-index:5;font-size:14px;padding:6px 12px;opacity:.85}
+/* inside PlayRoom: its clock and Leave float top-centre, and on a phone a corner menu would sit under a thumb */
+body.embed #bars{left:calc(16px + var(--sl));top:calc(14px + var(--st))}body.embed #quest{right:calc(16px + var(--sr));top:calc(14px + var(--st))}
+@media (max-width:699px){body.embed #bars,body.embed #quest{top:calc(10px + var(--top))}}
+body.embed #toast{top:calc(var(--top) + 96px)}
+.touchui #toast,body.embed #toast{top:34%;white-space:normal;width:min(560px,86vw);font-size:clamp(15px,4.4vw,21px);letter-spacing:1px}
+.touchui #menubtn{right:auto;left:calc(20px + var(--sl));bottom:calc(406px + var(--sb));width:46px;height:46px;border-radius:50%;padding:0;font-size:9px;letter-spacing:0}
+.touchui #boss{bottom:auto;top:56%;width:min(420px,64vw)}.touchui #boss h3{font-size:14px}
+@media (max-height:560px){.touchui #menubtn{left:calc(276px + var(--sl));bottom:calc(136px + var(--sb))}.touchui #prompt{bottom:200px;top:auto}}
+#withwho{font:700 17px var(--body);color:#bff0ff;text-shadow:0 2px 6px #000}
+#withwho:empty{display:none}
+#prompt{max-width:calc(100vw - 24px);white-space:normal;text-align:center}
+@media (max-width:560px){#prompt{bottom:calc(214px + var(--sb));max-width:calc(100vw - 150px);font-size:14px}#dlg p{font-size:17px}#dlg{bottom:calc(8px + var(--sb))}#inv{font-size:13px;gap:0 8px}.lvl{font-size:13px}#bars{width:calc(54vw - 24px)}#quest{max-width:42vw;padding:8px 10px}#quest p{font-size:13px}}
+.lvl{white-space:nowrap;overflow:hidden}
+@media (max-height:460px){#quest{max-width:min(210px,34vw);padding:6px 10px;font-size:12px;top:10px}#bars{width:min(240px,40vw)}#regionname{font-size:12px}}
+</style>
+
+<canvas id="gl"></canvas><canvas id="hud2"></canvas>
+<div id="vig"></div><div id="hurt"></div><div id="fade"></div>
+
+<div id="hud" hidden>
+ <div class="hud" id="bars"><div class="lvl"><span id="lv">LV 1</span><span id="regionname"></span></div>
+  <div class="bar" id="hpb"><i></i><b></b></div><div class="bar" id="stb"><i></i></div><div class="bar" id="mpb"><i></i></div><div class="bar" id="xpb"><i></i></div>
+  <div id="inv"><span>🪙 <b id="coins">0</b></span><span>🧪 <b id="pots">2</b></span><span>✨ <b id="sprites">0/36</b></span><span>🪵 <b id="i_wood">0</b></span><span>🐟 <b id="i_fish">0</b></span><span>🍖 <b id="i_cooked">0</b></span><span>🍓 <b id="i_berry">0</b></span><span>🍄 <b id="i_mush">0</b></span><span id="clock"></span></div></div>
+ <div class="hud" id="quest"><h4>QUEST</h4><p id="qtext"></p><div class="sh" id="qsh"><s style="--c:#6fe06a"></s><s style="--c:#7fdcff"></s><s style="--c:#ff7a3a"></s></div></div>
+ <div class="hud" id="prompt" hidden></div>
+ <div class="hud" id="boss" hidden><h3 id="bname"></h3><div class="bar"><i id="bfill"></i></div></div>
+ <div class="hud" id="toast"></div>
+ <div id="dlg" class="hud" hidden></div>
+ <button id="menubtn">Menu</button>
+</div>
+<div id="touch" hidden><div id="look"></div><div id="joy"><div id="knob"></div></div>
+ <button class="tb" id="tAtk">ATTACK</button><button class="tb" id="tRoll">ROLL</button><button class="tb" id="tJump">JUMP</button><button class="tb" id="tSpec">SPIN</button><button class="tb" id="tUse">TALK</button><button class="tb" id="tPot">HEAL</button><button class="tb" id="tCam">VIEW</button><button class="tb" id="tDo">DO</button><button class="tb" id="tLock">LOCK</button><button class="tb" id="tEat">EAT</button><button class="tb" id="tMap">MAP</button><button class="tb" id="tEmo">EMOTE</button><div id="emo"><button class="tb" data-e="KeyZ">WAVE</button><button class="tb" data-e="KeyC">DANCE</button><button class="tb" data-e="KeyB">CHEER</button><button class="tb" data-e="KeyX">SIT</button></div></div>
+<div id="mapov" hidden><button id="mapx">Close map ✕</button><div id="mapl"></div></div>
+
+<div id="title" class="ov" hidden>
+ <h1>EMBERFALL</h1><div class="tag">THE LAST FLAME OF THE ISLE</div><div id="withwho"></div>
+ <div class="row"><button class="main" id="bNew">New Journey</button><button id="bCont">Continue</button></div>
+ <div class="row" id="heroes"></div><div id="herodesc" style="font:600 16px var(--body);color:#ffe9b8;margin:-4px 0 6px"></div>
+ <div class="row" id="gfx"><button data-q="1">Low</button><button data-q="2" class="sel">Medium</button><button data-q="3">High</button></div>
+ <div class="panel"><b>Move</b> <kbd>W A S D</kbd> · <b>Look</b> mouse (click the screen) or <kbd>←</kbd><kbd>→</kbd> · <b>Attack</b> <kbd>Left click</kbd> / <kbd>J</kbd> · <b>Dodge roll</b> <kbd>Right click</kbd> / <kbd>K</kbd><br><b>Jump</b> <kbd>Space</kbd> (hold in the air to glide · hold against a wall to climb) · <b>Sprint</b> <kbd>Shift</kbd> · <b>Spin attack</b> <kbd>R</kbd> · <b>Heal</b> <kbd>Q</kbd> · <b>Talk / open</b> <kbd>E</kbd> · <b>Lock on</b> <kbd>F</kbd> · <b>Camera view</b> <kbd>V</kbd> (third person, first person, top-down) · <b>Map</b> <kbd>M</kbd> · <b>Do</b> <kbd>G</kbd> (fish, pick, cook, build a fire) · <b>Eat</b> <kbd>H</kbd> · <b>Emotes</b> <kbd>Z</kbd><kbd>C</kbd><kbd>B</kbd> · <b>Sit/rest</b> <kbd>X</kbd> · <i>Swing at trees to chop wood</i> · <b>Pause</b> <kbd>Esc</kbd></div>
+</div>
+<div id="pause" class="ov" hidden><h2>Paused</h2><div class="row"><button class="main" id="bRes">Resume</button><button id="bView">View: Third person</button><button id="bGfx">Graphics: Medium</button></div><div class="row"><button id="bMute">Sound: On</button><button id="bQuit">Quit to title</button></div></div>
+<div id="dead" class="ov" hidden><h2>You fell</h2><p style="font:600 20px var(--body);margin:0">The ember flickers, but it is not out yet.</p><button class="main" id="bResp">Rise again</button></div>
+<div id="end" class="ov" hidden><h2>The Flame Returns</h2><p id="endtxt" style="font:600 20px var(--body);max-width:520px;margin:0"></p><div class="row"><button class="main" id="bFree">Keep exploring</button><button id="bQuit2">Title</button></div></div>
+<div id="load" class="ov"><h2 style="font-size:34px">EMBERFALL</h2><div class="bar"><i id="loadbar"></i></div><div id="loadtxt" style="font:600 16px var(--body);opacity:.8">Shaping the island…</div></div>
+
+<script src="three.min.js"></script>
+<script src="game.js"></script>
+
+</body></html>

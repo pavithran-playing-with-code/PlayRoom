@@ -216,8 +216,16 @@ There is no test runner. What works:
   explorer, never in the air; the rope snaps and re-ties).
   `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
 - **Emberfall** (slug `emberfall`, 1–2 players) is a finished single page,
-  `public/emberfall/` (index.html, game.js, its own three.min.js), run in a
-  frame by `Emberfall.jsx`, which only relays: the page posts `send`, the
+  `public/emberfall/index.html` (the mobile rebuild, worked on outside this
+  repo as `emberfall-p*.html`; three.js from the CDN, falling back to the
+  `three.min.js` beside it), run in a frame by `Emberfall.jsx`, which only
+  relays. The page speaks the same bridge as before (its "PlayRoom bridge"
+  section): `ready` once loaded, `score` once a second; it takes `init`
+  (ids, names, the notch), `names` and `over` (stop the game and the sound).
+  **Co-op is not in the rebuild yet**: each player plays their own island and
+  `ef:msg` is ignored. The old two-player version is kept beside it as
+  `index-backup-before-p6a.html` + `game.js` (and `game-backup-before-p6a.js`);
+  how its co-op worked, for porting: the page posts `send`, the
   room gets `ef:msg` (passed on whole by `config/socket.js`, size-capped),
   and back. The NET section of game.js is the co-op: the playing player with
   the lowest id hosts (enemies, bosses, time, weather; a snapshot `w` ~8/s),

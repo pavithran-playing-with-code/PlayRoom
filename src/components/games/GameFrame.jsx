@@ -51,6 +51,7 @@ export default function GameFrame({
   floatExtra = null,          // node: more buttons for that floating row
   helpOnly = false,           // bare: float only the ? — the game shows its own
                               // time and leaves through its own menu (Emberfall)
+  noHelp = false,             // no ? either: the game has its own How to play (Emberfall)
   children,                   // node, or ({ w, h }) => node
 }) {
   const msgFill = { success: "var(--lime)", error: "var(--coral)", info: "var(--sky)" };
@@ -105,7 +106,7 @@ export default function GameFrame({
               : <span className={`gf-clock${timer.value <= 20 ? " low" : ""}`} aria-label="Time left">⏱ {clock(timer.value)}</span>
           )}
           {floatExtra}
-          {howToFor(gameName) && <button type="button" className="gf-btn" onClick={() => setHelp(true)} aria-label="How to play">?</button>}
+          {howToFor(gameName) && !noHelp && <button type="button" className="gf-btn" onClick={() => setHelp(true)} aria-label="How to play">?</button>}
           {!helpOnly && <button type="button" className="gf-btn gf-leave" onClick={onQuit} aria-label="Leave">✕ Leave</button>}
         </div>
       )}

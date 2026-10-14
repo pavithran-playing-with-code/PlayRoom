@@ -210,6 +210,15 @@ body.portrait #mapc{grid-area:m;justify-self:center}
 body.portrait #mapP .mlist{grid-area:l;width:auto;max-height:none}
 /* settings */
 #setP{width:min(560px,calc(100vw - 20px - var(--sal) - var(--sar)))}
+/* fix3: How to play */
+#helpP{width:min(600px,calc(100vw - 20px - var(--sal) - var(--sar)))}
+#helpP h4{margin:12px 0 6px;font:800 14px var(--hfont);letter-spacing:1px;color:var(--gold)}
+#helpP .hrow{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,210,150,.12);font:500 14px/1.3 var(--nfont)}
+#helpP .hrow b{font:800 12px var(--hfont);letter-spacing:.4px;color:#ffe9b8;min-width:74px}
+#helpP .hic{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:rgba(30,18,10,.55);border:2px solid rgba(255,210,150,.5);color:#ffe9b8}
+#helpP .hic svg{width:20px;height:20px}
+#helpP .hsw{flex:none;width:34px;height:8px;border-radius:4px}
+#helpP ul{margin:0;padding-left:18px;font:500 14px/1.4 var(--nfont)}
 #setP>h3{padding-right:8px}
 .srow{display:flex;align-items:center;gap:12px;min-height:52px;padding:2px 0;border-bottom:1px solid rgba(255,210,150,.14)}
 .srow>span{flex:1;font:600 15px/1.25 var(--nfont)}
@@ -248,7 +257,9 @@ body.menu-open #feed{z-index:22;top:calc(var(--pnl-top) + 4px);bottom:auto}
 #touch{position:fixed;inset:0;z-index:4;pointer-events:none}
 #joyzone,#look{position:absolute;top:0;bottom:0;pointer-events:auto;touch-action:none}
 #joyzone{left:0;width:40%}#look{right:0;width:60%}
-#joyzone,#look{z-index:1}#joy{z-index:2}.tb{z-index:3}   /* fix2: a button always gets its touch, never the pads under it */
+#joyzone,#look{z-index:1}#joy{z-index:2}.tb{z-index:3}
+#joyzone,#look,#joy,.tb{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;touch-action:none}   /* fix3 */
+#tLock{display:none!important}   /* fix3: LOCK is gone from the touch controls (F still locks on a keyboard) */   /* fix2: a button always gets its touch, never the pads under it */
 body.mirror #joyzone{left:auto;right:0}body.mirror #look{right:auto;left:0}
 #joy,#joyRest{position:absolute;left:0;top:0;border-radius:50%;pointer-events:none}
 #joyRest{border:2px dashed rgba(255,230,190,.3)}
@@ -390,7 +401,7 @@ body.touch #feed{left:var(--ctl-cx,50%);bottom:var(--feed-b,calc(var(--sab) + 64
   <table><tr><th>Touch</th><th>Does</th></tr>
    <tr><td>Left side (drag)</td><td>Move; push to the edge to sprint</td></tr><tr><td>Right side (drag)</td><td>Look; two fingers to zoom</td></tr>
    <tr><td>ATTACK</td><td>Attack; hold to chain the combo</td></tr><tr><td>ROLL</td><td>Dodge roll</td></tr><tr><td>JUMP</td><td>Jump; hold in the air to glide, at a wall to climb</td></tr>
-   <tr><td>SPIN</td><td>Spin attack when the blue bar is full</td></tr><tr><td>LOCK</td><td>Lock on to a foe</td></tr><tr><td>HEAL / EAT</td><td>Drink a potion / eat food</td></tr>
+   <tr><td>SPIN</td><td>Spin attack when the blue bar is full</td></tr><tr><td>HEAL / EAT</td><td>Drink a potion / eat food</td></tr>
    <tr><td>TALK, RIDE, DO…</td><td>Appears beside people, horses, chests and things to do</td></tr><tr><td>Top-right</td><td>Bag, emotes, camera view, menu; tap the minimap for the map</td></tr></table>
   <table><tr><th>Keyboard</th><th>Does</th></tr>
    <tr><td>W A S D</td><td>Move (Shift sprints)</td></tr><tr><td>Mouse / arrows</td><td>Look (click the scene to capture the mouse)</td></tr>
@@ -400,6 +411,10 @@ body.touch #feed{left:var(--ctl-cx,50%);bottom:var(--feed-b,calc(var(--sab) + 64
  </details>
 </div>
 
+<div id="helpP" class="pnl pcard mid" hidden role="dialog" aria-label="How to play">
+ <div class="phead"><h3>HOW TO PLAY</h3><button class="pclose" data-close aria-label="Close how to play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg></button></div>
+ <div id="helpBody"></div>
+</div>
 <div id="title" class="ov" hidden>
  <h1>EMBERFALL</h1><div class="tag">THE LAST FLAME OF THE ISLE</div><div id="withwho"></div>
  <div class="row"><button class="main" id="bNew">New Journey</button><button id="bCont">Continue</button><button id="bTSet">Settings</button></div>
@@ -407,7 +422,7 @@ body.touch #feed{left:var(--ctl-cx,50%);bottom:var(--feed-b,calc(var(--sab) + 64
  <div class="panel"><b>Move</b> <kbd>W A S D</kbd> · <b>Look</b> mouse (click the screen) or <kbd>←</kbd><kbd>→</kbd> · <b>Attack</b> <kbd>Left click</kbd> / <kbd>J</kbd> · <b>Dodge roll</b> <kbd>Right click</kbd> / <kbd>K</kbd><br><b>Jump</b> <kbd>Space</kbd> (hold in the air to glide · hold against a wall to climb) · <b>Sprint</b> <kbd>Shift</kbd> · <b>Spin attack</b> <kbd>R</kbd> · <b>Heal</b> <kbd>Q</kbd> · <b>Talk / open</b> <kbd>E</kbd> · <b>Lock on</b> <kbd>F</kbd> · <b>Camera view</b> <kbd>V</kbd> (third person, first person, top-down) · <b>Map</b> <kbd>M</kbd> · <b>Do</b> <kbd>G</kbd> (fish, pick, cook, build a fire) · <b>Eat</b> <kbd>H</kbd> · <b>Bag</b> <kbd>B</kbd> · <b>Emotes</b> <kbd>T</kbd> tray, <kbd>Z</kbd><kbd>C</kbd><kbd>N</kbd> · <b>Sit/rest</b> <kbd>X</kbd> · <i>Swing at trees to chop wood</i> · <b>Pause</b> <kbd>Esc</kbd></div>
 </div>
 <div id="pause" class="ov" hidden><h2>Paused</h2>
- <div class="pgrid"><button class="main" id="bRes">Resume</button><button id="bSet">Settings</button><button id="bPBag">Bag</button><button id="bPMap">Map</button><button id="bSave">Save</button><button id="bQuit">Quit</button></div>
+ <div class="pgrid"><button class="main" id="bRes">Resume</button><button id="bSet">Settings</button><button id="bPBag">Bag</button><button id="bPMap">Map</button><button id="bSave">Save</button><button id="bHelp">How to play</button><button id="bQuit">Quit</button></div>
  <div class="sconfirm" id="pQuitConfirm" hidden><span>Quit to the title? Your journey is saved first.</span><button class="danger" id="bPQuitYes">Quit</button><button id="bPQuitNo">Cancel</button></div>
  <div hidden><button id="bView">View: Third person</button><button id="bMute">Sound: On</button></div>
 </div>
@@ -448,7 +463,7 @@ let renderer,scene,camera;
 const PERFX={n:0,hudT:0,mmT:0,avT:-1e9,av:[],en:[],fpsOn:/[?&]fps=1/.test(location.search),fT:0,fN:0,fEl:null};
 // one quality: shadows on (2048 map), full grass, pixel ratio up to 2 (lowered only by the frame-rate net)
 const SHADOW_MAP=2048,GRASS_MAX=10000;
-const PIX={max:Math.min(devicePixelRatio||1,touchDev?1.5:2),floor:1.25,cur:1,lowered:false};   // fix2: 1.5 at most on a touch screenPIX.floor=Math.min(PIX.max,1.25);PIX.cur=PIX.max;
+const PIX={max:Math.min(devicePixelRatio||1,touchDev?1.5:2),floor:1.25,cur:1,lowered:false};/* 1.5 at most on a touch screen */PIX.floor=Math.min(PIX.max,1.25);PIX.cur=PIX.max;
 try{renderer=new THREE.WebGLRenderer({canvas:glc,antialias:!touchDev,powerPreference:'high-performance'});}catch(e){document.body.insertAdjacentHTML('beforeend','<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font:20px sans-serif;z-index:99;background:#111;text-align:center;padding:20px">WebGL is not available in this browser, so Emberfall cannot start.</div>');throw e;}
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;   // fix2: redrawn every 2nd frame (renderFrame)
 renderer.toneMapping=THREE.NoToneMapping;
@@ -2194,9 +2209,17 @@ const decals=[];
 function makeDecal(){const g=new THREE.Group(),a=new THREE.Mesh(new THREE.RingGeometry(.94,1,48),new THREE.MeshBasicMaterial({color:0xff3a2a,transparent:true,opacity:.9,depthWrite:false,side:THREE.DoubleSide,fog:false}));const b=new THREE.Mesh(new THREE.CircleGeometry(1,40),new THREE.MeshBasicMaterial({color:0xff3a2a,transparent:true,opacity:.25,depthWrite:false,side:THREE.DoubleSide,fog:false}));a.rotation.x=b.rotation.x=-PI/2;g.add(a,b);g.visible=false;g.userData={a,b};scene.add(g);return g;}
 function getDecal(){for(const d of decals)if(!d.visible)return d;if(decals.length<40){const d=makeDecal();decals.push(d);return d;}return null;}
 const projs=[];
+// fix3: a boss barrage used to build (and dispose) a geometry and a material per shot. Now the shapes and colours
+// are shared, the meshes pooled, and no more than PJ.max fly at once (the oldest goes)
+const PJ={geo:new Map(),mat:new Map(),free:[],max:60};
+function pjGeo(o){const k=o.kind==='arrow'?'arrow':'s'+(o.r||.35);let g=PJ.geo.get(k);if(!g){g=o.kind==='arrow'?new THREE.CylinderGeometry(.03,.03,.9,5):new THREE.SphereGeometry(o.r||.35,8,6);PJ.geo.set(k,g);}return g;}
+function pjMat(col){let m=PJ.mat.get(col);if(!m){m=new THREE.MeshBasicMaterial({color:col,fog:false});PJ.mat.set(col,m);}return m;}
+function projFree(i){const p=projs[i];p.m.visible=false;PJ.free.push(p.m);projs.splice(i,1);}
 function fireProj(o){
-  const col=o.col||0xffd070,g=o.kind==='arrow'?new THREE.CylinderGeometry(.03,.03,.9,5):new THREE.SphereGeometry(o.r||.35,8,6);
-  const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:col,fog:false}));if(o.kind==='arrow')m.rotation.order='YXZ';scene.add(m);
+  if(projs.length>=PJ.max)projFree(0);
+  const col=o.col||0xffd070;let m=PJ.free.pop();
+  if(m){m.geometry=pjGeo(o);m.material=pjMat(col);m.visible=true;m.rotation.set(0,0,0);}else{m=new THREE.Mesh(pjGeo(o),pjMat(col));scene.add(m);}
+  m.rotation.order=o.kind==='arrow'?'YXZ':'XYZ';
   const p=Object.assign({m,life:5,r:.7},o);projs.push(p);return p;
 }
 function updateProjs(dt,game){
@@ -2207,7 +2230,7 @@ function updateProjs(dt,game){
     if(!P.dead&&P.iT<=0){const dx=P.x-p.x,dy=(P.y+1)-p.y,dz=P.z-p.z;if(dx*dx+dy*dy+dz*dz<(p.r+.5)**2){game.hurtPlayer(p.dmg,p.x,p.z,'proj');dead=true;}}
     if(p.y<gh(p.x,p.z)+.05||p.life<=0)dead=true;
     for(const c of world.colliders)if(c.tag!=='break'&&c.tag!=='lava'&&Math.abs(c.x-p.x)<3&&Math.abs(c.z-p.z)<3&&Math.hypot(c.x-p.x,c.z-p.z)<c.r&&p.y<gh(c.x,c.z)+4){dead=true;break;}
-    if(dead){burst(p.x,p.y,p.z,p.col||0xffc060,8,3,.4,.12);scene.remove(p.m);p.m.geometry.dispose();p.m.material.dispose();projs.splice(i,1);}
+    if(dead){burst(p.x,p.y,p.z,p.col||0xffc060,8,3,.4,.12);projFree(i);}
   }
 }
 
@@ -2305,7 +2328,7 @@ function killEnemy(e){
   if(!e.boss&&R()<.16)dropPickup('potion',e.x,e.z,e.y+1);
   if(game.lock===e)game.lock=null;
   if(e.boss){
-    game.hitstop=.45;game.slow=1.4;cam.shake=1;sfx('bossdie');toast(def.name+' defeated!',3.4);
+    game.hitstop=.1;/* fix3: was .45 s of freeze */game.slow=1.4;cam.shake=1;sfx('bossdie');toast(def.name+' defeated!',3.4);
     if(def.final){game.stage=4;setQuestText();setTimeout(()=>victory(),3200);}
     else{const sp=dropPickup('shard',e.x,e.z,e.y+1.5);sp.idx=def.idx;sp.col=def.col;sp.m.material.color.setHex(def.col);if(sp.beam)sp.beam.material.color.setHex(def.col);}
     if(game.boss===e)game.boss=null;$('boss').hidden=true;
@@ -2320,7 +2343,8 @@ const coinGeo=new THREE.CylinderGeometry(.22,.22,.06,12).rotateX(PI/2),coinMat=n
 function dropPickup(kind,x,z,y){
   let m;
   if(kind==='coin')m=new THREE.Mesh(coinGeo,coinMat);
-  else if(kind==='potion'){m=new THREE.Group();const b=new THREE.Mesh(new THREE.SphereGeometry(.2,8,7),new THREE.MeshStandardMaterial({color:0xe5483f,emissive:0x601010,roughness:.3}));const n=new THREE.Mesh(new THREE.CylinderGeometry(.06,.08,.18,6),TOON({color:0xcfe0e8}));n.position.y=.24;m.add(b,n);}
+  else if(kind==='potion'){const D=dropPickup;if(!D.pg){D.pg=[new THREE.SphereGeometry(.2,8,7),new THREE.MeshStandardMaterial({color:0xe5483f,emissive:0x601010,roughness:.3}),new THREE.CylinderGeometry(.06,.08,.18,6),TOON({color:0xcfe0e8})];}
+    m=new THREE.Group();const b=new THREE.Mesh(D.pg[0],D.pg[1]);const n=new THREE.Mesh(D.pg[2],D.pg[3]);n.position.y=.24;m.add(b,n);}   // fix3: shared, not new per drop
   else{m=new THREE.Mesh(new THREE.OctahedronGeometry(.45,0),new THREE.MeshBasicMaterial({color:0xffffff,fog:false}));m.scale.y=1.6;}
   m.position.set(x,y,z);scene.add(m);
   const p={kind,m,x,z,y,vy:kind==='shard'?0:RR(4,7),vx:RR(-2,2),vz:RR(-2,2),t:0,idx:0};
@@ -2377,7 +2401,7 @@ function playerHit(range,arc,mul,kb){
   for(const b of world.breakables){if(b.hp<=0)continue;const dx=b.x-P.x,dz=b.z-P.z,d=Math.hypot(dx,dz);if(d>range+.5)continue;if(arc<3&&(dx*fx+dz*fz)/(d||1)<Math.cos(arc))continue;breakBreakable(b);}
   hitObjects(range,arc,mul);
   if(hits&&P.counter>0){P.counter=0;burst(P.x,P.y+1.2,P.z,0xffd27a,30,7,.6,.16);dmgNum(P.x,P.y+2.4,P.z,'COUNTER!','#ffd27a',true);}
-  if(hits){game.hitstop=Math.max(game.hitstop,.055+(mul>1.5?.04:0));cam.shake=Math.max(cam.shake,.12+mul*.08);}
+  if(hits){game.hitstop=Math.max(game.hitstop,.05);/* fix3: a heavy hit held .095 s */cam.shake=Math.max(cam.shake,.12+mul*.08);}
   return hits;
 }
 function breakBreakable(b){
@@ -2432,9 +2456,10 @@ function updatePlayer(dt){
     const dur=[.44,.44,.66][P.atkIdx];P.atkT+=dt/dur;
     const lf=Math.max(0,1-P.atkT*2.2);P.vx=P.lungeX*lf;P.vz=P.lungeZ*lf;
     if(!P.hitDone&&P.atkT>=.42){P.hitDone=true;owChop();const k=P.atkIdx;heroSwing(P,k);spark3(P);if(k===2){playerHit(6.2,PI+1,.7,12);cam.shake=Math.max(cam.shake,.35);for(let i=0;i<28;i++){const a=i/28*TAU;spark(P.x+Math.sin(a)*1.2,P.y+.3,P.z+Math.cos(a)*1.2,Math.sin(a)*9,.8,Math.cos(a)*9,0xffc060,.5,.16,0);}burst(P.x,P.y+.2,P.z,0xd8c8a0,14,4,.5,.16);sfx('smash');}}
-    if(P.atkT>.55&&input.attack>0){input.attack=0;P.combo=.1;startAttack(P);}
-    else if(P.atkT>=1){P.state='free';P.combo=.5;}
-    if(input.dodge>0&&P.atkT>.5){P.state='free';}
+    if(input.attack>0&&P.atkT<=.55){P.atkQ=true;input.attack=0;}            // fix3: a press during the swing is kept for the next one
+    if(P.atkT>.55&&(input.attack>0||P.atkQ)){input.attack=0;P.atkQ=false;P.combo=.1;startAttack(P);}
+    else if(P.atkT>=1){P.state='free';P.combo=.5;P.atkQ=false;}
+    if(input.dodge>0&&P.hitDone){P.state='free';P.atkQ=false;}             // fix3: roll out as soon as the blow has landed
     P.sp=.2;
   }
   else if(P.state==='roll'){
@@ -2445,6 +2470,7 @@ function updatePlayer(dt){
     P.spinT+=dt/.78;P.vx*=.9;P.vz*=.9;
     for(const th of[.28,.5,.72])if(P.spinT>=th&&P.spinHit<th){P.spinHit=th;playerHit(4.6,PI+1,1.35,8);sfx('swing',1);cam.shake=.2;}
     if(P.spinT>=1)P.state='free';
+    else if(input.dodge>0&&P.spinT>.72)P.state='free';                     // fix3: roll out of the spin's last turn
   }
   // hurt knockback
   if(P.hurtT>0){P.vx+=P.kbx*dt*10;P.vz+=P.kbz*dt*10;P.kbx*=.9;P.kbz*=.9;}
@@ -3155,7 +3181,7 @@ const Input=(()=>{
     if(a==='digit'){if(game.dialog&&arg<2)chooseOpt(arg);return;}
     if(game.dialog){if(a==='context'||a==='jump'||a==='confirm'||a==='attack')advanceDialog();return;}
     switch(a){
-      case'jump':input.jump=.3;break;case'attack':input.attack=.35;break;case'roll':input.dodge=.35;break;case'spin':input.special=.35;break;   // fix2: longer bufferscase'heal':input.potion=.3;break;
+      case'jump':input.jump=.3;break;case'attack':input.attack=.35;break;case'roll':input.dodge=.35;break;case'spin':input.special=.35;break;/* longer buffers */case'heal':input.potion=.3;break;
       case'context':interact();break;case'do':doCtx();break;case'eat':eatFood();break;case'lock':toggleLock();break;case'view':cycleView();break;
       case'map':openPanel('map');break;
       case'emote':if(arg)doEmote(arg);else emoTray();break;
@@ -3230,7 +3256,7 @@ const Input=(()=>{
       fire(a,arg);ctlFirstInput();});
     const up=e=>{if(!mine.delete(e.pointerId))return;release(a,src(e));if(!mine.size)el.classList.remove('press');};
     el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);el.addEventListener('lostpointercapture',up);};
-  btn('tAtk','attack');btn('tRoll','roll');btn('tJump','jump');btn('tSpec','spin');btn('tLock','lock');btn('tPot','heal');btn('tEat','eat');
+  btn('tAtk','attack');btn('tRoll','roll');btn('tJump','jump');btn('tSpec','spin');btn('tPot','heal');btn('tEat','eat');
   btn('tUse','context');btn('tDo','do');btn('tNext','confirm');
   // ---- emote tray: the HUD Emote button toggles it; a choice or a tap elsewhere closes it
   $('emo').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{fire('emote',b.dataset.e);emoTray(false);}));
@@ -3242,6 +3268,11 @@ const Input=(()=>{
   addEventListener('selectstart',e=>e.preventDefault());
   for(const ev of['gesturestart','gesturechange'])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
   document.addEventListener('touchmove',e=>{if(e.cancelable&&(e.touches.length>1||!(e.target.closest&&e.target.closest('.ov,.pnl,#rotate'))))e.preventDefault();},{passive:false});
+  // fix3: the touch layer never scrolls or zooms (a second finger); when the last finger lifts, nothing stays held
+  const tl=$('touch');
+  for(const ev of['touchstart','touchmove'])tl.addEventListener(ev,e=>{if(e.cancelable)e.preventDefault();},{passive:false});
+  const allUp=e=>{if(e.touches&&e.touches.length===0){if(jid!==null)jend();looks.clear();pinchD=0;for(const a in held)for(const k of[...held[a]])if(k.startsWith('p:'))held[a].delete(k);document.querySelectorAll('.tb.press').forEach(b=>b.classList.remove('press'));}};
+  addEventListener('touchend',allUp,{capture:true,passive:true});addEventListener('touchcancel',allUp,{capture:true,passive:true});
   return {state:input,move,ACTIONS,keys,down,fire,poll,takeLook,reset,settings,setSetting,zoom,on(a,f){(hooks[a]||(hooks[a]=[])).push(f);},get pointerLocked(){return locked;}};
 })();
 const keys=Input.keys;
@@ -3398,7 +3429,7 @@ function ctlHint(){
 function layoutControls(){
   const W0=innerWidth,H0=innerHeight,body=document.body,mirror=!!Input.settings.mirror,portrait=body.classList.contains('portrait');
   body.classList.toggle('mirror',mirror);
-  const s=clamp(Math.min(W0,H0)/390,.85,1.15),base=clamp(124*s,112,140),R=base/2;CTL.jr=R;
+  const s=clamp(Math.min(W0,H0)/390,.85,1.15),base=clamp(124*s,112,140)*.85,R=base/2;CTL.jr=R;   // fix3: the stick 15% smaller
   const Cx=W0-SAFE.r-12,Cy=H0-SAFE.b-12,ad=96*s,Ax=Cx-ad/2-2,Ay=Cy-ad/2-2,S={};
   const put=(id,cx,cy,d)=>{S[id]={cx:mirror?W0-cx:cx,cy,d};};
   // right thumb arc around ATTACK
@@ -3407,16 +3438,18 @@ function layoutControls(){
   put('tSpec',Ax-66*s,Ay-62*s,Math.max(52*s,46));
   put('tJump',Ax,Ay-86*s,Math.max(56*s,48));
   put('tLock',Ax-52*s,Ay-124*s,44);
+  put('tPot',Ax-52*s,Ay-124*s,Math.max(44*s,44));             // fix3: HEAL exactly where (and as big as) LOCK was
   put('ctx1',Ax-120*s,Ay-130*s,72*s);                     // one context button
   put('ctxA',Ax-130*s,Ay-150*s,Math.max(56*s,56));        // two stacked: TALK above DO
   put('ctxB',Ax-130*s,Ay-150*s+Math.max(56*s,56)+8,Math.max(56*s,56));   // a button's height and a gap below TALK
   put('tNext',Cx-42,Cy-42,80);
   // left: the stick's home, Heal above its top-left, Eat beside Heal
-  const Jx=SAFE.l+16+R,Jy=H0-SAFE.b-16-R,hd=Math.max(50*s,46);
-  put('joy',Jx,Jy,base);put('tPot',Jx-R+hd/2,Jy-R-12-hd/2,hd);put('tEat',Jx-R+hd+10+22,Jy-R-12-hd/2,44);
+  // fix3: the stick a little right and up; EAT stays above it on the left (HEAL moved to the right thumb)
+  const Jx=SAFE.l+16+R+18*s,Jy=H0-SAFE.b-16-R-14*s,hd=Math.max(50*s,46);
+  put('joy',Jx,Jy,base);put('tEat',Jx-R+22,Jy-R-12-22,44);
   // nothing may sit on a HUD block: push an upper control down below it (the stacked pair moves together)
   const below=c=>{let dy=0;for(const b of HUD.boxes||[])if(c.cx+c.d/2>b.l&&c.cx-c.d/2<b.r&&c.cy-c.d/2<b.b+6)dy=Math.max(dy,b.b+6-(c.cy-c.d/2));return dy;};
-  for(const id of['tLock','tJump','tSpec','ctx1'])S[id].cy+=below(S[id]);
+  for(const id of['tLock','tPot','tJump','tSpec','ctx1'])S[id].cy+=below(S[id]);
   {const dy=below(S.ctxA);S.ctxA.cy+=dy;S.ctxB.cy+=dy;}
   CTL.S=S;CTL.rest={x:S.joy.cx,y:S.joy.cy};
   const zx=W0*.4,hudBottom=(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--hudL-top'))||8)+130;
@@ -3441,7 +3474,7 @@ function updateControls(){
   const sig=[dlg,showIt&&verb,showDo,canEat,Input.settings.mirror,ride2].join('|');
   if(sig!==CTL.sig){CTL.sig=sig;
     for(const id of['tAtk','tJump','tPot'])$(id).hidden=dlg;
-    for(const id of['tRoll','tSpec','tLock'])$(id).hidden=dlg||ride2;
+    for(const id of['tRoll','tSpec'])$(id).hidden=dlg||ride2;$('tLock').hidden=true;
     $('joy').hidden=$('joyRest').hidden=dlg;$('tNext').hidden=!dlg;$('tEat').hidden=!canEat||ride2;
     const u=$('tUse'),d=$('tDo');u.hidden=!showIt;d.hidden=!showDo;
     if(showIt){u.querySelector('.tl').textContent=verb;u.setAttribute('aria-label',verb.charAt(0)+verb.slice(1).toLowerCase());}
@@ -3606,7 +3639,7 @@ $('bFree').onclick=()=>{$('end').hidden=true;};
 /* One open at a time. While open the game clock stops (frame() skips step), inputs are released, the play UI steps
    aside (body.menu-open), and Android Back closes it (one history entry per opening, guarded for frames that block history). */
 const PANEL={open:null,pushed:false,ignorePopUntil:0,hintOnClose:false,drawn:false};
-const PANEL_EL={bag:'bag',map:'mapP',settings:'setP'};
+const PANEL_EL={bag:'bag',map:'mapP',settings:'setP',help:'helpP'};
 const ICO_X='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
 function openPanel(name){
   if(PANEL.open===name||!PANEL_EL[name])return;
@@ -3616,7 +3649,7 @@ function openPanel(name){
   if(document.pointerLockElement)try{document.exitPointerLock();}catch(e){}
   document.body.classList.add('menu-open');document.body.classList.toggle('on-title',game.st==='title');cam.mapOpen=name==='map';
   $('quitConfirm').hidden=true;
-  if(name==='bag')renderBag();else if(name==='map')renderMap();else renderSettings();
+  if(name==='bag')renderBag();else if(name==='map')renderMap();else if(name==='help')renderHelp();else renderSettings();
   const back=$('pnlBack'),el=$(PANEL_EL[name]);clearTimeout(back._t);clearTimeout(el._t);back.hidden=false;el.hidden=false;el.scrollTop=0;
   void el.offsetWidth;back.classList.add('show');el.classList.add('show');   // a forced reflow starts the fade now, not after a (possibly slow) frame
 }
@@ -3716,6 +3749,38 @@ $('bQuitNo').addEventListener('click',()=>{$('quitConfirm').hidden=true;});
 $('bQuitYes').addEventListener('click',()=>{closePanel();setPause(false);quitOut();});
 // ---- pause screen and title
 $('bSet').addEventListener('click',()=>openPanel('settings'));
+$('bHelp').addEventListener('click',()=>openPanel('help'));
+// fix3: How to play — the bars and buttons as the game draws them (their own icons and colours)
+function renderHelp(){
+  const ic=id=>{const b=$(id),v=b&&b.querySelector('svg');return '<span class="hic">'+(v?v.outerHTML:'')+'</span>';};
+  const sw=c=>'<span class="hsw" style="background:'+c+'"></span>';
+  const row=(a,b,c)=>'<div class="hrow">'+a+'<b>'+b+'</b><span>'+c+'</span></div>';
+  $('helpBody').innerHTML=
+   '<h4>BARS (TOP LEFT)</h4>'+
+   row(sw('linear-gradient(90deg,#ff6a5c,#c8302a)'),'HEALTH','Your life. At zero you fall, and wake at the village.')+
+   row(sw('linear-gradient(90deg,#a6f29f,#6fd36b)'),'STAMINA','Used by sprinting, rolling, attacks and jumps. Refills by itself a moment after you stop.')+
+   row(sw('linear-gradient(90deg,#a9dcff,#58b7ff)'),'SPIN POWER','Thin blue bar: fills as your blows land. Full, and SPIN is ready.')+
+   row(sw('var(--gold)'),'EXPERIENCE','Thin gold bar: fills as you defeat foes. Full: level up, more health and damage.')+
+   '<h4>BUTTONS</h4>'+
+   row(ic('tAtk'),'ATTACK','Strike. Tap again (or hold) for a three-hit combo.')+
+   row(ic('tSpec'),'SPIN','A spinning attack all around you, when the blue bar is full.')+
+   row(ic('tRoll'),'ROLL','Dodge: you can\'t be hit for a moment. Roll just as a blow lands for a counter.')+
+   row(ic('tJump'),'JUMP','Jump. Hold in the air to glide; hold against a wall to climb.')+
+   row(ic('tPot'),'HEAL','Drink a potion (half your health back). The number is potions left.')+
+   row(ic('tUse'),'TALK / RIDE / OPEN','Appears beside people, horses, chests and towers. DO appears for things to do.')+
+   row(ic('hBag'),'BAG','Your coins, potions and what you\'ve gathered.')+
+   row(ic('hEmote'),'EMOTE','Wave, dance, cheer or sit.')+
+   row(ic('hView'),'CAMERA','Switch view: behind you, first person, from above.')+
+   row(ic('menubtn'),'MENU','Pause, settings, save, this card.')+
+   row('<span class="hic">◎</span>','MAP','Tap the minimap for the world map and fast travel to lit watchtowers.')+
+   '<h4>MOVING</h4>'+
+   row('<span class="hic">✥</span>','JOYSTICK','Put your thumb down anywhere on the left to move; push to the edge to sprint.')+
+   row('<span class="hic">↔</span>','LOOK','Drag on the right side to look around; two fingers to zoom.')+
+   '<h4>TIPS</h4><ul>'+
+   '<li>When a foe\'s health bar turns orange, or a red ring spreads on the ground, it\'s about to strike: roll.</li>'+
+   '<li>Heal before your health runs low; the bar pulses when it does.</li>'+
+   '<li>Against a guardian, roll out of the slam, then attack while it recovers.</li></ul>';
+}
 $('bTSet').addEventListener('click',()=>openPanel('settings'));
 $('bPBag').addEventListener('click',()=>{setPause(false);openPanel('bag');});
 $('bPMap').addEventListener('click',()=>{setPause(false);openPanel('map');});
@@ -3772,15 +3837,16 @@ if(EMBED)addEventListener('message',e=>{
    carries to the parent. On its own the page asks for itself. Every tap asks again while not full screen (after the app
    was left, say); a refusal is ignored. */
 let fsAskT=0;
+function fsAsked(){try{if(sessionStorage.getItem('ef-fs'))return true;sessionStorage.setItem('ef-fs','1');}catch(e){if(fsAsked.done)return true;fsAsked.done=true;}return false;}
 function fsDoc(){try{return EMBED?parent.document:document;}catch(e){return null;}}
 function isFull(){const d=fsDoc();return !!(d&&(d.fullscreenElement||d.webkitFullscreenElement));}
 function askFull(){
   const now=performance.now();if(now-fsAskT<1200||isFull())return;fsAskT=now;
+  if(fsAsked())return;   // fix3: once a session (Android shows its own exit notice on every entry)
   if(EMBED){netPost({ef:'fs'});return;}
   try{const el=document.documentElement,f=el.requestFullscreen||el.webkitRequestFullscreen;if(f){const r=f.call(el,{navigationUI:'hide'});if(r&&r.catch)r.catch(()=>{});}}catch(e){}
 }
 addEventListener('pointerdown',askFull,true);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){fsAskT=0;askFull();}});
 /* fix1: Quit (with its confirm) leaves the room in PlayRoom: the room's own Leave button is gone for Emberfall */
 function quitOut(){toTitle();if(EMBED)netPost({ef:'leave'});}
 

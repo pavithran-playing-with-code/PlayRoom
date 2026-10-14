@@ -12,7 +12,8 @@
 //     second; the engine syncs it like any game (pairs_matched 1 = the win)
 //   • the room's clock running out pauses the page
 //   • { ef: 'leave' } (its Quit, confirmed) leaves the room — the floating
-//     clock and Leave are hidden for this game (GameFrame helpOnly), only ? stays
+//     clock, Leave and ? are hidden for this game (GameFrame helpOnly, noHelp):
+//     the page has its own How to play in its menu
 //   • { ef: 'fs' } (a tap in the page) puts this page full screen, so a phone's
 //     status bar goes; the tap's activation reaches us from the frame. The whole
 //     page, not the frame: it keeps the sideways turn for an upright phone
@@ -150,6 +151,7 @@ export default function Emberfall(props) {
         landscape
         bare
         helpOnly={!isSpectator}
+        noHelp={!isSpectator}
       >
         {({ w, h }) => (isSpectator
           ? <div className="muted">👀 Watching {spectatorWatching?.username} — {Number(spectatorWatching?.score ?? 0).toLocaleString()} pts</div>

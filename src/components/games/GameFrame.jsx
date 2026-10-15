@@ -222,5 +222,5 @@ function Sideways() {
     const shell = document.querySelector(".gameshell");
     if (shell) shell.classList.toggle("rot", !!rotated);
   }, [rotated]);
-  return rotated ? <div className="gf-rothint" aria-hidden="true">↺ Turn your phone sideways</div> : null;
+  return null;   // the frame turns itself; no "turn your phone" hint
 }

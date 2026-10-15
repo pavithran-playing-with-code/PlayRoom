@@ -4188,7 +4188,8 @@ _probe.style.cssText='position:fixed;visibility:hidden;pointer-events:none;left:
 _sprobe.style.cssText='position:fixed;visibility:hidden;pointer-events:none;inset:0;padding:var(--sat) var(--sar) var(--sab) var(--sal)';
 document.body.append(_probe,_sprobe);
 if(DEBUG){const z=document.createElement('div');z.id='przone';z.textContent='PlayRoom zone';document.body.appendChild(z);}
-let rotateShown=false,portraitOK=false,hiddenPause=false,glLost=false,_layoutT=0;
+let rotateShown=false,portraitOK=/[?&]embed=1/.test(location.search)&&window.parent!==window,hiddenPause=false,   /* fix6: inside PlayRoom the room turns the game sideways itself: never ask to rotate */
+glLost=false,_layoutT=0;
 function layout(){
   PIX.max=Math.min(devicePixelRatio||1,2);PIX.floor=Math.min(PIX.max,1.25);PIX.cur=PIX.lowered?clamp(PIX.cur,PIX.floor,PIX.max):PIX.max;
   resize();

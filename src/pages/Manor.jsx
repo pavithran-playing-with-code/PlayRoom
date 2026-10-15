@@ -294,7 +294,6 @@ export default function Manor() {
         </div>
       )}
 
-      {rotated && playing && <div className="s13-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
     </div>
   );
 }

@@ -310,7 +310,6 @@ export default function ManorGame({ roomCode, currentUser, spectatorWatching = n
 
       {over && <Results over={over} me={currentUser} onExit={leave} leaving={leaving} />}
 
-      {rotated && h && !over && <div className="s13-rothint" aria-hidden="true">↺ Turn your phone to the left</div>}
     </div>
   );
 }

@@ -84,10 +84,26 @@ export default function Lobby() {
   }, [selected.slug, selected.defaultDuration]);
 
   // Play as a team starts ticked only for the games made for it (coopDefault:
-  // Kitchen Rush, Station 13, Sunshard Jump, Emberfall); for the rest you tick it.
+  // Kitchen Rush, Station 13, Sunshard Jump); for the rest you tick it.
   useEffect(() => {
     if (selected.coopDefault) { setCoopMode(true); setTeamMode(false); } else setCoopMode(false);
   }, [selected.slug, selected.coopDefault]);
+
+  // Arriving with a game already picked (a tile on the home page): bring its
+  // settings and the start button into view, not the top of the page. Once,
+  // on arrival — picking another game here doesn't move the page.
+  const arrivedWithGame = useRef(!!GAME_MAP[params.get("game")]);
+  useEffect(() => {
+    if (!arrivedWithGame.current) return undefined;
+    arrivedWithGame.current = false;
+    const t = setTimeout(() => {
+      const b = document.getElementById("createBtn");
+      if (!b) return;
+      const r = b.getBoundingClientRect();
+      window.scrollTo({ top: Math.max(0, window.scrollY + r.bottom - window.innerHeight + 24), behavior: "smooth" });
+    }, 250);
+    return () => clearTimeout(t);
+  }, []);
 
   const fetchRooms = useCallback(async () => {
     try {

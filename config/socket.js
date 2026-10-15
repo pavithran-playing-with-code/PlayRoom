@@ -227,23 +227,62 @@ function initSocket(httpServer) {
         user_id: uid,
         x: n(msg.x, -1e4, 1e4), y: n(msg.y, -1e3, 1e4), z: n(msg.z, -1e4, 1e4), f: n(msg.f, -100, 100),
         vx: n(msg.vx, -60, 60), vy: n(msg.vy, -60, 60), vz: n(msg.vz, -60, 60),
-        g: msg.g ? 1 : 0, gl: msg.gl ? 1 : 0, a: msg.a ? 1 : 0, iv: msg.iv ? 1 : 0, hp: Math.floor(n(msg.hp, 0, 3)),
+        g: msg.g ? 1 : 0, gl: msg.gl ? 1 : 0, a: msg.a ? 1 : 0, iv: msg.iv ? 1 : 0, hp: Math.floor(n(msg.hp, 0, 6)),
         sh: Math.floor(n(msg.sh, 0, 31)), gm: Math.floor(n(msg.gm, 0, 999)), p: Math.floor(n(msg.p, 0, 999)),
         rp: Math.floor(n(msg.rp, 0, 3)),             // together: my ropes tied, to the one before me (1) / after (2)
         rd: Math.floor(n(msg.rd, 0, 999)),           // which island I'm on (0 = the room's seed, then the next…)
+        sg: msg.sg ? 1 : 0,                          // the stage: 0 the sky hop, 1 Sunhaven Isle (then sh is the shrines)
+        fm: Math.floor(n(msg.fm, 0, 255)),           // the isle's flags I've found (a bit each)
         fin: msg.fin === null || msg.fin === undefined ? null : n(msg.fin, 0, 1e4),
       });
     });
 
-    // Sunshard Jump: a moment on my island everyone shares — a slime I
-    // stomped, a crumbling stone I stepped on (its index in the level).
+    // Sunshard Jump: a moment on my island everyone shares, by its index in
+    // the level — a slime I stomped, a crumbling stone I stepped on; the
+    // portal opening (tp, at: the match clock when it takes us); and on
+    // Sunhaven Isle a creature popped (kill, t), a heart taken (heart, id), a
+    // shrine lit, a hit on the stunned boss (asked of the host), the boss gone.
+    const ISL_EV = new Set(["stomp", "crumble", "tp", "kill", "heart", "shrine", "bossHit", "bossDead"]);
     socket.on("isl:ev", (msg) => {
       const code = msg && msg.code;
       if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
-      const k = msg.k === "stomp" || msg.k === "crumble" ? msg.k : null;
-      const i = Number(msg.i), rd = Number(msg.rd) || 0;
+      const k = typeof msg.k === "string" && ISL_EV.has(msg.k) ? msg.k : null;
+      const i = msg.i === undefined ? 0 : Number(msg.i), rd = Number(msg.rd) || 0;
       if (!k || !Number.isInteger(i) || i < 0 || i > 999 || !Number.isInteger(rd) || rd < 0 || rd > 999) return;
-      socket.to(roomChannel(code)).emit("isl:ev", { user_id: uid, k, i, rd });
+      const out = { user_id: uid, k, i, rd };
+      if (k === "kill") {
+        if (msg.t !== "slime" && msg.t !== "wisp") return;
+        out.t = msg.t;
+      } else if (k === "heart") {
+        if (typeof msg.id !== "string" || !/^(slime|wisp)\d{1,3}$/.test(msg.id)) return;
+        out.id = msg.id;
+      } else if (k === "tp") {
+        const at = Number(msg.at);
+        if (!Number.isFinite(at) || at < 0 || at > 1e5) return;
+        out.at = Math.round(at * 100) / 100;
+      } else if (k === "shrine" && i > 3) return;
+      socket.to(roomChannel(code)).emit("isl:ev", out);
+    });
+
+    // Sunshard Jump together, on Sunhaven Isle: the host (the lowest seated id
+    // there) runs the creatures and the boss and sends them ~8 times a second
+    // — the boss's state (b), the slimes (s) and wisps (w) as short arrays.
+    // Relayed only, volatile: the next one is a moment away.
+    let lastHostAt = 0;
+    socket.on("isl:host", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const rd = Number(msg.rd);
+      if (!Number.isInteger(rd) || rd < 0 || rd > 999) return;
+      const { b, s, w } = msg;
+      if (!b || typeof b !== "object" || Array.isArray(b) || !Array.isArray(s) || !Array.isArray(w) || s.length > 64 || w.length > 64) return;
+      let size = 0;
+      try { size = JSON.stringify({ b, s, w }).length; } catch { return; }
+      if (size > 4000) return;
+      const now = Date.now();
+      if (now - lastHostAt < 60) return;                    // ~16 a second at most per phone
+      lastHostAt = now;
+      socket.to(roomChannel(code)).volatile.emit("isl:host", { user_id: uid, rd, b, s, w });
     });
 
     // Emberfall: everything the two phones say to each other — where each

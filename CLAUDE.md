@@ -227,6 +227,18 @@ There is no test runner. What works:
   on to the next island (`seed-1`, `seed-2`…, `rd` in `isl:pos`); islands'
   points add up under the cap.
   `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
+  **Sunhaven Isle** is stage 2 of every round: lighting the temple opens a
+  3 s portal to a free-roaming island 62 m above it (`sunhavenWorld.js`,
+  `sunhavenSim.js`, drawn by `createIsle` in the scene, built only at the
+  portal): Elder Sol's 4 shrines (pulse, dash, +heart, bigger pulse), Pip's
+  slime quest, Brindle's boots, then the Shade Colossus; saved, and 6 s later
+  the next sky island. No `Math.random` in its rules (creatures wander by the
+  clock, the boss's orbs from a seeded stream). `isl:pos` carries the stage
+  (`sg`) and found flags (`fm`). Together, the portal is joint (`isl:ev` `tp`
+  with a match-clock `at`), and the lowest seated id on the isle is the host:
+  only it runs the creatures and the boss and sends them (`isl:host`, ~8/s);
+  every phone decides damage to its own explorer; kills, hearts, shrines and
+  the boss's end are shared events. Race: each player's own island.
 - **Emberfall** (slug `emberfall`, solo only for now — the registry offers
   one seat until co-op is ported) is a finished single page,
   `public/emberfall/index.html` (the mobile rebuild, worked on outside this

@@ -10,7 +10,10 @@
 //     id at each end); tied, it sags with slack and goes straight when taut;
 //     snapped, a short tail dangles from each of you
 //   fx.burst / fx.ring                               effects, from the events
+//   createIsle(WI, off)                              the second stage, Sunhaven
+//                                                    Isle, built when it's needed
 import { ZONES, PAL0, TAU, clamp, lerp } from "./sunshardWorld.js";
+import { zoneAt, EMBER, LAKE, MAP_SIZE } from "./sunhavenWorld.js";
 
 const BEAM_H = 140;
 // Each zone has its own sky, as Rail Runner's stretches do: reach the next
@@ -23,7 +26,15 @@ const THEMES = [
   { top: 0x7fb6e8, bot: 0xeef8ff, hemi: 0.9, sun: 0.7, sunC: 0xe8f4ff, stars: 0, near: 30, far: 150 },    // Frost Ridge: a pale, misty cold
   { top: 0x3a1430, bot: 0xd2553a, hemi: 0.55, sun: 0.75, sunC: 0xff8a5a, stars: 0.25, near: 35, far: 170 }, // Ember Cliffs: a red dusk
   { top: 0x0e1240, bot: 0x5a4a9a, hemi: 0.5, sun: 0.55, sunC: 0xffd89a, stars: 1, near: 50, far: 220 },  // Sky Temple: night, and stars
+  // Sunhaven Isle's zones (stage two, ISLE_SKY + zone): the village, the cliffs, the lake, the ember ruins, the hollow, the tower
+  { top: 0x3d9bff, bot: 0xbfe8ff, hemi: 0.85, sun: 1.0, sunC: 0xfff1d6, stars: 0, near: 70, far: 300 },
+  { top: 0x5aa8ff, bot: 0xe6f2ff, hemi: 0.9, sun: 0.95, sunC: 0xffffff, stars: 0, near: 70, far: 300 },
+  { top: 0x3fb8d8, bot: 0xc4f0f4, hemi: 0.9, sun: 0.85, sunC: 0xdffaff, stars: 0, near: 60, far: 260 },
+  { top: 0xf0884a, bot: 0xffd9a0, hemi: 0.75, sun: 0.9, sunC: 0xffb070, stars: 0, near: 55, far: 240 },
+  { top: 0x3f9e6e, bot: 0xc6ecc8, hemi: 0.8, sun: 0.8, sunC: 0xeaffd0, stars: 0, near: 55, far: 240 },
+  { top: 0x2a1a5a, bot: 0x9a88c8, hemi: 0.6, sun: 0.7, sunC: 0xc9b4ff, stars: 0.6, near: 55, far: 250 },
 ];
+const ISLE_SKY = 5;
 export const MATE = [0x37c8e6, 0xa678ff, 0x62d36c, 0xff8fc7, 0xffd24a, 0xf4efe6, 0xff9f43];
 
 export function createScene(THREE, W, opts = {}) {
@@ -408,6 +419,31 @@ export function createScene(THREE, W, opts = {}) {
     setSky(zone, dt);
   }
 
+  // everyone else, and the ropes between us. off: drawn lifted by it (the
+  // isle), where their own shadow isn't worked out
+  function drawMates(remotes, ropes, dt, T, off) {
+    const seen = new Set();
+    for (const r of remotes) {
+      seen.add(r.id);
+      let h = mates.get(r.id);
+      if (!h) { h = makeHero(r.col, r.name); mates.set(r.id, h); }
+      if (off) { pose(h, { ...r, x: r.x + off.x, y: r.y + off.y, z: r.z + off.z }, dt, T, null); h.blob.visible = false; }
+      else pose(h, r, dt, T, null);
+    }
+    for (const [id, h] of mates) if (!seen.has(id)) { dropHero(h); mates.delete(id); }
+    const used = new Set();
+    for (const rp of ropes) {
+      const ha = rp.a === "me" ? H : mates.get(rp.a), hb = rp.b === "me" ? H : mates.get(rp.b);
+      if (!ha || !hb) continue;
+      const key = rp.a + "~" + rp.b;
+      used.add(key);
+      let R = ropeMesh.get(key);
+      if (!R) { R = makeRope(rp.ca, rp.cb); ropeMesh.set(key, R); }
+      drawRope(R, ha, hb, rp, T);
+    }
+    for (const [k, R] of ropeMesh) if (!used.has(k)) { dropRope(R); ropeMesh.delete(k); }
+  }
+
   // ── one frame ──────────────────────────────────────────────────────────────
   function frame({ S, team, remotes = [], ropes = [], yaw, pitch, dt, T }) {
     const P = S.pl;
@@ -457,35 +493,231 @@ export function createScene(THREE, W, opts = {}) {
     for (const q of S.plats) if (q.state === 1 && Math.random() < 0.4) emit(q.x + (Math.random() - 0.5) * 2, q.y, q.z + (Math.random() - 0.5) * 2, 0, 1, 0, 0.6, 0xd8b080);
     // you
     pose(H, { x: P.x, y: P.y, z: P.z, face: P.face, speed: P.speed, onG: P.onG, vy: P.vy, vx: P.vx, vz: P.vz, gliding: P.gliding, inv: P.inv > 0, sq: P.sq }, dt, T, S.plats);
-    // everyone else
-    const seen = new Set();
-    for (const r of remotes) {
-      seen.add(r.id);
-      let h = mates.get(r.id);
-      if (!h) { h = makeHero(r.col, r.name); mates.set(r.id, h); }
-      pose(h, r, dt, T, null);
-    }
-    for (const [id, h] of mates) if (!seen.has(id)) { dropHero(h); mates.delete(id); }
-    const used = new Set();
-    for (const rp of ropes) {
-      const ha = rp.a === "me" ? H : mates.get(rp.a), hb = rp.b === "me" ? H : mates.get(rp.b);
-      if (!ha || !hb) continue;
-      const key = rp.a + "~" + rp.b;
-      used.add(key);
-      let R = ropeMesh.get(key);
-      if (!R) { R = makeRope(rp.ca, rp.cb); ropeMesh.set(key, R); }
-      drawRope(R, ha, hb, rp, T);
-    }
-    for (const [k, R] of ropeMesh) if (!used.has(k)) { dropRope(R); ropeMesh.delete(k); }
+    drawMates(remotes, ropes, dt, T, null);
     updParticles(dt); updRings(dt);
     cameraFollow(P, yaw, pitch, dt, S.zone);
     renderer.render(scene, camera);
+  }
+
+  // ── Sunhaven Isle: the stage after the temple ──────────────────────────────
+  // A second island, drawn with the same lights, sky, shadows, fx and explorer
+  // as the sky hop. It floats high over the temple (off), so from its rim you
+  // look down at the way you came. WI is the island's own world (sunhavenWorld,
+  // local coordinates). Built only when asked — at the portal — because its
+  // ground is a big mesh; everything goes through keep(), so dispose() takes it.
+  //   createIsle(WI, off) -> { show(on), frame({ S, remotes, ropes, yaw, pitch, dt, T }), off }
+  //     S: an island run (sunhavenSim); remotes in the island's coordinates
+  function createIsle(WI, off, K = { zoneAt, EMBER, LAKE }) {
+    const G0 = new THREE.Group(); G0.position.set(off.x, off.y, off.z); G0.visible = false; scene.add(G0);
+    const A = (m, x, y, z, p) => { m.position.set(x, y, z); (p || G0).add(m); return m; };
+    const SPH = (r, c, o) => new THREE.Mesh(G("is_s" + r, () => new THREE.SphereGeometry(r, 10, 8)), M(c, o));
+    // ground: a vertex-coloured height map that takes the sun's shadow
+    {
+      const N = 150, SZ = MAP_SIZE, g = keep(new THREE.PlaneGeometry(SZ, SZ, N, N)); g.rotateX(-Math.PI / 2);
+      const pos = g.attributes.position, col = new Float32Array(pos.count * 3), c = new THREE.Color();
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i), z = pos.getZ(i), h = WI.H(x, z); pos.setY(i, h);
+        const zi = K.zoneAt(x, z, 0);
+        if (h < -2.5) c.setHex(0x8f7a64);
+        else if (h < 0.1) c.setHex(0xe8d49a);
+        else if (h < 0.7) c.setHex(0xd9d08a);
+        else if (zi === 3 && Math.hypot(x - K.EMBER.x, z - K.EMBER.z) < 30) c.setHex(h > 9 ? 0xb8704c : 0xa06c4a);
+        else if (zi === 5) c.setHex(0x8e8ea6);
+        else if (zi === 0 && Math.hypot(x, z) < 11) c.setHex(0xe0cfa0);
+        else if (h > 18) c.setHex(0xc8d8a0);
+        else if (h > 9) c.setHex(0x7ec45a);
+        else c.setHex(0x72d15a);
+        c.multiplyScalar(0.93 + ((((Math.sin(x * 12.9898 + z * 78.233) * 43758.5) % 1) + 1) % 1) * 0.12);
+        col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+      }
+      g.setAttribute("color", new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
+      const t = new THREE.Mesh(g, keep(new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 0, specular: 0x000000 })));
+      t.receiveShadow = true; G0.add(t);
+      const lk = new THREE.Mesh(keep(new THREE.CircleGeometry(23, 36)), keep(new THREE.MeshPhongMaterial({ color: 0x4fb8e8, transparent: true, opacity: 0.82, shininess: 40, flatShading: true })));
+      lk.rotation.x = -Math.PI / 2; A(lk, K.LAKE.x, -0.25, K.LAKE.z);
+    }
+    const inst = (geo, list, f, shadow) => {
+      const im = keep(new THREE.InstancedMesh(geo, keep(new THREE.MeshPhongMaterial({ color: 0xffffff, flatShading: true, shininess: 0, specular: 0x000000 })), Math.max(1, list.length)));
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
+      list.forEach((o, i) => { const r = f(o); e.set(0, r.rot || 0, 0); q.setFromEuler(e); s.set(r.sx, r.sy, r.sz); p.set(r.x, r.y, r.z); m.compose(p, q, s); im.setMatrixAt(i, m); c.setHex(r.c); im.setColorAt(i, c); });
+      if (!list.length) im.count = 0;
+      im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; im.castShadow = !!shadow; G0.add(im); return im;
+    };
+    const trunkG = keep(new THREE.CylinderGeometry(0.22, 0.34, 1, 6)); trunkG.translate(0, 0.5, 0);
+    const coneG = keep(new THREE.ConeGeometry(1, 1, 8)); coneG.translate(0, 0.5, 0);
+    const ballG = keep(new THREE.IcosahedronGeometry(1, 0));
+    inst(trunkG, WI.trees, (t) => ({ x: t.x, y: t.y, z: t.z, sx: t.s, sy: 3.4 * t.s, sz: t.s, c: t.ember ? 0x5a4234 : 0x8b5e3c, rot: t.rot }), true);
+    inst(ballG, WI.trees.filter((t) => t.round), (t) => ({ x: t.x, y: t.y + 4.0 * t.s, z: t.z, sx: 1.7 * t.s, sy: 1.5 * t.s, sz: 1.7 * t.s, c: t.ember ? 0xa0623a : [0x4fc05a, 0x5ecf62, 0x45b04f][(t.v * 3) | 0], rot: t.rot }), true);
+    inst(coneG, WI.trees.filter((t) => !t.round), (t) => ({ x: t.x, y: t.y + 2.2 * t.s, z: t.z, sx: 1.5 * t.s, sy: 3.6 * t.s, sz: 1.5 * t.s, c: t.ember ? 0x8a5232 : [0x2f9a52, 0x3aa85c, 0x2a8a4a][(t.v * 3) | 0], rot: t.rot }), true);
+    inst(keep(new THREE.DodecahedronGeometry(1, 0)), WI.rocks, (r) => ({ x: r.x, y: r.y + 0.3 * r.s, z: r.z, sx: r.s, sy: r.s * 0.7, sz: r.s, c: r.ember ? 0x7a5248 : 0xa8a8b4, rot: r.rot }), true);
+    const petal = [0xff8fc7, 0xffd24a, 0xffffff, 0xa678ff];
+    inst(keep(new THREE.IcosahedronGeometry(0.2, 0)), WI.flowers, (f) => ({ x: f.x, y: f.y + 0.4, z: f.z, sx: 1, sy: 1, sz: 1, c: petal[f.c] }));
+    inst(keep(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 3)), WI.flowers, (f) => ({ x: f.x, y: f.y + 0.2, z: f.z, sx: 1, sy: 1, sz: 1, c: 0x3d8a3a }));
+    // houses and the fountain
+    WI.houses.forEach((h) => {
+      const g = new THREE.Group();
+      const w = A(new THREE.Mesh(G("is_hw", () => new THREE.BoxGeometry(5, 3.4, 4.4)), M(h.wall)), 0, 1.7, 0, g); w.castShadow = true;
+      const roof = A(new THREE.Mesh(G("is_hr", () => new THREE.ConeGeometry(4.2, 2.4, 4)), M(h.roof)), 0, 4.6, 0, g); roof.rotation.y = Math.PI / 4; roof.castShadow = true;
+      A(new THREE.Mesh(G("is_hd", () => new THREE.BoxGeometry(1, 1.8, 0.2)), M(0x7a4a2a)), 0, 0.9, 2.25, g);
+      A(new THREE.Mesh(G("is_hwi", () => new THREE.BoxGeometry(0.9, 0.9, 0.2)), M(0xbfe8ff, { emissive: 0x2a5a7a })), -1.5, 2.2, 2.25, g);
+      g.position.set(h.x, h.y, h.z); g.rotation.y = h.rot; G0.add(g);
+    });
+    {
+      const f = WI.fountain, g = new THREE.Group();
+      A(new THREE.Mesh(G("is_f1", () => new THREE.CylinderGeometry(2.4, 2.6, 0.8, 10)), M(0xe2ddd0)), 0, 0.4, 0, g).castShadow = true;
+      A(new THREE.Mesh(G("is_f2", () => new THREE.CylinderGeometry(2.0, 2.0, 0.2, 10)), M(0x6fd0ff, { emissive: 0x1a4a6a })), 0, 0.75, 0, g);
+      A(new THREE.Mesh(G("is_f3", () => new THREE.CylinderGeometry(0.35, 0.5, 2.2, 8)), M(0xe2ddd0)), 0, 1.6, 0, g);
+      A(SPH(0.6, 0xffe28a, { emissive: 0x6a5010 }), 0, 3, 0, g);
+      g.position.set(f.x, f.y, f.z); G0.add(g);
+    }
+    // stepping stones and the wind vent, in the same stone as the sky hop
+    const isPlat = [], platFx = [];
+    WI.plats.forEach((p) => {
+      const g = new THREE.Group();
+      const color = p.kind === "crumble" ? 0xb98a5e : p.kind === "lift" ? 0x9ad8e8 : p.pad ? 0x62d36c : 0xd8c9a8;
+      A(new THREE.Mesh(G("is_p" + p.r + p.th, () => new THREE.CylinderGeometry(p.r, p.r * 0.9, p.th, 10)), M(color)), 0, -p.th / 2, 0, g).castShadow = true;
+      if (!p.pad && p.kind !== "lift") A(new THREE.Mesh(G("is_pt" + p.r, () => new THREE.CylinderGeometry(p.r * 0.97, p.r * 0.97, 0.14, 10)), M(0x72d15a)), 0, -0.05, 0, g);
+      if (p.kind === "spring") { const cap = A(new THREE.Mesh(G("is_cap", () => new THREE.SphereGeometry(0.85, 10, 6, 0, TAU, 0, Math.PI / 2)), M(0xe8453b)), 0, 0, 0, g); platFx.push({ p, cap }); }
+      if (p.kind === "lift") A(new THREE.Mesh(G("is_beam", () => new THREE.CylinderGeometry(1.5, 1.5, 9, 10, 1, true)), BM(0xbff4ff, { transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })), 0, 4.5, 0, g);
+      g.position.set(p.x, p.y, p.z); G0.add(g); isPlat.push(g);
+    });
+    // checkpoints
+    const isFlag = WI.flags.map((f) => {
+      const g = new THREE.Group();
+      A(new THREE.Mesh(G("is_fp", () => new THREE.CylinderGeometry(0.08, 0.1, 3, 6)), M(0xdddddd)), 0, 1.5, 0, g);
+      const cloth = A(new THREE.Mesh(G("is_fc", () => new THREE.BoxGeometry(1.2, 0.8, 0.06)), M(0x8a96a8, { side: THREE.DoubleSide })), 0.62, 2.5, 0, g);
+      g.position.set(f.x, f.y, f.z); G0.add(g); return cloth;
+    });
+    // the four sun shrines
+    const shrineMesh = WI.shrines.map((s) => {
+      const g = new THREE.Group();
+      A(new THREE.Mesh(G("is_sb", () => new THREE.CylinderGeometry(1.1, 1.3, 0.5, 8)), M(0xc4c0b4)), 0, 0.25, 0, g).castShadow = true;
+      A(new THREE.Mesh(G("is_sc", () => new THREE.CylinderGeometry(0.45, 0.6, 1.1, 8)), M(0xe2ddd0)), 0, 1.05, 0, g).castShadow = true;
+      const gem = A(new THREE.Mesh(G("is_sg", () => new THREE.OctahedronGeometry(0.55, 0)), M(0x666677)), 0, 2.2, 0, g);
+      const beam = A(new THREE.Mesh(G("is_sbm", () => new THREE.CylinderGeometry(0.5, 0.9, 60, 8, 1, true)), BM(s.col, { opacity: 0.28, side: THREE.DoubleSide, ...ADD })), 0, 30, 0, g); beam.visible = false;
+      g.position.set(s.x, s.y, s.z); G0.add(g); return { gem, beam, s };
+    });
+    // creatures: a mesh each, made when first seen (the boss's wisps come and go)
+    const slimeMesh = new Map(), wispMesh = new Map();
+    const slimeFor = (s) => {
+      let m = slimeMesh.get(s);
+      if (!m) {
+        m = new THREE.Group();
+        const b = A(new THREE.Mesh(G("is_sl", () => new THREE.SphereGeometry(0.62, 10, 8)), M(0x6fe08a, { emissive: 0x104a20 })), 0, 0.45, 0, m); b.castShadow = true;
+        A(SPH(0.08, 0x111111), -0.2, 0.6, 0.5, m); A(SPH(0.08, 0x111111), 0.2, 0.6, 0.5, m);
+        G0.add(m); slimeMesh.set(s, m);
+      }
+      return m;
+    };
+    const wispFor = (w) => { let m = wispMesh.get(w); if (!m) { m = new THREE.Mesh(G("is_wi", () => new THREE.IcosahedronGeometry(0.5, 1)), M(0xff9a4a, { emissive: 0xa04010 })); G0.add(m); wispMesh.set(w, m); } return m; };
+    // heart pickups
+    const heartM = [];
+    for (let i = 0; i < 12; i++) {
+      const g = new THREE.Group(), hm = M(0xff5a6e, { emissive: 0x801020 });
+      A(SPH(0.22, 0xff5a6e, { emissive: 0x801020 }), -0.15, 0.1, 0, g); A(SPH(0.22, 0xff5a6e, { emissive: 0x801020 }), 0.15, 0.1, 0, g);
+      const t = A(new THREE.Mesh(G("is_ht", () => new THREE.ConeGeometry(0.34, 0.5, 6)), hm), 0, -0.18, 0, g); t.rotation.x = Math.PI;
+      g.visible = false; G0.add(g); heartM.push(g);
+    }
+    // the shade tower yard
+    const AR = WI.arena, pillarMesh = [];
+    WI.pillars.forEach((p) => {
+      const m = new THREE.Mesh(G("is_pl" + (p.gate ? 1 : 0), () => new THREE.BoxGeometry(1.3, p.gate ? 9 : 7, 1.3)), M(p.gate ? 0xffd24a : 0x9a92b8, p.gate ? { emissive: 0x6a4a00 } : undefined));
+      m.castShadow = true; A(m, p.x, p.y0 + (p.gate ? 4.5 : 3.5), p.z); pillarMesh.push(m);
+    });
+    const boss = new THREE.Group();
+    {
+      const bm = M(0x3a3050), bm2 = M(0x4a4068);
+      A(new THREE.Mesh(G("is_b1", () => new THREE.BoxGeometry(4.2, 4.0, 3.2)), bm), 0, 3.0, 0, boss).castShadow = true;
+      A(new THREE.Mesh(G("is_b2", () => new THREE.BoxGeometry(2.4, 2.0, 2.4)), bm2), 0, 6.0, 0, boss).castShadow = true;
+      A(new THREE.Mesh(G("is_b3", () => new THREE.BoxGeometry(1.4, 4, 1.4)), bm), -3.1, 3.2, 0.3, boss);
+      A(new THREE.Mesh(G("is_b3", () => new THREE.BoxGeometry(1.4, 4, 1.4)), bm), 3.1, 3.2, 0.3, boss);
+      A(SPH(0.28, 0xff3a3a, { emissive: 0xff2020 }), -0.55, 6.2, 1.25, boss); A(SPH(0.28, 0xff3a3a, { emissive: 0xff2020 }), 0.55, 6.2, 1.25, boss);
+    }
+    const crystal = A(new THREE.Mesh(G("is_cr", () => new THREE.OctahedronGeometry(0.9, 0)), M(0x66448a, { emissive: 0x220a44 })), 0, 3.3, 1.8, boss);
+    A(boss, AR.x, AR.y, AR.z);
+    const flat = (r0, col, op) => { const m = new THREE.Mesh(keep(new THREE.RingGeometry(r0, 1, 40)), BM(col, { transparent: true, opacity: op, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; G0.add(m); return m; };
+    const ringM = flat(0.92, 0xff4a6a, 0.85), teleM = flat(0, 0xff3a5a, 0.35);
+    const orbD = [0, 1, 2, 3].map(() => flat(0, 0xff3a5a, 0.35));
+    const orbB = [0, 1, 2, 3].map(() => { const m = SPH(0.7, 0xc060ff, { emissive: 0x6020a0 }); m.visible = false; G0.add(m); return m; });
+    // the people of Sunhaven wear the explorer's look
+    let npcHero = null;
+    const NPC_COL = { sol: 0xf4efe6, pip: 0xff8fc7, brindle: 0xc08a5a };
+    function show(on) {
+      G0.visible = on;
+      if (!on) return;
+      if (!npcHero) npcHero = WI.npcs.map((n) => { const h = makeHero(NPC_COL[n.id] || 0xffffff, n.name); h.hero.scale.setScalar(n.s); if (h.tag) h.tag.position.y = 2.15 / n.s; return h; });
+      camInit = false;
+      // the sky hop's clouds that drift through this island go away
+      for (const c of cloudMesh) { const d = Math.hypot(c.g.position.x - off.x, c.g.position.z - off.z); c.g.visible = !(d < 130 && Math.abs(c.g.position.y - off.y) < 60); }
+    }
+    const camP = { zoom: 0 };
+    function frameIsle({ S: S2, remotes = [], ropes = [], yaw, pitch, dt, T }) {
+      const P = S2.pl, B = S2.boss;
+      P.sq *= Math.max(0, 1 - dt * 9);
+      // you, with the explorer's own animation
+      pose(H, { x: P.x + off.x, y: P.y + off.y, z: P.z + off.z, face: P.face, speed: P.speed, onG: P.onG, vy: P.vy, vx: P.vx, vz: P.vz, gliding: P.gliding, inv: P.inv > 0, sq: P.sq }, dt, T, null);
+      H.blob.visible = false;
+      if (P.onG && P.speed > 3.5 && Math.random() < dt * 14) emit(P.x + off.x - P.vx * 0.05, P.y + off.y + 0.05, P.z + off.z - P.vz * 0.05, (Math.random() - 0.5) * 0.8, 0.6, (Math.random() - 0.5) * 0.8, 0.4, 0xd8d2c0);
+      for (const l of WI.lifts) if (Math.hypot(P.x - l.x, P.z - l.z) < l.r && Math.random() < dt * 20) emit(l.x + off.x + (Math.random() - 0.5) * 2, P.y + off.y - 0.4, l.z + off.z + (Math.random() - 0.5) * 2, 0, 3, 0, 0.5, 0xcfeaff);
+      // the stones
+      S2.plats.forEach((q, i) => { const g = isPlat[i]; g.visible = q.state !== 3; g.position.set(q.x + (q.shake ? Math.sin(T * 60) * 0.06 : 0), q.y, q.z); });
+      platFx.forEach((f) => { const k = WI.springs.findIndex((s) => s.p === f.p.i), v = k >= 0 ? S2.springs[k] || 0 : 0; f.cap.scale.set(1 + v * 0.25, 1 - v * 0.45, 1 + v * 0.25); });
+      isFlag.forEach((c, i) => { const on = S2.flags.has(i); c.material = M(on ? 0x62d36c : 0x8a96a8, { side: THREE.DoubleSide }); c.rotation.y = Math.sin(T * 3 + i) * 0.35; c.position.y = on ? 2.1 : 1.4; });
+      shrineMesh.forEach((s, i) => { const lit = S2.shrines.has(i); s.gem.rotation.y = T * (lit ? 2 : 0.6); s.gem.position.y = 2.2 + Math.sin(T * 2 + i) * 0.15; s.gem.material = M(lit ? s.s.col : 0x666677, lit ? { emissive: s.s.col } : undefined); s.beam.visible = lit; });
+      npcHero.forEach((h, i) => { const n = WI.npcs[i]; pose(h, { x: n.x + off.x, y: n.y + off.y, z: n.z + off.z, face: Math.atan2(P.x - n.x, P.z - n.z), speed: 0, onG: true, vy: 0, vx: 0, vz: 0, gliding: false, inv: false, sq: 0 }, dt, T, null); h.blob.visible = false; });
+      S2.slimes.forEach((s) => { const m = slimeFor(s); m.visible = s.alive; if (!s.alive) return; const hop = Math.max(0, Math.sin(s.t * 5)); m.position.set(s.x, s.y - hop * 0.5, s.z); m.rotation.y = s.dir; m.scale.set(1 + (1 - hop) * 0.15, 0.8 + hop * 0.3, 1 + (1 - hop) * 0.15); });
+      S2.wisps.forEach((w) => { const m = wispFor(w); m.visible = w.alive; if (!w.alive) return; m.position.set(w.x, w.y, w.z); m.scale.setScalar(1 + Math.sin(w.t * 8) * 0.12 + (w.st === 1 ? 0.25 : 0)); m.material = M(w.boss ? 0xc060ff : w.st === 1 ? 0xff5a3a : 0xff9a4a, { emissive: w.boss ? 0xa020c0 : w.st === 1 ? 0xff4010 : 0xa04010 }); });
+      heartM.forEach((g, i) => { const q = S2.pickups[i]; g.visible = !!q; if (q) { g.position.set(q.x, q.y + Math.sin(T * 3 + i) * 0.15, q.z); g.rotation.y = T * 2.5; } });
+      // the yard: the gate sinks, the colossus wakes, its attacks are drawn on the ground
+      pillarMesh[0].position.y = WI.pillars[0].y0 + 4.5 - S2.gateT * 9.2;
+      if (S2.gateOpen && S2.gateT < 1 && Math.random() < 0.5) emit(WI.pillars[0].x + off.x + (Math.random() - 0.5), WI.pillars[0].y0 + off.y + 0.2, WI.pillars[0].z + off.z + (Math.random() - 0.5), 0, 2, 0, 0.7, 0xffe28a);
+      boss.visible = B.state !== "dead"; boss.rotation.y = B.face || 0;
+      crystal.material = M(B.stunned ? 0xfff2a0 : 0x66448a, { emissive: B.stunned ? 0xffe060 : 0x220a44 }); crystal.rotation.y = T * 2;
+      boss.position.y = AR.y + (B.state === "sleep" ? -0.5 : 0); boss.scale.y = B.state === "sleep" ? 0.88 : 1; boss.rotation.z = B.stunned ? Math.sin(T * 4) * 0.06 : 0;
+      ringM.visible = B.state === "cycle" && B.sub === 1 && B.orbs.length === 0 && B.ringR > 0 && B.ringR < AR.r + 1;
+      if (ringM.visible) { ringM.position.set(AR.x, AR.y + 0.2, AR.z); ringM.scale.setScalar(B.ringR); }
+      const tele = B.state === "cycle" && B.sub === 0 && B.orbs.length === 0 && B.tele > 0;
+      teleM.visible = tele; if (tele) { teleM.position.set(AR.x, AR.y + 0.15, AR.z); teleM.scale.setScalar(2 + B.tele * (AR.r - 2)); teleM.material.opacity = 0.15 + B.tele * 0.25; }
+      for (let k = 0; k < 4; k++) {
+        const o = B.orbs[k], on = !!o && B.state === "cycle" && B.sub === 0;
+        orbD[k].visible = on; orbB[k].visible = on;
+        if (on) { orbD[k].position.set(o.x, AR.y + 0.15, o.z); orbD[k].scale.setScalar(1.7); orbD[k].material.opacity = 0.2 + B.tele * 0.4; orbB[k].position.set(o.x, AR.y + 1 + (1 - B.tele) * 14, o.z); }
+      }
+      // friends on the island, and the ropes between us
+      drawMates(remotes, ropes, dt, T, off);
+      for (const c of cloudMesh) { c.g.position.x += c.sp * dt; if (c.g.position.x > 280) c.g.position.x = -280; }
+      updParticles(dt); updRings(dt);
+      // the camera: behind you, never inside the hill, wider in the tower yard
+      const inYard = Math.hypot(P.x - AR.x, P.z - AR.z) < AR.r + 2 && B.state !== "dead" && S2.gateOpen;
+      camP.zoom += ((inYard ? 1 : 0) - camP.zoom) * Math.min(1, dt * 2);
+      const pe = clamp(pitch + camP.zoom * 0.25, -0.6, 1.4), cp = Math.cos(pe), dist = (8.5 + camP.zoom * 6) * (P.gliding ? 1.15 : 1);
+      const tx = P.x + off.x, ty = P.y + off.y + 1.3, tz = P.z + off.z;
+      const wx = tx + Math.sin(yaw) * cp * dist, wz = tz + Math.cos(yaw) * cp * dist;
+      let wy = ty + Math.sin(pe) * dist + 0.3;
+      const gh = WI.H(wx - off.x, wz - off.z) + off.y + 1.1;
+      if (wy < gh) wy = gh;
+      if (!camInit) { camera.position.set(wx, wy, wz); camInit = true; }
+      const k = 1 - Math.exp(-dt * 10);
+      camera.position.x += (wx - camera.position.x) * k; camera.position.y += (wy - camera.position.y) * k; camera.position.z += (wz - camera.position.z) * k;
+      shake = Math.max(0, shake - dt * 1.6);
+      if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.5; camera.position.y += (Math.random() - 0.5) * shake * 0.5; }
+      // looking up: tilt toward the sky
+      camera.lookAt(tx, ty + Math.max(0, -pe) * dist * 1.3, tz);
+      const fov = 55 + clamp(P.speed - 6, 0, 4) * 0.8 + (P.gliding ? 4 : 0);
+      camera.fov += (fov - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();
+      sun.position.set(tx + 22, ty + 38, tz + 14); sun.target.position.set(tx, ty, tz); sun.target.updateMatrixWorld();
+      sky.position.copy(camera.position); stars.position.copy(camera.position);
+      setSky(ISLE_SKY + (S2.zone || 0), dt);
+      renderer.render(scene, camera);
+    }
+    return { show, frame: frameIsle, off };
   }
 
   return {
     canvas,
     resize(w, h) { renderer.setSize(Math.max(1, w), Math.max(1, h), false); camera.aspect = Math.max(1, w) / Math.max(1, h); camera.updateProjectionMatrix(); },
     frame,
+    createIsle,
     fx: { burst, ring, emit, shake(a) { shake = Math.max(shake, a); } },
     dispose() {
       for (const d of disposables) { try { d.dispose(); } catch { /* fine */ } }

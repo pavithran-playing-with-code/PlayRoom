@@ -292,5 +292,104 @@ check(`a simple bot gets through every jump, takes all 5 shards, opens the gate 
   check(`tied to a friend a step behind, the bot still gets home (${lv} levels)`, ok === lv, `${ok}/${lv}, slowest ${Math.round(slow)}s`);
 }
 
+// ── Sunhaven Isle: the stage after the temple ────────────────────────────────
+{
+  const IW = await import(pathToFileURL(path.join(src, "sunhavenWorld.js")).href);
+  const SH = await import(pathToFileURL(path.join(src, "sunhavenSim.js")).href);
+  const code = "sunhaven-" + levelCode(424242);
+  const WI = IW.buildWorld(code), WI2 = IW.buildWorld(code);
+  const sig = (w) => JSON.stringify([w.plats.map((p) => [p.x, p.y, p.z, p.kind]), w.slimes, w.wisps, w.flags, w.trees.length, w.rocks.length,
+    [[0, 0], [30, -20], [-50, 8], [8, 56], [-6, -66]].map(([x, z]) => w.H(x, z))]);
+  check("the same seed builds the same Sunhaven", sig(WI) === sig(WI2));
+  check("...and the next island's Sunhaven is another", sig(IW.buildWorld(code + "-1")) !== sig(WI));
+  check("four shrines, three people, a yard of 24 pillars with one gate, no seeds to collect",
+    WI.shrines.length === IW.SHRINES && WI.npcs.length === 3 && WI.pillars.length === 24 && WI.pillars.filter((p) => p.gate).length === 1 && WI.seeds.length === 0);
+
+  // two phones, one isle, nobody near: the creatures wander by the clock, so
+  // they're in the same place at any frame rate
+  const far = WI.flags.find((f) => f.name === "Tower Gate");
+  const idle = (h) => {
+    const S = SH.newRun(WI);
+    Object.assign(S.pl, { x: far.x, z: far.z, y: WI.H(far.x, far.z) });
+    for (let t = 0; t < 10; t += h) SH.step(S, WI, {}, h);
+    return S;
+  };
+  const A = idle(1 / 60), B = idle(1 / 144);
+  const sOff = Math.max(...A.slimes.map((s, k) => Math.hypot(s.x - B.slimes[k].x, s.z - B.slimes[k].z)));
+  const wOff = Math.max(...A.wisps.map((w, k) => Math.hypot(w.x - B.wisps[k].x, w.y - B.wisps[k].y, w.z - B.wisps[k].z)));
+  check("isle slimes and wisps are where they are on every phone (60 vs 144 fps)", sOff < 0.05 && wOff < 0.05, `${sOff.toFixed(3)} / ${wOff.toFixed(3)} m apart at most`);
+  check("...and never Math.random in the rules", !/Math\.random/.test((await import("node:fs")).readFileSync(path.join(src, "sunhavenSim.js"), "utf8")));
+
+  // a friend's moments, played into my run
+  const S = SH.newRun(WI);
+  S.pipQ = 1;
+  const k1 = SH.applyEvent(S, WI, { k: "kill", t: "slime", i: 3 });
+  check("a friend's kill: the slime goes here, Pip counts it, and the same heart drops",
+    !S.slimes[3].alive && k1.length === 1 && k1[0].how === "friend" && S.pipK === 1 && S.pickups.some((q) => q.id === "slime3") && S.kills === 0);
+  check("...and only once", SH.applyEvent(S, WI, { k: "kill", t: "slime", i: 3 }).length === 0 && S.pipK === 1);
+  check("a friend took the heart: it's gone here", SH.applyEvent(S, WI, { k: "heart", id: "slime3" }).length === 1 && !S.pickups.some((q) => q.id === "slime3"));
+  SH.applyEvent(S, WI, { k: "shrine", i: 0 }); SH.applyEvent(S, WI, { k: "shrine", i: 1 });
+  check("two shrines lit between us: the pulse and the dash are mine too", SH.hasPulse(S) && SH.hasDash(S) && !S.gateOpen);
+  SH.applyEvent(S, WI, { k: "shrine", i: 2 });
+  const g4 = SH.applyEvent(S, WI, { k: "shrine", i: 3 });
+  check("...four: the tower gate opens", S.gateOpen && g4.some((e) => e.k === "gate") && SH.maxHp(S) === 4);
+  const before = SH.score(S);
+  SH.applyEvent(S, WI, { k: "bossDead" });
+  check("the boss gone (a friend's blow): Sunhaven is saved, and it scores", S.finished && S.boss.state === "dead" && SH.score(S) > before && SH.score(S) <= 25000);
+
+  // tied on the isle: walking away from a friend who stands still
+  {
+    const R = SH.newRun(WI), P = R.pl, st = WI.start;
+    const friend = [{ id: 2, x: st.x - 5, y: WI.H(st.x - 5, st.z), z: st.z }];
+    const go = (secs, inp) => { const ev = []; for (let t = 0; t < secs; t += dt) { const bx = P.x, bz = P.z; ev.push(...SH.step(R, WI, inp, dt), ...tether(R, WI, friend, bx, bz, dt)); } return ev; };
+    const e0 = go(0.3, {});
+    go(4, { mx: 0.2, mz: 1 });
+    const d = Math.hypot(P.x - friend[0].x, P.z - friend[0].z);
+    check("tied on the isle: held at the chain's length, never snapped", e0.some((e) => e.k === "tie") && d <= LEASH + AIR_SLACK + 0.01, `${d.toFixed(2)} m`);
+  }
+
+  // a bot climbs the Bounce Cliffs by their stepping stones and mushrooms
+  const mesaBot = (Wm) => {
+    const R = SH.newRun(Wm), P = R.pl;
+    const stones = Wm.plats.filter((p) => p.mesa !== undefined).sort((a, b) => a.mesa - b.mesa);
+    const s0 = stones[0], a0 = Math.atan2(s0.z - IW.CLIFF.z, s0.x - IW.CLIFF.x);
+    const startAt = () => {
+      const x = s0.x + Math.cos(a0) * (s0.r + 2.5), z = s0.z + Math.sin(a0) * (s0.r + 2.5), y = Wm.H(x, z);
+      Object.assign(P, { x, y, z, vx: 0, vy: 0, vz: 0, onG: true, gp: null }); R.ckpt = { x, y, z };
+    };
+    startAt();
+    let cur = -1, t = 0, tries = 1, ground = 0, doubled = false, lastJ = -1;
+    while (t < 180 && cur < stones.length - 1) {
+      t += dt;
+      const nxt = stones[cur + 1], q = R.plats[nxt.i], at = cur >= 0 ? stones[cur] : null;
+      const dx = q.x - P.x, dz = q.z - P.z, d = Math.hypot(dx, dz) || 1;
+      let mx = dx / d, mz = dz / d;
+      if (P.onG) {
+        doubled = false; SH.releaseJump(R);
+        if (at && at.kind === "spring") {
+          // to the middle: the mushroom does the rest
+          const cx = at.x - P.x, cz = at.z - P.z, cd = Math.hypot(cx, cz) || 1;
+          mx = cx / cd; mz = cz / cd;
+          if (cd < 0.25) mx = mz = 0;
+        } else if (d < nxt.r + 3.4 && t - lastJ > 0.3) { SH.pressJump(R); lastJ = t; }
+      } else {
+        // don't press into its side from below; double-jump on the way down; then glide
+        if (P.y < q.y - 0.2 && d < nxt.r + 0.8) mx = mz = 0;
+        const bouncing = at && at.kind === "spring" && P.vy > 0;
+        if (!doubled && !bouncing && P.vy < 0.5 && P.y < q.y + 0.6 && P.jumps <= 1) { SH.releaseJump(R); SH.pressJump(R); doubled = true; }
+      }
+      SH.step(R, Wm, { mx, mz }, dt);
+      if (P.onG && P.gp !== null) { const k = stones.findIndex((s) => s.i === P.gp); if (k > cur) cur = k; }
+      // fell off to the ground: back to the foot of the stones
+      if (P.onG && P.gp === null && cur >= 0) { ground += dt; if (ground > 1.5) { tries++; cur = -1; ground = 0; startAt(); } } else ground = 0;
+    }
+    return { top: cur === stones.length - 1, tries, t };
+  };
+  let up = 0, mostTries = 0;
+  const NM = 8;
+  for (let s = 1; s <= NM; s++) { const r = mesaBot(IW.buildWorld("sunhaven-" + levelCode(s * 7919))); if (r.top) up++; mostTries = Math.max(mostTries, r.tries); }
+  check(`a bot climbs the mesa's stones to the top (${NM} islands)`, up === NM, `${up}/${NM}, at most ${mostTries} tries`);
+}
+
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
 process.exit(fails ? 1 : 0);

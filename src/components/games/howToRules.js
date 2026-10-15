@@ -112,7 +112,7 @@ export const HOW_TO = {
   emberfall: {
     name: "Emberfall",
     goal: "Win back the three Ember Shards from their guardians, then defeat the Cinder Colossus.",
-    steps: ["Pick a hero on the title screen, then New Journey (or Continue your last one).", "Drag on the left to move — push to the edge to sprint. Drag on the right to look, pinch to zoom.", "ATTACK (hold to chain three hits), ROLL dodges through blows, SPIN when the blue ring is full, HEAL drinks a potion. Hold JUMP in the air to glide, or at a wall to climb.", "A green button appears beside people, chests, horses and things to do: TALK, OPEN, RIDE, DO. Top right: Bag, emotes, camera and menu; tap the minimap to fast-travel to lit watchtowers.", "With a friend in the room, each of you explores your own island for now."],
+    steps: ["Pick a hero on the title screen, then New Journey (or Continue your last one).", "Drag on the left to move — push to the edge to sprint. Drag on the right to look, pinch to zoom.", "ATTACK (hold to chain three hits), ROLL dodges through blows, SLAM (Meteor Slam: leap and crash down) when the blue ring is full, HEAL drinks a potion. Hold JUMP in the air to glide, or at a wall to climb.", "A green button appears beside people, chests, horses and things to do: TALK, OPEN, RIDE, DO. Top right: Bag, emotes, camera and menu; tap the minimap to fast-travel to lit watchtowers.", "With a friend in the room, each of you explores your own island for now."],
     tip: "A red ring on the ground is a boss about to strike: roll out of it, or roll through the blow at the last moment to counter.",
   },
   speedway: {

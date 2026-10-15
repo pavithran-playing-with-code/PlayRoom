@@ -295,7 +295,8 @@ body.mirror #joyzone{left:auto;right:0}body.mirror #look{right:auto;left:0}
 #tPot.off{filter:grayscale(1);opacity:.4}
 #tEat{color:#ffb4a0}
 /* emote tray: a vertical stack beside the right-hand HUD column (works without touch too) */
-#emo{position:fixed;right:var(--emo-right,214px);top:var(--emo-top,8px);z-index:7;display:flex;flex-direction:column;gap:6px}
+#emo{position:fixed;right:var(--emo-right,214px);top:var(--emo-top,8px);z-index:7;display:grid;grid-auto-flow:column;grid-template-rows:repeat(var(--emo-rows,7),56px);direction:rtl;gap:6px}
+#emo[hidden]{display:none}#emo button{direction:ltr}
 #emo button{width:56px;height:56px;min-width:56px;padding:0;border-radius:50%;font:800 11px/1 var(--hfont);letter-spacing:.4px;background:var(--panel);border:1.5px solid var(--pline);color:var(--gold);box-shadow:0 2px 6px rgba(0,0,0,.45);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
 #emo button svg{width:22px;height:22px}
 #hint{position:fixed;left:50%;top:46%;transform:translate(-50%,-50%);z-index:6;pointer-events:none;padding:8px 16px;border-radius:99px;background:var(--panel);border:1px solid var(--pline);font:700 14px/1.2 var(--nfont);color:var(--txt);white-space:nowrap;transition:opacity .6s}
@@ -324,7 +325,7 @@ body.watching *{cursor:default!important}
    <div class="st-bars">
     <div class="hbar" id="hpb" role="img" aria-label="Health"><i></i><b></b></div>
     <div class="hbar" id="stb" role="img" aria-label="Stamina"><i></i></div>
-    <div class="hbar" id="mpb" role="img" aria-label="Spin power"><i></i></div>
+    <div class="hbar" id="mpb" role="img" aria-label="Slam power"><i></i></div>
     <div class="hbar" id="xpb" role="img" aria-label="Experience"><i></i></div>
    </div>
   </div>
@@ -356,7 +357,7 @@ body.watching *{cursor:default!important}
  <button class="tb" id="tPot" aria-label="Heal (drink a potion)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 3h5M10.5 3v5.2L5.6 16.4A3 3 0 0 0 8.2 21h7.6a3 3 0 0 0 2.6-4.6L13.5 8.2V3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M7.3 14h9.4l1.1 2.4A2 2 0 0 1 16 19.5H8a2 2 0 0 1-1.8-3.1z" fill="#e5483f"/></svg><span class="tl">HEAL</span><b id="tPotN">2</b></button>
  <button class="tb" id="tEat" aria-label="Eat" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5c3 0 5 2.2 5 5 0 3.4-3.3 6.2-6.2 6.2L9 20l-1.6-.4L7 18l4.3-4.3C11.3 10.8 11.6 4.5 14.5 4.5z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><circle cx="5.5" cy="19.5" r="1.8" fill="currentColor"/></svg><span class="tl">EAT</span></button>
  <button class="tb" id="tRoll" aria-label="Dodge roll"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.1-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M17.5 2.8l-.6 4.4-4.4-.6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="tl">ROLL</span></button>
- <button class="tb" id="tSpec" aria-label="Spin attack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M12 8a4 4 0 1 0 4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M21 12l-2.6-2.4M21 12l2-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="tl">SPIN</span></button>
+ <button class="tb" id="tSpec" aria-label="Meteor Slam"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M12 8a4 4 0 1 0 4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M21 12l-2.6-2.4M21 12l2-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="tl">SLAM</span></button>
  <button class="tb" id="tJump" aria-label="Jump (hold to glide or climb)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="tl">JUMP</span></button>
  <button class="tb" id="tLock" aria-label="Lock on"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="tl">LOCK</span></button>
  <button class="tb" id="tAtk" aria-label="Attack"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 3.5L9 14l1 1L20.5 4.5V3.5z" fill="currentColor"/><path d="M6.5 12.5l5 5M8 16l-3.5 3.5M5 20.5l-1.5-1.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span class="tl">ATTACK</span></button>
@@ -369,6 +370,9 @@ body.watching *{cursor:default!important}
  <button data-e="KeyC" role="menuitem" aria-label="Dance"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V6l10-2v12" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="18" r="2.4" fill="currentColor"/><circle cx="17" cy="16" r="2.4" fill="currentColor"/></svg>DANCE</button>
  <button data-e="KeyN" role="menuitem" aria-label="Cheer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>CHEER</button>
  <button data-e="KeyX" role="menuitem" aria-label="Sit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v9h9l1 7M7 13l-1 7M16 13V9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>SIT</button>
+ <button data-e="KeyY" role="menuitem" aria-label="Bow"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="15" cy="6" r="2.4" fill="currentColor"/><path d="M6 9l6 3 3-2M12 12l-1 9M12 12l4 1 1 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>BOW</button>
+ <button data-e="KeyU" role="menuitem" aria-label="Clap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 20l-3-6 5-8 3 3M16 20l3-6-5-8-3 3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 2v2M8.5 3l1 1.6M15.5 3l-1 1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>CLAP</button>
+ <button data-e="KeyI" role="menuitem" aria-label="Victory pose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l1.6 3v10h-3.2V5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7.5 15h9M12 15v4M10 21h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>WIN</button>
 </div>
 <div id="hint" hidden>Drag left to move · Drag right to look</div>
 <div id="pnlBack" hidden></div>
@@ -388,7 +392,7 @@ body.watching *{cursor:default!important}
  <div class="pcard bag-hero">
   <div class="port" id="bagPort" style="--port:72px"><span class="hglyph" id="bagGlyph" style="font:800 32px/1 var(--hfont);color:#fff3d6;text-shadow:0 2px 3px rgba(0,0,0,.7)">E</span><b id="bagPortLv">1</b></div>
   <div class="hero-name" id="bagHero2">Ember Knight</div>
-  <div class="hero-stats"><span>Health <b id="bagHp">100 / 100</b></span><span>Stamina <b id="bagSt">100 / 100</b></span><span>Spin power <b id="bagMp">0 / 100</b></span></div>
+  <div class="hero-stats"><span>Health <b id="bagHp">100 / 100</b></span><span>Stamina <b id="bagSt">100 / 100</b></span><span>Slam power <b id="bagMp">0 / 100</b></span></div>
  </div>
 </div>
 <div id="mapP" class="pnl pcard mid" hidden role="dialog" aria-label="Map and fast travel">
@@ -414,13 +418,13 @@ body.watching *{cursor:default!important}
   <table><tr><th>Touch</th><th>Does</th></tr>
    <tr><td>Left side (drag)</td><td>Move; push to the edge to sprint</td></tr><tr><td>Right side (drag)</td><td>Look; two fingers to zoom</td></tr>
    <tr><td>ATTACK</td><td>Attack; hold to chain the combo</td></tr><tr><td>ROLL</td><td>Dodge roll</td></tr><tr><td>JUMP</td><td>Jump; hold in the air to glide, at a wall to climb</td></tr>
-   <tr><td>SPIN</td><td>Spin attack when the blue bar is full</td></tr><tr><td>HEAL / EAT</td><td>Drink a potion / eat food</td></tr>
+   <tr><td>SLAM</td><td>Meteor Slam when the blue bar is full</td></tr><tr><td>HEAL / EAT</td><td>Drink a potion / eat food</td></tr>
    <tr><td>TALK, RIDE, DO…</td><td>Appears beside people, horses, chests and things to do</td></tr><tr><td>Top-right</td><td>Bag, emotes, camera view, menu; tap the minimap for the map</td></tr></table>
   <table><tr><th>Keyboard</th><th>Does</th></tr>
    <tr><td>W A S D</td><td>Move (Shift sprints)</td></tr><tr><td>Mouse / arrows</td><td>Look (click the scene to capture the mouse)</td></tr>
    <tr><td>Left click / J</td><td>Attack (hold to chain)</td></tr><tr><td>Right click / K / Ctrl</td><td>Dodge roll</td></tr><tr><td>Space</td><td>Jump; hold to glide or climb</td></tr>
-   <tr><td>R</td><td>Spin attack</td></tr><tr><td>Q / H</td><td>Heal / eat</td></tr><tr><td>E / G</td><td>Talk, open, ride / do</td></tr><tr><td>F</td><td>Lock on</td></tr><tr><td>V</td><td>Camera view</td></tr>
-   <tr><td>B / M or Tab</td><td>Bag / map (1–9 travel while the map is open)</td></tr><tr><td>T · Z C N X</td><td>Emote tray · wave, dance, cheer, sit</td></tr><tr><td>Esc / P</td><td>Pause, or close a panel</td></tr></table>
+   <tr><td>R</td><td>Meteor Slam</td></tr><tr><td>Q / H</td><td>Heal / eat</td></tr><tr><td>E / G</td><td>Talk, open, ride / do</td></tr><tr><td>F</td><td>Lock on</td></tr><tr><td>V</td><td>Camera view</td></tr>
+   <tr><td>B / M or Tab</td><td>Bag / map (1–9 travel while the map is open)</td></tr><tr><td>T · Z C N X Y U I</td><td>Emote tray · wave, dance, cheer, sit, bow, clap, victory</td></tr><tr><td>Esc / P</td><td>Pause, or close a panel</td></tr></table>
  </details>
 </div>
 
@@ -432,7 +436,7 @@ body.watching *{cursor:default!important}
  <h1>EMBERFALL</h1><div class="tag">THE LAST FLAME OF THE ISLE</div><div id="withwho"></div>
  <div class="row"><button class="main" id="bNew">New Journey</button><button id="bCont">Continue</button><button id="bTSet">Settings</button></div>
  <div class="row" id="heroes"></div><div id="herodesc" style="font:600 16px var(--body);color:#ffe9b8;margin:-4px 0 6px"></div>
- <div class="panel"><b>Move</b> <kbd>W A S D</kbd> · <b>Look</b> mouse (click the screen) or <kbd>←</kbd><kbd>→</kbd> · <b>Attack</b> <kbd>Left click</kbd> / <kbd>J</kbd> · <b>Dodge roll</b> <kbd>Right click</kbd> / <kbd>K</kbd><br><b>Jump</b> <kbd>Space</kbd> (hold in the air to glide · hold against a wall to climb) · <b>Sprint</b> <kbd>Shift</kbd> · <b>Spin attack</b> <kbd>R</kbd> · <b>Heal</b> <kbd>Q</kbd> · <b>Talk / open</b> <kbd>E</kbd> · <b>Lock on</b> <kbd>F</kbd> · <b>Camera view</b> <kbd>V</kbd> (third person, first person, top-down) · <b>Map</b> <kbd>M</kbd> · <b>Do</b> <kbd>G</kbd> (fish, pick, cook, build a fire) · <b>Eat</b> <kbd>H</kbd> · <b>Bag</b> <kbd>B</kbd> · <b>Emotes</b> <kbd>T</kbd> tray, <kbd>Z</kbd><kbd>C</kbd><kbd>N</kbd> · <b>Sit/rest</b> <kbd>X</kbd> · <i>Swing at trees to chop wood</i> · <b>Pause</b> <kbd>Esc</kbd></div>
+ <div class="panel"><b>Move</b> <kbd>W A S D</kbd> · <b>Look</b> mouse (click the screen) or <kbd>←</kbd><kbd>→</kbd> · <b>Attack</b> <kbd>Left click</kbd> / <kbd>J</kbd> · <b>Dodge roll</b> <kbd>Right click</kbd> / <kbd>K</kbd><br><b>Jump</b> <kbd>Space</kbd> (hold in the air to glide · hold against a wall to climb) · <b>Sprint</b> <kbd>Shift</kbd> · <b>Meteor Slam</b> <kbd>R</kbd> · <b>Heal</b> <kbd>Q</kbd> · <b>Talk / open</b> <kbd>E</kbd> · <b>Lock on</b> <kbd>F</kbd> · <b>Camera view</b> <kbd>V</kbd> (third person, first person, top-down) · <b>Map</b> <kbd>M</kbd> · <b>Do</b> <kbd>G</kbd> (fish, pick, cook, build a fire) · <b>Eat</b> <kbd>H</kbd> · <b>Bag</b> <kbd>B</kbd> · <b>Emotes</b> <kbd>T</kbd> tray, <kbd>Z</kbd><kbd>C</kbd><kbd>N</kbd> · <b>Sit/rest</b> <kbd>X</kbd> · <i>Swing at trees to chop wood</i> · <b>Pause</b> <kbd>Esc</kbd></div>
 </div>
 <div id="pause" class="ov" hidden><h2>Paused</h2>
  <div class="pgrid"><button class="main" id="bRes">Resume</button><button id="bSet">Settings</button><button id="bPBag">Bag</button><button id="bPMap">Map</button><button id="bSave">Save</button><button id="bHelp">How to play</button><button id="bGuide">Guide: On</button><button id="bQuit">Quit</button></div>
@@ -454,6 +458,18 @@ body.watching *{cursor:default!important}
 const $=id=>document.getElementById(id);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
 const sstep=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);};
+/* fix7: keyframes, eased between points [[at,value]…] */
+const kf=(a,p)=>{if(a<=p[0][0])return p[0][1];for(let i=1;i<p.length;i++){if(a<=p[i][0]){const q=p[i-1];return q[1]+(p[i][1]-q[1])*sstep(q[0],p[i][0],a);}}return p[p.length-1][1];};
+/* fix7: the sword combo, one table per swing: anticipation, a fast strike with overshoot, follow-through, settle */
+const KF_ATK=[
+ {ax:[[0,-.2],[.30,-2.95],[.42,-.9],[.52,.15],[1,-.2]],az:[[0,-.12],[.30,-.6],[.52,.35],[1,-.08]],tw:[[0,0],[.30,.7],[.52,-.8],[1,0]],le:[[0,0],[.30,-.15],[.52,.4],[1,0]],
+  by:[[0,0],[.3,.04],[.52,-.14],[1,0]],l0:[[0,0],[.3,.35],[.52,-.7],[1,0]],l1:[[0,0],[.3,-.3],[.52,.55],[1,0]],a0x:[[0,-.4],[.3,-1.2],[.52,.5],[1,-.3]],a0z:[[0,.08],[.3,-.5],[.52,-.2],[1,.08]],hy:-.5},
+ {ax:[[0,-.2],[.30,.75],[.42,-.6],[.52,-2.5],[.7,-2.8],[1,-.2]],az:[[0,-.1],[.3,.3],[.52,-.35],[1,-.08]],tw:[[0,0],[.3,-.9],[.52,.95],[.75,.7],[1,0]],le:[[0,0],[.3,.5],[.52,-.3],[.75,-.2],[1,0]],
+  by:[[0,0],[.3,-.2],[.52,.1],[1,0]],pa:[[0,0],[.3,-.05],[.52,.18],[.7,.12],[.9,0]],l0:[[0,0],[.3,.6],[.52,-.2],[1,0]],l1:[[0,0],[.3,-.5],[.52,.4],[1,0]],a0x:[[0,-1],[.3,-.3],[.52,-1.8],[1,-.5]],hy:-.4},
+ {ax:[[0,-.2],[.42,-3.25],[.52,-1.0],[.58,.2],[.82,.1],[1,-.2]],le:[[0,0],[.42,-.32],[.58,.62],[.82,.55],[1,0]],by:[[0,0],[.42,.12],[.58,-.28],[.82,-.24],[1,0]],pa:[[0,0],[.3,.12],[.42,.16],[.58,-.05],[1,0]],
+  l0:[[0,0],[.42,.4],[.58,-.9],[.82,-.8],[1,0]],l1:[[0,0],[.42,-.5],[.58,.8],[.82,.7],[1,0]],a0x:[[0,-1],[.42,-3.0],[.58,.2],[.82,.1],[1,-.3]],a0z:[[0,.08],[.42,-.1],[1,.08]],hy:0}];
+const ATK_HIT=[.42,.42,.52],ATK_TINT=[[.95,.97,1],[.6,.9,1],[1,.7,.3]],SLAM_TINT=[1,.7,.25];
+const KF_SLAM_AX=[[0,-1.5],[.5,-2.6],[.7,-3.2],[1,-3.3]],KF_SLAM_END=[[0,.3],[1,-.2]];
 const TAU=Math.PI*2,PI=Math.PI;
 const angDiff=(a,b)=>{let d=(b-a)%TAU;if(d>PI)d-=TAU;if(d<-PI)d+=TAU;return d;};
 /* fix5: watch mode (?embed=1&watch=1 in PlayRoom): this page draws a friend's game from the frames the room passes in.
@@ -1244,7 +1260,8 @@ function updateRuins(dt){
 
 /* ================= living world: chop, forage, fish, cook, rest, emote, weather ================= */
 const TREES=[],FALL=[],FORAGE=[],WX={rain:0,target:0,next:140,drops:null};
-const EMOTES={KeyZ:'wave',KeyC:'dance',KeyN:'cheer',KeyX:'sit'};
+const EMOTES={KeyZ:'wave',KeyC:'dance',KeyN:'cheer',KeyX:'sit',KeyY:'bow',KeyU:'clap',KeyI:'victory'};
+const EMO_NAME={wave:'Wave',dance:'Dance',cheer:'Cheer',bow:'Bow',clap:'Clap',victory:'Victory pose'};
 function invDefault(){return {wood:0,fish:0,cooked:0,berry:0,mush:0};}
 function invHud(){const i=game.inv||invDefault();for(const k of['wood','fish','cooked','berry','mush']){const e=$('i_'+k);if(e)e.textContent=i[k]||0;}}
 function addInv(k,n){game.inv=game.inv||invDefault();game.inv[k]=(game.inv[k]||0)+n;invHud();if(n>0)feed('',{key:'inv:'+k,n,fmt:m=>'+'+m+' '+(INV_NAME[k]||k)});}
@@ -1344,14 +1361,37 @@ function eatFood(){const P=game.player,inv=game.inv||invDefault();if(P.hp>=P.max
   else toast('Nothing to eat',1.4);invHud();}
 function doEmote(code){const P=game.player;if(P.dead||P.mount||game.dialog||P.state!=='free')return;const k=EMOTES[code];
   if(k==='sit'){if(P.rest||(P.emote&&P.emote.kind==='sit')){P.rest=false;P.emote=null;}else if(nearFire())startRest();else P.emote={kind:'sit',t:0};return;}
-  P.rest=false;P.emote=P.emote&&P.emote.kind===k?null:{kind:k,t:0};}
+  P.rest=false;P.emote=P.emote&&P.emote.kind===k?null:{kind:k,t:0};if(P.emote)toast(EMO_NAME[k]+' (move to stop)',1.3);}
 function applyEmote(P,c,t){
   if(P.emote&&(Math.hypot(input.mx,input.my)>.1||P.state!=='free'||P.hurtT>0||input.jump>0||P.mount||P.swim||!P.grounded)){P.emote=null;P.rest=false;}
-  if(!P.emote)return;const e=P.emote;e.t+=PERFX.dt||1/60;const k=e.kind;
-  if(k==='wave'){c.arms[1].rotation.x=0;c.arms[1].rotation.z=2.55+Math.sin(game.time*11)*.25;}
-  else if(k==='cheer'){c.arms[0].rotation.x=0;c.arms[1].rotation.x=0;c.arms[0].rotation.z=-2.7;c.arms[1].rotation.z=2.7;c.body.position.y=-.9+Math.abs(Math.sin(game.time*8))*.12;}
-  else if(k==='dance'){const s=game.time*7;c.body.position.y=-.9+Math.abs(Math.sin(s))*.1;c.body.rotation.y=Math.sin(s*.5)*.6;c.arms[0].rotation.x=0;c.arms[1].rotation.x=0;c.arms[0].rotation.z=-1.6-Math.sin(s)*.8;c.arms[1].rotation.z=1.6+Math.sin(s+PI)*.8;c.legs[0].rotation.x=Math.sin(s)*.6;c.legs[1].rotation.x=-Math.sin(s)*.6;}
-  else if(k==='sit'){c.body.position.y=-.9-.46;c.legs[0].rotation.x=-1.45;c.legs[1].rotation.x=-1.45;c.arms[0].rotation.x=-.7;c.arms[1].rotation.x=-.7;c.body.rotation.x=.08;}
+  if(!P.emote)return;const e=P.emote;e.t+=PERFX.dt||1/60;const k=e.kind,T=game.time,w=Math.min(1,e.t*4.5);   // fix7: blends in over ~0.22 s
+  const Wp=c.weapon;if(Wp&&k!=='sit')Wp.rotation.x+=((k==='victory'?PI-.28:(k==='clap'?-.15:.28))-Wp.rotation.x)*w;
+  const M=(o,key,v)=>{o[key]+=(v-o[key])*w;},A0=c.arms[0].rotation,A1=c.arms[1].rotation,B=c.body,H=c.head.rotation,L0=c.legs[0].rotation,L1=c.legs[1].rotation;
+  if(k==='wave'){ /* the free hand waves; the sword arm stays down */
+    M(A0,'x',0);M(A0,'z',-(2.4+Math.sin(T*10)*.3));M(A1,'x',.05);M(B.rotation,'z',.06+Math.sin(T*2)*.02);M(H,'z',.16);M(H,'y',-.2);M(B.rotation,'y',-.18);}
+  else if(k==='cheer'){ /* two-arm jump, legs tucked, head back */
+    const j=Math.abs(Math.sin(T*6.2));M(A0,'x',0);M(A1,'x',0);M(A0,'z',-2.5-j*.35);M(A1,'z',2.5+j*.35);M(B.position,'y',-.9+j*.3);M(L0,'x',-j*.7);M(L1,'x',-j*.7);M(H,'x',-.3);}
+  else if(k==='dance'){ /* four moves, 2.4 s each: disco point, march-and-pump, twirl, hype jump */
+    const bt=T*7.4,sn=Math.sin(bt),mv=Math.floor(e.t/2.4)%4,tw=(e.t%2.4)/2.4,jp=Math.abs(sn);
+    M(H,'x',Math.sin(bt*2)*.14);
+    if(mv===0){const al=Math.sin(bt*.5)>0?1:-1;M(A0,'x',0);M(A1,'x',0);M(A0,'z',al>0?-2.3:-.15);M(A1,'z',al>0?-.1:2.3);M(B.rotation,'z',al*.2);M(B.rotation,'y',al*.5);
+      M(B.position,'y',-.9+jp*.12);M(L0,'x',al>0?.5:-.2);M(L1,'x',al>0?-.2:.5);M(H,'z',al*.2);}
+    else if(mv===1){M(A0,'x',-1.2+sn*1.1);M(A1,'x',-1.2-sn*1.1);M(A0,'z',-.2);M(A1,'z',.2);M(L0,'x',sn*.9);M(L1,'x',-sn*.9);M(B.rotation,'y',sn*.35);M(B.position,'y',-.9+jp*.14);}
+    else if(mv===2){M(A0,'x',0);M(A1,'x',0);M(A0,'z',-1.6);M(A1,'z',1.6);M(B.rotation,'y',sstep(0,.9,tw)*TAU);M(B.position,'y',-.9+Math.sin(tw*PI)*.22);M(L0,'x',.4);M(L1,'x',-.25);}
+    else{M(A0,'x',0);M(A1,'x',0);M(A0,'z',-2.3-jp*.3);M(A1,'z',2.3+jp*.3);M(B.position,'y',-.9+jp*.3);M(L0,'x',-jp*.8);M(L1,'x',-jp*.8);M(H,'x',-.25);}}
+  else if(k==='sit'){ /* sit and breathe, glance around */
+    M(B.position,'y',-.9-.46);M(L0,'x',-1.45);M(L1,'x',-1.45);M(A0,'x',-.7);M(A1,'x',-.7);M(B.rotation,'x',.08+Math.sin(T*1.6)*.018);M(H,'y',Math.sin(T*.5)*.28);M(H,'x',Math.sin(T*.8)*.05);}
+  else if(k==='bow'){ /* down, hold, up; ends by itself */
+    if(e.t>2.6){P.emote=null;return;}const b=sstep(0,.6,e.t)-sstep(1.7,2.4,e.t);
+    M(B.rotation,'x',.95*b);M(H,'x',.25*b);M(A0,'x',-.2);M(A1,'x',-.25);M(A0,'z',.1);M(A1,'z',-.1);M(L0,'x',-.12*b);M(L1,'x',.12*b);M(B.position,'y',-.9-.06*b);}
+  else if(k==='clap'){ /* forearms up in front, palms apart then snapping together, a bounce and a nod */
+    const ph=Math.sin(T*9),cl=ph>0?1:0,sn=Math.pow(Math.abs(ph),.5)*Math.sign(ph),open=.5-.5*sn;
+    M(A0,'x',-1.3);M(A1,'x',-1.3);M(A0,'z',-.28+(1-open)*.95);M(A1,'z',.28-(1-open)*.95);M(B.position,'y',-.9+Math.abs(Math.sin(T*4.5))*.05);M(H,'x',Math.sin(T*4.5)*.1);M(B.rotation,'x',.05);
+    if(cl!==e.cl){e.cl=cl;if(cl){sfx('ui');c.root.updateMatrixWorld(true);const hp=c.arms[0].localToWorld(_emV.set(0,-.62,0));burst(hp.x,hp.y,hp.z,0xfff0c0,5,2.2,.25,.07,0);}}}
+  else if(k==='victory'){ /* blade straight up, off hand on the hip, chest out, sparkles up the steel */
+    M(A1,'x',-2.85);M(A1,'z',.3);M(A0,'x',-.35);M(A0,'z',.55);M(B.rotation,'x',-.14);M(H,'x',-.3);M(L0,'x',.25);M(L1,'x',-.25);M(B.position,'y',-.9+Math.sin(T*2.2)*.012);
+    if(!e.fx&&e.t>.35){e.fx=true;burst(P.x,P.y+3.2,P.z,0xffe28a,34,5,.9,.14,-1);sfx('heal');}
+    if(e.t>.35&&c.tip&&Math.floor(T*9)!==e.sp){e.sp=Math.floor(T*9);c.root.updateMatrixWorld(true);c.tip.getWorldPosition(_emV);burst(_emV.x,_emV.y,_emV.z,Math.random()<.5?0xffe28a:0xffffff,3,1.6,.6,.08,-1);}}
 }
 /* ---- weather ---- */
 function buildWeather(){
@@ -2172,24 +2212,31 @@ function makeWolf(o){
 function poseHumanoid(c,s,t){
   const sp=s.sp,sw=Math.sin(s.phase)*sp*.95;
   c.legs[0].rotation.set(sw,0,0);c.legs[1].rotation.set(-sw,0,0);c.arms[0].rotation.y=0;c.arms[1].rotation.y=0;c.pivot.rotation.y=0;c.pivot.rotation.z=0;   // fix1: no leftover riding pose
+  if(c.weapon){const ud=c.weapon.userData;if(ud.rx0===undefined)ud.rx0=c.weapon.rotation.x;else c.weapon.rotation.x=ud.rx0;}   // fix7: an emote tilts the blade; back to rest each frame
   const idle=Math.sin(t*2+(s.seed||0))*.03;
   c.arms[0].rotation.x=-sw*.8+idle;c.arms[0].rotation.z=.08;
-  let ax=sw*.8+idle*-1,az=-.08,twist=0,lean=sp*.14,bodyY=Math.abs(Math.sin(s.phase))*.06*sp+idle*.3;
+  let ax=sw*.8+idle*-1,az=-.08,twist=0,lean=sp*.14,bodyY=Math.abs(Math.sin(s.phase))*.06*sp+idle*.3,hy=0,pAdd=0,flip=0;
   const wk=s.windup>0&&s.windup<=1?s.windup:-1;
-  if(s.atk>=0){const a=s.atk,k=s.atkIdx||0;
-    if(k===0){const w=a<.38?sstep(0,.38,a):1-sstep(.38,.62,a)*1.0;const wd=a<.38?-.4-w*2.6:-3.0+sstep(.38,.62,a)*2.7+sstep(.62,1,a)*.2;ax=wd;az=-.15;twist=a<.38?.5*sstep(0,.38,a):.5-sstep(.38,.62,a)*1.3;lean=a<.38?-.1:.35*sstep(.38,.6,a);}
-    else if(k===1){ax=-1.55;az=-.1;const tw=a<.3?sstep(0,.3,a):1;twist=a<.3?1.15*tw:1.15-sstep(.3,.6,a)*2.5;lean=.1;c.arms[1].rotation.y=0;}
-    else{const w=a<.45?sstep(0,.45,a):1;ax=a<.45?-.5-w*2.7:-3.2+sstep(.45,.66,a)*3.0;az=-.05;twist=0;lean=a<.45?-.25*w:.55*sstep(.45,.66,a);}
-    c.arms[0].rotation.x=-1.0;
-  }else if(s.spin>=0){ax=-1.5;az=-.1;twist=s.spin*TAU*2;lean=.1;c.arms[0].rotation.x=-1.4;c.arms[0].rotation.z=.9;}
+  if(s.atk>=0){const a=s.atk,K=KF_ATK[s.atkIdx|0]||KF_ATK[0],L=c.legs;
+    /* fix7: 0 a diagonal cut, 1 a rising cut with a hop, 2 an overhead finisher into a lunge */
+    ax=kf(a,K.ax);az=K.az?kf(a,K.az):-.08;twist=K.tw?kf(a,K.tw):0;lean=kf(a,K.le);bodyY=kf(a,K.by);if(K.pa)pAdd=kf(a,K.pa);
+    L[0].rotation.x=kf(a,K.l0);L[1].rotation.x=kf(a,K.l1);c.arms[0].rotation.x=kf(a,K.a0x);if(K.a0z)c.arms[0].rotation.z=kf(a,K.a0z);hy=twist*K.hy;
+  }else if(s.slam){const q=s.slam;
+    /* fix7: Meteor Slam: crouch, spring up into a somersault, dive blade-first, land in a crouch */
+    if(q.ph===0){const w=sstep(0,1,q.t);bodyY=-.22*w;lean=.25*w;ax=-1.0-w*1.8;az=-.1;c.arms[0].rotation.x=-1.5-w*1.2;c.legs[0].rotation.x=.5*w;c.legs[1].rotation.x=-.5*w;}
+    else if(q.ph===1){const u=q.u;flip=sstep(0,.6,u);ax=kf(u,KF_SLAM_AX);az=-.08;c.arms[0].rotation.x=ax;c.arms[0].rotation.z=-.05;
+      const tuck=1-sstep(.58,.8,u);c.legs[0].rotation.x=-1.1*tuck+.3*(1-tuck);c.legs[1].rotation.x=-1.1*tuck-.2*(1-tuck);lean=.1;pAdd=-.14*Math.sin(Math.min(1,u*1.6)*PI);}
+    else{const w=1-sstep(0,1,q.t);ax=kf(q.t,KF_SLAM_END);az=-.08;lean=.55*w;bodyY=-.3*w;c.legs[0].rotation.x=-.9*w;c.legs[1].rotation.x=.8*w;c.arms[0].rotation.x=-.3-.2*w;c.arms[0].rotation.z=.08;}
+  }
   else if(wk>=0){const w=sstep(0,1,wk);ax=-.3-w*(s.bossy?2.9:2.6);az=-.1;lean=-.2*w;c.arms[0].rotation.x=-w*1.2;}
   else if(s.bow>=0){ax=-1.55;az=-.1;c.arms[0].rotation.x=-1.5-s.bow*0;}
   else if(s.recover>0){ax=-.2;lean=.3*s.recover;}
   c.arms[1].rotation.x=ax;c.arms[1].rotation.z=az;
-  c.body.rotation.y=twist;c.body.rotation.x=lean;c.pivot.rotation.x=0;c.body.position.y=-.9+bodyY;
-  c.head.rotation.x=-lean*.5;
+  c.body.rotation.y=twist;c.body.rotation.x=lean;c.body.rotation.z=0;c.pivot.rotation.x=0;c.body.position.y=-.9+bodyY;
+  c.head.rotation.x=-lean*.5;c.head.rotation.y=hy;c.head.rotation.z=0;   // fix7: z and y reset too (an emote tilts them)
   if(s.roll>=0){c.pivot.rotation.x=s.roll*TAU;c.body.rotation.x=0;c.arms[0].rotation.x=-1.6;c.arms[1].rotation.x=-1.6;c.legs[0].rotation.x=-1;c.legs[1].rotation.x=-1.1;c.pivot.position.y=.62+.1*Math.sin(s.roll*PI);}
-  else c.pivot.position.y=.9;
+  else c.pivot.position.y=.9+pAdd;
+  if(flip>0){c.pivot.rotation.x=flip*TAU;c.body.rotation.x=0;c.pivot.position.y=.78+pAdd;}
   if(s.hit>0){c.body.rotation.x-=.45*s.hit;}
   if(s.glide){c.arms[0].rotation.set(-.3,0,.2);c.arms[1].rotation.set(-.3,0,-.2);c.arms[0].rotation.z=1.25;c.arms[1].rotation.z=-1.25;c.legs[0].rotation.x=.3;c.legs[1].rotation.x=-.1;c.body.rotation.x=.25;if(c.cape)c.cape.rotation.x=.9;}
   if(s.dead>0){c.pivot.rotation.x=-s.dead*PI*.5;c.pivot.position.y=.9-s.dead*.55;c.legs[0].rotation.x=0;c.legs[1].rotation.x=0;}
@@ -2282,7 +2329,7 @@ function makePlayer(){
   const c=makeHero('knight');
   scene.add(c.root);
   const hp=100;
-  return {x:0,y:4.4,z:78,vx:0,vz:0,vy:0,yaw:Math.PI,moveYaw:Math.PI,hp,maxhp:hp,st:100,maxst:100,mp:0,state:'free',atkT:0,atkIdx:0,combo:0,hitDone:false,rollT:0,rdx:0,rdz:1,iT:0,hurtT:0,grounded:true,swim:false,c,phase:0,sp:0,spinT:0,spinHit:0,potCd:0,dead:false,deadT:0,lungeX:0,lungeZ:0,flash:0,stDelay:0,kbx:0,kbz:0,trail:makeTrail(),step:0,jumpT:0};
+  return {x:0,y:4.4,z:78,vx:0,vz:0,vy:0,yaw:Math.PI,moveYaw:Math.PI,hp,maxhp:hp,st:100,maxst:100,mp:0,state:'free',atkT:0,atkIdx:0,combo:0,hitDone:false,rollT:0,rdx:0,rdz:1,iT:0,hurtT:0,grounded:true,swim:false,c,phase:0,sp:0,slam:null,potCd:0,dead:false,deadT:0,lungeX:0,lungeZ:0,flash:0,stDelay:0,kbx:0,kbz:0,trail:makeTrail(),step:0,jumpT:0};
 }
 function makeTrail(){
   const N=14,geo=new THREE.BufferGeometry(),pos=new Float32Array(N*2*3),col=new Float32Array(N*2*3),idx=[];
@@ -2395,7 +2442,7 @@ function hurtPlayer(dmg,fx,fz,kind){
   if((HEROES[game.hero]||{}).kit==='quake')dmg*=.8;
   P.hp-=dmg;P.iT=.55;P.hurtT=.25;P.flash=.3;game.hurtV=1;cam.shake=Math.max(cam.shake,.35);
   const dx=P.x-fx,dz=P.z-fz,d=Math.hypot(dx,dz)||1;P.kbx=dx/d*7;P.kbz=dz/d*7;
-  if(P.state==='attack'||P.state==='spin'){P.state='free';}
+  if(P.state==='attack'||P.state==='slam'){P.state='free';P.slam=null;}
   dmgNum(P.x,P.y+2.2,P.z,Math.round(dmg),'#ff6a5a');burst(P.x,P.y+1.2,P.z,0xff5a4a,10,4,.5,.14);sfx('hurt');game.hitstop=.06;
   if(P.hp<=0){P.hp=0;P.dead=true;P.deadT=0;P.state='dead';game.deaths++;sfx('die');setTimeout(()=>{if(game.st==='play'){$('dead').hidden=false;document.exitPointerLock&&document.exitPointerLock();}},1400);}
   return true;
@@ -2439,7 +2486,7 @@ function startAttack(P){
   else{P.yaw=game.mode==='first'?cam.yaw:(Math.hypot(input.mx,input.my)>.1?P.moveYaw:P.yaw);P.lungeX=Math.sin(P.yaw)*3;P.lungeZ=Math.cos(P.yaw)*3;}
   sfx('swing',idx);
 }
-const _reinH=new THREE.Vector3(),_reinB=new THREE.Vector3();   // fix2: reused each frame
+const _reinH=new THREE.Vector3(),_reinB=new THREE.Vector3(),_emV=new THREE.Vector3();   // fix2: reused each frame
 function updatePlayer(dt){
   const P=game.player,c=P.c;
   P.iT-=dt;P.counter=Math.max(0,(P.counter||0)-dt);P.hurtT-=dt;P.potCd-=dt;P.flash=Math.max(0,P.flash-dt);P.combo=Math.max(0,P.combo-dt);P.stDelay-=dt;
@@ -2467,14 +2514,15 @@ function updatePlayer(dt){
     if(input.jump>0&&(P.grounded||P.coyote>0)&&!P.swim&&locked){P.vy=P.mount?11:8.6;P.grounded=false;P.coyote=0;P.st=Math.max(0,P.st-(P.mount?0:6));input.jump=0;sfx('jump');burst(P.x,P.y,P.z,0xd8c8a0,6,2,.4,.12);}
     if(input.attack>0&&locked&&!P.swim){input.attack=0;startAttack(P);}   // fix2: no stamina floor (running drained it)
     else if(input.dodge>0&&locked&&!P.swim&&!P.mount){input.dodge=0;P.st=Math.max(0,P.st-16);P.stDelay=.6;P.state='roll';P.rollT=0;P.pd=false;let rx=moving?dirx:Math.sin(P.yaw),rz=moving?dirz:Math.cos(P.yaw);P.rdx=rx;P.rdz=rz;P.yaw=Math.atan2(rx,rz);P.iT=Math.max(P.iT,.42);sfx('roll');}
-    else if(input.special>0&&locked&&P.mp>=100&&!P.swim&&!P.mount){input.special=0;P.mp=0;P.state='spin';P.spinT=0;P.spinHit=0;P.iT=Math.max(P.iT,.7);sfx('spin');}
+    else if(input.special>0&&locked&&P.mp>=100&&!P.swim&&!P.mount){input.special=0;P.mp=0;startSlam(P);}
+    else if(input.special>0&&locked&&!P.swim&&!P.mount){input.special=0;toast('Meteor Slam bar '+Math.floor(P.mp)+'%, hit enemies to charge it',2.4);}
     if(input.potion>0&&locked){input.potion=0;if(P.potCd<=0)drinkPotion();}
     P.sp=clamp(Math.hypot(P.vx,P.vz)/(P.mount?19:8.6),0,1);if(P.mount)P.sp=0;P.phase+=dt*(6+Math.hypot(P.vx,P.vz)*1.35);
   }
   else if(P.state==='attack'){
     const dur=[.44,.44,.66][P.atkIdx];P.atkT+=dt/dur;
     const lf=Math.max(0,1-P.atkT*2.2);P.vx=P.lungeX*lf;P.vz=P.lungeZ*lf;
-    if(!P.hitDone&&P.atkT>=.42){P.hitDone=true;owChop();const k=P.atkIdx;heroSwing(P,k);spark3(P);if(k===2){playerHit(6.2,PI+1,.7,12);cam.shake=Math.max(cam.shake,.35);for(let i=0;i<28;i++){const a=i/28*TAU;spark(P.x+Math.sin(a)*1.2,P.y+.3,P.z+Math.cos(a)*1.2,Math.sin(a)*9,.8,Math.cos(a)*9,0xffc060,.5,.16,0);}burst(P.x,P.y+.2,P.z,0xd8c8a0,14,4,.5,.16);sfx('smash');}}
+    if(!P.hitDone&&P.atkT>=ATK_HIT[P.atkIdx]){P.hitDone=true;owChop();const k=P.atkIdx;heroSwing(P,k);slashArc(P,k);spark3(P);if(k===2){playerHit(6.2,PI+1,.7,12);cam.shake=Math.max(cam.shake,.35);for(let i=0;i<28;i++){const a=i/28*TAU;spark(P.x+Math.sin(a)*1.2,P.y+.3,P.z+Math.cos(a)*1.2,Math.sin(a)*9,.8,Math.cos(a)*9,0xffc060,.5,.16,0);}burst(P.x,P.y+.2,P.z,0xd8c8a0,14,4,.5,.16);sfx('smash');}}
     if(input.attack>0&&P.atkT<=.55){P.atkQ=true;input.attack=0;}            // fix3: a press during the swing is kept for the next one
     if(P.atkT>.55&&(input.attack>0||P.atkQ)){input.attack=0;P.atkQ=false;P.combo=.1;startAttack(P);}
     else if(P.atkT>=1){P.state='free';P.combo=.5;P.atkQ=false;}
@@ -2485,11 +2533,15 @@ function updatePlayer(dt){
     P.rollT+=dt/.52;const k=1-P.rollT*.5;P.vx=P.rdx*12.5*k;P.vz=P.rdz*12.5*k;P.sp=.5;if(P.rollT>=1){P.state='free';}
     if(R()<.4)spark(P.x,P.y+.1,P.z,RR(-1,1),RR(0,1.5),RR(-1,1),0xd8c8a0,.4,.12);
   }
-  else if(P.state==='spin'){
-    P.spinT+=dt/.78;P.vx*=.9;P.vz*=.9;
-    for(const th of[.28,.5,.72])if(P.spinT>=th&&P.spinHit<th){P.spinHit=th;playerHit(4.6,PI+1,1.35,8);sfx('swing',1);cam.shake=.2;}
-    if(P.spinT>=1)P.state='free';
-    else if(input.dodge>0&&P.spinT>.72)P.state='free';                     // fix3: roll out of the spin's last turn
+  else if(P.state==='slam'){                                               // fix7: Meteor Slam
+    const Q=P.slam;P.sp=0;
+    if(Q.ph===0){Q.t+=dt/.26;P.vx*=.8;P.vz*=.8;
+      if(R()<.5)spark(P.x+RR(-.6,.6),P.y+.1,P.z+RR(-.6,.6),0,1.4,0,0xff9a3a,.4,.12,0);
+      if(Q.t>=1){Q.ph=1;Q.air=0;Q.u=0;P.vy=11;P.grounded=false;P.vx=(Q.tx-P.x)/.75;P.vz=(Q.tz-P.z)/.75;sfx('mrise');burst(P.x,P.y+.1,P.z,0xd8c8a0,10,3,.5,.14);}}
+    else if(Q.ph===1){Q.air+=dt;Q.u=clamp(Q.air/.75,0,1);if(P.vy<0)P.vy-=34*dt;
+      if(R()<.7)spark(P.x+RR(-.4,.4),P.y+RR(.4,1.8),P.z+RR(-.4,.4),0,RR(-2,1),0,Math.random()<.5?0xffb040:0xff6a20,.35,.16,0);
+      if(P.grounded&&Q.air>.15)slamImpact(P,Q);}
+    else{Q.t+=dt/.34;P.vx*=.8;P.vz*=.8;if(Q.t>=1){P.state='free';P.slam=null;}}
   }
   // hurt knockback
   if(P.hurtT>0){P.vx+=P.kbx*dt*10;P.vz+=P.kbz*dt*10;P.kbx*=.9;P.kbz*=.9;}
@@ -2521,7 +2573,7 @@ function updatePlayer(dt){
   // footsteps
   if(P.grounded&&P.state==='free'&&P.sp>.15){P.step+=dt*(P.sp*9+2);if(P.step>PI){P.step-=PI;sfx(P.swim?'splashstep':'step',gh(P.x,P.z)>1.4?(gh(P.x,P.z)>20?2:0):1);}}
   // pose
-  const st={sp:P.sp,phase:P.phase,seed:0,swim:P.swim,hit:P.hurtT>0?P.hurtT/.25:0,atk:P.state==='attack'?P.atkT:-1,atkIdx:P.atkIdx,roll:P.state==='roll'?P.rollT:-1,spin:P.state==='spin'?P.spinT:-1};
+  const st={sp:P.sp,phase:P.phase,seed:0,swim:P.swim,hit:P.hurtT>0?P.hurtT/.25:0,atk:P.state==='attack'?P.atkT:-1,atkIdx:P.atkIdx,roll:P.state==='roll'?P.rollT:-1,slam:P.state==='slam'?P.slam:null};
   c.lift=P.grounded?0:clamp(-P.vy/10,-1,1);
   st.glide=P.gliding||P.climbing;poseHumanoid(c,st,game.time);applyEmote(P,c,game.time);
   let rideY=0;
@@ -2534,8 +2586,34 @@ function updatePlayer(dt){
     pa.needsUpdate=true;h.rein.visible=true;}
   for(const h of OW.horses)if(h.rein&&h!==P.mount)h.rein.visible=false;c.root.rotation.y=P.yaw;setFlash(c,P.flash>0?P.flash*2.5:(P.iT>0&&P.state==='roll'?.15:0));
   c.root.visible=!(game.mode==='first'&&game.st==='play'&&false);
-  updateTrail(P.trail,c,P.state==='attack'&&P.atkT>.25&&P.atkT<.75||P.state==='spin',dt,P.state==='spin'?[.5,.8,1]:(P.atkIdx===2?[1,.7,.3]:[.9,.95,1]));
+  updateTrail(P.trail,c,P.state==='attack'&&P.atkT>.22&&P.atkT<.7||P.state==='slam'&&P.slam&&P.slam.ph===1,dt,P.state==='slam'?SLAM_TINT:(ATK_TINT[P.atkIdx]||ATK_TINT[0]));
   if(P.state==='roll'&&R()<.3)sfx('rollstep');
+}
+function slashArc(P,k){   // fix7: a crescent of sparks along each swing's path
+  const fx=Math.sin(P.yaw),fz=Math.cos(P.yaw),rx=fz,rz=-fx,c1=k===2?0xffc060:(k===1?0xbfe8ff:0xffffff),c2=k===2?0xff7a2a:0x9fd0ff,N=k===2?18:15;
+  for(let i=0;i<=N;i++){const u=i/N;let fw,sd=0,h;
+    if(k===0){const a=lerp(1.1,-1.1,u);fw=Math.cos(a)*2.3;sd=Math.sin(a)*2.3;h=lerp(2.5,.7,u);}
+    else if(k===1){fw=1.6+Math.sin(u*PI)*.9;sd=lerp(-1.3,1.0,u);h=lerp(.3,2.7,u);}
+    else{const a=lerp(-.4,1.9,u);fw=2.3*Math.sin(a);h=1.2+2.3*Math.cos(a);}
+    spark(P.x+fx*fw+rx*sd,P.y+h,P.z+fz*fw+rz*sd,fx*2.5,0,fz*2.5,i%2?c1:c2,.18+u*.1,k===2?.2:.16,0);}
+}
+function startSlam(P){   // fix7: toward the locked or nearest enemy (11 m), else straight ahead
+  const kit=(HEROES[game.hero]||HEROES.knight).kit;
+  let t=game.lock&&game.lock.state!=='dead'?game.lock:nearestEnemy(11,false),tx,tz;
+  if(t){P.yaw=Math.atan2(t.x-P.x,t.z-P.z);const d=Math.hypot(t.x-P.x,t.z-P.z),m=clamp(d-1.2,0,7.5);tx=P.x+Math.sin(P.yaw)*m;tz=P.z+Math.cos(P.yaw)*m;}
+  else{if(Math.hypot(input.mx,input.my)>.1)P.yaw=P.moveYaw;tx=P.x+Math.sin(P.yaw)*5.5;tz=P.z+Math.cos(P.yaw)*5.5;}
+  P.emote=null;P.rest=false;
+  P.state='slam';P.slam={ph:0,t:0,u:0,air:0,tx,tz,kit};P.iT=Math.max(P.iT,1.4);P.vx=P.vz=0;sfx('mrise');
+}
+function slamImpact(P,Q){
+  Q.ph=2;Q.t=0;P.vx=P.vz=0;
+  playerHit(6.0,PI+1,2.6,14);playerHit(8.6,PI+1,1.0,18);
+  ringFx(P,0xffa040,6);ringFx(P,0xfff0b0,3.5);ringFx(P,0xff6020,8.2);
+  for(let a=0;a<8;a++){const an=a/8*TAU+.2;for(let j=0;j<7;j++)spark(P.x+Math.sin(an)*.6,P.y+.15,P.z+Math.cos(an)*.6,Math.sin(an)*(4+j*1.5),.3,Math.cos(an)*(4+j*1.5),j%2?0xffd27a:0xff7a2a,.55,.17,0);}
+  for(let i=0;i<26;i++){const an=R()*TAU,r=R()*1.6;spark(P.x+Math.sin(an)*r,P.y+.2,P.z+Math.cos(an)*r,Math.sin(an)*2,RR(6,13),Math.cos(an)*2,R()<.5?0xffb040:0xff5a20,.9,.17,6);}
+  burst(P.x,P.y+.2,P.z,0xd8c8a0,28,6.5,.7,.2);
+  if(Q.kit==='nova'){ringFx(P,0xff8a2a,9.5);}else if(Q.kit==='quake'){cam.shake=Math.max(cam.shake,.9);}
+  cam.shake=Math.max(cam.shake,.75);game.hitstop=Math.max(game.hitstop,.1);sfx('smash');sfx('mslam');dmgNum(P.x,P.y+2.6,P.z,'METEOR SLAM!','#ffb040',true);
 }
 function spark3(P){const k=P.atkIdx,f=[Math.sin(P.yaw),Math.cos(P.yaw)];burst(P.x+f[0]*1.8,P.y+1.1,P.z+f[1]*1.8,0xffffff,4,3,.3,.1,0);}
 
@@ -2937,6 +3015,8 @@ function sfxVoice(g,n,v){
   case'smash':N(.2,.3,2000,300,'bandpass');T(220,.12,'square',.1,-100);break;
   case'bossdie':T(60,2,'sawtooth',.4,-30);N(1.5,.4,900,60,'lowpass');[392,523,659,784].forEach((f,i)=>T(f,.8,'triangle',.18,0,.8+i*.15));break;
   case'spin':N(.7,.3,1200,500,'bandpass',.7);T(220,.6,'sawtooth',.1,300);break;
+  case'mrise':N(.5,.28,600,2400,'bandpass',.8);T(180,.45,'sawtooth',.1,500);break;
+  case'mslam':T(55,.7,'sine',.55,-28);N(.6,.55,700,60,'lowpass');T(110,.3,'square',.12,-60);break;
   case'chest':T(180,.3,'triangle',.18,100);[784,988,1175].forEach((f,i)=>T(f,.3,'triangle',.15,0,.15+i*.08));break;
   case'ui':T(700,.06,'triangle',.12);break;
   case'talk':T(240+g.rand()*90,.05,'triangle',.05);break;
@@ -3032,7 +3112,7 @@ function lines(npc){
     return{l:['Potions! Fresh potions! Best prices on the isle, and the only prices on the isle.'],opts:[{label:'Healing potion  (25 coins)',fn:()=>{if(game.coins>=25){game.coins-=25;game.pots++;sfx('pick');return 'Pleasure doing business!';}return 'Not enough coins, friend.';}},game.hpUp<3?{label:`Vitality tonic +15 max health  (${vc} coins)`,fn:()=>{if(game.coins>=vc){game.coins-=vc;game.hpUp++;game.player.maxhp+=15;game.player.hp+=15;sfx('level');return 'Strong as an ox. A very small ox.';}return 'Not enough coins, friend.';}}:null].filter(Boolean)};
   }
   if(npc.id==='bree')return{l:[S<3?'Are you going out there? I hear the goblins are camped along the paths. Watch the archers!':'Is it true? Did you really beat the Colossus? Tell me everything!','Hint: jump over the shockwave when a big one slams the ground!']};
-  if(npc.id==='cob')return{l:['Back in my day we fought wolves with spoons.','Press R when your blue bar is full. Spin attack. Very dramatic. Very effective.','And the roll has invincibility frames, young one. Use it.']};
+  if(npc.id==='cob')return{l:['Back in my day we fought wolves with spoons.','Press R when your blue bar is full. Meteor Slam: you leap, you crash, they fall over. Very dramatic. Very effective.','And the roll has invincibility frames, young one. Use it.']};
   return{l:['...']};
 }
 function openDialog(npc){
@@ -3239,7 +3319,7 @@ const Input=(()=>{
   const KEYMAP={KeyW:'up',KeyS:'down',KeyA:'left',KeyD:'right',
     ArrowLeft:'lookLeft',ArrowRight:'lookRight',ArrowUp:'lookUp',ArrowDown:'lookDown',ShiftLeft:'sprint',ShiftRight:'sprint',
     Space:'jump',KeyJ:'attack',KeyK:'roll',ControlLeft:'roll',KeyR:'spin',KeyQ:'heal',KeyE:'context',KeyG:'do',KeyH:'eat',
-    KeyF:'lock',KeyV:'view',KeyM:'map',Tab:'map',KeyZ:'emote',KeyC:'emote',KeyN:'emote',KeyX:'emote',KeyT:'emote',KeyB:'bag',Escape:'pause',KeyP:'pause',Enter:'confirm'};
+    KeyF:'lock',KeyV:'view',KeyM:'map',Tab:'map',KeyZ:'emote',KeyC:'emote',KeyN:'emote',KeyX:'emote',KeyY:'emote',KeyU:'emote',KeyI:'emote',KeyT:'emote',KeyB:'bag',Escape:'pause',KeyP:'pause',Enter:'confirm'};
   const ACTIONS=['attack','roll','spin','jump','lock','context','do','heal','eat','bag','map','emote','view','pause'];
   const held={},hooks={};                          // held: action -> Set of sources ('k:Code' / 'p:pointerId')
   const move={x:0,y:0},look={dx:0,dy:0};
@@ -3424,6 +3504,7 @@ function layoutHUD(){
   const er=portrait?SAFE.r+10:SAFE.r+10+bw+8,el=innerWidth-er-56;let et=portrait?rt+bh+8+mm+8:rt;
   if(!portrait&&et<zb&&el<PRZ.x+PRZ.w+6&&innerWidth-er>PRZ.x-6)et=zb+8;
   st.setProperty('--emo-right',er+'px');st.setProperty('--emo-top',et+'px');
+  st.setProperty('--emo-rows',String(clamp(Math.floor((innerHeight-et-12+6)/62),1,7)));   // fix7: seven emotes; a short screen gets a second column
   // the HUD blocks' extents, for the controls to keep clear of
   HUD.boxes=[{l:left,r:left+(lt<zb?PRZ.x-8-left:Math.min(340,innerWidth-SAFE.l-SAFE.r-20)),b:lt+port+70},{l:rr-Math.max(bw,mm),r:rr,b:rt+bh+8+mm}];
   HUD.mm=mm;
@@ -3862,11 +3943,11 @@ function renderHelp(){
    '<h4>BARS (TOP LEFT)</h4>'+
    row(sw('linear-gradient(90deg,#ff6a5c,#c8302a)'),'HEALTH','Your life. At zero you fall, and wake at the village.')+
    row(sw('linear-gradient(90deg,#a6f29f,#6fd36b)'),'STAMINA','Used by sprinting, rolling, attacks and jumps. Refills by itself a moment after you stop.')+
-   row(sw('linear-gradient(90deg,#a9dcff,#58b7ff)'),'SPIN POWER','Thin blue bar: fills as your blows land. Full, and SPIN is ready.')+
+   row(sw('linear-gradient(90deg,#a9dcff,#58b7ff)'),'SLAM POWER','Thin blue bar: fills as your blows land. Full, and SLAM is ready.')+
    row(sw('var(--gold)'),'EXPERIENCE','Thin gold bar: fills as you defeat foes. Full: level up, more health and damage.')+
    '<h4>BUTTONS</h4>'+
    row(ic('tAtk'),'ATTACK','Strike. Tap again (or hold) for a three-hit combo.')+
-   row(ic('tSpec'),'SPIN','A spinning attack all around you, when the blue bar is full.')+
+   row(ic('tSpec'),'SLAM','Meteor Slam: leap at the nearest enemy and crash down, hitting everything around. When the blue bar is full.')+
    row(ic('tRoll'),'ROLL','Dodge: you can\'t be hit for a moment. Roll just as a blow lands for a counter.')+
    row(ic('tJump'),'JUMP','Jump. Hold in the air to glide; hold against a wall to climb.')+
    row(ic('tPot'),'HEAL','Drink a potion (half your health back). The number is potions left.')+
@@ -3898,8 +3979,8 @@ $('bPQuitYes').addEventListener('click',()=>{$('pQuitConfirm').hidden=true;quitO
    The watcher (?watch=1): the same island, built the same way at start; the hero, the camera, the enemies, their shots,
    the boss rings and the damage numbers follow the frames (eased between them). Nothing there runs AI, takes input,
    plays sound or saves.
-   A frame: v, st (play | pause | title…), h hero, p [x,y,z,yaw], vl [vx,vy,vz], s state, a [atkT,atkIdx,rollT,spinT,deadT],
-   sp walk speed, fl (1 swim, 2 glide, 4 climb, 8 grounded, 16 dead), ht hurt, lf lift, fx flash, em emote, mt horse (-1 none),
+   A frame: v, st (play | pause | title…), h hero, p [x,y,z,yaw], vl [vx,vy,vz], s state, a [atkT,atkIdx,rollT,0,deadT], sl [phase,t,u] Meteor Slam,
+   sp walk speed, fl (1 swim, 2 glide, 4 climb, 8 grounded, 16 dead), ht hurt, lf lift, fx flash, em emote, et its time, mt horse (-1 none),
    hud [hp,maxhp,st,maxst,mp,xp,lvl,coins,pots,hurtV], c [camYaw,pitch,dist,mode,shake], T time of day, rn rain,
    q [stage, shard bits], ow [tower, sprite, chest bits], b the awake boss's id, k the killed ids,
    e [[id,kind,x,y,z,yaw,state,hp,windup,atk,bow,recover,hit,sp,flash,deadT,awake]…] the 16 nearest and an awake boss,
@@ -3940,9 +4021,9 @@ function specFrame(){
   const SH=[];for(const p of game.pickups)if(p.kind==='shard')SH.push([p.idx,sR1(p.x),sR1(p.y),sR1(p.z),p.col||0xffffff]);
   return{v:1,st:game.st,h:game.hero||'knight',
     p:[sR2(P.x),sR2(P.y),sR2(P.z),sR2(P.yaw)],vl:[sR1(P.vx),sR1(P.vy),sR1(P.vz)],
-    s:P.state,a:[sR2(P.atkT),P.atkIdx|0,sR2(P.rollT),sR2(P.spinT),sR2(P.deadT)],sp:sR2(P.sp),
+    s:P.state,a:[sR2(P.atkT),P.atkIdx|0,sR2(P.rollT),0,sR2(P.deadT)],sl:P.state==='slam'&&P.slam?[P.slam.ph,sR2(P.slam.t),sR2(P.slam.u)]:0,sp:sR2(P.sp),
     fl:(P.swim?1:0)|(P.gliding?2:0)|(P.climbing?4:0)|(P.grounded?8:0)|(P.dead?16:0),
-    ht:sR2(Math.max(0,P.hurtT)),lf:sR2(P.c.lift),fx:sR2(P.flash),em:P.emote?P.emote.kind:0,mt:P.mount?OW.horses.indexOf(P.mount):-1,
+    ht:sR2(Math.max(0,P.hurtT)),lf:sR2(P.c.lift),fx:sR2(P.flash),em:P.emote?P.emote.kind:0,et:P.emote?sR2(P.emote.t):0,mt:P.mount?OW.horses.indexOf(P.mount):-1,
     hud:[Math.ceil(P.hp),P.maxhp,Math.round(P.st),P.maxst,Math.round(P.mp),game.xp,game.lvl,game.coins,game.pots,sR2(game.hurtV)],
     c:[sR2(cam.yaw),sR2(cam.pitch),sR1(cam.dist),game.mode,sR2(cam.shake)],
     T:Math.round(game.T*1e4)/1e4,rn:sR2(WX.rain),q:[game.stage,sBits(game.shards,Boolean)],
@@ -4007,7 +4088,7 @@ function watchApply(f){
   if(h!==(P.mount||null)){
     if(P.mount){const o=P.mount;o.mounted=false;if(o.rein)o.rein.visible=false;o.x=P.x+Math.cos(P.yaw)*1.6;o.z=P.z-Math.sin(P.yaw)*1.6;o.y=gh(o.x,o.z);o.yaw=P.yaw;P.mount=null;}
     resetPose(P.c);if(h){P.mount=h;h.mounted=true;}}
-  if(f.em&&!P.mount){if(!P.emote||P.emote.kind!==f.em)P.emote={kind:String(f.em),t:0};}else P.emote=null;
+  if(f.em&&!P.mount){if(!P.emote||P.emote.kind!==f.em)P.emote={kind:String(f.em),t:0};P.emote.t=Math.max(P.emote.t,+f.et||0);}else P.emote=null;
   /* enemies: the page's own, matched by id (the world spawns the same ones, same ids); one it lacks (a summoned goblin,
      the Colossus) is spawned by kind */
   game.killed=new Set(Array.isArray(f.k)?f.k:[]);
@@ -4053,14 +4134,16 @@ function watchStep(dt){
   const a=Array.isArray(f.a)?f.a:[0,0,0,0,0];P.atkIdx=clamp(a[1]|0,0,2);
   P.atkT=P.state==='attack'?Math.min(1,(+a[0]||0)+age/[.44,.44,.66][P.atkIdx]):0;
   P.rollT=P.state==='roll'?Math.min(1,(+a[2]||0)+age/.52):0;
-  P.spinT=P.state==='spin'?Math.min(1,(+a[3]||0)+age/.78):0;
+  if(P.state==='slam'&&Array.isArray(f.sl)){const q=P.slam||(P.slam={ph:0,t:0,u:0,air:0,tx:0,tz:0}),ph=clamp(f.sl[0]|0,0,2);q.ph=ph;   // fix7
+    q.t=Math.min(1,(+f.sl[1]||0)+(ph===0?age/.26:ph===2?age/.34:0));q.u=Math.min(1,(+f.sl[2]||0)+(ph===1?age/.75:0));}
+  else{P.slam=null;if(P.state==='slam')P.state='free';}
   P.deadT=(+a[4]||0)+(P.dead?age:0);
   P.hurtT=Math.max(0,(+f.ht||0)-age);P.flash=Math.max(0,(+f.fx||0)-age);
   P.sp+=((+f.sp||0)-P.sp)*k;P.phase+=dt*(6+Math.hypot(P.vx,P.vz)*1.35);
   const c=P.c;
   if(P.dead){poseHumanoid(c,{sp:0,phase:0,dead:Math.min(1,P.deadT*2.2)},game.time);c.root.position.set(P.x,P.y,P.z);c.root.rotation.y=P.yaw;setFlash(c,0);}
   else{
-    const st={sp:P.sp,phase:P.phase,seed:0,swim:P.swim,hit:P.hurtT>0?P.hurtT/.25:0,atk:P.state==='attack'?P.atkT:-1,atkIdx:P.atkIdx,roll:P.state==='roll'?P.rollT:-1,spin:P.state==='spin'?P.spinT:-1};
+    const st={sp:P.sp,phase:P.phase,seed:0,swim:P.swim,hit:P.hurtT>0?P.hurtT/.25:0,atk:P.state==='attack'?P.atkT:-1,atkIdx:P.atkIdx,roll:P.state==='roll'?P.rollT:-1,slam:P.state==='slam'?P.slam:null};
     c.lift=(c.lift||0)+((+f.lf||0)-(c.lift||0))*k;
     st.glide=P.gliding||P.climbing;poseHumanoid(c,st,game.time);applyEmote(P,c,game.time);
     let rideY=0;
@@ -4072,7 +4155,7 @@ function watchStep(dt){
       for(let i=0;i<2;i++){const hp=c.arms[i].localToWorld(_reinH.set(0,-.62,0));const b=_reinB.set((i?1:-1)*.2,2.5,2.1);hm.g.localToWorld(b);pa.setXYZ(i*2,hp.x,hp.y,hp.z);pa.setXYZ(i*2+1,b.x,b.y,b.z);}
       pa.needsUpdate=true;hm.rein.visible=true;}
     setFlash(c,P.flash>0?P.flash*2.5:(P.state==='roll'?.15:0));
-    updateTrail(P.trail,c,P.state==='attack'&&P.atkT>.25&&P.atkT<.75||P.state==='spin',dt,P.state==='spin'?[.5,.8,1]:(P.atkIdx===2?[1,.7,.3]:[.9,.95,1]));
+    updateTrail(P.trail,c,P.state==='attack'&&P.atkT>.22&&P.atkT<.7||P.state==='slam'&&P.slam&&P.slam.ph===1,dt,P.state==='slam'?SLAM_TINT:(ATK_TINT[P.atkIdx]||ATK_TINT[0]));
   }
   c.root.visible=true;
   /* enemies: the ones in the frame follow it; the rest stand where they were last seen (the killed ones are gone) */
@@ -4259,7 +4342,7 @@ async function boot(){
   $('load').hidden=true;layout();if(!WATCH)lockLandscape();
   lastT=performance.now();requestAnimationFrame(frame);netReady();
 }
-if(touchDev){const pn=document.querySelector('#title .panel');if(pn)pn.innerHTML='<b>Move</b> left stick (push to the edge to sprint) · <b>Look</b> drag the right side · <b>ATTACK</b> chain 3 hits · <b>ROLL</b> dodge · <b>JUMP</b> (hold in air to glide, hold at a wall to climb) · <b>SPIN</b> · <b>HEAL</b> · <b>EAT</b> · <b>TALK</b> (NPCs, chests, horse) · <b>DO</b> (fish, pick, cook, campfire) · <b>LOCK</b> target · <b>MAP</b> fast travel · <b>EMOTE</b> wave / dance / cheer / sit · <b>VIEW</b> camera · swing at trees to chop wood';}
+if(touchDev){const pn=document.querySelector('#title .panel');if(pn)pn.innerHTML='<b>Move</b> left stick (push to the edge to sprint) · <b>Look</b> drag the right side · <b>ATTACK</b> chain 3 hits · <b>ROLL</b> dodge · <b>JUMP</b> (hold in air to glide, hold at a wall to climb) · <b>SLAM</b> · <b>HEAL</b> · <b>EAT</b> · <b>TALK</b> (NPCs, chests, horse) · <b>DO</b> (fish, pick, cook, campfire) · <b>LOCK</b> target · <b>MAP</b> fast travel · <b>EMOTE</b> wave / dance / cheer / sit · <b>VIEW</b> camera · swing at trees to chop wood';}
 window.__ef={DMG,hitObjects,damageObj,objNear,treeImpact,DEB,TREES,FORAGE,FISH,WX,ctxAction,doCtx,doEmote,eatFood,owChop,startRest,HERO_IMG,RUINS,swapHero,HEROES,OW,surfaceAt,insideSolid,mount,dismount,fastTravel,activateTower,owWaypoints,game,input,cam,keys,step,gh,world,spawnEnemy,damageEnemy,hurtPlayer,startGame,toTitle,Input,HUD,NET,netScore,netOver,audioRender,MIX,AMBMIX,MUSIC,AMBA,TRACKS,musicSting,setAudioLevel,audioState:()=>G?{live:G.live,state:G.cur,tracks:Object.keys(G.tracks),ctx:G.ctx.state,music:G.music.gain.value,amb:G.amb.gain.value,sfx:G.sfx.gain.value,master:G.master.gain.value,bird:AMBA.bird,night:AMBA.night}:null,AMB:()=>AMB,updateAmbientFx,PANEL,openPanel,closePanel,renderBag,renderMap,travelTo,drinkPotion,AUD,setVolume,audio:()=>({gain:mg?mg.gain.value:null,running:!!AC&&AC.state==='running'}),CTL,layoutControls,updateControls,emoTray,feed,layoutHUD,combatTarget,layout,PIX,PRZ,SAFE,store,CAMPS,ARENAS,addXP,dropPickup,renderFrame,setPause,cycleView,interact,openDialog,advanceDialog,closeDialog,projs,ensureColossus,respawn,saveGame,boot,titleCam,render:()=>renderFrame(),camera,scene,renderer,updateSky,toggleLock,openChest,nearestInteract};
 boot();
 })();

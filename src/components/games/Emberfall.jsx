@@ -42,16 +42,8 @@ const STALE_MS = 1500;
 // the floating clock / ? / Leave row is this tall; the page keeps its HUD under it on a phone
 const FLOAT_H = 50;
 
-// full screen for the whole page (a refusal is fine: no full screen on iPhone)
+// leaving full screen, if something else entered it (Emberfall itself no longer asks for it)
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
-function enterFull() {
-  if (typeof document === "undefined" || fsEl()) return;
-  try {
-    const el = document.documentElement, f = el.requestFullscreen || el.webkitRequestFullscreen;
-    const r = f && f.call(el, { navigationUI: "hide" });
-    if (r && r.catch) r.catch(() => {});
-  } catch { /* refused */ }
-}
 function leaveFull() {
   try {
     if (!fsEl()) return;
@@ -153,7 +145,7 @@ export default function Emberfall(props) {
       if (!m || !m.ef) return;
       if (m.ef === "frame") { const L = lastFrame.current; L.f = m.f; L.at = Date.now(); }
       else if (m.ef === "ready") { readyRef.current = true; post(initMsg()); }
-      else if (m.ef === "fs") enterFull();
+      // "fs" is ignored: no full screen, so Chrome's "to exit full screen" notice never shows
       else if (m.ef === "leave") quitRef.current();
       else if (m.ef === "send") { if (socket && roomCode) socket.emit("ef:msg", { code: roomCode, d: m.d }); }
       else if (m.ef === "score") {

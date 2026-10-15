@@ -4259,7 +4259,7 @@ function askFull(){
   if(EMBED){netPost({ef:'fs'});return;}
   try{const el=document.documentElement,f=el.requestFullscreen||el.webkitRequestFullscreen;if(f){const r=f.call(el,{navigationUI:'hide'});if(r&&r.catch)r.catch(()=>{});}}catch(e){}
 }
-addEventListener('pointerdown',askFull,true);
+/* fix8: no full screen at all: Chrome shows its "To exit full screen" notice on every entry, and players asked for it gone */
 /* fix1: Quit (with its confirm) leaves the room in PlayRoom: the room's own Leave button is gone for Emberfall */
 function quitOut(){toTitle();if(EMBED)netPost({ef:'leave'});}
 

@@ -63,6 +63,9 @@ Three places, or it half-exists:
 3. a row in `GAME_SEED` in `config/setupDb.js`, **and** the slug in `APP_GAMES`
    in `server.js`
 
+Played together? Also `COOP_GAMES` in `routes/rooms.js` (the server refuses
+a co-op room otherwise) and `COOP_GOAL` in `config/matchResult.js`.
+
 Then `npm run sql` and run the SQL against the database by hand. A missing
 `game_types` row means "Game type not found" when someone creates a room;
 `server.js` warns about this at startup.
@@ -271,6 +274,27 @@ There is no test runner. What works:
   one horse (seat 0 drives, seat 1 behind). Test it with two frames and a
   relay in one headless page (`window.__ef` reaches everything); a room for it
   needs its `game_types` row (`sql/emberfall.sql`).
+- **Hollow Hours** (slug `hollow`, 1–2 players, endless) is a side-on
+  horror adventure in three.js r128: a small child, a house built for
+  giants, six rooms — the Nursery, the Hall (the Keeper, blind, hunts by
+  sound), the Workshop (a crank and a lift), the Gallery (the Cuckoo sweeps a
+  beam on the hour; furniture between you and its eye is shadow), the
+  Stairwell (the chase), the Bell Tower (midnight). Pure rules in
+  `src/components/hollow/*.mjs` (`hollowCore` the kid and the rooms' boxes,
+  `hollowChapter` the later rooms, `hollowKeeper`, `hollowWeather`);
+  drawing in `hollowScene.js` + `hollowDress.js` (+ the kid and Keeper rigs);
+  sound synthesised in `hollowAudio.js`. The rules measure depth into the
+  screen and three.js toward you: drawing goes through `Z()`, or it comes
+  out mirrored. Standalone at `/hollow` (`pages/Hollow.jsx`, title and
+  Continue); in a room through `HollowGame.jsx` (lazy) and the same view.
+  Together, each phone runs its own run (`hollowNet.mjs`): every phone sends
+  its kid (`hh:kid`), the lowest seat still here also the room — its clock,
+  machinery, the Keeper (`hh:room`); you go on only when both are through,
+  and a catch restarts the room for both. `scripts/check-hollow.mjs` has bots
+  play every room and two phones play together; `check-hollow-relay.js` tests
+  the server's relays. A building scene that throws shows "couldn't start
+  the 3D view": look in the console — twice it was a `let` used before its
+  line.
 - **Video calls** (friends, up to 4) — `config/calls.js` rings and
   introduces; the media goes phone to phone (`src/utils/CallContext.js`,
   `src/components/CallLayer.jsx`). In each pair only the lower user id

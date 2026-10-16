@@ -299,6 +299,49 @@ function initSocket(httpServer) {
       socket.to(roomChannel(code)).emit("ef:msg", { user_id: uid, d });
     });
 
+    // Hollow Hours together: each phone's kid ~15 times a second — where it
+    // is, what it's doing, hidden or not, through the exit or not, the noises
+    // it made (for the Keeper), a crank or lever it used, and once, if it was
+    // caught (src/components/hollow/hollowNet.mjs, kidMsg). Relayed whole; the
+    // server only checks the shape, caps the size and the rate — never
+    // dropping a message that says someone was caught or used something.
+    let lastKidAt = 0;
+    socket.on("hh:kid", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const d = msg.d;
+      if (!d || typeof d !== "object" || Array.isArray(d)) return;
+      if (!Number.isInteger(d.r) || d.r < -1 || d.r > 99) return;
+      if (!["x", "y", "z"].every((k) => Number.isFinite(d[k]) && Math.abs(d[k]) < 1e4)) return;
+      if ((d.ev && (!Array.isArray(d.ev) || d.ev.length > 40)) || (d.use && (!Array.isArray(d.use) || d.use.length > 4))) return;
+      let size = 0;
+      try { size = JSON.stringify(d).length; } catch { return; }
+      if (size > 4000) return;
+      const now = Date.now(), urgent = !!d.caught || (d.use && d.use.length > 0) || !!d.out;
+      if (!urgent && now - lastKidAt < 35) return;
+      lastKidAt = now;
+      socket.to(roomChannel(code)).emit("hh:kid", { user_id: uid, d });
+    });
+
+    // Hollow Hours together: the host (the lowest seat still playing) sends
+    // the room ~8 times a second — its clock, its machinery, the boxes that
+    // move, the Keeper and its sounds (hollowNet.mjs, roomMsg).
+    let lastRoomAt = 0;
+    socket.on("hh:room", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const d = msg.d;
+      if (!d || typeof d !== "object" || Array.isArray(d)) return;
+      if (!Number.isInteger(d.r) || d.r < -1 || d.r > 99 || !Number.isFinite(d.rt)) return;
+      let size = 0;
+      try { size = JSON.stringify(d).length; } catch { return; }
+      if (size > 8000) return;
+      const now = Date.now(), urgent = Array.isArray(d.rev) && d.rev.length > 0;
+      if (!urgent && now - lastRoomAt < 55) return;
+      lastRoomAt = now;
+      socket.to(roomChannel(code)).emit("hh:room", { user_id: uid, d });
+    });
+
     socket.on("disconnect", () => {
       for (const [k, sid] of playing) {
         if (sid !== socket.id) continue;

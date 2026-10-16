@@ -115,6 +115,12 @@ export const HOW_TO = {
     steps: ["Pick a hero on the title screen, then New Journey (or Continue your last one).", "Drag on the left to move — push to the edge to sprint. Drag on the right to look, pinch to zoom.", "ATTACK (hold to chain three hits), ROLL dodges through blows, SLAM (Meteor Slam: leap and crash down) when the blue ring is full, HEAL drinks a potion. Hold JUMP in the air to glide, or at a wall to climb.", "A green button appears beside people, chests, horses and things to do: TALK, OPEN, RIDE, DO. Top right: Bag, emotes, camera and menu; tap the minimap to fast-travel to lit watchtowers.", "With a friend in the room, each of you explores your own island for now."],
     tip: "A red ring on the ground is a boss about to strike: roll out of it, or roll through the blow at the last moment to counter.",
   },
+  hollow: {
+    name: "Hollow Hours",
+    goal: "Get out of the house: through every room to the top of the Bell Tower by midnight.",
+    steps: ["Left thumb moves (a small push is a quiet walk), JUMP, hold GRAB to drag, tap it to pick up, throw, wind or pull. CROUCH to crawl under things. Keyboard: W A S D, Space, E, C, Shift to sneak.", "Jump at an edge to catch it, then push toward it (or jump) to climb up.", "The Keeper is blind: it hunts by sound. Sneak, keep to the carpet, hide under things or among the coats, throw a can to send it away.", "The Cuckoo comes out on the hour and sweeps its light: be behind something when it does.", "Together: you go on only when you're both through. Crouch to give a boost. If it catches either of you, you both start the room again."],
+    tip: "When the Keeper stops breathing, it's listening. Freeze.",
+  },
   speedway: {
     name: "Speedway",
     goal: "Win the race — 3 laps, 5 on a 3–4 minute clock, 8 on 5 minutes.",

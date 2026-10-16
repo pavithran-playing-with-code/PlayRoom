@@ -25,6 +25,7 @@ import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
 import SunshardIslands from "./SunshardIslands";
 import Emberfall from "./Emberfall";
+import HollowGame from "./HollowGame";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -224,6 +225,15 @@ export const GAMES = [
     minPlayers: 1, maxPlayers: 1, tag: "Adventure", col: "var(--coral)",   // solo only, for now
     defaultDuration: 0, endless: true,
     Component: Emberfall,
+  },
+  {
+    slug: "hollow", name: "Hollow Hours", icon: "🕰️",
+    blurb: "A side-on horror adventure: a tiny child in a house built for giants. Sneak past the Keeper, hide from the Cuckoo, climb the Bell Tower by midnight.",
+    minPlayers: 1, maxPlayers: 2, tag: "Horror", col: "var(--grape)",
+    coopMax: 2, coopDefault: true, defaultDuration: 0, endless: true,
+    coopLabel: "one chapter — through every room together",
+    coopNote: "You go on to each room only when both of you are through. Crouch to give your friend a boost; at the top of the tower, pull the two levers together. If it catches either of you, you both start that room again.",
+    Component: HollowGame,
   },
 ];
 

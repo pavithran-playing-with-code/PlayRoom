@@ -1611,3 +1611,64 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 /* the theme switch beside "Log in" (signed in, it's in the account menu) */
 .themebtn{width:40px;height:40px;border:3px solid var(--ink);border-radius:999px;background:var(--card);
   box-shadow:0 3px 0 var(--ink);font-size:1.1rem;display:grid;place-items:center}
+
+/* ── HOLLOW HOURS (.hh-): side-on horror platformer — full screen, sideways on a phone ── */
+.hh{position:fixed;inset:0;z-index:50;background:#0b0d16;color:#d8d0bc;font-family:Georgia,'Times New Roman',serif;overflow:hidden;
+  touch-action:none;user-select:none;-webkit-user-select:none}
+.hh.hh-rot{inset:auto;top:0;left:100vw;width:100vh;width:100dvh;height:100vw;transform:rotate(90deg);transform-origin:0 0}
+.hh-host{position:absolute;inset:0;touch-action:none}
+.hh-gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hh-fx{position:absolute;inset:0;pointer-events:none}
+.hh-vig{z-index:2;background:radial-gradient(ellipse 75% 70% at 50% 48%,transparent 45%,rgba(4,4,10,.55) 85%,rgba(0,0,0,.85) 120%)}
+.hh-grain{z-index:2;opacity:.07;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation:hhgrain .5s steps(4) infinite}
+@keyframes hhgrain{0%{background-position:0 0}25%{background-position:-40px 30px}50%{background-position:30px -50px}75%{background-position:-20px -20px}100%{background-position:0 0}}
+.hh-sub{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 12vh);transform:translateX(-50%);z-index:4;max-width:70%;text-align:center;
+  font-size:15px;font-style:italic;letter-spacing:.03em;line-height:1.4;padding:6px 16px;color:#e6dcc4;text-shadow:0 1px 6px #000,0 0 14px #000;
+  transition:opacity .5s;pointer-events:none}
+.hh-stick{position:absolute;z-index:4;width:92px;height:92px;border-radius:50%;border:2px solid rgba(230,220,196,.22);pointer-events:none;
+  display:flex;align-items:center;justify-content:center}
+.hh-stick i{width:38px;height:38px;border-radius:50%;background:rgba(230,220,196,.28)}
+.hh button{font:inherit;color:#e6dcc4;background:rgba(14,14,20,.75);border:1px solid #6a604c;padding:11px 26px;cursor:pointer;letter-spacing:.18em;text-transform:uppercase;font-size:13px}
+.hh button:hover{background:#2a2620;border-color:#b89a5a}
+.hh button:disabled{opacity:.5;cursor:default}
+.hh .hh-pause{position:absolute;z-index:5;right:calc(env(safe-area-inset-right,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 12px);
+  width:40px;height:40px;padding:0;border-radius:50%;letter-spacing:0;font-size:12px;background:rgba(14,14,20,.45);border-color:rgba(106,96,76,.6)}
+/* JUMP the big one under the thumb; GRAB to its left; CROUCH above GRAB */
+.hh-tb{position:absolute;right:calc(env(safe-area-inset-right,0px) + 18px);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);z-index:5;
+  display:grid;grid-template-columns:64px 76px;grid-template-rows:56px 76px;gap:12px 14px;grid-template-areas:"crouch ." "grab jump";align-items:end}
+.hh .hh-tb button{padding:0;border-radius:50%;font-size:10px;letter-spacing:.08em;background:rgba(14,14,20,.5);touch-action:none;font-family:'Segoe UI',Helvetica,Arial,sans-serif}
+.hh .hh-tb .hh-jump{grid-area:jump;width:76px;height:76px;font-size:12px}
+.hh .hh-tb .hh-grab{grid-area:grab;width:64px;height:64px;justify-self:end}
+.hh .hh-tb .hh-crouch{grid-area:crouch;width:56px;height:56px;justify-self:end}
+.hh .hh-tb button.on{background:rgba(230,220,196,.85);color:#16130e;border-color:#e6dcc4}
+.hh-ov{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:30px;
+  background:rgba(6,6,12,.55)}
+.hh-ov.hh-title{background:linear-gradient(180deg,rgba(6,6,12,.1),rgba(6,6,12,.65))}
+.hh-ov h1{font-size:clamp(34px,8vw,80px);margin:0;font-weight:400;letter-spacing:.22em;color:#e6dcc4;text-shadow:0 2px 24px rgba(0,0,0,.9)}
+.hh-ov h1.hh-h2{font-size:clamp(26px,6vw,44px)}
+.hh-ov p{max-width:520px;font-size:14px;line-height:1.7;margin:0;opacity:.8;letter-spacing:.03em;text-shadow:0 1px 8px #000}
+.hh-ov p.hh-tag{font-style:italic;opacity:.7;letter-spacing:.2em;font-size:13px}
+.hh-ov p.hh-small{font-size:11px;opacity:.55;font-family:'Segoe UI',Helvetica,Arial,sans-serif}
+.hh-row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.hh .hh-leave{position:absolute;left:calc(env(safe-area-inset-left,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 14px);padding:8px 14px;font-size:11px}
+@media (max-height:520px){ .hh-ov{gap:9px;padding:14px 20px} .hh-ov p{font-size:12px;line-height:1.5} .hh button{padding:9px 18px} }
+.hh.hh-rot .hh-ov{gap:9px;padding:14px 20px}
+.hh.hh-rot .hh-ov p{font-size:12px;line-height:1.5}
+.hh.hh-rot .hh-ov h1{font-size:40px}
+/* moving between rooms: up out of black */
+.hh-fade{z-index:3;background:#000;animation:hhfade 1.4s ease-in forwards}
+@keyframes hhfade{0%{opacity:1}35%{opacity:1}100%{opacity:0}}
+/* caught: the edges close in, dark red, to black */
+.hh-caught{z-index:3;background:radial-gradient(ellipse at center,rgba(60,0,0,0) 20%,rgba(50,0,0,.85) 70%,#000 100%);animation:hhcaught 2.6s ease-in forwards}
+@keyframes hhcaught{0%{opacity:0;background-color:rgba(0,0,0,0)}60%{opacity:.75;background-color:rgba(0,0,0,0)}100%{opacity:1;background-color:#000}}
+/* a room's name, as you come into it */
+.hh-card{position:absolute;left:0;right:0;top:20%;z-index:4;text-align:center;pointer-events:none;font-size:clamp(22px,4.5vw,40px);
+  letter-spacing:.3em;text-transform:uppercase;color:#e6dcc4;text-shadow:0 2px 18px #000,0 0 30px #000;opacity:0;animation:hhcard 4.2s ease forwards}
+@keyframes hhcard{0%{opacity:0;letter-spacing:.42em}25%{opacity:.9}70%{opacity:.9}100%{opacity:0;letter-spacing:.3em}}
+/* together: through an exit, waiting for the other */
+.hh-wait{position:absolute;left:50%;top:42%;transform:translateX(-50%);z-index:6;padding:12px 22px;font-style:italic;letter-spacing:.06em;
+  color:#e6dcc4;background:rgba(6,6,12,.72);border:1px solid rgba(106,96,76,.6);text-shadow:0 1px 6px #000;pointer-events:none}
+/* a spectator: whose game this is */
+.hh-watching{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);z-index:6;font-style:italic;letter-spacing:.1em;color:#e6dcc4;opacity:.75;text-shadow:0 1px 6px #000;pointer-events:none}

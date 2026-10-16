@@ -74,7 +74,7 @@ export default function Leaderboard() {
             {/* My rank — only worth a callout when I'm not already visible up top */}
             {myRow && board.indexOf(myRow) > 2 && (
               <div className="pop row" style={{ padding: "14px 18px", gap: 14, marginBottom: 20, background: "var(--sun)" }}>
-                <span className="rank" style={{ background: "#fff" }}>#{myRow.rank}</span>
+                <span className="rank" style={{ background: "var(--card)" }}>#{myRow.rank}</span>
                 <Avatar emoji={myRow.avatar} size={44} seed={myRow.user_id} />
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span className="display" style={{ display: "block", fontSize: "1.1rem" }}>Your rank</span>

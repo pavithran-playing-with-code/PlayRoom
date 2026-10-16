@@ -15,6 +15,7 @@ import Logo from "./Logo";
 import Runner from "./characters/Runner";
 import FriendsDock from "./FriendsDock";
 import { Avatar } from "./ui";
+import useTheme from "../utils/theme";
 
 export default function Navbar() {
   const { user, isLoggedIn, logout } = useAuth();
@@ -25,6 +26,7 @@ export default function Navbar() {
   const location = useLocation();
 
   const [open, setOpen] = useState(false);
+  const [theme, toggleTheme] = useTheme();
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -85,6 +87,9 @@ export default function Navbar() {
                       label={`👥 Friends${pendingCt ? `  (${pendingCt})` : ""}`} />
                     <MenuItem to="/leaderboard" onClick={() => setOpen(false)} label="🏆 Leaderboard" />
                     <MenuItem to="/lobby" onClick={() => setOpen(false)} label="🕹️ Game Lobby" />
+                    <button className="menu-item" onClick={toggleTheme} aria-pressed={theme === "dark"}>
+                      {theme === "dark" ? "☀️ Light theme" : "🌙 Dark theme"}
+                    </button>
                     <button className="danger" onClick={handleLogout}>🚪 Log out</button>
                   </div>
                 )}
@@ -93,6 +98,9 @@ export default function Navbar() {
           </>
         ) : (
           <div className="navme">
+            <button className="themebtn" onClick={toggleTheme} aria-label={theme === "dark" ? "Light theme" : "Dark theme"}>
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
             {navLink("/login", "Log in")}
             <Link to="/register" className="press p-coral sm">Join free</Link>
           </div>

@@ -15,6 +15,7 @@
   --card:#FFFFFF;
   --ink:#2E2140;          /* outlines + body text */
   --ink-soft:#6C5E85;
+  --text:#2E2140;         /* body text: the ink in light, near-white in dark */
   --shade:#C9B8A8;        /* the hard shadow under everything */
 
   /* the toy palette — every game owns one */
@@ -40,7 +41,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{
   font-family:Nunito,system-ui,sans-serif;font-weight:700;
-  color:var(--ink);background:var(--paper);min-height:100vh;
+  color:var(--text);background:var(--paper);min-height:100vh;
   -webkit-font-smoothing:antialiased;
 }
 /* confetti paper — replaces the blurred aurora */
@@ -85,14 +86,14 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
 .p-sun{background:var(--sun)} .p-coral{background:var(--coral);color:#fff}
 .p-mint{background:var(--mint)} .p-grape{background:var(--grape);color:#fff}
 .p-sky{background:var(--sky)} .p-lime{background:var(--lime)}
-.p-white{background:#fff}
+.p-white{background:var(--card)}
 .sm{padding:9px 16px;font-size:.9rem;--lift:4px}
 .lg{padding:17px 34px;font-size:1.2rem;--lift:6px}
 .full{width:100%}
 
 .chip{
   display:inline-flex;align-items:center;gap:6px;border:2.5px solid var(--ink);
-  border-radius:999px;padding:4px 12px;font-size:.8rem;font-weight:800;background:#fff;
+  border-radius:999px;padding:4px 12px;font-size:.8rem;font-weight:800;background:var(--card);
 }
 .c-sun{background:var(--sun)} .c-coral{background:var(--coral);color:#fff}
 .c-mint{background:var(--mint)} .c-grape{background:var(--grape);color:#fff}
@@ -115,7 +116,7 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
 @media(max-width:600px){ .runstrip .actor svg{width:30px;height:32px} }
 .navlink{border:3px solid transparent;border-radius:999px;padding:8px 16px;
   font-family:Fredoka,sans-serif;font-weight:600;font-size:.95rem;color:var(--ink-soft)}
-.navlink:hover{color:var(--ink)}
+.navlink:hover{color:var(--text)}
 .navlink[aria-current="true"]{background:var(--sun);border-color:var(--ink);color:var(--ink);
   box-shadow:0 3px 0 var(--ink)}
 
@@ -157,7 +158,7 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
 .tile .top{height:118px;display:grid;place-items:center;border-bottom:4px solid var(--ink);position:relative}
 .tile .top .big{font-size:3.6rem;filter:drop-shadow(0 4px 0 rgba(46,33,64,.22))}
 .tile .top .ghost{position:absolute;right:-14px;bottom:-22px;font-size:6rem;opacity:.22;transform:rotate(-12deg)}
-.tile .bot{background:#fff;padding:16px 18px 18px}
+.tile .bot{background:var(--card);padding:16px 18px 18px}
 .tile h3{font-size:1.25rem;margin-bottom:5px}
 .tile p{font-size:.88rem;line-height:1.5;font-weight:600;color:var(--ink-soft);margin-bottom:12px}
 
@@ -174,7 +175,7 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
   display:inline-flex;gap:8px;
 }
 .code span{
-  width:46px;height:58px;border:3px solid var(--ink);border-radius:12px;background:#fff;
+  width:46px;height:58px;border:3px solid var(--ink);border-radius:12px;background:var(--card);
   display:grid;place-items:center;font-size:1.9rem;box-shadow:0 4px 0 var(--ink);
 }
 .rank{width:44px;height:44px;border:3px solid var(--ink);border-radius:14px;display:grid;
@@ -245,7 +246,7 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
   transition:transform .24s cubic-bezier(.34,1.9,.64,1),opacity .16s}
 .tile:hover .peek{opacity:1;transform:translateY(-74%) scale(1) rotate(-6deg)}
 
-.bubble{position:relative;border:3px solid var(--ink);border-radius:20px;background:#fff;
+.bubble{position:relative;border:3px solid var(--ink);border-radius:20px;background:var(--card);
   padding:14px 18px;box-shadow:0 5px 0 var(--ink);font-size:1rem;display:inline-block}
 .bubble::after{content:"";position:absolute;left:34px;bottom:-15px;width:0;height:0;
   border:12px solid transparent;border-top-color:var(--ink);border-bottom:0}
@@ -301,7 +302,7 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
 /* ---------- profile menu ---------- */
 .menuwrap{position:relative}
 .menu{position:absolute;right:0;top:calc(100% + 12px);min-width:212px;z-index:120;
-  border:3px solid var(--ink);border-radius:var(--r-lg);background:#fff;
+  border:3px solid var(--ink);border-radius:var(--r-lg);background:var(--card);
   box-shadow:0 6px 0 var(--ink);padding:8px;animation:drop .16s cubic-bezier(.34,1.7,.64,1)}
 @keyframes drop{from{opacity:0;transform:translateY(-8px) scale(.97)}}
 .menu .who{padding:10px 12px 12px;border-bottom:3px solid var(--ink);margin-bottom:8px;
@@ -336,17 +337,17 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
 .field{margin-bottom:16px}
 .field label{display:block;font-size:.78rem;font-weight:900;letter-spacing:.09em;
   text-transform:uppercase;color:var(--ink-soft);margin-bottom:7px}
-.field input{width:100%;border:3px solid var(--ink);border-radius:var(--r);background:#fff;
+.field input{width:100%;border:3px solid var(--ink);border-radius:var(--r);background:var(--card);
   padding:13px 16px;font-size:1rem;box-shadow:0 4px 0 var(--ink);outline:none}
 .field input:focus{border-color:var(--grape);box-shadow:0 4px 0 var(--grape)}
 .avpick{display:flex;gap:8px;flex-wrap:wrap}
 .avpick button{width:50px;height:50px;border:3px solid var(--ink);border-radius:16px;
-  background:#fff;font-size:1.4rem;box-shadow:0 4px 0 var(--ink);transition:.08s}
+  background:var(--card);font-size:1.4rem;box-shadow:0 4px 0 var(--ink);transition:.08s}
 .avpick button[aria-pressed="true"]{background:var(--sun);transform:translateY(4px);box-shadow:0 0 0 var(--ink)}
 /* Profile: how you prove it's you (old password / email code), the code box,
    and the delete-account card */
 .pf-seg{display:flex;gap:8px;margin-bottom:16px}
-.pf-seg button{flex:1;border:3px solid var(--ink);border-radius:999px;background:#fff;padding:9px 10px;
+.pf-seg button{flex:1;border:3px solid var(--ink);border-radius:999px;background:var(--card);padding:9px 10px;
   font-weight:800;font-size:.9rem;box-shadow:0 4px 0 var(--ink);transition:.08s}
 .pf-seg button[aria-selected="true"]{background:var(--sun);transform:translateY(4px);box-shadow:0 0 0 var(--ink)}
 .pf-coderow{display:flex;gap:10px;align-items:stretch}
@@ -400,8 +401,8 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
 .card-hover:hover{transform:translateY(-4px);box-shadow:0 calc(var(--lift) + 4px) 0 var(--ink)}
 
 /* Standalone inputs (no .field wrapper) get the same treatment as .field input */
-.ui-field{width:100%;border:3px solid var(--ink);border-radius:var(--r);background:#fff;
-  color:var(--ink);padding:13px 16px;font-size:1rem;font-weight:700;
+.ui-field{width:100%;border:3px solid var(--ink);border-radius:var(--r);background:var(--card);
+  color:var(--text);padding:13px 16px;font-size:1rem;font-weight:700;
   box-shadow:0 4px 0 var(--ink);outline:none}
 .ui-field:focus{border-color:var(--grape);box-shadow:0 4px 0 var(--grape)}
 
@@ -474,7 +475,7 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
   padding:8px clamp(12px,2vw,20px);background:var(--paper);
   border-bottom:3px solid var(--ink)}
 .oppcard{display:flex;align-items:center;gap:10px;flex:1;min-width:150px;
-  padding:7px 12px;border:3px solid var(--ink);border-radius:var(--r);background:#fff;
+  padding:7px 12px;border:3px solid var(--ink);border-radius:var(--r);background:var(--card);
   box-shadow:0 3px 0 var(--ink)}
 /* a teammate, in their colour (together boards) */
 .oppcard.mate{border-left:9px solid var(--mate)}
@@ -508,7 +509,7 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
    thumbs, and the board takes the whole height between them. Drawn turned a
    quarter (.rot) when the phone is held upright — turn the phone. */
 .press.pick{position:relative}
-.chip.lb-together{cursor:pointer;background:#fff;margin-bottom:10px;font-size:.8rem}
+.chip.lb-together{cursor:pointer;background:var(--card);margin-bottom:10px;font-size:.8rem}
 .chip.lb-together.on{background:var(--grape);color:#fff}
 .press.gb-help{width:36px;height:36px;padding:0;border-radius:50%;font-weight:900;font-size:1.05rem;flex:none}
 /* how to play: the card, in the lobby, the waiting room and over a game */
@@ -516,12 +517,12 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
 .howto-goal{font-weight:800;margin:0 0 6px}
 .howto-steps{list-style:decimal;margin:0 0 6px;padding-left:22px;display:grid;gap:4px;font-size:.92rem;line-height:1.35}
 .howto-tip{margin:6px 0 0;padding:6px 10px;border-radius:10px;background:rgba(255,197,61,.28);font-size:.86rem}
-.howto-box{margin-bottom:16px;border:3px solid var(--ink);border-radius:var(--r);background:#fff;padding:10px 14px;box-shadow:0 3px 0 var(--ink)}
+.howto-box{margin-bottom:16px;border:3px solid var(--ink);border-radius:var(--r);background:var(--card);padding:10px 14px;box-shadow:0 3px 0 var(--ink)}
 .howto-box summary{cursor:pointer;font-family:Fredoka,sans-serif;font-weight:700;font-size:1rem}
 .howto-box[open] summary{margin-bottom:8px}
-.howto-note{background:#fff}
+.howto-note{background:var(--card)}
 .howto-over{position:absolute;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:rgba(46,33,64,.55)}
-.howto-card{width:min(420px,100%);max-height:100%;overflow:hidden;padding:16px 18px;background:#fff;
+.howto-card{width:min(420px,100%);max-height:100%;overflow:hidden;padding:16px 18px;background:var(--card);
   display:flex;flex-direction:column;gap:12px}
 /* the rules scroll; "Got it" always stays in reach — on a sideways game held
    upright the card is taller than the screen it's drawn on */
@@ -589,14 +590,14 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
 .pw-toggle{position:absolute;right:9px;top:50%;transform:translateY(calc(-50% - 2px));
   width:38px;height:38px;border-radius:12px;display:grid;place-items:center;
   color:var(--ink-soft);transition:background .1s,color .1s}
-.pw-toggle:hover{color:var(--ink);background:var(--paper2)}
+.pw-toggle:hover{color:var(--text);background:var(--paper2)}
 .pw-toggle[aria-pressed="true"]{color:var(--grape)}
 /* Edge draws its own reveal button; one eye is enough */
 input::-ms-reveal,input::-ms-clear{display:none}
 
 /* ---------- Arrow Escape ---------- */
 /* Width is capped by the viewport height too, so the 7x9 board never needs scrolling on a phone. */
-.ae-frame{position:relative;margin:0 auto;padding:10px;background:#fff;
+.ae-frame{position:relative;margin:0 auto;padding:10px;background:var(--card);
   border:3px solid var(--ink);border-radius:var(--r-lg);box-shadow:0 5px 0 var(--ink);
   width:min(92vw,430px,calc((100dvh - 250px) * 7 / 9 + 26px));
   touch-action:manipulation;user-select:none;-webkit-user-select:none}
@@ -665,7 +666,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .fdock-more{font-family:Fredoka,sans-serif;font-weight:600;font-size:.78rem;color:var(--ink-soft)}
 .fdock-panel{position:fixed;z-index:240;width:min(290px,calc(100vw - 24px));
   max-height:min(62vh,380px);overflow-y:auto;border:3px solid var(--ink);border-radius:var(--r-lg);
-  background:#fff;box-shadow:0 6px 0 var(--ink);padding:8px;
+  background:var(--card);box-shadow:0 6px 0 var(--ink);padding:8px;
   animation:drop .16s cubic-bezier(.34,1.7,.64,1)}
 .fdock-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:8px 10px 10px;border-bottom:3px solid var(--ink);margin-bottom:6px;
@@ -694,7 +695,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* The count is the whole point of showing it, so it reads at a glance: a side
    that can't legally start is flagged before the host finds out on tap. */
 .teamhead .teamok,.teamhead .teamshort{min-width:24px;text-align:center;
-  border:2px solid var(--ink);border-radius:999px;padding:0 7px;font-size:.85rem;background:#fff}
+  border:2px solid var(--ink);border-radius:999px;padding:0 7px;font-size:.85rem;background:var(--card)}
 .teamhead .teamshort{background:var(--paper2);opacity:.75}
 .teamlist{display:flex;flex-wrap:wrap;gap:5px;padding:0 10px;min-height:28px}
 .teamcol .press{margin:0 10px}
@@ -736,7 +737,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
   gap:10px;width:min(360px,calc(100vw - 24px));pointer-events:none}
 .noti{pointer-events:auto;display:flex;align-items:flex-start;gap:12px;
   padding:12px 10px 12px 14px;border:3px solid var(--ink);border-radius:var(--r-lg);
-  background:#fff;box-shadow:0 5px 0 var(--ink);font-size:.95rem;line-height:1.35;
+  background:var(--card);box-shadow:0 5px 0 var(--ink);font-size:.95rem;line-height:1.35;
   animation:notiIn .22s cubic-bezier(.34,1.7,.64,1)}
 .noti-request,.noti-invite{background:var(--sun)}
 .noti-online{align-items:center;padding:7px 8px 7px 9px;border-radius:999px;
@@ -745,7 +746,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .noti-acts{display:flex;gap:8px;margin-top:9px;flex-wrap:wrap}
 .noti-x{flex:none;width:28px;height:28px;border-radius:10px;display:grid;place-items:center;
   font-size:.85rem;color:var(--ink-soft)}
-.noti-x:hover{background:rgba(46,33,64,.08);color:var(--ink)}
+.noti-x:hover{background:rgba(46,33,64,.08);color:var(--text)}
 @keyframes notiIn{from{opacity:0;transform:translateY(-10px) scale(.96)}}
 @media(max-width:600px){ .notistack{left:12px;right:12px;width:auto;top:8px} }
 
@@ -758,7 +759,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 
 /* ---------- Number Rush ---------- */
 .nr-find{display:inline-block;margin-bottom:10px;padding:4px 16px;border:3px solid var(--ink);border-radius:999px;
-  background:#fff;box-shadow:0 3px 0 var(--ink);font-family:Fredoka,sans-serif;font-weight:600;font-size:1.05rem}
+  background:var(--card);box-shadow:0 3px 0 var(--ink);font-family:Fredoka,sans-serif;font-weight:600;font-size:1.05rem}
 .nr-find strong{font-size:1.25rem}
 .nr-grid{display:grid;justify-content:center;touch-action:manipulation}
 .press.nr-cell{padding:0;border-radius:14px;--lift:4px;font-family:Fredoka,sans-serif;font-weight:600;
@@ -773,7 +774,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .cd-target{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 16px;
   font-family:Fredoka,sans-serif;font-weight:600;font-size:1.3rem}
 .cd-swatch{width:32px;height:32px;border:3px solid var(--ink);border-radius:10px;flex:none}
-.cd-bar{height:12px;margin:10px 0 14px;border:3px solid var(--ink);border-radius:999px;background:#fff;overflow:hidden}
+.cd-bar{height:12px;margin:10px 0 14px;border:3px solid var(--ink);border-radius:999px;background:var(--card);overflow:hidden}
 .cd-bar span{display:block;height:100%;background:var(--sun);transform-origin:left center;animation:cdBar 1.5s linear forwards}
 @keyframes cdBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 .cd-grid{display:grid;justify-content:center;padding:6px;border-radius:24px;transition:background .15s;touch-action:manipulation}
@@ -815,7 +816,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .dino-pad{display:flex;align-items:center;justify-content:center;touch-action:none;
   user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:pointer}
 .dino-canvas{display:block;border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);
-  background:#FFF6E6}
+  background:var(--paper)}
 .press.dino-btn{flex:1;max-width:260px;padding:14px 10px;font-size:1.1rem;touch-action:none;
   user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .dino-key{font-size:.7rem;border:2px solid var(--ink);border-radius:6px;padding:1px 6px;opacity:.6}
@@ -845,7 +846,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .bb-float span{border-radius:5px}
 .bb-float span.on{box-shadow:inset 0 -3px 0 rgba(46,33,64,.22)}
 .bb-slot{width:84px;height:72px;display:grid;place-items:center;padding:6px;
-  border:3px solid var(--ink);border-radius:16px;background:#fff;
+  border:3px solid var(--ink);border-radius:16px;background:var(--card);
   box-shadow:0 4px 0 var(--ink);transition:transform .08s ease, box-shadow .08s ease}
 .bb-slot.picked{background:var(--sun);transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
 .bb-slot.used{opacity:.25;box-shadow:none;border-style:dashed}
@@ -880,7 +881,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* the lobby's song picker: a card a song, its level in a pill */
 .pt-songs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:18px}
 .pt-song{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:9px 11px;text-align:left;cursor:pointer;
-  border:3px solid var(--ink);border-radius:14px;background:#fff;box-shadow:0 3px 0 var(--ink);font-size:.88rem}
+  border:3px solid var(--ink);border-radius:14px;background:var(--card);box-shadow:0 3px 0 var(--ink);font-size:.88rem}
 .pt-song.on{background:var(--sun);transform:translateY(-2px);box-shadow:0 5px 0 var(--ink)}
 .pt-song-ic{font-size:1.3rem;line-height:1}
 .pt-lvl{font-size:.68rem;font-weight:800;padding:1px 8px;border-radius:999px;border:2px solid var(--ink)}
@@ -1542,3 +1543,64 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 
 /* Emberfall: the game is its own page in a frame (public/emberfall/) */
 .ef-frame{display:block;border:0;background:#0b1522}
+
+/* ============================================================
+   Dark theme — html[data-theme="dark"], set by src/utils/theme.js
+   (and before the first paint by public/index.html). The app's pages
+   go dark; a game in play (body.in-game) keeps its own look. Outlines
+   and the hard shadows go black, cards a deep plum, text near-white;
+   the bright fills keep dark text on them.
+   ============================================================ */
+html[data-theme="dark"]{color-scheme:dark;background:#1A1424}
+html[data-theme="dark"] body:not(.in-game){
+  --paper:#1A1424;
+  --paper2:#261D35;
+  --card:#30264A;
+  --ink:#06040A;
+  --ink-soft:#B9AED1;
+  --text:#F4EEFC;
+  --shade:#000;
+}
+html[data-theme="dark"] body:not(.in-game)::before{opacity:.22}
+html[data-theme="dark"] body:not(.in-game) .hero h1{text-shadow:0 4px 0 rgba(0,0,0,.35)}
+html[data-theme="dark"] body:not(.in-game) .field input::placeholder,html[data-theme="dark"] body:not(.in-game) .ui-field::placeholder{color:#8C80A6}
+/* bright fills: dark text, as in the light theme */
+html[data-theme="dark"] body:not(.in-game) .p-sun,
+html[data-theme="dark"] body:not(.in-game) .p-mint,
+html[data-theme="dark"] body:not(.in-game) .p-sky,
+html[data-theme="dark"] body:not(.in-game) .p-lime,
+html[data-theme="dark"] body:not(.in-game) .c-sun,
+html[data-theme="dark"] body:not(.in-game) .c-mint,
+html[data-theme="dark"] body:not(.in-game) .c-sky,
+html[data-theme="dark"] body:not(.in-game) .c-lime,
+html[data-theme="dark"] body:not(.in-game) .face,
+html[data-theme="dark"] body:not(.in-game) .toast,
+html[data-theme="dark"] body:not(.in-game) .avpick button[aria-pressed="true"],
+html[data-theme="dark"] body:not(.in-game) .pf-seg button[aria-selected="true"],
+html[data-theme="dark"] body:not(.in-game) .noti-request,
+html[data-theme="dark"] body:not(.in-game) .noti-invite,
+html[data-theme="dark"] body:not(.in-game) .noti-online,
+html[data-theme="dark"] body:not(.in-game) .press.nr-cell.done,
+html[data-theme="dark"] body:not(.in-game) .cd-bar span,
+html[data-theme="dark"] body:not(.in-game) .sp-frame.done,
+html[data-theme="dark"] body:not(.in-game) .pp-frame.done,
+html[data-theme="dark"] body:not(.in-game) .bb-slot.picked,
+html[data-theme="dark"] body:not(.in-game) .pt-song.on,
+html[data-theme="dark"] body:not(.in-game) .pt-lvl.lvl-easy,
+html[data-theme="dark"] body:not(.in-game) .pt-lvl.lvl-medium,
+html[data-theme="dark"] body:not(.in-game) .kr-knob,
+html[data-theme="dark"] body:not(.in-game) .fstick-knob,
+html[data-theme="dark"] body:not(.in-game) .mz-frame.done,
+html[data-theme="dark"] body:not(.in-game) .mz-token,
+html[data-theme="dark"] body:not(.in-game) .press.mz-btn:active,
+html[data-theme="dark"] body:not(.in-game) .ty-w.cur,
+html[data-theme="dark"] body:not(.in-game) .call-emoji,
+html[data-theme="dark"] body:not(.in-game) .call-pick-go,
+html[data-theme="dark"] body:not(.in-game) .call-face-state,
+html[data-theme="dark"] body:not(.in-game) .again-list li.on,
+html[data-theme="dark"] body:not(.in-game) .navlink[aria-current="true"],
+html[data-theme="dark"] body:not(.in-game) [style*="background: var(--sun)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--mint)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--sky)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--lime)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--leaf)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--ice)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--chick)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--peach)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--bubble)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--berry)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--pipe)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--slate)"],html[data-theme="dark"] body:not(.in-game) [style*="background: var(--brick)"]{color:#2E2140}
+html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"] body:not(.in-game) .press.p-ghost:hover{background:var(--paper2)}
+/* the theme switch beside "Log in" (signed in, it's in the account menu) */
+.themebtn{width:40px;height:40px;border:3px solid var(--ink);border-radius:999px;background:var(--card);
+  box-shadow:0 3px 0 var(--ink);font-size:1.1rem;display:grid;place-items:center}

@@ -37,7 +37,7 @@ export default function Logo({ size = "md", showText = true, style = {} }) {
           style={{
             fontSize: cfg.font,
             lineHeight: 1,
-            color: "var(--ink)",
+            color: "var(--text)",
             // hard offset shadow, the same trick every pressable uses
             textShadow: "0 3px 0 var(--sun)",
           }}

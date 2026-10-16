@@ -21,7 +21,7 @@ export default function ProgressRing({ value, max, size = 60, stroke = 7, urgent
         />
       </svg>
       <div className="absolute inset-0 flex items-center justify-center leading-none">
-        <span className="display" style={{ color: "var(--ink)", fontSize: size * 0.26 }}>{label}</span>
+        <span className="display" style={{ color: "var(--text)", fontSize: size * 0.26 }}>{label}</span>
       </div>
     </div>
   );

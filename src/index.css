@@ -1562,7 +1562,14 @@ html[data-theme="dark"] body:not(.in-game){
   --shade:#000;
 }
 html[data-theme="dark"] body:not(.in-game)::before{opacity:.22}
-html[data-theme="dark"] body:not(.in-game) .hero h1{text-shadow:0 4px 0 rgba(0,0,0,.35)}
+/* the home hero: the same sun → bubble → sky sweep, at night (light text needs a dark ground) */
+html[data-theme="dark"] body:not(.in-game) .hero{
+  background:
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.05) 0 22px, transparent 22px 44px),
+    linear-gradient(160deg,#5A3A1E,#5B1F4E 58%,#123E5C)}
+html[data-theme="dark"] body:not(.in-game) .hero h1{text-shadow:0 4px 0 var(--grape)}
+html[data-theme="dark"] body:not(.in-game) .hero p{color:#E8DEF6}
+html[data-theme="dark"] body:not(.in-game) .float{filter:drop-shadow(0 3px 0 rgba(0,0,0,.45))}
 html[data-theme="dark"] body:not(.in-game) .field input::placeholder,html[data-theme="dark"] body:not(.in-game) .ui-field::placeholder{color:#8C80A6}
 /* bright fills: dark text, as in the light theme */
 html[data-theme="dark"] body:not(.in-game) .p-sun,

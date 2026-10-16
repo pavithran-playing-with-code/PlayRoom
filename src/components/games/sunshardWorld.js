@@ -40,16 +40,48 @@ export const SHARDS = ZONES.length;
 export const LIFT_H = 9;
 export const MOVER = { amp: 2.0, spd: 0.8 };
 
+// Every island after the first is its own: a new look (LOOKS, by the round),
+// a little harder (more gaps, fewer plain stones, more slimes, up to round 4),
+// and a twist — odd rounds wind gusts, even rounds blinking stones. Round 0 is
+// the island it always was.
+export const LOOKS = [
+  { name: "Sunny Skies" },
+  { name: "Golden Hour", sky: 0xff9a4a, skyK: 0.45, ground: 0xffb070, groundK: 0.18, light: 0.95, stars: 0 },
+  { name: "Moonlit Night", sky: 0x141a4a, skyK: 0.7, ground: 0x4a5a9a, groundK: 0.3, light: 0.7, stars: 1 },
+  { name: "Candy Sky", sky: 0xff8fd0, skyK: 0.45, ground: 0xff9ad8, groundK: 0.2, light: 1, stars: 0 },
+  { name: "Storm Front", sky: 0x4a5468, skyK: 0.6, ground: 0x6a7488, groundK: 0.22, light: 0.8, stars: 0 },
+];
+export const TWISTS = { wind: "Wind gusts push you in the air", blink: "Violet stones blink in and out" };
+export const twistOf = (round) => (!round ? null : round % 2 === 1 ? "wind" : "blink");
+// A gust: 2.5 s in every 8, from a direction that turns each time — by the
+// match clock, so it's the same on every phone. [vx, vz]: the drift, m/s.
+export const WIND = { every: 8, lasts: 2.5, drift: 1.7 };
+export function windAt(W, T) {
+  if (W.twist !== "wind") return null;
+  const n = Math.floor(T / WIND.every), ph = T - n * WIND.every;
+  if (ph >= WIND.lasts) return null;
+  const k = Math.sin((ph / WIND.lasts) * Math.PI), a = n * 2.399 + (W.round || 0);
+  return [Math.cos(a) * WIND.drift * k, Math.sin(a) * WIND.drift * k];
+}
+// A blinking stone: there for 70% of a 4.6 s cycle (never right after a vent or a mushroom: you can't wait in the air). blinkLeft: the seconds it
+// has left before it goes (0 while it's gone).
+export const BLINK = { every: 4.6, on: 0.7 };
+export function blinkLeft(p, T) {
+  const k = (T / BLINK.every + p.ph) % 1;
+  return k < BLINK.on ? (BLINK.on - k) * BLINK.every : 0;
+}
+
 // Where a moving platform is at time t (it slides back and forth along the path).
 export const moverAt = (p, t) => {
   const s = Math.sin(t * p.spd + p.ph) * p.amp;
   return [p.bx + p.ax * s, p.bz + p.az * s];
 };
 
-export function buildWorld(code) {
+export function buildWorld(code, round = 0) {
   const R = mkRng(code);
   const D = mkRng(code + "/deco");
-  const W = { code, plats: [], slimes: [], shards: [], flags: [], springs: [], lifts: [], trees: [], flowers: [], clouds: [], pillars: [], temple: null, gate: null, path: [], topY: 0 };
+  const tier = Math.min(4, Math.max(0, round | 0)), twist = twistOf(tier ? round : 0);
+  const W = { code, round: round | 0, look: (round | 0) % LOOKS.length, twist, plats: [], slimes: [], shards: [], flags: [], springs: [], lifts: [], trees: [], flowers: [], clouds: [], pillars: [], temple: null, gate: null, path: [], topY: 0 };
   const plats = W.plats;
   const addPlat = (o) => {
     const p = { x: 0, y: 0, z: 0, r: 3, th: 1.2, kind: "static", zone: 0, ph: 0, amp: 0, spd: 0, ax: 0, az: 0, cp: false, rot: D() * TAU, ...o };
@@ -93,12 +125,22 @@ export function buildWorld(code) {
 
   let shardNo = 0;
   for (let zi = 0; zi < ZONES.length; zi++) {
-    const Z = ZONES[zi];
+    const Z0 = ZONES[zi];
+    // harder each round: wider gaps (never past 4 m), smaller stones, fewer plain ones, more slimes
+    const Z = !tier ? Z0 : {
+      ...Z0, n: Z0.n + (tier >> 1),
+      gap: [Math.min(3.6, Z0.gap[0] + 0.12 * tier), Math.min(4.0, Z0.gap[1] + 0.1 * tier)],
+      r: [Math.max(1.9, Z0.r[0] - 0.08 * tier), Math.max(2.2, Z0.r[1] - 0.08 * tier)],
+      w: { ...Z0.w, static: Math.max(0.15, (Z0.w.static || 0) * (1 - 0.13 * tier)), crumble: (Z0.w.crumble || 0) + 0.04 * tier, mover: (Z0.w.mover || 0) + (zi || tier >= 2 ? 0.04 * tier : 0) },
+      slime: Z0.slime + 0.05 * tier,
+    };
     for (let i = 0; i < Z.n; i++) {
       let kind = pickKind(Z, i === 0);
       if ((kind === "mover" && prevKind === "mover") || ((kind === "lift" || kind === "spring") && (prevKind === "lift" || prevKind === "spring"))) kind = "static";
       // you wait for a moving platform to come close — not on a stone that's falling away
       if (kind === "mover" && prevKind === "crumble") kind = "static";
+      // a blinking island: some plain stones blink (you wait for one to come back, never on one that's going)
+      if (twist === "blink" && kind === "static" && i > 0 && prevKind !== "crumble" && prevKind !== "blink" && prevKind !== "mover" && prevKind !== "lift" && prevKind !== "spring" && R() < 0.38) kind = "blink";
       let r2 = Z.r[0] + R() * (Z.r[1] - Z.r[0]), gap = Z.gap[0] + R() * (Z.gap[1] - Z.gap[0]), rise = Z.rise[0] + R() * (Z.rise[1] - Z.rise[0]);
       if (kind === "mover") { r2 = 2.1; gap = 3.4; }
       if (kind === "lift") r2 = 1.9;
@@ -111,6 +153,7 @@ export function buildWorld(code) {
       heading = pos.h + (R() - 0.5) * 0.8 + 0.1;
       const o = { x: pos.x, y: pos.y, z: pos.z, r: r2, kind, zone: zi, from: cur.i, gap, rise };
       if (kind === "mover") { o.amp = MOVER.amp; o.spd = MOVER.spd; o.ph = R() * TAU; o.ax = Math.cos(pos.h); o.az = Math.sin(pos.h); }
+      if (kind === "blink") o.ph = D();
       const p = addPlat(o);
       W.path.push(p.i);
       if (kind === "lift") W.lifts.push({ p: p.i, x: p.x, z: p.z, r: 1.7, y0: p.y, h: LIFT_H });

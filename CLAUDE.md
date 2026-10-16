@@ -226,6 +226,10 @@ There is no test runner. What works:
   (`isl:ev`, `killSlime` / `crumbleAt`). Light the temple and the side moves
   on to the next island (`seed-1`, `seed-2`…, `rd` in `isl:pos`); islands'
   points add up under the cap.
+  Each later island (`buildWorld(code, round)`) has its own look (`LOOKS`:
+  sky and ground tint), is a little harder up to round 4, and has a twist:
+  odd rounds wind gusts (`windAt`, by the clock), even rounds blinking stones
+  (`blinkLeft`). Round 0 is unchanged.
   `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
   **Sunhaven Isle** is stage 2 of every round: lighting the temple opens a
   3 s portal to a free-roaming island 62 m above it (`sunhavenWorld.js`,

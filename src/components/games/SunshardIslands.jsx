@@ -59,7 +59,7 @@ import useSpecStream from "./useSpecStream";
 import { useSocket } from "../../utils/SocketContext";
 import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
 import { team as teamOf, plural } from "./coopTeam";
-import { buildWorld, levelCode, ZONES, SHARDS, clamp, TAU } from "./sunshardWorld.js";
+import { buildWorld, levelCode, ZONES, SHARDS, clamp, TAU, LOOKS, TWISTS } from "./sunshardWorld.js";
 import { newRun, step, pressJump, releaseJump, respawn, score, shardsHave, tether, tiedTo, ropeState, LEASH, killSlime, crumbleAt, watchStep } from "./sunshardSim.js";
 import { buildWorld as buildIsle, ISLE_ZONES, SHRINES as ISLE_SHRINES, SHRINE_COLS, MAP_SIZE, zoneAt as isleZoneAt } from "./sunhavenWorld.js";
 import * as SH from "./sunhavenSim.js";
@@ -193,7 +193,8 @@ export default function SunshardIslands(props) {
   const [round, setRound] = useState(0);
   const roundRef = useRef(0);
   roundRef.current = round;
-  const W = useMemo(() => buildWorld(islandCode(seed, round)), [seed, round]);
+  // every island after the first has its own look, is a little harder, and has a twist (sunshardWorld)
+  const W = useMemo(() => buildWorld(islandCode(seed, round), round), [seed, round]);
   const bank = useRef(0);                     // the points of the islands behind you
   const litOnce = useRef(false);              // any island lit: the room's goal
   const savedN = useRef(0);                   // Sunhavens saved
@@ -575,7 +576,7 @@ export default function SunshardIslands(props) {
     const chain = () => seatedRef.current.map((p) => p.id);
     const ensureIsle = () => { if (!isle) { isle = scene.createIsle(st.WI, off); isle.show(true); } };
     if (st.sg === 1 && st.S2) ensureIsle();
-    if (round > 0 && st.sg === 0) { A.play(true); shout(`Island ${round + 1}`, "A new island — find the 5 Sunshards"); }
+    if (round > 0 && st.sg === 0) { A.play(true); shout(`Island ${round + 1}: ${LOOKS[W.look].name}`, W.twist ? TWISTS[W.twist] : "A new island — find the 5 Sunshards"); }
     else if (st.sg === 1) A.play(true);
     // the islands behind: this one's points go in the bank (once), and on we go
     const bankSky = () => { if (!st.banked) { st.banked = true; bank.current = Math.min(MAX_PTS, bank.current + score(S, W, agreedTeam())); } };

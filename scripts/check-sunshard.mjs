@@ -14,7 +14,7 @@ import path from "node:path";
 const src = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src", "components", "games");
 const Wm = await import(pathToFileURL(path.join(src, "sunshardWorld.js")).href);
 const Sm = await import(pathToFileURL(path.join(src, "sunshardSim.js")).href);
-const { buildWorld, levelCode, SHARDS, ZONES } = Wm;
+const { buildWorld, levelCode, SHARDS, ZONES, blinkLeft } = Wm;
 const { newRun, step, pressJump, releaseJump, score, RUN, JUMP, GRAVITY, tether, tiedTo, LEASH, AIR_SLACK, killSlime, crumbleAt, ISLAND_PTS } = Sm;
 
 let fails = 0;
@@ -151,7 +151,12 @@ function bot(Wb, team = null, maxS = 900, rope = null) {
       } else {
         const edgeGap = Math.hypot(tq.x - cq.x, tq.z - cq.z) - cur.r - tgt.r;
         // a moving platform: wait at the edge until it's coming close
-        if (tgt.kind === "mover" && edgeGap > 2.6) {
+        // a blinking stone: wait at the edge until it's back with time to spare
+        if (tgt.kind === "blink" && blinkLeft(tgt, S.T) < 2.0) {
+          const L = Math.hypot(tq.x - cq.x, tq.z - cq.z), ex = cq.x + ((tq.x - cq.x) / L) * (cur.r - 0.9), ez = cq.z + ((tq.z - cq.z) / L) * (cur.r - 0.9);
+          const de = Math.hypot(ex - P.x, ez - P.z) || 1;
+          if (de > 0.2) { mx = (ex - P.x) / de; mz = (ez - P.z) / de; }
+        } else if (tgt.kind === "mover" && edgeGap > 2.6) {
           const dEdge = Math.hypot(P.x - cq.x, P.z - cq.z);
           const ex = cq.x + ((tq.x - cq.x) / Math.hypot(tq.x - cq.x, tq.z - cq.z)) * (cur.r - 0.9), ez = cq.z + ((tq.z - cq.z) / Math.hypot(tq.x - cq.x, tq.z - cq.z)) * (cur.r - 0.9);
           const de = Math.hypot(ex - P.x, ez - P.z) || 1;
@@ -228,6 +233,23 @@ for (let s = 1; s <= N; s++) {
   else failures.push(`seed ${s * 104729}: stuck at hop ${r.S.maxPath}/${w.path.length - 1} after ${Math.round(r.t)}s, ${r.S.shards.size} shards`);
 }
 check(`a simple bot gets through every jump, takes all 5 shards, opens the gate and finishes (${N} levels)`, done === total, `${done}/${total}, slowest ${Math.round(worst)}s, ${respawns} falls${failures.length ? "\n      " + failures.slice(0, 6).join("\n      ") : ""}`);
+
+// the later islands: harder, with wind (odd rounds) or blinking stones (even) — still all beatable
+{
+  const NR = Number(process.env.SS_NR) || 8;
+  for (const rd of [1, 2, 3, 4, 7]) {
+    let ok = 0, slow = 0, falls = 0;
+    const bad = [];
+    for (let s = 1; s <= NR; s++) {
+      const w = buildWorld(levelCode(s * 104729) + "-" + rd, rd), r = bot(w);
+      falls += r.respawns;
+      if (r.S.finished && r.S.shards.size === SHARDS) { ok++; slow = Math.max(slow, r.t); } else bad.push(`seed ${s * 104729}: hop ${r.S.maxPath}/${w.path.length - 1}`);
+    }
+    const w1 = buildWorld(levelCode(5) + "-" + rd, rd);
+    check(`island ${rd + 1} (${w1.twist}, ${w1.plats.filter((p) => p.kind === "blink").length} blinking): the bot finishes ${NR} levels`, ok === NR, `${ok}/${NR}, slowest ${Math.round(slow)}s, ${falls} falls${bad.length ? "\n      " + bad.slice(0, 4).join("\n      ") : ""}`);
+  }
+  check("round 0 is the island it always was", JSON.stringify(buildWorld(levelCode(9)).plats.map((p) => p.kind)) === JSON.stringify(buildWorld(levelCode(9), 0).plats.map((p) => p.kind)));
+}
 
 // ── together, and the score ──────────────────────────────────────────────────
 {

@@ -14,7 +14,7 @@
 //
 // The world clock (T) is the match clock, so moving platforms are in the same
 // place on every phone.
-import { TAU, clamp, moverAt, SHARDS } from "./sunshardWorld.js";
+import { TAU, clamp, moverAt, SHARDS, windAt, blinkLeft } from "./sunshardWorld.js";
 
 export const RUN = 7.4, GLIDE_RUN = 8.6, GRAVITY = 26, JUMP = 10.6, DOUBLE = 9.6, GLIDE_FALL = 2.5;
 export const COYOTE = 0.1, BUFFER = 0.14, SPRING = 17.5, LIFT_UP = 7.5;
@@ -62,6 +62,8 @@ function platforms(S, W, dt) {
       else if (q.state === 1) { q.t += dt; q.shake = 1; if (q.t > 0.75) { q.state = 2; q.solid = false; q.vy = 0; q.shake = 0; } }
       else if (q.state === 2) { q.vy -= 22 * dt; q.y += q.vy * dt; if (p.by - q.y > 30) { q.state = 3; q.t = 0; } }
       else if (q.state === 3) { q.t += dt; if (q.t > 3.2) { q.state = 0; q.y = p.by; q.solid = true; S.ev.push({ k: "regrow", i }); } }
+    } else if (p.kind === "blink") {
+      q.solid = blinkLeft(p, S.T) > 0;
     } else if (p.kind === "pillar" && p.gate && S.gateOpen && q.solid && S.gateT > 0.3) q.solid = false;
   }
 }
@@ -106,9 +108,11 @@ export function step(S, W, inp, dt, team = null) {
     const d = Math.hypot(P.x - l.x, P.z - l.z);
     if (d < l.r && P.y > l.y0 - 0.3 && P.y < l.y0 + l.h) { if (P.vy < LIFT_UP) P.vy += 75 * dt; if (P.jumps > 1) P.jumps = 1; S.inLift = true; }
   }
-  // sideways, then up and down
+  // sideways, then up and down (a gust carries you while you're in the air)
   const prevY = P.y, vyBefore = P.vy;
   P.x += P.vx * dt; P.z += P.vz * dt;
+  const gust = !P.onG && !S.finished ? windAt(W, S.T) : null;
+  if (gust) { P.x += gust[0] * dt; P.z += gust[1] * dt; }
   for (let i = 0; i < W.plats.length; i++) {
     const p = W.plats[i], q = S.plats[i];
     if (!q.solid) continue;

@@ -12,7 +12,7 @@
 //   fx.burst / fx.ring                               effects, from the events
 //   createIsle(WI, off)                              the second stage, Sunhaven
 //                                                    Isle, built when it's needed
-import { ZONES, PAL0, TAU, clamp, lerp } from "./sunshardWorld.js";
+import { ZONES, PAL0, TAU, clamp, lerp, LOOKS, windAt, blinkLeft } from "./sunshardWorld.js";
 import { zoneAt, EMBER, LAKE, MAP_SIZE } from "./sunhavenWorld.js";
 
 const BEAM_H = 140;
@@ -35,6 +35,18 @@ const THEMES = [
   { top: 0x2a1a5a, bot: 0x9a88c8, hemi: 0.6, sun: 0.7, sunC: 0xc9b4ff, stars: 0.6, near: 55, far: 250 },
 ];
 const ISLE_SKY = 5;
+// an island's look (LOOKS) laid over the sky zones and the ground colours
+const mixHex = (a, b, k) => {
+  const m = (s) => Math.round(((a >> s) & 255) * (1 - k) + ((b >> s) & 255) * k);
+  return (m(16) << 16) | (m(8) << 8) | m(0);
+};
+function lookThemes(L) {
+  if (!L || L.sky === undefined) return THEMES;
+  return THEMES.map((t, i) => (i >= ISLE_SKY ? t : {
+    ...t, top: mixHex(t.top, L.sky, L.skyK), bot: mixHex(t.bot, L.sky, L.skyK * 0.75),
+    hemi: t.hemi * L.light, sun: t.sun * L.light, stars: Math.max(t.stars, L.stars),
+  }));
+}
 export const MATE = [0x37c8e6, 0xa678ff, 0x62d36c, 0xff8fc7, 0xffd24a, 0xf4efe6, 0xff9f43];
 
 export function createScene(THREE, W, opts = {}) {
@@ -72,9 +84,10 @@ export function createScene(THREE, W, opts = {}) {
   const stars = new THREE.Points(starG, keep(new THREE.PointsMaterial({ size: 2.4, sizeAttenuation: false, color: 0xffffff, transparent: true, opacity: 0, fog: false, depthWrite: false })));
   scene.add(stars);
   const _c1 = new THREE.Color(), _c2 = new THREE.Color();
+  const LOOK = LOOKS[W.look || 0], SKIES = lookThemes(LOOK);
   let skyAt = null;
   function setSky(zone, dt) {
-    const th = THEMES[clamp(zone, 0, THEMES.length - 1)];
+    const th = SKIES[clamp(zone, 0, SKIES.length - 1)];
     const k = skyAt === null ? 1 : 1 - Math.exp(-dt * 1.6);        // about two seconds to turn over
     skyAt = zone;
     skyU.top.value.lerp(_c1.setHex(th.top), k);
@@ -88,7 +101,9 @@ export function createScene(THREE, W, opts = {}) {
 
   // ── materials ──────────────────────────────────────────────────────────────
   const mats = {};
-  const M = (c, o) => { const k = c + (o ? JSON.stringify(o) : ""); return mats[k] || (mats[k] = keep(new THREE.MeshPhongMaterial({ color: c, flatShading: true, shininess: 0, specular: 0x000000, ...(o || {}) }))); };
+  // while the level is built, its colours take the island's look (tint); the explorers keep theirs
+  let tint = LOOK.ground !== undefined;
+  const M = (c0, o) => { const c = tint ? mixHex(c0, LOOK.ground, LOOK.groundK) : c0; const k = c + (o ? JSON.stringify(o) : ""); return mats[k] || (mats[k] = keep(new THREE.MeshPhongMaterial({ color: c, flatShading: true, shininess: 0, specular: 0x000000, ...(o || {}) }))); };
   const ADD = { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
   const BM = (c, o) => keep(new THREE.MeshBasicMaterial({ color: c, ...(o || {}) }));
   const geos = {};
@@ -139,6 +154,7 @@ export function createScene(THREE, W, opts = {}) {
     if (p.kind === "crumble") topC = pal.crum;
     if (p.kind === "mover") topC = 0x5e8fd8;
     if (p.kind === "lift") topC = 0xb9b4c4;
+    if (p.kind === "blink") topC = 0xb48cff;
     const g = new THREE.Group();
     const top = new THREE.Mesh(keep(new THREE.CylinderGeometry(p.r * 0.97, p.r, 0.5, 10)), M(topC));
     top.position.y = -0.25; top.castShadow = true; top.receiveShadow = true;
@@ -148,6 +164,7 @@ export function createScene(THREE, W, opts = {}) {
     g.add(top, base);
     if (p.kind === "mover") { const t = new THREE.Mesh(keep(new THREE.TorusGeometry(p.r * 0.86, 0.08, 6, 20)), BM(0x7ff0ff)); t.rotation.x = Math.PI / 2; t.position.y = 0.03; g.add(t); }
     if (p.kind === "crumble") for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(keep(new THREE.BoxGeometry(0.1, 0.04, p.r * 0.9)), M(0x5a3a22)); c.position.set(0, 0.02, 0); c.rotation.y = i * 0.8 + p.rot * 0.3; g.add(c); }
+    if (p.kind === "blink") { const t = new THREE.Mesh(keep(new THREE.TorusGeometry(p.r * 0.8, 0.07, 6, 20)), BM(0xe2d0ff)); t.rotation.x = Math.PI / 2; t.position.y = 0.03; g.add(t); }
     if (p.kind === "lift") { const r2 = new THREE.Mesh(G("liftRing", () => new THREE.TorusGeometry(1.5, 0.12, 6, 16)), M(0x8a86a0)); r2.rotation.x = Math.PI / 2; r2.position.y = 0.05; g.add(r2); }
     g.position.set(p.x, p.y, p.z); g.rotation.y = p.rot;
     world.add(g);
@@ -260,6 +277,8 @@ export function createScene(THREE, W, opts = {}) {
     world.add(g);
     return g;
   });
+
+  tint = false;
 
   // ── explorers ──────────────────────────────────────────────────────────────
   function makeHero(color, name) {
@@ -452,6 +471,8 @@ export function createScene(THREE, W, opts = {}) {
       const m = platMesh[i]; if (!m) continue;
       const q = S.plats[i];
       m.visible = q.state !== 3;
+      // a blinking stone: gone while it's gone, flickering in its last half second
+      if (W.plats[i].kind === "blink") { const left = blinkLeft(W.plats[i], S.T); m.visible = left > 0 && (left > 0.6 || Math.floor(left * 12) % 2 === 0); }
       if (q.state === 0 && m.scale.x < 1) m.scale.setScalar(Math.min(1, m.scale.x + dt * 4));
       m.position.set(q.x + (q.state === 1 ? (Math.random() - 0.5) * 0.12 : 0), q.y, q.z + (q.state === 1 ? (Math.random() - 0.5) * 0.12 : 0));
     }
@@ -487,6 +508,9 @@ export function createScene(THREE, W, opts = {}) {
       templeBeam.visible = S.gateOpen;
       if (S.gateOpen && Math.random() < dt * 25) { const a = Math.random() * TAU; emit(W.temple.x + Math.cos(a) * 1.2, W.temple.y + 0.2, W.temple.z + Math.sin(a) * 1.2, 0, 3.5, 0, 1, 0xffe28a); }
     }
+    // a gust: streaks blowing past you
+    const gust = windAt(W, S.T);
+    if (gust && Math.random() < dt * 40) { const a = Math.random() * TAU, r = 2 + Math.random() * 6; emit(P.x + Math.cos(a) * r - gust[0] * 3, P.y + Math.random() * 4, P.z + Math.sin(a) * r - gust[1] * 3, gust[0] * 7, 0.6, gust[1] * 7, 0.7, 0xeef6ff); }
     // dust under running feet, wind in the vents
     if (P.onG && P.speed > 3.5 && Math.random() < dt * 14) emit(P.x - P.vx * 0.05, P.y + 0.05, P.z - P.vz * 0.05, (Math.random() - 0.5) * 0.8, 0.6, (Math.random() - 0.5) * 0.8, 0.4, 0xd8d2c0);
     for (const l of W.lifts) if (Math.hypot(P.x - l.x, P.z - l.z) < l.r && P.y > l.y0 - 0.3 && P.y < l.y0 + l.h && Math.random() < dt * 20) emit(l.x + (Math.random() - 0.5) * 2, P.y - 0.4, l.z + (Math.random() - 0.5) * 2, 0, 3, 0, 0.5, 0xcfeaff);

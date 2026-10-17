@@ -1181,7 +1181,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 @keyframes tySpin{from{transform:rotate(0)}to{transform:rotate(720deg)}}
 @keyframes tyPuff{from{opacity:1;transform:translateX(0) scale(.7)}to{opacity:0;transform:translateX(-10px) scale(1.2)}}
 /* Pinned to the top of the board: on a phone the keyboard takes the bottom. */
-.ty-wrap{align-self:flex-start;margin:6px auto 0;display:flex;flex-direction:column;gap:10px}
+.ty-wrap{position:relative;align-self:flex-start;margin:6px auto 0;display:flex;flex-direction:column;gap:10px}
 .ty-box{position:relative;border:3px solid var(--ink);border-radius:20px;background:var(--card);
   box-shadow:0 5px 0 var(--ink);padding:16px 16px 18px;min-height:150px;transition:background .15s}
 .ty-box.bad{background:#FFE6E6}
@@ -1209,6 +1209,27 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .ty-streak{font-size:.85rem}
 @keyframes tyBlink{50%{opacity:0}}
 @keyframes tyPop{from{transform:scale(1.4);opacity:.3}}
+/* the upgrades: golden words, the nitro meter, the banners */
+.ty-w.gold{position:relative;color:#b07800}
+.ty-w.next.gold::after{content:"★";position:absolute;right:-9px;top:-9px;font-size:.55em;color:#e0a100}
+.ty-w.cur.gold{background:linear-gradient(135deg,#ffe58a 0%,#f2b632 45%,#fff0b8 60%,#f2b632 100%);background-size:220% 220%;animation:tpShimmer 1.4s linear infinite}
+.ty-flash.gold{color:#b07800}
+.ty-meter{display:flex;align-items:center;gap:8px;flex:0 1 52%}
+.ty-mbar{flex:1;height:12px;border:3px solid var(--ink);border-radius:999px;background:var(--paper2);overflow:hidden}
+.ty-mbar i{display:block;height:100%;background:var(--ice,#9fe3ff);transition:width .18s ease-out}
+.ty-meter b{font-size:.82rem;white-space:nowrap}
+.ty-meter.on .ty-mbar i{background:linear-gradient(90deg,#ffd34d,#ff8a3d,#ff4d6d,#ffd34d);background-size:300% 100%;animation:tpFire 1s linear infinite}
+.ty-car.nitro::before{content:"";position:absolute;left:-16px;top:6px;width:18px;height:7px;border-radius:7px 0 0 7px;
+  background:linear-gradient(90deg,rgba(255,77,109,0),#ff8a3d,#ffd34d);animation:tyFlame .16s linear infinite alternate}
+@keyframes tyFlame{from{transform:scaleX(.7);opacity:.75}to{transform:scaleX(1.15);opacity:1}}
+.ty-banner{position:absolute;left:50%;top:22px;z-index:6;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;
+  padding:7px 16px;border:3px solid var(--ink);border-radius:18px;background:var(--sun);box-shadow:0 5px 0 var(--ink);
+  font-weight:900;font-size:clamp(17px,5.2vw,26px);animation:tpBanner 1.3s ease-out forwards}
+.ty-banner-nitro{background:#ffb347}
+.ty-banner-gold{background:linear-gradient(135deg,#ffe58a,#f2b632)}
+.ty-banner-level{background:var(--grape);color:#fff}
+.ty-banner-lost{background:var(--paper2);color:var(--ink-soft);font-size:clamp(14px,4.2vw,20px)}
+@media (prefers-reduced-motion:reduce){.ty-w.cur.gold,.ty-car.nitro::before{animation:none}}
 
 /* the moment between pressing Start and the game: the game's own icon, bouncing */
 .room-loading{display:grid;place-items:center;min-height:70svh}

@@ -142,7 +142,7 @@ export const HOW_TO = {
   typing: {
     name: "Typing Race",
     goal: "Type as many words as you can.",
-    steps: ["Type the highlighted word, then press space.", "Your car drives as you type — friends race in the lanes above.", "A wrong letter makes your car sputter; a missed word spins it out."],
+    steps: ["Type the highlighted word, then press space.", "Your car drives as you type — friends race in the lanes above.", "Ten right in a row lights the nitro: ×1.5. A ★ golden word pays double; a word with no wrong letter earns a little more.", "The words get longer as you go. A missed word spins your car out."],
     tip: "Accuracy builds your streak, and the streak builds your score.",
   },
   piano: {

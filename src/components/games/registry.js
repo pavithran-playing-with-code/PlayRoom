@@ -182,7 +182,7 @@ export const GAMES = [
   },
   {
     slug: "typing", name: "Typing Race", icon: "⌨️",
-    blurb: "Type the words as fast as you can. Same words for everyone, streaks score big.",
+    blurb: "Type the words as fast as you can. Light the nitro, catch the golden words, race your friends' cars.",
     minPlayers: 1, maxPlayers: 8, tag: "Speed", col: "var(--ice)",
     Component: TypingRace,
   },

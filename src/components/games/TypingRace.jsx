@@ -2,7 +2,9 @@
 // Typing Race. A stream of words, the same for everyone in the room; type
 // each one and press space. Right scores by its length plus your streak,
 // wrong scores nothing and breaks the streak. Most points when the clock
-// stops wins. The words live in typingBoard.js.
+// stops wins. The words live in typingBoard.js: they grow longer as you go,
+// every 12th is a ★ golden word worth double, a word typed without a wrong
+// letter is "clean" (+3), and ten in a row lights the nitro (×1.5).
 //
 // On a phone this is the one game that wants the keyboard: a real text box
 // sits over the words, so a tap anywhere on them brings the keyboard up, and
@@ -14,7 +16,8 @@ import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
-import { wordStream, pointsFor, check, clean, wpm, accuracy } from "./typingBoard";
+import { wordStream, pointsFor, check, clean, wpm, accuracy, isGolden, nitro, levelOf, NITRO_AT } from "./typingBoard";
+import sfx from "./sfx";
 
 // The race you can see: a lane each, a little car each, driven by points —
 // type faster, drive faster. A wrong letter and your car sputters; a missed
@@ -32,7 +35,7 @@ function Track({ lanes }) {
             <span className="ty-name truncate">{l.me ? "You" : l.name}</span>
             <div className="ty-road">
               <span className="ty-finish" />
-              <div className={`ty-car${l.sputter ? " sputter" : ""}${l.spin ? " spin" : ""}`}
+              <div className={`ty-car${l.sputter ? " sputter" : ""}${l.spin ? " spin" : ""}${l.nitro ? " nitro" : ""}`}
                 style={{ left: `calc(${(k * 100).toFixed(2)}% - ${(k * 34).toFixed(1)}px)` }}>
                 <i style={{ background: l.colour }} /><b /><s className="w1" /><s className="w2" />
               </div>
@@ -55,7 +58,7 @@ export default function TypingRace(props) {
 
   const [words] = useState(() => wordStream(seed));
   // Typing acts on the ref: two keystrokes in one tick must each see the other.
-  const live = useRef({ i: 0, typed: "", streak: 0, right: 0, wrong: 0, chars: 0, res: {} });
+  const live = useRef({ i: 0, typed: "", streak: 0, right: 0, wrong: 0, chars: 0, res: {}, dirty: false });
   const [, bump] = useState(0);
   const refresh = () => bump((n) => n + 1);
   const [focused, setFocused] = useState(false);
@@ -65,6 +68,15 @@ export default function TypingRace(props) {
   useEffect(() => () => clearTimeout(spinT.current), []);
   const inputRef = useRef(null);
   const uid = useRef(0);
+  const [banner, setBanner] = useState(null);
+  const bannerT = useRef(null);
+  useEffect(() => () => clearTimeout(bannerT.current), []);
+  function announce(text, cls = "") {
+    const n = ++uid.current;
+    setBanner({ text, cls, n });
+    clearTimeout(bannerT.current);
+    bannerT.current = setTimeout(() => setBanner(null), 1300);
+  }
 
   const spectate = useSpectate({
     isSpectator, spectatorState,
@@ -98,17 +110,26 @@ export default function TypingRace(props) {
     const word = words[s.i];
     const right = typed === word;
     const n = ++uid.current;
+    const golden = isGolden(s.i), wasClean = !s.dirty;
+    s.dirty = false;
     if (right) {
-      const pts = pointsFor(word, s.streak);
+      const pts = pointsFor(word, s.streak, { golden, clean: wasClean });
       s.streak += 1;
       s.right += 1;
       s.chars += word.length + 1;                 // the space counts, as in any WPM test
       eng.addScore(pts);
-      setFlash({ ok: true, pts, n });
+      setFlash({ ok: true, pts, n, golden, clean: wasClean });
+      sfx.tone(sfx.note(72 + Math.min(12, s.streak)), 0.12, 0.08, "triangle");
+      if (golden) sfx.sparkle();
+      if (s.streak === NITRO_AT) { sfx.whoosh(); sfx.chime(4); announce("🔥 Nitro! ×1.5", "ty-banner-nitro"); }
+      else if (golden) announce("★ Golden word ×2", "ty-banner-gold");
     } else {
+      const lost = nitro(s.streak);
       s.streak = 0;
       s.wrong += 1;
       setFlash({ ok: false, pts: 0, n });
+      sfx.crack(); sfx.thud();
+      if (lost) announce("nitro lost", "ty-banner-lost");
       setSpin(true);
       clearTimeout(spinT.current);
       spinT.current = setTimeout(() => setSpin(false), 750);
@@ -117,6 +138,8 @@ export default function TypingRace(props) {
     for (const k of Object.keys(s.res)) if (Number(k) < s.i - KEEP) delete s.res[k];
     s.i += 1;
     eng.addMove();
+    if (s.i === 15) announce("Longer words!", "ty-banner-level");
+    else if (s.i === 40) announce("Long words!", "ty-banner-level");
   }
 
   function onChange(e) {
@@ -130,6 +153,13 @@ export default function TypingRace(props) {
       v = v.slice(cut + 1).replace(/^\s+/, "");
       cut = v.search(/\s/);
     }
+    // a click for each right letter, a buzz the moment it goes wrong
+    const before = check(words[s.i] || "", clean(s.typed)), after = check(words[s.i] || "", clean(v));
+    if (clean(v).length > clean(s.typed).length) {
+      if (after.bad && !before.bad) sfx.tone(150, 0.08, 0.05, "square", 110);
+      else if (!after.bad) sfx.noise(0.02, 0.05, 3400, "bandpass", 0, null, 3);
+    }
+    if (after.bad) s.dirty = true;
     s.typed = v;
     refresh();
   }
@@ -143,6 +173,20 @@ export default function TypingRace(props) {
       refresh();
     }
   }
+
+  // the last ten seconds tick; a beat underneath, quicker with the streak
+  const playing = !isSpectator && !eng.gameOver;
+  const secs = Math.ceil(eng.timeLeft);
+  useEffect(() => { if (playing && !eng.unlimited && secs > 0 && secs <= 10) sfx.tick(secs <= 3); }, [secs, playing, eng.unlimited]);
+  const tempo = useRef(92);
+  tempo.current = 88 + levelOf(live.current.i) * 6 + Math.min(live.current.streak, NITRO_AT) * 2;
+  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => tempo.current, 0.35); return () => b.stop(); }, [playing]);
+  const ended = useRef(false);
+  useEffect(() => {
+    if (!eng.gameOver || isSpectator || ended.current) return;
+    ended.current = true;
+    if (eng.won || eng.rank === 1) sfx.win(); else sfx.lose();
+  }, [eng.gameOver, eng.won, eng.rank, isSpectator]);
 
   const s = live.current;
   const start = Math.floor(s.i / PER_LINE) * PER_LINE;    // whole lines, so words don't shuffle about
@@ -158,7 +202,7 @@ export default function TypingRace(props) {
     ...Object.values(eng.opponents).filter((p) => Number(p.user_id) !== myId)
       .map((p) => ({ id: p.user_id, name: p.username, pts: Number(p.score) || 0, colour: colourOf(p.user_id) })),
     { id: myId || "me", me: true, pts: isSpectator ? Number(spectatorWatching?.score) || 0 : eng.score,
-      colour: colourOf(myId), sputter: now.bad && !isSpectator, spin },
+      colour: colourOf(myId), sputter: now.bad && !isSpectator, spin, nitro: nitro(s.streak) },
   ];
 
   const stats = isSpectator
@@ -180,10 +224,13 @@ export default function TypingRace(props) {
         opponents={Object.values(eng.opponents)}
         teams={eng.teams}
         onQuit={eng.endMatch}
+        sound
       >
         {({ w }) => (
           <div className="ty-wrap" style={{ width: Math.min(w, 640) }} onPointerDown={() => { if (!focused) focusBox(); }}>
             <Track lanes={lanes} />
+            {/* over the race, never over the words being typed */}
+            {banner && <div key={banner.n} className={`ty-banner ${banner.cls}`}>{banner.text}</div>}
             <div className={`ty-box${now.bad ? " bad" : ""}${focused || isSpectator ? "" : " asleep"}`}>
               <div className="ty-words" aria-hidden="true">
                 {shown.map((word, k) => {
@@ -193,7 +240,7 @@ export default function TypingRace(props) {
                   }
                   if (idx === s.i) {
                     return (
-                      <span key={idx} className="ty-w cur">
+                      <span key={idx} className={`ty-w cur${isGolden(idx) ? " gold" : ""}`}>
                         {now.letters.map((st, j) => (
                           <React.Fragment key={j}>
                             {j === clean(s.typed).length && !isSpectator && focused && <span className="ty-caret" />}
@@ -205,7 +252,7 @@ export default function TypingRace(props) {
                       </span>
                     );
                   }
-                  return <span key={idx} className="ty-w next">{word}</span>;
+                  return <span key={idx} className={`ty-w next${isGolden(idx) ? " gold" : ""}`}>{word}</span>;
                 })}
               </div>
               {!isSpectator && (
@@ -222,11 +269,14 @@ export default function TypingRace(props) {
             </div>
             <div className="ty-under">
               {flash ? (
-                <span key={flash.n} className={`ty-flash ${flash.ok ? "ok" : "bad"}`}>
-                  {flash.ok ? `+${flash.pts}` : "missed"}
+                <span key={flash.n} className={`ty-flash ${flash.ok ? "ok" : "bad"}${flash.golden ? " gold" : ""}`}>
+                  {flash.ok ? `+${flash.pts}${flash.clean ? " clean!" : ""}` : "missed"}
                 </span>
               ) : <span className="muted">{isSpectator ? "" : "Type the word, then space"}</span>}
-              {s.streak > 1 && <span className="chip c-sun ty-streak">🔥 {s.streak} in a row</span>}
+              <span className={`ty-meter${nitro(s.streak) ? " on" : ""}`} title="Ten in a row lights the nitro">
+                <span className="ty-mbar"><i style={{ width: `${Math.min(1, s.streak / NITRO_AT) * 100}%` }} /></span>
+                <b>{nitro(s.streak) ? `🔥 ${s.streak} · ×1.5` : `${s.streak}/${NITRO_AT}`}</b>
+              </span>
             </div>
           </div>
         )}

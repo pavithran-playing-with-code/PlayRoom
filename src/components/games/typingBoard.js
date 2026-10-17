@@ -4,10 +4,13 @@
 // Everyone in a room gets the same endless stream of words, drawn from the
 // room's seed, so the race is fair. Type a word and press space: right, and
 // it scores by its length plus a streak bonus; wrong, and it scores nothing
-// and the streak starts again.
+// and the streak starts again. The words grow longer as you go (short, then
+// medium, then long ones mixed in); every 12th is a ★ golden word worth
+// double; a word typed without a single wrong letter is "clean" and earns a
+// little more; ten in a row lights the nitro, half as much again.
 //
 // No React and no DOM, so it can be exercised from a Node script.
-import { seededRand } from "./seededRand";
+import { seededRand } from "./seededRand.js";
 
 // Short, common, unambiguous on a phone keyboard: lower case, no
 // punctuation, nothing autocorrect is likely to "fix".
@@ -26,6 +29,14 @@ export const WORDS = (
   "volcano whisper blanket chicken dolphin giraffe hamster kingdom library mermaid octopus penguin pumpkin science"
 ).split(" ").filter(Boolean);
 
+// The words by length, for the stream's levels.
+export const SHORT = WORDS.filter((w) => w.length <= 4);
+export const MID = WORDS.filter((w) => w.length >= 5 && w.length <= 6);
+export const LONG = WORDS.filter((w) => w.length >= 7);
+export const LEVEL_AT = [0, 15, 40];                       // the word each level starts at
+export const levelOf = (i) => LEVEL_AT.filter((s) => i >= s).length;   // 1..3
+const POOLS = [SHORT, [...SHORT, ...MID], [...SHORT.filter((_, k) => k % 3 === 0), ...MID, ...LONG, ...LONG]];
+
 // Word n of a room's stream. Built in one pass and kept, so word 900 is the
 // same word for everyone however fast they reached it.
 export function wordStream(seed, count = 1500) {
@@ -33,7 +44,8 @@ export function wordStream(seed, count = 1500) {
   const out = [];
   let last = "";
   while (out.length < count) {
-    const w = WORDS[Math.floor(rand() * WORDS.length)];
+    const pool = POOLS[levelOf(out.length) - 1];
+    const w = pool[Math.floor(rand() * pool.length)];
     if (w === last) continue;                   // never the same word twice running
     out.push(w);
     last = w;
@@ -41,8 +53,12 @@ export function wordStream(seed, count = 1500) {
   return out;
 }
 
-export const STREAK_CAP = 10;
-export const pointsFor = (word, streak) => 10 + 2 * word.length + Math.min(STREAK_CAP, streak);
+export const STREAK_CAP = 10, NITRO_AT = 10, CLEAN = 3, GOLD_EVERY = 12;
+export const isGolden = (i) => i % GOLD_EVERY === GOLD_EVERY - 1;
+export const nitro = (streak) => streak >= NITRO_AT;
+// streak: right words in a row before this one
+export const pointsFor = (word, streak, { golden = false, clean = false } = {}) =>
+  Math.round((10 + 2 * word.length + Math.min(STREAK_CAP, streak) + (clean ? CLEAN : 0)) * (nitro(streak) ? 1.5 : 1) * (golden ? 2 : 1));
 
 // What the typed text so far says about the word: which letters are right,
 // and whether it's gone wrong.

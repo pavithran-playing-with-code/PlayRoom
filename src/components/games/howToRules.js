@@ -131,7 +131,7 @@ export const HOW_TO = {
   storm: {
     name: "Dodge Storm",
     goal: "Survive the storm.",
-    steps: ["Drag anywhere (or hold the arrow keys) to move.", "Don't touch the shards — skimming past them earns a bonus.", "A hit costs a few points, then you carry on."],
+    steps: ["Stay alive: each second is worth ×2 after 20 s, ×3 after 40 s.", "Grab ⭐ stars, 🛡️ shields (they take one hit) and ⏱️ slow time. From 30 s, purple shards hunt you.", "Drag anywhere (or hold the arrow keys) to move.", "Don't touch the shards — skimming past them earns a bonus.", "A hit costs a few points, then you carry on."],
     tip: "Keep to open space, not the corners.",
   },
   maze: {

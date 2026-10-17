@@ -167,7 +167,7 @@ export const GAMES = [
   },
   {
     slug: "storm", name: "Dodge Storm", icon: "⚡",
-    blurb: "Stay alive while the shards close in from every side.",
+    blurb: "Dodge the storm of shards. Grab stars, shields and slow time; the longer you live, the more it pays.",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--berry)",
     Component: DodgeStorm,
   },

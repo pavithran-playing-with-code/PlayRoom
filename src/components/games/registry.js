@@ -45,7 +45,7 @@ import HollowGame from "./HollowGame";
 export const GAMES = [
   {
     slug: "mahjong", name: "Mahjong Solitaire", icon: "🀄",
-    blurb: "Match free tiles and clear the board before the clock stops.",
+    blurb: "Match free tiles and clear the board. Chain quick matches into combos and find the golden pair.",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--sun)",
     coopMax: 4,
     coopLabel: "one stack — take pairs together",

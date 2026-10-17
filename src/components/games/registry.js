@@ -123,7 +123,7 @@ export const GAMES = [
   },
   {
     slug: "flappy", name: "Flappy Dash", icon: "🐤",
-    blurb: "Tap to flap. Squeeze through the pipes and try not to meet one.",
+    blurb: "Flap through the gaps, grab the stars, build a streak, fly into the night.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--chick)",
     coopMax: 4,
     coopLabel: "fly side by side — save each other with ❤️",

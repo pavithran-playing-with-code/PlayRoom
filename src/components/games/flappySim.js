@@ -22,22 +22,40 @@ export const STUN_S = 1.1;         // how long a crash dazes you
 export const PIPE_POINTS = 10;
 export const CRASH_COST = -10;
 export const MARGIN = 54;          // keep gaps this far from ceiling and ground
+export const STAR_PTS = 5;         // a star grabbed between the pipes
+export const STAR_R = 12;
+export const GOLD_EVERY = 10;      // every 10th pipe is golden: double
+// pipes in a row pay more: x2 from 10, x3 from 20
+export const streakMult = (run) => (run >= 20 ? 3 : run >= 10 ? 2 : 1);
+export const isGolden = (i) => i % GOLD_EVERY === GOLD_EVERY - 1;
 
-// The pipes for this room, built as the bird gets to them.
+// The pipes for this room, built as the bird gets to them. Stars come from a
+// stream of their own (so the pipes are exactly as they always were): now
+// and then one sits between two pipes, a little off the straight line from
+// one gap to the next, so it takes a choice to fly through it.
 export function makeCourse(seed) {
   const rand = seededRand((Number(seed) || 1) * 7907 + 13);
   for (let i = 0; i < 6; i++) rand();
+  const srand = seededRand((Number(seed) || 1) * 4243 + 7);
+  for (let i = 0; i < 3; i++) srand();
   const list = [];
+  const stars = [];
   let next = 300;
   function extend(upTo) {
     while (next < upTo) {
       const top = MARGIN + GAP / 2;
       const bottom = VIEW_H - GROUND - MARGIN - GAP / 2;
-      list.push({ x: next, gapY: top + rand() * (bottom - top), passed: false, gone: false });
+      const p = { x: next, gapY: top + rand() * (bottom - top), passed: false, gone: false };
+      const prev = list[list.length - 1];
+      list.push(p);
+      if (prev && srand() < 0.45) {
+        const y = (prev.gapY + p.gapY) / 2 + (srand() * 2 - 1) * 45;
+        stars.push({ x: prev.x + PIPE_W + (SPACING - PIPE_W) / 2, y: Math.max(MARGIN + 20, Math.min(VIEW_H - GROUND - MARGIN - 20, y)), taken: false });
+      }
       next += SPACING;
     }
   }
-  return { list, extend };
+  return { list, stars, extend };
 }
 
 export function newBird() {
@@ -51,6 +69,8 @@ export function newBird() {
     pipes: 0, run: 0, best: 0, crashes: 0,
     points: 0,
     first: 0,
+    stars: 0,
+    events: [],            // pipes passed and stars grabbed this frame, for the screen
   };
 }
 
@@ -82,6 +102,7 @@ function crash(s, course) {
     course.list[i].passed = true;
     course.list[i].gone = true;
   }
+  for (const st of course.stars || []) if (!st.taken && st.x < skipTo + BIRD_X + 200 && st.x > s.x) st.taken = true;
   s.x = skipTo;
 }
 
@@ -111,7 +132,22 @@ export function step(s, course, dt) {
       p.passed = true;
       s.pipes += 1;
       s.run += 1;
-      s.points += PIPE_POINTS;
+      const pts = PIPE_POINTS * streakMult(s.run) * (isGolden(i) ? 2 : 1);
+      s.points += pts;
+      s.events.push({ k: "pass", i, pts, golden: isGolden(i), mult: streakMult(s.run), up: streakMult(s.run) > streakMult(s.run - 1) });
+    }
+  }
+  // stars: any the bird's box touches
+  for (const st of course.stars || []) {
+    const sx = BIRD_X + (st.x - s.x);
+    if (sx < -40) continue;
+    if (sx > VIEW_W) break;
+    if (st.taken) continue;
+    if (sx + STAR_R > me.l && sx - STAR_R < me.r && st.y + STAR_R > me.t && st.y - STAR_R < me.b) {
+      st.taken = true;
+      s.stars += 1;
+      s.points += STAR_PTS;
+      s.events.push({ k: "star", x: st.x, y: st.y });
     }
   }
   return null;

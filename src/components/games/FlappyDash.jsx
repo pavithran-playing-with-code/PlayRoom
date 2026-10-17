@@ -6,6 +6,11 @@
 //
 // The rules live in flappySim.js. This file draws the bird and takes the taps.
 //
+// Stars sit between the pipes, off the straight line — steer for them. Pipes
+// in a row pay x2 from 10 and x3 from 20; every 10th pipe is golden. The sky
+// turns from day to sunset to night as you fly. Feathers on a flap, a burst
+// on a crash, the run counted big in the sky, and sound for all of it.
+//
 // Together (a co-op room): your friends fly beside you, see-through. A crash
 // knocks you down for a few seconds unless a friend flies through a ❤️ —
 // then everyone who's down is back up (runTogether.js). The side's points
@@ -22,9 +27,10 @@ import useRunTogether from "./useRunTogether";
 import useSpecStream from "./useSpecStream";
 import { DOWN_S, HEART_PTS, teamGoal, hearts, heartsBetween } from "./runTogether";
 import { team } from "./coopTeam";
+import sfx from "./sfx";
 import {
-  VIEW_W, VIEW_H, GROUND, BIRD_X, BIRD_RY, GAP, PIPE_W, CRASH_COST, SPEED, GRAVITY, SPACING,
-  makeCourse, newBird, flap, step,
+  VIEW_W, VIEW_H, GROUND, BIRD_X, BIRD_RY, GAP, PIPE_W, CRASH_COST, SPEED, GRAVITY, SPACING, STAR_R,
+  makeCourse, newBird, flap, step, isGolden, streakMult,
 } from "./flappySim";
 
 const INK = "#2E2140";
@@ -133,31 +139,73 @@ function drawBird(ctx, x, y, tilt, wing, dazed) {
   ctx.restore();
 }
 
-function drawPipe(ctx, left, gapY) {
+function drawPipe(ctx, left, gapY, gold) {
   ctx.lineWidth = 3;
   ctx.lineJoin = "round";
   ctx.strokeStyle = INK;
   const topH = gapY - GAP / 2;
   const botY = gapY + GAP / 2;
   const lip = 16;
+  const body = gold ? "#FFC53D" : PIPE, rim = gold ? "#E0A100" : PIPE_DARK;
   // shafts
-  rrect(ctx, left, -20, PIPE_W, topH + 20 - lip, 6); paint(ctx, PIPE);
-  rrect(ctx, left, botY + lip, PIPE_W, VIEW_H - botY - lip, 6); paint(ctx, PIPE);
+  rrect(ctx, left, -20, PIPE_W, topH + 20 - lip, 6); paint(ctx, body);
+  rrect(ctx, left, botY + lip, PIPE_W, VIEW_H - botY - lip, 6); paint(ctx, body);
   // lips
-  rrect(ctx, left - 5, topH - lip, PIPE_W + 10, lip, 6); paint(ctx, PIPE_DARK);
-  rrect(ctx, left - 5, botY, PIPE_W + 10, lip, 6); paint(ctx, PIPE_DARK);
+  rrect(ctx, left - 5, topH - lip, PIPE_W + 10, lip, 6); paint(ctx, rim);
+  rrect(ctx, left - 5, botY, PIPE_W + 10, lip, 6); paint(ctx, rim);
+  // a stripe of shine down each shaft
+  ctx.fillStyle = "rgba(255,255,255,.28)";
+  ctx.fillRect(left + 8, -20, 6, topH + 20 - lip - 4);
+  ctx.fillRect(left + 8, botY + lip + 4, 6, VIEW_H - botY - lip);
 }
 
-function draw(ctx, s, course, k, now, tg, idle = "Tap or press Space to flap!") {
+// a five-pointed star
+function drawStar(ctx, x, y, r, spin) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(spin);
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (i * Math.PI) / 5 - Math.PI / 2, rr = i % 2 ? r * 0.45 : r;
+    ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = INK; ctx.lineJoin = "round";
+  ctx.fillStyle = "#FFE27A"; ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+// the sky over a flight: day, sunset, night, dawn, round again
+const SKIES = [[0, ["#8FD3FF", "#DDF3FF"]], [0.4, ["#8FD3FF", "#DDF3FF"]], [0.5, ["#FF9E7A", "#FFD9A8"]],
+  [0.6, ["#25204F", "#4A3F86"]], [0.86, ["#25204F", "#4A3F86"]], [0.94, ["#FFB4A2", "#FFE3C2"]], [1, ["#8FD3FF", "#DDF3FF"]]];
+const DAY_LEN = 9000;                    // scrolled px round the whole day: sunset about a minute in
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const mix = (a, b, f) => `rgb(${hex(a).map((v, j) => Math.round(v + (hex(b)[j] - v) * f)).join(",")})`;
+function skyAt(x) {
+  const t = (((x % DAY_LEN) + DAY_LEN) % DAY_LEN) / DAY_LEN;
+  let i = 0;
+  while (i < SKIES.length - 2 && t > SKIES[i + 1][0]) i++;
+  const [t0, a] = SKIES[i], [t1, b] = SKIES[i + 1], f = (t - t0) / Math.max(1e-6, t1 - t0);
+  const night = t < 0.5 || t > 0.94 ? 0 : t < 0.6 ? (t - 0.5) / 0.1 : t <= 0.86 ? 1 : 1 - (t - 0.86) / 0.08;
+  return { top: mix(a[0], b[0], f), bottom: mix(a[1], b[1], f), night };
+}
+const STARFIELD = Array.from({ length: 30 }, (_, i) => [(i * 97) % VIEW_W, 10 + ((i * 61) % 260), 0.8 + (i % 3) * 0.5]);
+
+function draw(ctx, s, course, k, now, tg, idle = "Tap or press Space to flap!", fx = null) {
   ctx.setTransform(k, 0, 0, k, 0, 0);
-  // sky
+  // sky, turning with the distance flown
+  const tint = skyAt(s.x);
   const sky = ctx.createLinearGradient(0, 0, 0, VIEW_H);
-  sky.addColorStop(0, "#8FD3FF");
-  sky.addColorStop(1, "#DDF3FF");
+  sky.addColorStop(0, tint.top);
+  sky.addColorStop(1, tint.bottom);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  if (tint.night > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${0.9 * tint.night})`;
+    for (const [sx, sy, r] of STARFIELD) { ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill(); }
+  }
   // clouds drifting by
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = tint.night > 0.5 ? "rgba(255,255,255,.55)" : "#FFFFFF";
   for (let i = 0; i < 4; i++) {
     const cx = ((i * 140 - s.x * 0.25) % (VIEW_W + 160) + VIEW_W + 160) % (VIEW_W + 160) - 80;
     const cy = 46 + ((i * 53) % 130);
@@ -170,7 +218,14 @@ function draw(ctx, s, course, k, now, tg, idle = "Tap or press Space to flap!") 
     const p = course.list[i];
     const left = p.x - s.x;
     if (left > VIEW_W) break;
-    if (!p.gone) drawPipe(ctx, left, p.gapY);
+    if (!p.gone) drawPipe(ctx, left, p.gapY, isGolden(i));
+  }
+  // stars to grab
+  for (const st of course.stars || []) {
+    const x = BIRD_X + (st.x - s.x);
+    if (x < -20) continue;
+    if (x > VIEW_W + 20) break;
+    if (!st.taken) drawStar(ctx, x, st.y + Math.sin(now / 260 + st.x) * 3, STAR_R, Math.sin(now / 400 + st.x) * 0.3);
   }
   // ground
   const gy = VIEW_H - GROUND;
@@ -181,6 +236,7 @@ function draw(ctx, s, course, k, now, tg, idle = "Tap or press Space to flap!") 
     const gx = ((i * 46 - s.x) % (VIEW_W + 46) + VIEW_W + 46) % (VIEW_W + 46) - 23;
     ctx.fillRect(gx, gy + 12, 22, 6);
   }
+  if (tint.night > 0) { ctx.fillStyle = `rgba(28,24,70,${0.4 * tint.night})`; ctx.fillRect(0, gy, VIEW_W, GROUND); }
   ctx.strokeStyle = INK;
   ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(VIEW_W, gy); ctx.stroke();
@@ -209,11 +265,62 @@ function draw(ctx, s, course, k, now, tg, idle = "Tap or press Space to flap!") 
       ctx.fillText(m.dn ? `💤 ${m.name}` : m.name, x, m.y - 24);
     }
   }
+  // the run, big in the sky (the classic way)
+  if (s.started && s.run > 0) {
+    ctx.font = "700 46px Fredoka, Nunito, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ctx.lineWidth = 6; ctx.strokeStyle = INK; ctx.lineJoin = "round";
+    ctx.strokeText(String(s.run), VIEW_W / 2, 24);
+    ctx.fillStyle = streakMult(s.run) >= 3 ? "#FF8A3D" : streakMult(s.run) >= 2 ? "#FFD23F" : "#FFFFFF";
+    ctx.fillText(String(s.run), VIEW_W / 2, 24);
+    if (streakMult(s.run) > 1) {
+      ctx.font = "700 15px Fredoka, Nunito, sans-serif";
+      ctx.lineWidth = 4; ctx.strokeText(`×${streakMult(s.run)}`, VIEW_W / 2, 74);
+      ctx.fillText(`×${streakMult(s.run)}`, VIEW_W / 2, 74);
+    }
+  }
   // the bird: nose up while rising, nose down while falling
   const tilt = Math.max(-0.45, Math.min(0.9, s.vy / 620));
   const since = now - s.flapAt;
   const wing = since < 180 ? -1.1 * (1 - since / 180) : 0;
   drawBird(ctx, BIRD_X, s.y, s.started ? tilt : 0, wing, s.stun > 0);
+  // feathers and sparkles, and points floating up
+  if (fx) {
+    for (const p of fx.parts) {
+      const life = Math.max(0, p.life / p.max);
+      ctx.save();
+      ctx.globalAlpha = life;
+      ctx.translate(BIRD_X + (p.wx - s.x), p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.col;
+      if (p.kind === "feather") { ctx.beginPath(); ctx.ellipse(0, 0, 6, 2.6, 0, 0, Math.PI * 2); ctx.fill(); }
+      else { ctx.beginPath(); ctx.arc(0, 0, p.r * (0.5 + 0.5 * life), 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore();
+    }
+    ctx.font = "700 18px Fredoka, Nunito, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.lineWidth = 4; ctx.strokeStyle = INK;
+    for (const t of fx.texts) {
+      const life = Math.max(0, t.life / t.max);
+      ctx.globalAlpha = Math.min(1, life * 2);
+      const ty = t.y - (1 - life) * 34;
+      ctx.strokeText(t.text, BIRD_X + (t.wx - s.x), ty);
+      ctx.fillStyle = t.col;
+      ctx.fillText(t.text, BIRD_X + (t.wx - s.x), ty);
+    }
+    ctx.globalAlpha = 1;
+    if (fx.banner && now - fx.banner.at < 1300) {
+      const f = (now - fx.banner.at) / 1300;
+      ctx.save();
+      ctx.globalAlpha = f > 0.75 ? (1 - f) / 0.25 : 1;
+      ctx.font = "600 18px Fredoka, Nunito, sans-serif";
+      const w = ctx.measureText(fx.banner.text).width + 30;
+      ctx.lineWidth = 3; ctx.strokeStyle = INK;
+      rrect(ctx, VIEW_W / 2 - w / 2, 128 - f * 10, w, 36, 18); paint(ctx, fx.banner.fill);
+      ctx.fillStyle = INK; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(fx.banner.text, VIEW_W / 2, 147 - f * 10);
+      ctx.restore();
+    }
+  }
 
   if (!s.started || s.stun > 0) {
     const down = tg && tg.down;
@@ -290,7 +397,32 @@ export default function FlappyDash(props) {
   const [pipes, setPipes] = useState(0);
   const [best, setBest] = useState(0);
 
-  const tap = () => { if (!overRef.current && !isSpectator) flap(sim.current, performance.now()); };
+  const fxRef = useRef({ parts: [], texts: [], banner: null });
+  const tap = () => {
+    if (overRef.current || isSpectator) return;
+    const s = sim.current;
+    const was = s.stun;
+    flap(s, performance.now());
+    if (was > 0) return;
+    // a chirp, and a feather or two
+    sfx.tone(520, 0.08, 0.06, "triangle", 880);
+    sfx.noise(0.06, 0.04, 2600, "bandpass", 0, 1200, 2);
+    const F = fxRef.current;
+    for (let i = 0; i < 2; i++) F.parts.push({ kind: "feather", wx: s.x - 6, y: s.y + 4, vx: -40 - Math.random() * 40, vy: 30 + Math.random() * 40, rot: Math.random() * 3, vr: 4, life: 0.7, max: 0.7, col: "#FFE79A", r: 3 });
+  };
+
+  // a beat under the flight, quicker on a long streak; the last ten seconds tick
+  const playing = !isSpectator && !eng.gameOver;
+  const tempoRef = useRef(92);
+  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => tempoRef.current, 0.4); return () => b.stop(); }, [playing]);
+  const secs = Math.ceil(eng.timeLeft);
+  useEffect(() => { if (playing && !eng.unlimited && secs > 0 && secs <= 10) sfx.tick(secs <= 3); }, [secs, playing, eng.unlimited]);
+  const ended = useRef(false);
+  useEffect(() => {
+    if (!eng.gameOver || isSpectator || ended.current) return;
+    ended.current = true;
+    if (eng.won || eng.rank === 1) sfx.win(); else sfx.lose();
+  }, [eng.gameOver, eng.won, eng.rank, isSpectator]);
 
   useEffect(() => {
     if (isSpectator) return undefined;
@@ -311,6 +443,7 @@ export default function FlappyDash(props) {
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));   // a hidden tab mustn't teleport the bird
       last = now;
       const s = sim.current;
+      const F = fxRef.current;
       if (!overRef.current) {
         const before = s.pipes;
         const crashed = step(s, course, dt) === "crash";
@@ -319,7 +452,33 @@ export default function FlappyDash(props) {
         // on it, or the score it has already handed over is handed over again
         setBest(s.best);
         if (coop && crashed) { s.stun = DOWN_S; tg.current.down = true; }
+        if (crashed) {
+          sfx.thud(); sfx.crack();
+          for (let i = 0; i < 10; i++) {
+            const a = Math.random() * Math.PI * 2;            // cosmetic only
+            F.parts.push({ kind: "feather", wx: s.x, y: s.y, vx: Math.cos(a) * 90, vy: Math.sin(a) * 90, rot: a, vr: 6, life: 0.9, max: 0.9, col: i % 2 ? "#FFD23F" : "#FFF3C4", r: 3 });
+          }
+        }
+        for (const e of s.events) {
+          if (e.k === "pass") {
+            sfx.tone(sfx.note(76 + Math.min(12, s.run % 13)), 0.1, 0.07, "square");
+            if (e.golden) sfx.sparkle();
+            F.texts.push({ text: `+${e.pts}`, wx: s.x + 6, y: s.y - 26, life: 0.8, max: 0.8, col: e.golden ? "#FFD23F" : e.mult > 1 ? "#FFB347" : "#FFFFFF" });
+            if (e.up) { sfx.chime(e.mult + 2); F.banner = { text: `🔥 Streak ×${e.mult}!`, fill: "#FFB347", at: now }; }
+            else if (e.golden) F.banner = { text: "★ Golden pipe ×2", fill: "#FFE27A", at: now };
+          } else if (e.k === "star") {
+            sfx.sparkle();
+            F.texts.push({ text: "+5 ⭐", wx: e.x, y: e.y - 14, life: 0.8, max: 0.8, col: "#FFE27A" });
+            for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; F.parts.push({ kind: "dot", wx: e.x, y: e.y, vx: Math.cos(a) * 80, vy: Math.sin(a) * 80, rot: 0, vr: 0, life: 0.45, max: 0.45, col: "#FFE27A", r: 4 }); }
+          }
+        }
+        s.events.length = 0;
       }
+      for (const p of F.parts) { p.life -= dt; p.wx += p.vx * dt; p.y += p.vy * dt; p.vy += (p.kind === "feather" ? 60 : 0) * dt; p.rot += p.vr * dt; }
+      for (const t of F.texts) t.life -= dt;
+      if (F.parts.length) F.parts = F.parts.filter((p) => p.life > 0);
+      if (F.texts.length) F.texts = F.texts.filter((t) => t.life > 0);
+      tempoRef.current = 88 + streakMult(s.run) * 10;
       const T0 = tg.current;
       if (coop) {
         if (T0.down && s.stun <= 0) T0.down = false;
@@ -349,7 +508,7 @@ export default function FlappyDash(props) {
           hearts: heartsBetween(heartAt, s.first, s.first + 4).filter((x) => !T0.got.has(x.k)).map((x) => x.at),
           mates: mates().map((m) => ({ ...m, col: Tref.current.colourOf(m.id), name: Tref.current.nameOf(m.id) })),
         } : null;
-        draw(c.getContext("2d"), s, course, view.current, now, extra);
+        draw(c.getContext("2d"), s, course, view.current, now, extra, undefined, F);
       }
       raf = requestAnimationFrame(frame);
     };
@@ -372,6 +531,8 @@ export default function FlappyDash(props) {
         st: s.started ? 1 : 0, sn: Math.round(s.stun * 100) / 100,
         fa: Math.min(9999, Math.round(performance.now() - s.flapAt)),
         fi: s.first, g, p: Math.floor(s.points), pi: s.pipes, r: s.run, b: s.best,
+        // stars grabbed in the stretch ahead and just behind (by their x)
+        sg: (course.stars || []).filter((st) => st.taken && st.x > s.x - 40 && st.x < s.x + VIEW_W + SPACING).map((st) => Math.round(st.x)),
       };
       if (coop) {
         f.dn = tg.current.down ? 1 : 0;
@@ -426,6 +587,9 @@ export default function FlappyDash(props) {
           for (let i = f.fi; i < course.list.length && course.list[i].x - f.x <= VIEW_W + SPACING; i++) {
             course.list[i].gone = gone.has(i);
           }
+          const took = new Set(f.sg || []);
+          for (const st of course.stars || []) if (st.x > f.x - 40 && st.x < f.x + VIEW_W + SPACING) st.taken = took.has(Math.round(st.x));
+          s.run = f.r || 0;
           if (s.first < f.fi || s.first > f.fi + 2) s.first = f.fi;
           if (shown) { ox = shown.x - p.x; oy = shown.y - p.y; }
           if (!shown || Math.abs(ox) > 40 || Math.abs(oy) > 70) { ox = 0; oy = 0; }
@@ -494,6 +658,7 @@ export default function FlappyDash(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
+        sound
         controls={!isSpectator ? (
           <button className="press p-sun fl-btn" onPointerDown={(e) => { e.preventDefault(); tap(); }}
             onContextMenu={(e) => e.preventDefault()}>
@@ -517,7 +682,7 @@ export default function FlappyDash(props) {
 
       {eng.gameOver && !isSpectator && (
         <GameOver eng={eng} me={currentUser}
-          extra={coop ? `Team: ${teamTotal.toLocaleString()} pts` : `Pipes cleared: ${pipes} · Best run: ${Math.max(best, sim.current.run)}`}
+          extra={coop ? `Team: ${teamTotal.toLocaleString()} pts` : `Pipes cleared: ${pipes} · ⭐ ${sim.current.stars} · Best run: ${Math.max(best, sim.current.run)}`}
           together={coop ? { reached: teamTotal >= goal, goal: `${goal.toLocaleString()} points`, unit: "pts", mates: T.all(scores) } : null} />
       )}
     </>

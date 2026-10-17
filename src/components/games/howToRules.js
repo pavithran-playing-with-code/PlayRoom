@@ -77,7 +77,7 @@ export const HOW_TO = {
   flappy: {
     name: "Flappy Dash",
     goal: "Fly through as many gaps as you can.",
-    steps: ["Tap to flap — let go and you fall.", "Each gap you get through is 10 points.", "A crash costs 10 and dazes you, then you fly on.", "Together: a crash knocks you down — a friend flying through a ❤️ gets you up."],
+    steps: ["Stars sit between the pipes — steer through them for +5.", "Ten pipes in a row pays ×2, twenty ×3; every 10th pipe is golden. A crash ends the streak.", "Tap to flap — let go and you fall.", "Each gap you get through is 10 points.", "A crash costs 10 and dazes you, then you fly on.", "Together: a crash knocks you down — a friend flying through a ❤️ gets you up."],
     tip: "Small, steady taps beat big panicky ones.",
   },
   slide: {

@@ -149,7 +149,7 @@ export const HOW_TO = {
   piano: {
     name: "Piano Tiles",
     goal: "Play the song — tap the black tiles.",
-    steps: ["Tap the lowest black tile, then the next.", "Hold the long tiles until they've rolled past.", "Two in one row? Tap both.", "Don't tap the white."],
+    steps: ["Fifty in a row is 🔥 FEVER: every tile pays double until you slip. Every 30th tile is ★ golden: +20.", "Tap the lowest black tile, then the next.", "Hold the long tiles until they've rolled past.", "Two in one row? Tap both.", "Don't tap the white."],
     tip: "Pick your song in the lobby: Easy, Medium or Hard.",
   },
   kitchen: {

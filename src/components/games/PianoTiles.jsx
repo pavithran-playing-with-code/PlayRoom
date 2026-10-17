@@ -5,14 +5,16 @@
 //
 // Everyone in a room gets the same song and the same tiles (from the seed);
 // the room's clock decides it. A miss or a tap on white costs the combo and a
-// moment, never points. The rules are pianoSim.js; this file draws it, plays
+// moment, never points. Every 30th tile is golden (+20); fifty in a row is
+// FEVER — every tile pays double, the board glows — until a slip. The rules are pianoSim.js; this file draws it, plays
 // the notes and reads the fingers.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpecStream from "./useSpecStream";
-import { newSong, step, tap, release, visible, score, COLS, VISIBLE, HOLD_LINE } from "./pianoSim.js";
+import { newSong, step, tap, release, visible, score, isGold, fever, ensureNext, COLS, VISIBLE, HOLD_LINE, GOLD_PTS } from "./pianoSim.js";
+import sfx, { useMuted } from "./sfx";
 import { songFor, LEVELS } from "./pianoSongs.js";
 
 const KEYS = { d: 0, f: 1, j: 2, k: 3 };
@@ -98,6 +100,14 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
   // the count of tiles played big and red at the top.
   ctx.fillStyle = "#FFFFFF";
   ctx.fillRect(0, 0, W, H);
+  // FEVER: the board glows warm, and breathes with the tune
+  const hot = fever(s.combo);
+  if (hot) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, `rgba(255,170,60,${0.22 + 0.08 * Math.sin(now * 6)})`);
+    g.addColorStop(1, "rgba(255,90,140,.18)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
   ctx.strokeStyle = "#E3E3E3";
   ctx.lineWidth = 1;
   for (let r = Math.floor(s.pos); r <= s.pos + VISIBLE + 1; r++) {
@@ -133,6 +143,17 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
         ctx.fillStyle = "rgba(86,178,245,.35)";
         ctx.fillRect(x, y + hh * (1 - t.held), w, hh * t.held);
       }
+      continue;
+    }
+    if (isGold(t)) {
+      // a golden tile: gold, shining, a star in it
+      const gg = ctx.createLinearGradient(x, y, x + w, y + hh);
+      gg.addColorStop(0, "#F2B632"); gg.addColorStop(0.5 + 0.3 * Math.sin(now * 4), "#FFF0B8"); gg.addColorStop(1, "#D99A1E");
+      ctx.fillStyle = gg; ctx.fillRect(x, y, w, hh);
+      ctx.fillStyle = "#7A5200"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.font = `700 ${Math.round(Math.min(30, w * 0.3))}px system-ui, sans-serif`;
+      ctx.fillText("★", x + w / 2, y + hh / 2);
+      ctx.textBaseline = "alphabetic";
       continue;
     }
     ctx.fillStyle = "#111111";
@@ -189,6 +210,15 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
     ctx.fillStyle = "#F2484E";
     ctx.strokeText(String(s.hits), W / 2, H * 0.12);
     ctx.fillText(String(s.hits), W / 2, H * 0.12);
+    // the combo under it; FEVER when it's on
+    if (s.combo >= 10) {
+      ctx.font = `800 ${Math.round(Math.min(20, W * 0.05))}px Fredoka, Nunito, sans-serif`;
+      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(255,255,255,.95)";
+      const text = hot ? `🔥 FEVER ×2 · ${s.combo}` : `${s.combo} in a row`;
+      ctx.fillStyle = hot ? "#FF6A1A" : "#2E2140";
+      ctx.strokeText(text, W / 2, H * 0.12 + 30);
+      ctx.fillText(text, W / 2, H * 0.12 + 30);
+    }
   }
 
   // before the start: which song it is
@@ -283,28 +313,30 @@ export default function PianoTiles(props) {
     timers.current.push(setTimeout(() => setMsg(null), 800));
   };
 
-  const [sound, setSound] = useState(() => {
-    try { return localStorage.getItem(SOUND_KEY) !== "off"; } catch { return true; }
-  });
+  // one mute for every game (the 🔊 in the corner); the piano follows it
+  const muted = useMuted();
+  const sound = !muted;
   const soundRef = useRef(sound);
-  useEffect(() => {
-    soundRef.current = sound;
-    try { localStorage.setItem(SOUND_KEY, sound ? "on" : "off"); } catch { /* private window */ }
-  }, [sound]);
+  useEffect(() => { soundRef.current = sound; }, [sound]);
+  // the old Piano-only switch, if it was off, carries over once
+  useEffect(() => { try { if (localStorage.getItem(SOUND_KEY) === "off") { sfx.setMuted(true); localStorage.removeItem(SOUND_KEY); } } catch { /* private window */ } }, []);
   const piano = useRef(null);
   useEffect(() => () => { if (piano.current) piano.current.close(); }, []);
   const ringing = useRef(null);          // the note of the long tile being held
   const holder = useRef(null);           // the pointer (or key) holding it
 
   const fx = useRef({ ripples: [], notes: [], wrong: [], press: [], pulse: 0, bg: 0 });
+  const feverLive = useRef(false);
 
   const stopRing = () => { if (ringing.current) { ringing.current.stop(); ringing.current = null; } };
 
   // One tap, from a finger or a key. `yUp` is how many rows up the screen.
+  const feverWas = useRef(false);
   const press = (col, yUp, who) => {
     if (overRef.current || isSpectator) return;
     const s = sim.current;
-    const yRow = yUp === null ? s.tiles[s.next].y + 0.5 : s.pos + yUp;
+    feverWas.current = fever(s.combo);
+    const yRow = yUp === null ? ensureNext(s).y + 0.5 : s.pos + yUp;
     const res = tap(s, col, yRow);
     const f = fx.current;
     const { w: W, h: H } = size.current, rowH = H / VISIBLE, colW = W / COLS;
@@ -325,9 +357,12 @@ export default function PianoTiles(props) {
       f.notes.push({ x: cx, y: cy, t: 0, life: 0.9, ph: Math.random() * 6,
         ch: ["♪", "♫", "♩", "♬"][s.hits % 4], c: NOTE_COLS[s.hits % NOTE_COLS.length], size: 20 + Math.random() * 10 });
       f.pulse = 1;
-      if (s.combo > 0 && s.combo % 25 === 0) flash(`${s.combo} in a row!`, "success");
+      if (res.feverStart) { sfx.sparkle(); sfx.chime(6); flash("🔥 FEVER! Every tile ×2", "success"); }
+      else if (res.gold) { sfx.sparkle(); flash(`★ Golden tile +${GOLD_PTS}`, "success"); }
+      else if (s.combo > 0 && s.combo % 25 === 0) flash(`${s.combo} in a row!`, "success");
     } else if (res.kind === "wrong") {
       stopRing();
+      if (feverWas.current) sfx.lose();
       f.wrong.push({ col, yRow, t: 0 });
       if (soundRef.current && piano.current) piano.current.buzz();
       flash("Oops — that's white!", "error");
@@ -395,8 +430,9 @@ export default function PianoTiles(props) {
           stopRing();
           holder.current = null;
           if (soundRef.current && piano.current) piano.current.buzz();
-          flash("Missed one!", "error");
+          flash(feverLive.current ? "Missed one — fever's over" : "Missed one!", "error");
         }
+        feverLive.current = fever(s.combo);
         const target = score(s);
         if (target !== pushed) { addScore(target - pushed); pushed = target; }
         if (now - lastHud > 150) { lastHud = now; setHud({ hits: s.hits, best: s.best, misses: s.misses + s.wrongs }); }
@@ -509,12 +545,7 @@ export default function PianoTiles(props) {
     { label: "Tiles", value: hud.hits },
     { label: "Best combo", value: hud.best },
   ];
-  const controls = !isSpectator ? (
-    <button className="press p-white pt-btn" onClick={() => setSound((v) => !v)}
-      aria-label={sound ? "Sound off" : "Sound on"} aria-pressed={sound}>
-      {sound ? "🔊 Sound on" : "🔇 Sound off"}
-    </button>
-  ) : null;
+  const controls = null;
 
   return (
     <>
@@ -527,6 +558,7 @@ export default function PianoTiles(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
+        sound
         controls={controls}
       >
         {({ w, h }) => {

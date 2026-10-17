@@ -33,8 +33,8 @@ export const HOW_TO = {
   },
   reaction: {
     name: "Tap Rush",
-    goal: "Tap the tiles as they light up — fast.",
-    steps: ["A tile lights up: tap it for points.", "Watch out for 💣 tiles — don't tap those!"],
+    goal: "Tap the tiles as they light up — fast — and keep your streak going.",
+    steps: ["A tile lights up: tap it before its bar runs out.", "Hits in a row build a streak: ×2 after 5, ×3 after 10, ×4 after 15. Letting a tile go out breaks it.", "🌟 gold is worth a lot. 🧊 ice needs two taps. Sometimes two stars light at once — tap both.", "💣 Leave bombs alone: tapping one costs points and your streak. Letting it go out is safe."],
     tip: "Keep your thumb in the middle so every tile is close.",
   },
   wordrush: {

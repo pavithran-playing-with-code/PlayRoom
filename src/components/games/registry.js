@@ -69,7 +69,7 @@ export const GAMES = [
   },
   {
     slug: "reaction", name: "Tap Rush", icon: "⚡",
-    blurb: "Smash the lit tiles. Touch a bomb and you lose the streak.",
+    blurb: "Smash the lit tiles, build a ×4 streak, crack the ice, grab the gold. Touch a bomb and the streak's gone.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--sky)",
     Component: TapRush,
   },

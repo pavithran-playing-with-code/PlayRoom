@@ -1672,3 +1672,58 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
   color:#e6dcc4;background:rgba(6,6,12,.72);border:1px solid rgba(106,96,76,.6);text-shadow:0 1px 6px #000;pointer-events:none}
 /* a spectator: whose game this is */
 .hh-watching{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);z-index:6;font-style:italic;letter-spacing:.1em;color:#e6dcc4;opacity:.75;text-shadow:0 1px 6px #000;pointer-events:none}
+
+/* ---------- Tap Rush (.tp-): streaks, sparks, the drain bar ---------- */
+.tp-wrap{position:relative;margin:0 auto;text-align:center}
+.tp-tile{position:relative;overflow:visible;background:var(--paper2);transform:translateY(4px);box-shadow:0 1px 0 var(--ink);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.tp-tile.lit{transform:translateY(-4px);box-shadow:0 9px 0 var(--ink);animation:tpRise .14s ease-out}
+.tp-tile.tp-star,.tp-tile.tp-double{background:var(--sun)}
+.tp-tile.tp-gold{background:linear-gradient(135deg,#ffe58a 0%,#f2b632 45%,#fff0b8 60%,#f2b632 100%);background-size:220% 220%;animation:tpRise .14s ease-out,tpShimmer 1s linear infinite;box-shadow:0 9px 0 var(--ink),0 0 26px rgba(255,200,60,.65)}
+.tp-tile.tp-ice{background:var(--sky)}
+.tp-tile.tp-cracked{background:linear-gradient(115deg,transparent 46%,rgba(255,255,255,.9) 47%,transparent 49%),linear-gradient(35deg,transparent 52%,rgba(255,255,255,.75) 53%,transparent 55%),var(--sky);animation:tpWobble .18s}
+.tp-tile.tp-bomb{background:var(--coral);animation:tpRise .14s ease-out,tpThrob .5s ease-in-out infinite alternate}
+.tp-icon{display:inline-block;animation:tpIcon .18s cubic-bezier(.3,1.6,.6,1)}
+.tp-ring{position:absolute;left:12%;right:12%;bottom:9%;height:6px;border-radius:3px;background:var(--ink);opacity:.4;transform-origin:left center;animation:tpDrain linear forwards;pointer-events:none}
+.tp-burst{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;z-index:2}
+.tp-burst i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;border:2px solid var(--ink);background:var(--lime);animation:tpBurst .55s ease-out forwards}
+.tp-burst-gold i{background:#ffd34d;width:12px;height:12px}
+.tp-burst-ice i{background:#e8f7ff;border-radius:2px}
+.tp-burst-bomb i{background:var(--coral);width:14px;height:14px}
+.tp-pop{position:absolute;left:50%;top:-6px;z-index:3;transform:translateX(-50%);white-space:nowrap;pointer-events:none;
+  font-family:var(--font-display,inherit);font-weight:900;font-size:clamp(14px,4.2vw,22px);color:var(--ink);
+  text-shadow:2px 2px 0 var(--card);animation:tpFloat .8s ease-out forwards}
+.tp-pop-gold{color:#b07800}
+.tp-pop-bad{color:var(--coral)}
+.tp-pop-ice{color:#2a7ab0;font-size:clamp(12px,3.6vw,17px)}
+.tp-pop-dodge{color:var(--ink-soft);font-size:clamp(11px,3.2vw,15px)}
+.tp-shakeA{animation:tpShakeA .32s}
+.tp-shakeB{animation:tpShakeB .32s}
+.tp-hot3{filter:drop-shadow(0 0 10px rgba(255,170,40,.45))}
+.tp-hot4{filter:drop-shadow(0 0 16px rgba(255,90,40,.6));animation:tpHeat 1s ease-in-out infinite alternate}
+.tp-meter{display:flex;align-items:center;gap:10px;margin:16px auto 0;max-width:100%}
+.tp-mult{min-width:54px;padding:4px 10px;border:3px solid var(--ink);border-radius:999px;background:var(--card);box-shadow:0 3px 0 var(--ink);font-weight:900;font-size:1.15rem}
+.tp-bar{flex:1;height:16px;border:3px solid var(--ink);border-radius:999px;background:var(--paper2);overflow:hidden}
+.tp-bar i{display:block;height:100%;background:var(--lime);transition:width .18s ease-out}
+.tp-meter.max .tp-bar i{background:linear-gradient(90deg,#ffd34d,#ff8a3d,#ff4d6d,#ffd34d);background-size:300% 100%;animation:tpFire 1s linear infinite}
+.tp-meter.max .tp-mult{background:var(--sun)}
+.tp-best{font-size:.85rem;color:var(--ink-soft);white-space:nowrap}
+.tp-banner{position:absolute;left:50%;top:38%;z-index:5;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;
+  padding:8px 18px;border:3px solid var(--ink);border-radius:18px;background:var(--sun);box-shadow:0 5px 0 var(--ink);
+  font-weight:900;font-size:clamp(20px,6vw,34px);animation:tpBanner 1.1s ease-out forwards}
+.tp-banner-x3{background:#ffb347}
+.tp-banner-x4{background:linear-gradient(90deg,#ffd34d,#ff8a3d,#ff4d6d)}
+.tp-banner-lost{background:var(--paper2);color:var(--ink-soft);font-size:clamp(15px,4.4vw,22px)}
+@keyframes tpRise{0%{transform:translateY(4px) scale(.94)}70%{transform:translateY(-6px) scale(1.04)}100%{transform:translateY(-4px)}}
+@keyframes tpIcon{0%{transform:scale(.3)}100%{transform:scale(1)}}
+@keyframes tpShimmer{0%{background-position:0% 50%}100%{background-position:220% 50%}}
+@keyframes tpThrob{0%{filter:brightness(1)}100%{filter:brightness(1.18)}}
+@keyframes tpWobble{0%,100%{transform:translateY(-4px) rotate(0)}30%{transform:translateY(-4px) rotate(-4deg)}70%{transform:translateY(-4px) rotate(4deg)}}
+@keyframes tpDrain{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes tpBurst{0%{transform:rotate(var(--a)) translateX(0) scale(1);opacity:1}100%{transform:rotate(var(--a)) translateX(54px) scale(.2);opacity:0}}
+@keyframes tpFloat{0%{transform:translate(-50%,6px) scale(.7);opacity:0}20%{transform:translate(-50%,-6px) scale(1.12);opacity:1}100%{transform:translate(-50%,-44px) scale(1);opacity:0}}
+@keyframes tpShakeA{0%,100%{transform:translate(0)}20%{transform:translate(-9px,3px)}40%{transform:translate(8px,-4px)}60%{transform:translate(-6px,2px)}80%{transform:translate(4px,-1px)}}
+@keyframes tpShakeB{0%,100%{transform:translate(0)}20%{transform:translate(-9px,3px)}40%{transform:translate(8px,-4px)}60%{transform:translate(-6px,2px)}80%{transform:translate(4px,-1px)}}
+@keyframes tpHeat{0%{filter:drop-shadow(0 0 10px rgba(255,90,40,.45))}100%{filter:drop-shadow(0 0 22px rgba(255,140,40,.75))}}
+@keyframes tpFire{0%{background-position:0% 0}100%{background-position:300% 0}}
+@keyframes tpBanner{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}18%{transform:translate(-50%,-50%) scale(1.12);opacity:1}30%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{transform:translate(-50%,-80%) scale(1);opacity:0}}
+@media (prefers-reduced-motion:reduce){.tp-shakeA,.tp-shakeB,.tp-hot4,.tp-tile.tp-gold,.tp-tile.tp-bomb{animation:none}}

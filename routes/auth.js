@@ -228,43 +228,51 @@ function codeEmail(username, code, purpose) {
 </body></html>`;
 }
 
+// Mail `user` ({ id, username, email }) a code for `purpose`, within the
+// limits above. Returns [status, body] for the response. Shared by the
+// logged-in route and the forgotten-password one, so the two can't drift.
+async function mailCode(user, purpose) {
+  const [[recent]] = await db.execute(
+    `SELECT COUNT(*) AS hour,
+            COALESCE(MAX(TIMESTAMPDIFF(SECOND, created_at, NOW()) < ?), 0) AS tooSoon,
+            ? - MIN(TIMESTAMPDIFF(SECOND, created_at, NOW())) AS wait
+       FROM email_codes WHERE user_id = ? AND created_at > NOW() - INTERVAL 1 HOUR`,
+    [RESEND_SECONDS, RESEND_SECONDS, user.id]);
+  if (Number(recent.tooSoon))
+    return [429, { success: false, message: `Wait ${Math.max(1, Number(recent.wait))}s before asking for another code.`, wait: Math.max(1, Number(recent.wait)) }];
+  if (Number(recent.hour) >= CODES_PER_HOUR)
+    return [429, { success: false, message: "That's a lot of codes — try again in an hour." }];
+
+  const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
+  const hash = await bcrypt.hash(code, 10);
+  // a new code replaces any older one for the same thing
+  await db.execute("UPDATE email_codes SET used_at = NOW() WHERE user_id = ? AND purpose = ? AND used_at IS NULL", [user.id, purpose]);
+  const [ins] = await db.execute(
+    "INSERT INTO email_codes (user_id, purpose, code_hash, expires_at) VALUES (?, ?, ?, NOW() + INTERVAL ? MINUTE)",
+    [user.id, purpose, hash, CODE_MINUTES]);
+  db.execute("DELETE FROM email_codes WHERE created_at < NOW() - INTERVAL 1 DAY").catch(() => {});
+
+  try {
+    await sendMail({ to: user.email, subject: PURPOSES[purpose].subject, html: codeEmail(user.username, code, purpose) });
+  } catch (e) {
+    console.error("email-code:", e.message);
+    await db.execute("DELETE FROM email_codes WHERE id = ?", [ins.insertId]);   // not sent: doesn't count
+    return [502, { success: false, message: "Couldn't send the email just now. Try again in a minute." }];
+  }
+  return [200, { success: true, email: user.email, minutes: CODE_MINUTES, resend: RESEND_SECONDS }];
+}
+
 // POST /api/auth/email-code { purpose: "password" | "delete" } — mail a code.
 router.post("/email-code", verifyToken, async (req, res, next) => {
   try {
     const purpose = req.body && req.body.purpose;
     if (!PURPOSES[purpose]) return res.status(400).json({ success: false, message: "Unknown purpose." });
 
-    const [users] = await db.execute("SELECT username, email FROM users WHERE id = ? AND is_active = 1", [req.user.id]);
+    const [users] = await db.execute("SELECT id, username, email FROM users WHERE id = ? AND is_active = 1", [req.user.id]);
     if (!users.length) return res.status(404).json({ success: false, message: "User not found." });
 
-    const [[recent]] = await db.execute(
-      `SELECT COUNT(*) AS hour,
-              COALESCE(MAX(TIMESTAMPDIFF(SECOND, created_at, NOW()) < ?), 0) AS tooSoon,
-              ? - MIN(TIMESTAMPDIFF(SECOND, created_at, NOW())) AS wait
-         FROM email_codes WHERE user_id = ? AND created_at > NOW() - INTERVAL 1 HOUR`,
-      [RESEND_SECONDS, RESEND_SECONDS, req.user.id]);
-    if (Number(recent.tooSoon))
-      return res.status(429).json({ success: false, message: `Wait ${Math.max(1, Number(recent.wait))}s before asking for another code.`, wait: Math.max(1, Number(recent.wait)) });
-    if (Number(recent.hour) >= CODES_PER_HOUR)
-      return res.status(429).json({ success: false, message: "That's a lot of codes — try again in an hour." });
-
-    const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
-    const hash = await bcrypt.hash(code, 10);
-    // a new code replaces any older one for the same thing
-    await db.execute("UPDATE email_codes SET used_at = NOW() WHERE user_id = ? AND purpose = ? AND used_at IS NULL", [req.user.id, purpose]);
-    const [ins] = await db.execute(
-      "INSERT INTO email_codes (user_id, purpose, code_hash, expires_at) VALUES (?, ?, ?, NOW() + INTERVAL ? MINUTE)",
-      [req.user.id, purpose, hash, CODE_MINUTES]);
-    db.execute("DELETE FROM email_codes WHERE created_at < NOW() - INTERVAL 1 DAY").catch(() => {});
-
-    try {
-      await sendMail({ to: users[0].email, subject: PURPOSES[purpose].subject, html: codeEmail(users[0].username, code, purpose) });
-    } catch (e) {
-      console.error("email-code:", e.message);
-      await db.execute("DELETE FROM email_codes WHERE id = ?", [ins.insertId]);   // not sent: doesn't count
-      return res.status(502).json({ success: false, message: "Couldn't send the email just now. Try again in a minute." });
-    }
-    return res.json({ success: true, email: users[0].email, minutes: CODE_MINUTES, resend: RESEND_SECONDS });
+    const [status, body] = await mailCode(users[0], purpose);
+    return res.status(status).json(body);
   } catch (err) { next(err); }
 });
 
@@ -358,6 +366,80 @@ router.post("/change-password", verifyToken, async (req, res, next) => {
     const hash = await bcrypt.hash(new_password, 12);
     await db.execute("UPDATE users SET password = ? WHERE id = ?", [hash, req.user.id]);
     return res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+// ── Forgotten password (logged out) ──────────────────────────────────────────
+// The same emailed code as changing your password while logged in, asked for
+// by your username or email instead of a session: send the code, check it
+// (which hands back a one-time ticket, tied to the old password like the
+// logged-in one), then set the new password — and you're logged in.
+// The email address is shown only partly ("pa••••@gmail.com").
+const maskEmail = (e) => {
+  const [name, domain] = String(e).split("@");
+  return `${name.slice(0, Math.min(2, Math.max(1, name.length - 1)))}••••@${domain}`;
+};
+async function findByNameOrEmail(who) {
+  if (typeof who !== "string" || !who.trim() || who.length > 120) return null;
+  const [rows] = await db.execute(
+    "SELECT id, username, email, password FROM users WHERE (username = ? OR email = ?) AND is_active = 1",
+    [who.trim(), who.toLowerCase().trim()]);
+  return rows[0] || null;
+}
+
+// POST /api/auth/forgot/code { who } — mail a code to that account's address.
+router.post("/forgot/code", async (req, res, next) => {
+  try {
+    const user = await findByNameOrEmail(req.body && req.body.who);
+    if (!user) return res.status(404).json({ success: false, message: "No account with that username or email." });
+    const [status, body] = await mailCode(user, "password");
+    if (body.email) body.email = maskEmail(body.email);
+    return res.status(status).json(body);
+  } catch (err) { next(err); }
+});
+
+// POST /api/auth/forgot/verify { who, code } -> { ticket }
+router.post("/forgot/verify", async (req, res, next) => {
+  try {
+    const { who, code } = req.body || {};
+    const user = await findByNameOrEmail(who);
+    if (!user) return res.status(404).json({ success: false, message: "No account with that username or email." });
+    const bad = await checkCode(user.id, "password", String(code ?? ""));
+    if (bad) return res.status(400).json({ success: false, message: bad });
+    const ticket = jwt.sign({ id: user.id, pw: pwTag(user.password), use: "pwreset" }, process.env.JWT_SECRET,
+      { expiresIn: `${TICKET_MINUTES}m` });
+    return res.json({ success: true, ticket, minutes: TICKET_MINUTES });
+  } catch (err) { next(err); }
+});
+
+// POST /api/auth/forgot/reset { ticket, new_password } -> { token, user }: logged in
+router.post("/forgot/reset", async (req, res, next) => {
+  try {
+    const { ticket, new_password } = req.body || {};
+    if (typeof ticket !== "string" || !ticket || typeof new_password !== "string")
+      return res.status(400).json({ success: false, message: "A new password is required." });
+    if (new_password.length < 6 || new_password.length > 200)
+      return res.status(400).json({ success: false, message: "New password must be 6-200 characters." });
+    let t = null;
+    try { t = jwt.verify(ticket, process.env.JWT_SECRET); } catch { /* expired or forged */ }
+    if (!t || t.use !== "pwreset")
+      return res.status(400).json({ success: false, message: "That took too long — ask for a new code.", expired: true });
+    const [rows] = await db.execute(
+      "SELECT id, username, email, password, avatar, total_score, games_played, games_won FROM users WHERE id = ? AND is_active = 1", [t.id]);
+    if (!rows.length || t.pw !== pwTag(rows[0].password))
+      return res.status(400).json({ success: false, message: "That code has already been used — ask for a new one.", expired: true });
+    if (await bcrypt.compare(new_password, rows[0].password))
+      return res.status(400).json({ success: false, message: "That's already your password — you can just log in with it." });
+
+    const hash = await bcrypt.hash(new_password, 12);
+    // only if the password is still the one the ticket was for: two resets racing can't both win
+    const [u] = await db.execute("UPDATE users SET password = ? WHERE id = ? AND password = ?", [hash, t.id, rows[0].password]);
+    if (!u.affectedRows) return res.status(400).json({ success: false, message: "That code has already been used — ask for a new one.", expired: true });
+
+    const token = jwt.sign({ id: rows[0].id, username: rows[0].username }, process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" });
+    const { password: _p, ...user } = rows[0];
+    return res.json({ success: true, token, user });
   } catch (err) { next(err); }
 });
 

@@ -129,6 +129,8 @@ app.use("/api/auth/register", limiter(10,  60, "Too many accounts created — tr
 app.use("/api/auth/change-password", limiter(30, 15, "Too many password attempts - try again in a few minutes."));
 app.use("/api/auth/email-code",      limiter(10, 60, "Too many codes asked for - try again later."));
 app.use("/api/auth/delete-account",  limiter(10, 15, "Too many attempts - try again in a few minutes."));
+// a forgotten password: sending is also held to one a minute per account (routes/auth.js)
+app.use("/api/auth/forgot",          limiter(30, 60, "Too many tries - try again later."));
 
 // The game loop lives here (poll + score sync every few seconds). Generous.
 app.use("/api/rooms",         limiter(2000, 15, "Too many requests — please slow down."));
@@ -142,7 +144,7 @@ app.use("/api/rooms",         limiter(2000, 15, "Too many requests — please sl
 // the next "create room" came back 429 even though the room limiter was barely
 // touched. Anything with a limiter of its own is not counted again here.
 const HAS_OWN_LIMIT = ["/api/rooms", "/api/auth/login", "/api/auth/register", "/api/auth/change-password",
-  "/api/auth/email-code", "/api/auth/delete-account"];
+  "/api/auth/email-code", "/api/auth/delete-account", "/api/auth/forgot"];
 app.use("/api/",              limiter(600,  15, "Too many requests — please try again later.",
   (req) => HAS_OWN_LIMIT.some((p) => req.originalUrl === p || req.originalUrl.startsWith(p + "/") || req.originalUrl.startsWith(p + "?"))));
 

@@ -380,9 +380,10 @@ There is no test runner. What works:
   how to run it.
 - **Rules that span requests** — `scripts/check-results.js` (a finished match
   reaches the Hall of Fame), `scripts/check-spectating.js` (a friend
-  mid-match is visible and watchable) and `scripts/check-email-codes.js`
-  (password-by-code and delete account, with a fake mail relay). API-level,
-  no browser, quick to run.
+  mid-match is visible and watchable), `scripts/check-email-codes.js`
+  (password-by-code and delete account, with a fake mail relay) and
+  `scripts/check-forgot-password.js` (a forgotten password, logged out:
+  `/api/auth/forgot/*`). API-level, no browser, quick to run.
 
 Every headless Chrome a test launches gets `--mute-audio`: tests must never
 play sound on the machine they run on.

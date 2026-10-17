@@ -353,6 +353,14 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
 .pf-coderow{display:flex;gap:10px;align-items:stretch}
 .pf-coderow .press{white-space:nowrap;flex:none}
 .field input.pf-code{font-size:1.15rem;letter-spacing:.18em;font-weight:800;text-align:center;min-width:0;padding-left:8px;padding-right:8px}
+/* the login page: "Forgot password?" and the three steps of getting back in */
+.lg-forgot{display:block;margin:8px 0 0 auto;padding:2px 0;border:0;background:none;color:var(--ink-soft);
+  font-weight:800;font-size:.88rem;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.lg-forgot:hover{color:var(--ink)}
+.lg-linkbtn{display:block;margin:12px auto 0;border:0;background:none;color:var(--ink-soft);font-weight:700;font-size:.85rem;text-decoration:underline;cursor:pointer}
+.lg-steps{display:flex;gap:6px;margin-bottom:16px}
+.lg-steps i{flex:1;height:8px;border:2px solid var(--ink);border-radius:999px;background:var(--paper2)}
+.lg-steps i.on{background:var(--sun)}
 .linkish{background:none;border:0;padding:0;font:inherit;color:var(--grape);font-weight:800;text-decoration:underline;cursor:pointer}
 .pf-step{font-size:.88rem;font-weight:700;margin-bottom:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pf-cancel{display:block;margin:14px auto 0}

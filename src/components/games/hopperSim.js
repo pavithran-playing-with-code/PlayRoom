@@ -13,6 +13,11 @@
 // fallen too far behind (the eagle): not the end of the match — the room's
 // clock decides that — you're put back a few rows, onto grass, and
 // stand dazed a moment. Your best row never goes down.
+//
+// New rows reached in quick succession are a hot streak: x2 from 6, x3 from
+// 15 (a crash ends it). Now and then a gem rides a log — hop onto that log
+// and it's yours. Gems come from a stream of their own, so the course is
+// exactly what it always was.
 import { seededRand } from "./seededRand.js";
 
 export const COLS = 9;
@@ -25,6 +30,18 @@ export const EAGLE_ROWS = 3.2;           // this far behind the camera and the e
 export const CAM_SPEED = 0.22;           // rows a second the camera creeps on, once you've moved
 export const CAR_HIT = 0.12;             // a car hits you once your middle is this far inside it
 export const TRAIN_WARN = 1.2;           // seconds of flashing before a train
+export const STREAK_S = 0.9;             // a new row within this long of the last keeps the streak
+export const GEM_PTS = 50;
+export const streakMult = (n) => (n >= 15 ? 3 : n >= 6 ? 2 : 1);
+
+// Row n's gem, if it has one: which log (by its place in the row) carries it.
+// Only on rivers, past the first few rows, about one river in four.
+export function gemOn(h, n) {
+  if (n < 6 || rowAt(h.course, n).kind !== "river") return -1;
+  const r = seededRand(((Number(h.seed) || 1) * 977 + n * 131) % 2147483646 + 1);
+  r(); r();
+  return r() < 0.26 ? 0 : -1;
+}
 
 // ── the course ───────────────────────────────────────────────────────────────
 // row: { kind: "grass" | "road" | "river" | "rail", trees: Set(cols), coin: col | -1,
@@ -121,7 +138,8 @@ export function trainAt(row, t) {
 // ── you ──────────────────────────────────────────────────────────────────────
 export function newHopper(seed) {
   return {
-    course: newCourse(seed), t: 0,
+    seed, course: newCourse(seed), t: 0,
+    streak: 0, lastRowAt: -9, bonus: 0, gems: 0, gemTaken: new Set(),
     row: 0, col: 4, x: 4,                // x: where you are across (a log carries you)
     hop: null,                           // { from: [row, x], to: [row, x], t }
     best: 0, coins: 0, crashes: 0, daze: 0, cam: 0, moved: false,
@@ -130,7 +148,7 @@ export function newHopper(seed) {
   };
 }
 
-export const score = (h) => h.best * ROW_PTS + h.coins * COIN_PTS;
+export const score = (h) => h.best * ROW_PTS + h.coins * COIN_PTS + (h.bonus || 0);
 
 // A hop: dir "up" | "down" | "left" | "right". Not while hopping or dazed,
 // not into a tree, not off the sides.
@@ -152,13 +170,23 @@ export function hop(h, dir) {
 export function step(h, dt) {
   const d = Math.max(0, Math.min(0.1, dt));
   h.t += d;
-  const out = { crashed: null, coin: false, row: false };
+  const out = { crashed: null, coin: false, row: false, landed: false, gem: false, streak: 0, multUp: false };
   if (h.daze > 0) { h.daze = Math.max(0, h.daze - d); return out; }
   if (h.hop) {
     h.hop.t += d;
     if (h.hop.t >= HOP_S) {
       h.row = h.hop.to[0]; h.x = h.hop.to[1]; h.col = h.x; h.hop = null;
-      if (h.row > h.best) { h.best = h.row; out.row = true; }
+      out.landed = true;
+      if (h.row > h.best) {
+        h.best = h.row; out.row = true;
+        // the hot streak: new rows one after another, quickly
+        const was = streakMult(h.streak);
+        h.streak = h.t - h.lastRowAt <= STREAK_S ? h.streak + 1 : 1;
+        h.lastRowAt = h.t;
+        h.bonus += ROW_PTS * (streakMult(h.streak) - 1);
+        out.streak = h.streak;
+        out.multUp = streakMult(h.streak) > was;
+      }
       const r = rowAt(h.course, h.row);
       if (r.coin >= 0 && Math.round(h.x) === r.coin && !h.taken.has(h.row)) { h.taken.add(h.row); h.coins++; out.coin = true; }
     } else return out;                               // in the air: nothing can touch you
@@ -171,7 +199,11 @@ export function step(h, dt) {
     for (const c of thingsAt(row, h.t)) if (h.x + 0.5 > c.x0 + CAR_HIT && h.x + 0.5 < c.x1 - CAR_HIT) what = "car";
   } else if (row.kind === "river") {
     // on a log: ride it; off one: in the water
-    const on = thingsAt(row, h.t).find((c) => h.x + 0.5 > c.x0 + 0.15 && h.x + 0.5 < c.x1 - 0.15);
+    const logs = thingsAt(row, h.t);
+    const on = logs.find((c) => h.x + 0.5 > c.x0 + 0.15 && h.x + 0.5 < c.x1 - 0.15);
+    if (on && !h.gemTaken.has(h.row) && gemOn(h, h.row) === logs.indexOf(on)) {
+      h.gemTaken.add(h.row); h.gems++; h.bonus += GEM_PTS; out.gem = true;
+    }
     if (!on) what = "water";
     else { h.x += row.dir * row.speed * d; if (h.x < -0.4 || h.x > COLS - 0.6) what = "edge"; }
   } else if (row.kind === "rail") {
@@ -186,6 +218,7 @@ export function step(h, dt) {
 function crash(h, what) {
   h.crashes++;
   h.last = what;
+  h.streak = 0;
   h.hop = null;
   // back a few rows, onto grass, at a gap in the trees
   let r = Math.max(0, h.row - BACK_ROWS);

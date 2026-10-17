@@ -146,7 +146,7 @@ export const GAMES = [
     // the "racer" slot: Turbo Racer once, now Road Hopper (the slug stays, so
     // old rooms and results still line up)
     slug: "racer", name: "Road Hopper", icon: "🐔",
-    blurb: "Hop across roads, rivers and railways — how far can you get?",
+    blurb: "Hop across roads, rivers and railways. Build a hot streak, grab the gems, hop into winter.",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--slate)",
     Component: RoadHopper,
   },

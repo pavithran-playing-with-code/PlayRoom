@@ -10,6 +10,12 @@
 //
 // Steer with the stick (or WASD / arrows); Use with the button, Space or E —
 // or tap a counter you're next to.
+//
+// The kitchen is loud: steps, a clack as things are picked up and put down,
+// the board's chop-chop, the stoves sizzling, a ding when the meat's done
+// and an alarm before it burns, a bell at the window. Orders served one
+// after another build a combo (kitchenCore: up to half again); steam over the
+// stoves, chips off the board, confetti at the window.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
@@ -17,8 +23,24 @@ import FloatStick from "../together/FloatStick";
 import TogetherResults from "../together/TogetherResults";
 import useTogether, { secondsLeft, smoothRows, rivals, myScore } from "../together/useTogether";
 import {
-  W, H, LAYOUT, CRATE, ING, RECIPES, SPEED, REACH, R, kindAt, facingTile, slide, unpackItem, tileIndex,
+  W, H, LAYOUT, CRATE, ING, RECIPES, SPEED, REACH, R, kindAt, facingTile, slide, unpackItem, tileIndex, comboMult,
 } from "../together/kitchenCore.mjs";
+import sfx from "./sfx";
+
+// ── the kitchen's sounds (shared sfx: one mute for every game) ──────────────
+const snd = {
+  step: () => sfx.noise(0.03, 0.025, 900, "lowpass"),
+  clack: () => { sfx.tone(520, 0.05, 0.05, "triangle", 380); sfx.noise(0.03, 0.04, 2600, "bandpass"); },
+  chop: () => { sfx.noise(0.045, 0.09, 1800, "bandpass", 0, 700, 3); sfx.tone(180, 0.04, 0.05, "sine", 120); },
+  sizzle: (n) => sfx.noise(0.16, 0.018 + 0.008 * Math.min(3, n), 5200, "highpass"),
+  done: () => { sfx.tone(1320, 0.18, 0.06, "sine"); sfx.tone(1760, 0.22, 0.04, "sine", null, 0.08); },
+  alarm: () => { sfx.tone(980, 0.08, 0.05, "square"); sfx.tone(980, 0.08, 0.05, "square", null, 0.14); },
+  poof: () => { sfx.noise(0.4, 0.12, 600, "lowpass", 0, 200); sfx.tone(110, 0.3, 0.06, "sawtooth", 60); },
+  bell: (combo) => { sfx.tone(sfx.note(88), 0.5, 0.07, "sine"); sfx.tone(sfx.note(95 + Math.min(5, combo)), 0.6, 0.05, "sine", null, 0.06); },
+  buzz: () => sfx.tone(140, 0.35, 0.07, "square", 110),
+  ticket: () => { sfx.tone(sfx.note(81), 0.12, 0.05, "triangle"); sfx.tone(sfx.note(86), 0.14, 0.05, "triangle", null, 0.09); },
+  gone: () => { sfx.tone(sfx.note(67), 0.25, 0.06, "triangle"); sfx.tone(sfx.note(62), 0.35, 0.06, "triangle", null, 0.18); },
+};
 
 const REPORT_MS = 66;
 const STICK_R = 44;
@@ -268,7 +290,8 @@ export default function KitchenRush(props) {
   const { roomCode, currentUser, isSpectator = false, spectatorWatching = null, onGameEnd, durationSeconds = 120 } = props;
   const myId = Number(currentUser?.id);
   const me = useRef(null);                       // my chef, moved here at once
-  const fx = useRef({ pops: [], flash: new Map(), ring: null });
+  const fx = useRef({ pops: [], flash: new Map(), ring: null, parts: [], combo: 0 });
+  const tempo = useRef(96);
   const canvasRef = useRef(null);
   // the canvas: cw x ch; the kitchen starts at (ox, oy); the orders take the
   // top strip, or (side) a column down the left
@@ -294,18 +317,32 @@ export default function KitchenRush(props) {
     onTick: (v) => {
       const now = performance.now() / 1000;
       const f = fx.current;
+      const watching = isSpectator;
       for (const e of v.e || []) {
         if (e.type === "served") {
-          f.pops.push({ text: `+${e.pts}`, x: 4.5, y: 0.6, at: now, good: true });
-          if (e.id === myId) flash(`${RECIPES[e.r].icon} Served! +${e.pts}`, "success");
+          f.pops.push({ text: `+${e.pts}`, x: 0.9, y: 2.2, at: now, good: true });
+          // confetti out of the window
+          for (let i = 0; i < 16; i++) f.parts.push({ x: 1, y: 3, vx: 1 + Math.random() * 3, vy: -2 - Math.random() * 3, at: now, life: 0.9, c: ["#FFC53D", "#FF8FC7", "#4CC9F0", "#8FDB5C"][i % 4], kind: "conf" });
+          if (!watching) snd.bell(e.streak || 1);
+          const m = comboMult(e.streak || 1);
+          if (e.streak >= 2) flash(`🔥 Combo ×${m.toFixed(1)} — ${RECIPES[e.r].icon} +${e.pts}`, "success");
+          else if (e.id === myId) flash(`${RECIPES[e.r].icon} Served! +${e.pts}`, "success");
         } else if (e.type === "wrong") {
-          f.pops.push({ text: "✕", x: 4.5, y: 0.6, at: now, good: false });
-          if (e.id === myId) flash("Nobody ordered that!", "error");
-        } else if (e.type === "expired") flash(`${RECIPES[e.r].icon} An order ran out`, "error");
-        else if (e.type === "burnt") flash("🔥 Something's burning!", "error");
-        else if (e.type === "chopped") f.pops.push({ text: "✨", x: e.x + 0.5, y: e.y + 0.3, at: now, good: true });
-        else if (e.type === "order") { /* the card pops in */ }
+          f.pops.push({ text: "✕", x: 0.9, y: 2.2, at: now, good: false });
+          if (!watching) snd.buzz();
+          if (e.id === myId) flash(e.broke >= 2 ? "Nobody ordered that! Combo lost" : "Nobody ordered that!", "error");
+        } else if (e.type === "expired") { if (!watching) snd.gone(); flash(`${RECIPES[e.r].icon} An order ran out${e.broke >= 2 ? " — combo lost" : ""}`, "error"); }
+        else if (e.type === "burnt") {
+          if (!watching) snd.poof();
+          for (let i = 0; i < 10; i++) f.parts.push({ x: e.x + 0.5, y: e.y + 0.5, vx: (Math.random() - 0.5) * 1.2, vy: -0.6 - Math.random(), at: now, life: 1.4, c: "rgba(60,50,60,.7)", kind: "smoke" });
+          flash("🔥 Something's burning!", "error");
+        }
+        else if (e.type === "chopped") { f.pops.push({ text: "✨", x: e.x + 0.5, y: e.y + 0.3, at: now, good: true }); if (!watching && e.id === myId) snd.clack(); }
+        else if (e.type === "cooked") { if (!watching) snd.done(); }
+        else if (e.type === "order") { if (!watching) snd.ticket(); }
+        else if (["take", "put", "plate", "bin", "back"].includes(e.type) && e.id === myId) snd.clack();
       }
+      f.combo = v.sk || 0;
       for (const o of v.o) if (!f.flash.has(o[0])) f.flash.set(o[0], { kind: "new", at: now });
     },
     onReply: (r) => { if (!r.ok && r.why && WHY[r.why]) flash(WHY[r.why], "info", 1100); },
@@ -366,6 +403,17 @@ export default function KitchenRush(props) {
 
   // the stick: wherever your left thumb lands (FloatStick)
   const knobRef = useRef(null);
+  const stepT = useRef(0), sizT = useRef(0), almT = useRef(0), chopT = useRef(0);
+
+  // a beat under the cooking; the end
+  const playing = !isSpectator && tg.ready && !tg.over;
+  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => tempo.current, 0.35); return () => b.stop(); }, [playing]);
+  const ended = useRef(false);
+  useEffect(() => {
+    if (!tg.over || isSpectator || ended.current) return;
+    ended.current = true;
+    if ((tg.live.current?.view?.st || 0) >= 1) sfx.win(); else sfx.lose();
+  }, [tg.over, isSpectator, tg.live]);
 
   const { live: tgLive, report: tgReport } = tg;
   // ── the loop ───────────────────────────────────────────────────────────────
@@ -399,6 +447,8 @@ export default function KitchenRush(props) {
           const fl = Math.hypot(ix, iy);
           m.fx = ix / fl; m.fy = iy / fl;
         }
+        // footsteps while walking
+        if (m.moving) { stepT.current -= dt; if (stepT.current <= 0) { stepT.current = 0.26; snd.step(); } }
         const now = Date.now();
         if (now - sentAt.current >= (m.moving ? REPORT_MS : 300)) {
           sentAt.current = now;
@@ -431,6 +481,42 @@ export default function KitchenRush(props) {
           if (chr === ".") continue;
           drawTile(ctx, chr, x, y, T, t, items.get(tileIndex(x, y)));
         }
+        // the stoves: steam over what's cooking, and a warning before it burns
+        const F = fx.current;
+        let cooking = 0, danger = false;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          if (LAYOUT[y][x] !== "S") continue;
+          const it = items.get(tileIndex(x, y));
+          if (!it || it.k !== "meat" || it.s === "burnt") continue;
+          cooking++;
+          if (Math.random() < dt * 6) F.parts.push({ x: x + 0.3 + Math.random() * 0.4, y: y + 0.4, vx: (Math.random() - 0.5) * 0.2, vy: -0.6, at: t, life: 1, c: "rgba(255,255,255,.75)", kind: "steam" });
+          if (it.s === "cooked" && it.p > 0.55) {
+            danger = true;
+            const k2 = 0.5 + 0.5 * Math.sin(t * 14);
+            ctx.strokeStyle = `rgba(255,70,70,${0.5 + 0.5 * k2})`; ctx.lineWidth = 4;
+            rr(ctx, x * T + 2, y * T + 2, T - 4, T - 4, 8); ctx.stroke();
+            ctx.font = `900 ${Math.round(T * 0.42)}px Fredoka,sans-serif`; ctx.textAlign = "center"; ctx.fillStyle = "#FF3B3B";
+            ctx.fillText("!", x * T + T * 0.85, y * T + T * 0.32);
+          }
+        }
+        // chips off a board being chopped at
+        const chopping = L.view.p.some((p) => p[6] && !p[7]);
+        // the sounds that run: the sizzle, the alarm, the chopping
+        if (!isSpectator && !L.over) {
+          sizT.current -= dt;
+          if (cooking && sizT.current <= 0) { sizT.current = 0.14; snd.sizzle(cooking); }
+          almT.current -= dt;
+          if (danger && almT.current <= 0) { almT.current = 0.55; snd.alarm(); }
+          chopT.current -= dt;
+          if (chopping && chopT.current <= 0) { chopT.current = 0.2; snd.chop(); }
+        }
+        if (chopping) for (const p of L.view.p) {
+          if (!p[6] || p[7] || Math.random() > dt * 10) continue;
+          F.parts.push({ x: p[1] + p[3] * 0.8, y: p[2] + p[4] * 0.8, vx: (Math.random() - 0.5) * 2, vy: -1 - Math.random(), at: t, life: 0.5, c: "#C99A5B", kind: "chip" });
+        }
+        // the beat quickens when an order is about to run out
+        const urgent = L.view.o.some((o) => o[2] / o[3] < 0.25);
+        tempo.current = 92 + (urgent ? 26 : 0) + Math.min(5, F.combo) * 3;
         // the counter I'm facing
         if (m && !L.over) {
           const ft = facingTile(m.x, m.y, m.fx, m.fy);
@@ -461,6 +547,17 @@ export default function KitchenRush(props) {
           const pl = L.players.find((x) => x.id === p.id);
           drawChef(ctx, p, T, t, CHEF_COLOURS[p.i % 4], p.id === myId && !!m, names ? (p.id === myId ? "You" : pl?.name) : null);
         }
+        // steam, smoke, chips and confetti
+        F.parts = F.parts.filter((p) => t - p.at < p.life);
+        for (const p of F.parts) {
+          const q = (t - p.at) / p.life;
+          const px = (p.x + p.vx * (t - p.at)) * T, py = (p.y + p.vy * (t - p.at) + (p.kind === "conf" || p.kind === "chip" ? 3 * (t - p.at) * (t - p.at) : 0)) * T;
+          ctx.globalAlpha = 1 - q;
+          ctx.fillStyle = p.c;
+          const r = p.kind === "steam" || p.kind === "smoke" ? T * (0.08 + q * 0.14) : T * 0.06;
+          ctx.beginPath(); ctx.arc(px, py, r, 0, TAU); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
         // pops
         const now = performance.now() / 1000;
         fx.current.pops = fx.current.pops.filter((p) => now - p.at < 1.1);
@@ -479,18 +576,18 @@ export default function KitchenRush(props) {
       }
       if (ts - lastHud > 200 && L) {
         lastHud = ts;
-        setHud({ left: secondsLeft(L), score: myScore(L), stars: L.view.st, served: L.view.sv, line: L.world?.line, rivals: rivals(L) });
+        setHud({ left: secondsLeft(L), score: myScore(L), stars: L.view.st, served: L.view.sv, line: L.world?.line, rivals: rivals(L), combo: L.view.sk || 0 });
       }
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [tgLive, tgReport, myId]);
+  }, [tgLive, tgReport, myId, isSpectator]);
 
   const starText = "⭐".repeat(hud.stars || 0) + "☆".repeat(3 - (hud.stars || 0));
   const stats = [
     { label: "Score", value: Number(hud.score).toLocaleString() },
     { label: "Stars", value: starText },
-    { label: "Served", value: hud.served },
+    { label: hud.combo >= 2 ? "Combo" : "Served", value: hud.combo >= 2 ? `×${comboMult(hud.combo).toFixed(1)}` : hud.served },
   ];
   const controls = !isSpectator ? (
     <div className="kr-controls">
@@ -511,6 +608,7 @@ export default function KitchenRush(props) {
         message={msg}
         onQuit={onGameEnd}
         controls={controls}
+        sound
         landscape
       >
         {({ w, h }) => {

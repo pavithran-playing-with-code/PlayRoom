@@ -155,7 +155,7 @@ export const HOW_TO = {
   kitchen: {
     name: "Kitchen Rush",
     goal: "Cook the orders before they run out.",
-    steps: ["Take food from the crates. Chop 🥬🍅🧀 on a 🔪 board.", "Grill 🥩 on a stove — take it off before it burns.", "Put everything on a plate and hand it in at SERVE.", "Walk with the stick; tap a counter or press Use."],
+    steps: ["Serve orders one after another without letting one run out: a combo, each dish worth 10% more, up to half again.", "Listen: a ding when the meat's done, an alarm (and a red stove) before it burns.", "Take food from the crates. Chop 🥬🍅🧀 on a 🔪 board.", "Grill 🥩 on a stove — take it off before it burns.", "Put everything on a plate and hand it in at SERVE.", "Walk with the stick; tap a counter or press Use."],
     tip: "Together, split the jobs: one chops, one cooks.",
   },
   manor: {

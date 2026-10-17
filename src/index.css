@@ -785,16 +785,54 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .wr-slot.filled{border-style:solid;box-shadow:0 3px 0 var(--ink)}
 .wr-tile{border-radius:12px}
 
-/* ---------- Number Rush ---------- */
-.nr-find{display:inline-block;margin-bottom:10px;padding:4px 16px;border:3px solid var(--ink);border-radius:999px;
+/* ---------- Number Rush (.nr-): the rush, the golden number, shuffles ---------- */
+.nr-wrap{position:relative;text-align:center}
+.nr-find{position:relative;display:inline-flex;align-items:center;gap:6px;margin-bottom:10px;padding:4px 16px;border:3px solid var(--ink);border-radius:999px;
   background:var(--card);box-shadow:0 3px 0 var(--ink);font-family:Fredoka,sans-serif;font-weight:600;font-size:1.05rem}
 .nr-find strong{font-size:1.25rem}
+.nr-want{display:inline-block;min-width:1.4em;animation:nrWant .18s cubic-bezier(.3,1.6,.6,1)}
+.nr-find.nr-okA{animation:nrOkA .2s ease-out}
+.nr-find.nr-okB{animation:nrOkB .2s ease-out}
+.nr-goldtag{padding:1px 8px;border:2px solid var(--ink);border-radius:999px;background:#ffd34d;font-size:.78rem;font-weight:800}
 .nr-grid{display:grid;justify-content:center;touch-action:manipulation}
-.press.nr-cell{padding:0;border-radius:14px;--lift:4px;font-family:Fredoka,sans-serif;font-weight:600;
-  -webkit-tap-highlight-color:transparent}
+.press.nr-cell{position:relative;overflow:visible;padding:0;border-radius:14px;--lift:4px;font-family:Fredoka,sans-serif;font-weight:600;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.nr-num{display:inline-block}
 .press.nr-cell.done{background:var(--lime);opacity:.45;transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
 .press.nr-cell.bad{background:var(--coral);color:#fff;animation:pzShake .35s ease}
+.press.nr-cell.gold{background:linear-gradient(135deg,#ffe58a 0%,#f2b632 45%,#fff0b8 60%,#f2b632 100%);background-size:220% 220%;animation:tpShimmer 1.4s linear infinite}
+.press.nr-cell.nr-hint{animation:nrHint .9s ease-in-out infinite alternate;z-index:1}
+.nr-swapA .press.nr-cell:not(.done){animation:nrSwapA .32s cubic-bezier(.3,1.4,.6,1)}
+.nr-swapB .press.nr-cell:not(.done){animation:nrSwapB .32s cubic-bezier(.3,1.4,.6,1)}
+.nr-cleared .press.nr-cell{animation:nrClear .45s ease-out both;opacity:1}
+.nr-pop{position:absolute;left:50%;top:10%;z-index:4;transform:translateX(-50%);white-space:nowrap;pointer-events:none;
+  font-size:18px;font-weight:700;color:#fff;-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;animation:tpFloat .75s ease-out forwards}
+.nr-pop-rush{color:#ffd34d}
+.nr-pop-gold{color:#ffd34d;font-size:22px}
+.nr-pop-bad{color:var(--coral)}
+.nr-meter{display:flex;align-items:center;gap:10px;max-width:420px;margin:12px auto 0}
+.nr-zap{min-width:62px;padding:4px 10px;border:3px solid var(--ink);border-radius:999px;background:var(--card);box-shadow:0 3px 0 var(--ink);font-weight:900}
+.nr-mbar{position:relative;flex:1;height:14px;border:3px solid var(--ink);border-radius:999px;background:var(--paper2);overflow:hidden}
+.nr-mbar i{display:block;height:100%;background:var(--ice,#9fe3ff);transition:width .15s ease-out}
+.nr-mbar b{position:absolute;left:50%;top:0;bottom:0;width:3px;background:var(--ink);opacity:.35}
+.nr-meter.hot .nr-zap{background:var(--sun)}
+.nr-meter.max .nr-zap{background:#ffb347}
+.nr-meter.max .nr-mbar i{background:linear-gradient(90deg,#ffd34d,#ff8a3d,#ff4d6d,#ffd34d);background-size:300% 100%;animation:tpFire 1s linear infinite}
 .nr-help{margin-top:8px;font-size:.8rem}
+.nr-banner{position:absolute;left:50%;top:46%;z-index:6;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;
+  padding:8px 18px;border:3px solid var(--ink);border-radius:18px;background:var(--sun);box-shadow:0 5px 0 var(--ink);
+  font-weight:900;font-size:clamp(18px,5.6vw,30px);animation:tpBanner 1.2s ease-out forwards}
+.nr-banner-new{background:var(--grape);color:#fff}
+.nr-banner-rush{background:#ffb347}
+.nr-banner-lost{background:var(--paper2);color:var(--ink-soft);font-size:clamp(14px,4.2vw,20px)}
+@keyframes nrWant{0%{transform:scale(.6)}100%{transform:scale(1)}}
+@keyframes nrOkA{0%,100%{transform:scale(1)}40%{transform:scale(1.06);background:var(--lime)}}
+@keyframes nrOkB{0%,100%{transform:scale(1)}40%{transform:scale(1.06);background:var(--lime)}}
+@keyframes nrHint{0%{box-shadow:0 4px 0 var(--ink),0 0 0 0 rgba(255,200,60,0)}100%{box-shadow:0 4px 0 var(--ink),0 0 0 6px rgba(255,200,60,.85)}}
+@keyframes nrSwapA{0%{transform:scale(.6) rotate(-12deg)}100%{transform:none}}
+@keyframes nrSwapB{0%{transform:scale(.6) rotate(12deg)}100%{transform:none}}
+@keyframes nrClear{0%{transform:scale(1);background:var(--lime)}50%{transform:scale(1.12) rotate(4deg);background:var(--lime)}100%{transform:scale(1);background:var(--lime)}}
+@media (prefers-reduced-motion:reduce){.press.nr-cell.gold,.press.nr-cell.nr-hint,.nr-swapA .press.nr-cell,.nr-swapB .press.nr-cell,.nr-cleared .press.nr-cell{animation:none}}
 
 /* ---------- Color Dash (.cd-): four kinds of round, fever, streaks ---------- */
 /* No entry animation on the card: aePop fades from transparent and carries

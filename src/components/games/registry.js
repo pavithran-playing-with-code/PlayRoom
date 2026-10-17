@@ -99,7 +99,7 @@ export const GAMES = [
   },
   {
     slug: "numbers", name: "Number Rush", icon: "🔢",
-    blurb: "Tap 1, 2, 3… in order. Every grid you clear brings a bigger, busier one.",
+    blurb: "Tap 1, 2, 3… in order. Build a rush, grab the golden number — and watch out, the tiles shuffle.",
     minPlayers: 1, maxPlayers: 8, tag: "Focus", col: "var(--ice)",
     coopMax: 4,
     coopLabel: "one grid — count together",

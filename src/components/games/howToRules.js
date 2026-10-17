@@ -58,7 +58,7 @@ export const HOW_TO = {
   numbers: {
     name: "Number Rush",
     goal: "Tap the numbers in order, 1, 2, 3…",
-    steps: ["Find 1, then 2, then 3 — as fast as you can.", "Clear a grid and the next is bigger, with colours and tilted numbers to fool you.", "Together: one grid — whoever taps the next number moves everyone on. Clear 5 grids to win."],
+    steps: ["Find 1, then 2, then 3 — as fast as you can.", "Quick taps build a rush: ×2, then ×3. A miss or a pause breaks it.", "The ★ golden number pays extra; clear a grid fast for a speed bonus.", "Each grid is bigger — then colours, tiles that shuffle, tilted numbers.", "Together: one grid — whoever taps the next number moves everyone on. Clear 5 grids to win."],
     tip: "Look ahead for the next number while you tap this one.",
   },
   colors: {

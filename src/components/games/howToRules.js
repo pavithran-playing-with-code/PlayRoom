@@ -71,7 +71,7 @@ export const HOW_TO = {
   pipes: {
     name: "Pipes",
     goal: "Connect every pipe to the water.",
-    steps: ["Tap a tile to turn its pipe.", "Pipes joined to the source fill with water.", "Join them all with no loose ends to clear the board.", "Together: one board — anyone can turn any pipe. Join 3 boards to win."],
+    steps: ["Tap a tile to turn its pipe.", "Pipes joined to the source fill with water.", "Join them all with no loose ends to clear the board. Do it in the fewest turns for a Perfect bonus; quickly, for a speed bonus.", "💡 Hint puts one wrong pipe right, for a few points.", "Together: one board — anyone can turn any pipe. Join 3 boards to win."],
     tip: "Start from the corners and edges — they can only turn so many ways.",
   },
   flappy: {

@@ -1046,6 +1046,22 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .pp-board{display:block;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .pp-hit{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .pp-help{margin-top:8px;font-size:.8rem}
+/* the water and the shows */
+.pp-wrap{position:relative;text-align:center}
+.pp-flow{stroke-dasharray:10 22;animation:ppFlow .9s linear infinite;pointer-events:none}
+.pp-splash{pointer-events:none;transform-box:fill-box;transform-origin:center;animation:ppSplash .5s ease-out forwards}
+.pp-hintring{pointer-events:none;animation:ppHint .5s ease-in-out infinite alternate}
+.pp-frame.done .pp-board{animation:ppDone .6s ease-out}
+.pp-banner{position:absolute;left:50%;top:44%;z-index:6;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;
+  padding:8px 16px;border:3px solid var(--ink);border-radius:18px;background:var(--sun);box-shadow:0 5px 0 var(--ink);
+  font-weight:900;font-size:clamp(17px,5.4vw,28px);animation:tpBanner 1.3s ease-out forwards}
+.pp-banner-new{background:var(--grape);color:#fff}
+.pp-banner-perfect{background:linear-gradient(135deg,#ffe58a,#f2b632)}
+@keyframes ppFlow{to{stroke-dashoffset:-32}}
+@keyframes ppSplash{0%{transform:scale(.4);opacity:.95}100%{transform:scale(1.35);opacity:0}}
+@keyframes ppHint{from{opacity:.4}to{opacity:1}}
+@keyframes ppDone{0%{transform:scale(1)}40%{transform:scale(1.03)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.pp-flow,.pp-splash,.pp-frame.done .pp-board{animation:none}}
 
 /* ---------- Dino Dash ---------- */
 .dino-pad{display:flex;align-items:center;justify-content:center;touch-action:none;

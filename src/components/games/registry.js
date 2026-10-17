@@ -114,7 +114,7 @@ export const GAMES = [
   },
   {
     slug: "pipes", name: "Pipes", icon: "🚰",
-    blurb: "Turn the pipes until every one joins up to the source. No loose ends!",
+    blurb: "Turn the pipes until the water reaches every one. No loose ends, and fewest turns for a Perfect!",
     minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--pipe)",
     coopMax: 4,
     coopLabel: "one board — join the pipes together",

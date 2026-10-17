@@ -63,7 +63,7 @@ export const GAMES = [
   },
   {
     slug: "speedmath", name: "Speed Math", icon: "➗",
-    blurb: "Answer fast, build a streak, watch the bonus points stack up.",
+    blurb: "Sums that climb from + to ÷ and two-step puzzles. Answer fast for bonuses, build a ×2 streak, grab the ★ gold sums.",
     minPlayers: 1, maxPlayers: 8, tag: "Brain", col: "var(--mint)",
     Component: SpeedMath,
   },

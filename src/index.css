@@ -1727,3 +1727,52 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 @keyframes tpFire{0%{background-position:0% 0}100%{background-position:300% 0}}
 @keyframes tpBanner{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}18%{transform:translate(-50%,-50%) scale(1.12);opacity:1}30%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{transform:translate(-50%,-80%) scale(1);opacity:0}}
 @media (prefers-reduced-motion:reduce){.tp-shakeA,.tp-shakeB,.tp-hot4,.tp-tile.tp-gold,.tp-tile.tp-bomb{animation:none}}
+
+/* ---------- Speed Math (.sm-): levels, streaks, the quick bar ---------- */
+.sm-wrap{position:relative;margin:0 auto;text-align:center}
+.sm-head{display:flex;justify-content:center;align-items:center;gap:8px;height:30px;margin-bottom:6px}
+.sm-level{padding:3px 12px;border:2.5px solid var(--ink);border-radius:999px;background:var(--card);font-weight:800;font-size:.85rem;box-shadow:0 2px 0 var(--ink)}
+.sm-l2{background:var(--mint)}
+.sm-l3{background:var(--sky)}
+.sm-l4{background:var(--grape);color:#fff}
+.sm-goldtag{padding:3px 10px;border:2.5px solid var(--ink);border-radius:999px;background:#ffd34d;font-weight:900;font-size:.85rem;animation:smTag .6s ease-in-out infinite alternate}
+.sm-panel{position:relative;display:grid;place-items:center;line-height:1;background:var(--sun);overflow:visible;transition:background .15s}
+.sm-panel.sm-gold{background:linear-gradient(135deg,#ffe58a 0%,#f2b632 45%,#fff0b8 60%,#f2b632 100%);background-size:220% 220%;animation:tpShimmer 1.2s linear infinite;box-shadow:0 6px 0 var(--ink),0 0 26px rgba(255,200,60,.55)}
+.sm-panel.sm-goodA{animation:smGoodA .22s ease-out}
+.sm-panel.sm-goodB{animation:smGoodB .22s ease-out}
+.sm-panel.sm-wrong{background:var(--coral);animation:smShake .3s}
+.sm-sum{display:inline-block;animation:smFlip .2s cubic-bezier(.3,1.4,.6,1)}
+.sm-quick{position:absolute;left:10%;right:10%;bottom:10px;height:6px;border-radius:3px;background:var(--ink);opacity:.35;transform-origin:left center;animation:tpDrain linear forwards;pointer-events:none}
+.sm-pop{position:absolute;left:50%;top:58%;z-index:3;transform:translateX(-50%);white-space:nowrap;pointer-events:none;
+  font-weight:900;font-size:clamp(16px,4.6vw,24px);color:var(--ink);text-shadow:2px 2px 0 var(--card);animation:tpFloat .9s ease-out forwards}
+.sm-pop-gold{color:#b07800}
+.sm-pop-quick{color:#1f8a4c}
+.sm-pop-bad{color:var(--coral)}
+.sm-opts{display:grid;grid-template-columns:1fr 1fr}
+.sm-opt{position:relative;animation:smOpt .22s cubic-bezier(.3,1.5,.6,1) both;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.sm-opt.sm-right{background:var(--lime);animation:smRight .3s ease-out}
+.sm-opt.sm-chosen{background:var(--coral);animation:smShake .3s}
+.sm-opt.sm-dim{opacity:.45}
+.sm-key{position:absolute;top:5px;left:9px;font-size:.62rem;font-weight:800;color:var(--ink-soft);opacity:.6}
+@media (pointer:coarse){.sm-key{display:none}}
+.sm-meter{display:flex;align-items:center;gap:10px;margin:14px auto 0}
+.sm-flame{min-width:64px;padding:4px 10px;border:3px solid var(--ink);border-radius:999px;background:var(--card);box-shadow:0 3px 0 var(--ink);font-weight:900;font-size:1rem}
+.sm-bar{flex:1;height:14px;border:3px solid var(--ink);border-radius:999px;background:var(--paper2);overflow:hidden}
+.sm-bar i{display:block;height:100%;background:var(--mint);transition:width .18s ease-out}
+.sm-meter.max .sm-bar i{background:linear-gradient(90deg,#ffd34d,#ff8a3d,#ff4d6d,#ffd34d);background-size:300% 100%;animation:tpFire 1s linear infinite}
+.sm-meter.max .sm-flame{background:var(--sun)}
+.sm-best{font-size:.85rem;color:var(--ink-soft);white-space:nowrap}
+.sm-banner{position:absolute;left:50%;top:36%;z-index:5;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;
+  padding:8px 18px;border:3px solid var(--ink);border-radius:18px;background:var(--sun);box-shadow:0 5px 0 var(--ink);
+  font-weight:900;font-size:clamp(18px,5.6vw,30px);animation:tpBanner 1.2s ease-out forwards}
+.sm-banner-level{background:var(--grape);color:#fff}
+.sm-banner-streak{background:#ffb347}
+.sm-banner-lost{background:var(--paper2);color:var(--ink-soft);font-size:clamp(14px,4.2vw,20px)}
+@keyframes smFlip{0%{transform:rotateX(90deg) scale(.8);opacity:0}100%{transform:rotateX(0) scale(1);opacity:1}}
+@keyframes smOpt{0%{transform:scale(.7) translateY(6px);opacity:0}100%{transform:none;opacity:1}}
+@keyframes smGoodA{0%{transform:scale(1)}40%{transform:scale(1.04);background:var(--lime)}100%{transform:scale(1)}}
+@keyframes smGoodB{0%{transform:scale(1)}40%{transform:scale(1.04);background:var(--lime)}100%{transform:scale(1)}}
+@keyframes smShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}50%{transform:translateX(6px)}75%{transform:translateX(-4px)}}
+@keyframes smRight{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+@keyframes smTag{0%{transform:rotate(-3deg)}100%{transform:rotate(3deg)}}
+@media (prefers-reduced-motion:reduce){.sm-panel.sm-gold,.sm-goldtag,.sm-panel.sm-wrong,.sm-opt.sm-chosen{animation:none}}

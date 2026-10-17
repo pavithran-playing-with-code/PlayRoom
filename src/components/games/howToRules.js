@@ -27,8 +27,8 @@ export const HOW_TO = {
   },
   speedmath: {
     name: "Speed Math",
-    goal: "Solve as many sums as you can.",
-    steps: ["A sum appears at the top.", "Tap the right answer from the choices.", "Everyone in the room gets the same sums."],
+    goal: "Solve as many sums as you can — they get harder as you go.",
+    steps: ["Tap the right answer (or press 1–4). Everyone in the room gets the same sums.", "Level 1 is + and −, then times tables, then ÷, then two-step sums and \"? + 17 = 42\".", "Answer before the bar under the sum runs out for a quick bonus. ★ gold sums pay double.", "Right answers in a row build a streak: ×1.5 after 5, ×2 after 10. A wrong answer costs points, breaks the streak — and shows you the right one."],
     tip: "Speed matters, but a wrong answer costs you — be quick, not careless.",
   },
   reaction: {

@@ -152,7 +152,7 @@ export const GAMES = [
   },
   {
     slug: "runner", name: "Rail Runner", icon: "🏃",
-    blurb: "Run the rails: jump the barriers, slide under the bars, dodge the trains.",
+    blurb: "Dodge, jump and slide down the rails, grab the coins and the power-ups: magnet, double, shield.",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--coral)",
     coopMax: 4,
     coopLabel: "run side by side — save each other with ❤️",

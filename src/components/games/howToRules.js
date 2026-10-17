@@ -101,7 +101,7 @@ export const HOW_TO = {
   runner: {
     name: "Rail Runner",
     goal: "Run as far as you can and grab coins.",
-    steps: ["Swipe ◀ ▶ to change lane.", "Swipe ▲ to jump barriers, ▼ to slide under bars.", "Swerve round the trains — you can't jump them.", "Together: a crash knocks you down — a friend grabbing a ❤️ gets you up."],
+    steps: ["Power-ups now and then: 🧲 a magnet pulls in the coins, ✖2 doubles them, 🛡️ a shield takes one crash.", "Swipe ◀ ▶ to change lane.", "Swipe ▲ to jump barriers, ▼ to slide under bars.", "Swerve round the trains — you can't jump them.", "Together: a crash knocks you down — a friend grabbing a ❤️ gets you up."],
     tip: "Your score is metres run + 10 for every coin. A crash slows you right down.",
   },
   sunshard: {

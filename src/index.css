@@ -1688,7 +1688,14 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .rr-gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 .rr-msg{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;font:400 22px 'Lilita One','Arial Rounded MT Bold',sans-serif;color:#ffc83d}
 .rr-hud{position:absolute;inset:0;pointer-events:none;text-shadow:0 2px 0 rgba(0,0,0,.4)}
-.rr-coins{position:absolute;left:calc(env(safe-area-inset-left,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 12px);font:400 28px/1 'Lilita One','Arial Rounded MT Bold',sans-serif;color:#ffc83d}
+/* under the floating row (clock, sound, help, leave), which reaches this far left on a phone */
+.rr-coins{position:absolute;left:calc(env(safe-area-inset-left,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 58px);font:400 28px/1 'Lilita One','Arial Rounded MT Bold',sans-serif;color:#ffc83d}
+/* power-ups on: chips under the coins */
+.rr-powers{position:absolute;left:12px;top:calc(env(safe-area-inset-top,0px) + 96px);display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.rr-pw{padding:3px 10px;border:2.5px solid var(--ink);border-radius:999px;background:#fff;font-weight:900;font-size:.85rem;box-shadow:0 2px 0 var(--ink);animation:smTag .6s ease-in-out infinite alternate}
+.rr-pw.mag{background:#ffd1d9}
+.rr-pw.dbl{background:#ffe58a}
+.rr-pw.shd{background:#c9f0ff}
 .rr-score{position:absolute;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 52px);text-align:center;font:400 46px/1 'Lilita One','Arial Rounded MT Bold',sans-serif}
 .rr-score small{display:block;font:800 13px Nunito,sans-serif;color:#bfd0e8;letter-spacing:.12em}
 .rr-team{position:absolute;left:calc(env(safe-area-inset-left,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 48px);padding:4px 12px;border-radius:999px;

@@ -132,7 +132,7 @@ export const GAMES = [
   },
   {
     slug: "slide", name: "Slide Puzzle", icon: "🔀",
-    blurb: "Slide the tiles until 1–8 are back in order. Fewer moves, more points.",
+    blurb: "Slide the tiles back in order — then bigger boards and picture puzzles. Fewer moves, more points.",
     minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--slate)",
     Component: SlidePuzzle,
   },

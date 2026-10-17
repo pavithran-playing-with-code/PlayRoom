@@ -81,9 +81,9 @@ export const HOW_TO = {
   },
   slide: {
     name: "Slide Puzzle",
-    goal: "Put the tiles back in order 1–8.",
-    steps: ["Tap a tile next to the empty space to slide it in.", "Get 1 to 8 in order with the gap at the end."],
-    tip: "Fewer moves score more. Solve the top row first, then the rest.",
+    goal: "Slide the tiles back in order, with the gap at the end.",
+    steps: ["Tap a tile in the gap's row or column and the whole line slides — or swipe.", "A tile in its place gets a tick; a finished row chimes.", "Two 3×3 boards, then 4×4 — and every second board is a picture.", "Fewer moves and a quicker solve score more."],
+    tip: "Solve the top row first, then the next — leave the last two rows for last.",
   },
   blocks: {
     name: "Block Blast",

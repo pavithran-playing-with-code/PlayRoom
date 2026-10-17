@@ -21,9 +21,9 @@ export const HOW_TO = {
   },
   memory: {
     name: "Memory Match",
-    goal: "Find all 10 pairs before the clock runs out.",
-    steps: ["Tap a card to turn it over, then another.", "Same picture: they stay up. Different: they turn back.", "Together: one deck for everyone. Turn the twin of anyone's card to make a pair."],
-    tip: "Remember where each picture was — the faster you finish, the more you score.",
+    goal: "Find the pairs — and clear as many decks as you can before the clock runs out.",
+    steps: ["Tap a card to turn it over, then another.", "Same picture: they stay up. Different: they turn back (−5).", "Pairs in a row build a combo worth more; the ★ golden pair pays double.", "Clear a deck for a bonus and a new one: new pictures, then twelve pairs.", "Together: one deck for everyone. Turn the twin of anyone's card to make a pair."],
+    tip: "Remember where each picture was — a miss breaks your combo.",
   },
   speedmath: {
     name: "Speed Math",

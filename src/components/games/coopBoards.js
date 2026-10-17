@@ -14,7 +14,7 @@
 // The score is the team's: everyone on the side carries it. `by` counts what
 // each player did, for the strip and the results. `boards` is how many have
 // been cleared — the match is a win for the team once it reaches GOAL.
-import { buildCards, deckSeed, TOTAL_PAIRS as MEM_PAIRS } from "./memoryDeck.js";
+import { deckFor } from "./memoryDeck.js";
 import { deal, isFree, findPair, reshuffle, TOTAL_PAIRS as MJ_PAIRS } from "./mahjongBoard.js";
 import { makeBoard as makeGrid, HIT, MISS, clearBonus } from "./numberBoard.js";
 import { makeBoard as makePipes, currentMasks, flow, isSolved } from "./pipesBoard.js";
@@ -35,14 +35,16 @@ const int = (v) => (Number.isInteger(v) ? v : NaN);
 // One deck. Everyone can have one card of their own face up. Turn over a
 // card whose twin is face up — anyone's — and that's a pair, for the team.
 // Turn over a second one that isn't, and both of yours go back down (the
-// phones show them for a moment first).
+// phones show them for a moment first). Decks after the first have new
+// pictures (twelve pairs from deck 3) and a ★ golden pair worth double.
 export const MEM_PAIR = 100;
 export const MEM_MISS = 5;
 export const MEM_CLEAR = 300;
-const memDeck = (seed, n) => buildCards(deckSeed(seed, n)).map((c) => c.emoji);
+const memDeck = (seed, n) => deckFor(seed, n).cards;
+const memGold = (seed, n) => deckFor(seed, n).golden;
 
 export function memoryRules(seed) {
-  const init = { ...blank(1), deck: memDeck(seed, 1), matched: [], open: {}, pairs: 0 };
+  const init = { ...blank(1), deck: memDeck(seed, 1), gold: memGold(seed, 1), matched: [], open: {}, pairs: 0 };
   function rules(st, { u, a, c }) {
     if (!a || a.t !== "flip" || a.b !== st.b) return st;
     const i = int(a.i);
@@ -56,16 +58,18 @@ export function memoryRules(seed) {
       delete s.open[twin];
       s.matched = [...s.matched, i, j];
       s.pairs += 1;
-      s.score += MEM_PAIR;
+      const gold = s.deck[i] === s.gold;
+      s.score += gold ? MEM_PAIR * 2 : MEM_PAIR;
       credit(s, u);
-      said(s, c, { k: "pair", u, i, j, with: Number(twin) });
-      if (s.pairs >= MEM_PAIRS) {
+      said(s, c, { k: "pair", u, i, j, with: Number(twin), gold });
+      if (s.pairs >= s.deck.length / 2) {
         s.score += MEM_CLEAR;
         s.boards += 1;
         s.done = { b: s.b, deck: s.deck };
         said(s, c, { k: "clear", u, b: s.b });
         s.b += 1;
         s.deck = memDeck(seed, s.b);
+        s.gold = memGold(seed, s.b);
         s.matched = [];
         s.open = {};
         s.pairs = 0;

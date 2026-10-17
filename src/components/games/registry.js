@@ -54,7 +54,7 @@ export const GAMES = [
   },
   {
     slug: "memory", name: "Memory Match", icon: "🃏",
-    blurb: "Flip cards, remember pairs, race everyone else to the last one.",
+    blurb: "Flip cards, remember pairs, chain combos and clear deck after deck. Watch for the golden pair!",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--coral)",
     coopMax: 4,
     coopLabel: "one deck — find the pairs together",

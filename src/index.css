@@ -630,11 +630,40 @@ input::-ms-reveal,input::-ms-clear{display:none}
   width:min(92vw,430px,calc((100dvh - 250px) * 7 / 9 + 26px));
   touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .ae-board{display:block;width:100%;height:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.ae-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:2;pointer-events:none;
-  border:3px solid var(--ink);border-radius:999px;padding:6px 14px;font-family:Fredoka,sans-serif;
-  font-weight:600;font-size:.95rem;white-space:nowrap;box-shadow:0 3px 0 var(--ink);
-  animation:aePop .2s cubic-bezier(.34,1.7,.64,1)}
-@keyframes aePop{from{opacity:0;transform:translate(-50%,-6px) scale(.9)}}
+.ae-wrap{position:relative;margin:0 auto}
+.ae-stage{position:relative}
+.ae-frame.ae-boomA{animation:tpShakeA .35s}
+.ae-frame.ae-boomB{animation:tpShakeB .35s}
+.ae-gold .ae-body,.ae-gold .ae-tri{filter:drop-shadow(0 0 1.6px rgba(255,190,40,.9))}
+.ae-badge{pointer-events:none;font-weight:900;fill:#7a5200;paint-order:stroke;stroke:#fff;stroke-width:.8px}
+.ae-hint{animation:aeHint .9s ease-in-out infinite alternate}
+@keyframes aeHint{from{opacity:1}to{opacity:.35}}
+.ae-blasted{transform-box:fill-box;transform-origin:center;animation:aeBlast .45s ease-in forwards}
+@keyframes aeBlast{0%{transform:scale(1);opacity:1}40%{transform:scale(1.15) rotate(8deg);opacity:1}100%{transform:scale(.2) rotate(-20deg);opacity:0}}
+.ae-pop{position:absolute;z-index:3;transform:translateX(-50%);white-space:nowrap;pointer-events:none;
+  font-family:Fredoka,sans-serif;font-weight:700;font-size:18px;color:#fff;-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;animation:tpFloat .85s ease-out forwards}
+.ae-pop-gold{color:#ffd34d;font-size:21px}
+.ae-pop-bomb{color:#ff8a3d;font-size:21px}
+.ae-pop-bad{color:var(--coral)}
+.ae-puff{position:absolute;width:0;height:0;pointer-events:none;z-index:2}
+.ae-puff i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;border:2px solid var(--ink);animation:tpBurst .6s ease-out forwards}
+.ae-meter{display:flex;align-items:center;gap:10px;margin:12px auto 0}
+.ae-flame{min-width:58px;text-align:center;padding:4px 10px;border:3px solid var(--ink);border-radius:999px;background:var(--card);box-shadow:0 3px 0 var(--ink);font-weight:900}
+.ae-mbar{flex:1;height:14px;border:3px solid var(--ink);border-radius:999px;background:var(--paper2);overflow:hidden}
+.ae-mbar i{display:block;height:100%;background:var(--bubble,#ff9ec7);transition:width .18s ease-out}
+.ae-meter.hot .ae-mbar i{background:linear-gradient(90deg,#ffd34d,#ff8a3d,#ff4d6d,#ffd34d);background-size:300% 100%;animation:tpFire 1s linear infinite}
+.ae-meter.hot .ae-flame{background:var(--sun)}
+.ae-best{font-size:.82rem;color:var(--ink-soft);white-space:nowrap}
+.ae-banner{position:absolute;left:50%;top:46%;z-index:6;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;
+  padding:8px 16px;border:3px solid var(--ink);border-radius:18px;background:var(--sun);box-shadow:0 5px 0 var(--ink);
+  font-weight:900;font-size:clamp(16px,5vw,26px);animation:tpBanner 1.3s ease-out forwards}
+.ae-banner-new{background:var(--grape);color:#fff}
+.ae-banner-gold{background:linear-gradient(135deg,#ffe58a,#f2b632)}
+.ae-banner-bomb{background:#ff8a3d}
+.ae-banner-clear{background:var(--lime)}
+.ae-banner-streak{background:#ffb347}
+.ae-banner-lost{background:var(--paper2);color:var(--ink-soft);font-size:clamp(14px,4.2vw,20px)}
+@media (prefers-reduced-motion:reduce){.ae-hint,.ae-frame.ae-boomA,.ae-frame.ae-boomB{animation:none}}
 /* sliding out: the visible dash runs along the path while the head moves straight on */
 .ae-leaving .ae-body{animation:aeSlideBody var(--dur) cubic-bezier(.5,0,.9,.5) forwards}
 .ae-leaving .ae-head{animation:aeSlideHead var(--dur) cubic-bezier(.5,0,.9,.5) forwards}

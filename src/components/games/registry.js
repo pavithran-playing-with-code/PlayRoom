@@ -84,7 +84,7 @@ export const GAMES = [
   },
   {
     slug: "arrows", name: "Arrow Escape", icon: "🏹",
-    blurb: "Tap an arrow to slide it off the board, but only if its path is clear.",
+    blurb: "Slide arrows off the board, but only if their path is clear. Golden arrows, bomb arrows, big streaks.",
     minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--bubble)",
     Component: ArrowEscape,
   },

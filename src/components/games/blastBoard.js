@@ -4,7 +4,7 @@
 // every piece goes, and the game ends when none of the three will fit.
 //
 // No drawing and no React here, so the rules can be tested on their own.
-import { seededRand } from "./seededRand";
+import { seededRand } from "./seededRand.js";
 
 export const SIZE = 8;
 
@@ -119,3 +119,24 @@ export function makeDealer(seed) {
     },
   };
 }
+
+// Which rows and columns this piece would fill, put down at (r, c) — the
+// preview while you drag. Empty lists if it doesn't fit or fills none.
+export function wouldClear(board, piece, r, c) {
+  if (!canPlace(board, piece, r, c)) return { rows: [], cols: [] };
+  const { rows, cols } = clearLines(place(board, piece, r, c));
+  return { rows, cols };
+}
+
+// The combo: clear lines again within COMBO_WINDOW placements and it grows;
+// go longer without a clear and it's over. Each line in a combo of n pays
+// COMBO_STEP x (n - 1) more. An emptied board pays ALL_CLEAR.
+export const COMBO_WINDOW = 3, COMBO_STEP = 20, COMBO_MAX = 10, ALL_CLEAR = 300;
+// st: { combo, since } (since: placements since the last clear) -> the next, after a drop that cleared `lines`
+export function comboStep(st, lines) {
+  if (lines > 0) return { combo: Math.min(COMBO_MAX, (st.since < COMBO_WINDOW && st.combo ? st.combo : 0) + 1), since: 0 };
+  const since = st.since + 1;
+  return since >= COMBO_WINDOW ? { combo: 0, since } : { combo: st.combo, since };
+}
+export const clearPoints = (lines, combo) => scoreForClear(lines) + (lines ? COMBO_STEP * Math.max(0, combo - 1) * lines : 0);
+export const isEmpty = (board) => board.every((x) => !x);

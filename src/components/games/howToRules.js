@@ -89,7 +89,7 @@ export const HOW_TO = {
   blocks: {
     name: "Block Blast",
     goal: "Fill rows and columns to blast them.",
-    steps: ["Drag a piece from the tray onto the board.", "Fill a whole row or column and it clears.", "Out of room? The board is swept and you keep your score."],
+    steps: ["Drag a piece from the tray onto the board — the lines it would fill glow.", "Fill a whole row or column and it clears; several at once score more.", "Clear again within three pieces to grow your combo. Empty the whole board for +300.", "Out of room? The board is swept and you keep your score."],
     tip: "Keep a space free for the big pieces.",
   },
   racer: {

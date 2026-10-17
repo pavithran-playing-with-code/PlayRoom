@@ -138,7 +138,7 @@ export const GAMES = [
   },
   {
     slug: "blocks", name: "Block Blast", icon: "🧱",
-    blurb: "Fit the pieces in and clear whole rows and columns.",
+    blurb: "Fit the pieces in and blast whole rows and columns. Chain combos, go for the all clear.",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--brick)",
     Component: BlockDrop,
   },

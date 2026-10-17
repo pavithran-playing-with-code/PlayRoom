@@ -89,7 +89,7 @@ export function applyTick(c, m, now = Date.now()) {
   for (const e of m.e || []) {
     const mine = e.side && e.side === c.mySide;
     if (e.type === "fuse") {
-      c.flick = 3; snd("bang");
+      c.flick = 3; snd("bang"); snd("power");
       if (e.id === c.you) { snd("pick"); say(c, e.got >= e.need ? "Power restored for you. The elevator is waiting. So is IT." : `Fuse ${e.got}/${e.need}. The lights come back somewhere. Something heard that.`, 5); }
       else if (mine) say(c, `${nameOf(c, e.id)} found a fuse. ${e.got} of ${e.need}.`, 3.5);
       else say(c, "Somewhere, the lights come back on.", 3);

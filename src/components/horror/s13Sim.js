@@ -76,7 +76,7 @@ export function tick(s, inp, dt) {
       s.lit = litZones(s.fuses);
       const fresh = [...s.lit].filter((z) => !before.has(z)).map((z) => ZN[z]);
       s.flick = 3;
-      ev(s, "bang");
+      ev(s, "bang"); ev(s, "power");
       // picking one up is noisy: it comes to look
       if (M.st !== "chase" && M.st !== "sleep") { M.st = "invest"; M.wait = 0; setTarget(M, st, P.x | 0, P.y | 0); }
       if (s.fuses >= NEED) {

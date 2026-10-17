@@ -105,6 +105,8 @@ const sfx = {
   },
   // the shared switch
   muted: () => muted,
+  // outside React (a game's own audio graph): called on every change; returns the unsubscribe
+  onMute: (f) => { const g = () => f(muted); subs.add(g); return () => subs.delete(g); },
   setMuted(m) {
     muted = !!m;
     try { localStorage.setItem("pr_mute", muted ? "1" : "0"); } catch { /* fine */ }

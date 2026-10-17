@@ -15,7 +15,7 @@ import {
   createClient, applyTick, stepLocal, report, interact, actionDone, actionLabel, toggleTorch, playing, respawning, timeLeft, sideOfMe,
   watchedPlayer, cycleWatch, viewState,
 } from "../horror/s13Client";
-import { NEED, S as TILE_M } from "../horror/s13Core.mjs";
+import { NEED, S as TILE_M, isLit } from "../horror/s13Core.mjs";
 import { createStation } from "../horror/s13Scene";
 import { createS13Audio } from "../horror/s13Audio";
 import { useSideways, toGame } from "../horror/LandscapeGate";
@@ -146,7 +146,7 @@ export default function ManorGame({ roomCode, currentUser, spectatorWatching = n
       for (const s of stepLocal(c, { ix, iz, run: !!k.Shift || runOn.current }, dt, now)) audio.current.play(s);
       if (playing(c) && socket && now - sentAt.current >= REPORT_MS) { sentAt.current = now; socket.emit("manor:me", report(c)); }
       const v = viewState(c, now);
-      audio.current.tick(dt, v.P, c.monsters, c.tlv, playing(c) && !c.over);
+      audio.current.tick(dt, v.P, c.monsters, c.tlv, playing(c) && !c.over, { lit: isLit(c.st, c.lit, v.P.x, v.P.y), flick: c.flick });
       if (sc) sc.frame(v, dt, ts / 1000);
       if (ts - lastHud > HUD_MS) { lastHud = ts; syncHud(); }
     };

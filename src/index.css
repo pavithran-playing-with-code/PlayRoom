@@ -1812,6 +1812,8 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .s13-sub{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14vh);transform:translateX(-50%);z-index:4;max-width:80%;text-align:center;
   font-size:17px;letter-spacing:.02em;line-height:1.4;padding:6px 16px;background:rgba(0,0,0,.4);border-radius:4px;opacity:0;transition:opacity .6s;
   text-shadow:0 1px 4px #000;pointer-events:none}
+.s13 .s13-snd{position:absolute;right:calc(env(safe-area-inset-right,0px) + 18px);top:calc(env(safe-area-inset-top,0px) + 16px);z-index:5;
+  width:40px;height:40px;padding:0;border-radius:50%;font-size:17px;line-height:1;background:rgba(20,22,20,.6);touch-action:none}
 .s13-pr{position:absolute;left:50%;top:60%;transform:translateX(-50%);z-index:4;font-size:13px;letter-spacing:.2em;opacity:.9;pointer-events:none}
 /* RUN and LIGHT side by side; USE above them, between the two; pause below
    LIGHT (solo). Three fixed rows, so RUN and LIGHT sit in the same place

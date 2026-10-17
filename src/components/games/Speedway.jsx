@@ -15,6 +15,11 @@
 // The room's clock and the scores decide the result (raceScore): the first
 // across the line wins; if the clock runs out first, whoever got furthest.
 //
+// Your best lap races beside you as a ghost: each lap is recorded (about 20
+// times a second), a new best lap becomes the ghost (kept on the phone, per
+// track, so it's there next time too), and a split under the lap time says
+// whether you're ahead of it or behind at that point of the track.
+//
 // The rules are driftSim.js. This file draws, plays the sounds and reads keys
 // (W/↑ go, S/↓ brake, A D/← → steer, Shift/Space drift) and thumbs.
 //
@@ -29,6 +34,7 @@
 // turned, and a touch is turned back (toGame) before it's read — so "left
 // half" is always the left half of the track as the player sees it.
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import sfx, { useMuted } from "./sfx";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
@@ -206,6 +212,32 @@ function drawCar(ctx, c) {
   ctx.restore();
 }
 
+// your best lap: a see-through car, no lights, its name over it
+function drawGhost(ctx, g, z) {
+  ctx.save();
+  ctx.globalAlpha = 0.38;
+  drawCar(ctx, { x: g.x, y: g.y, a: g.a, color: "#e9e4ff", boostT: 0, boostMax: 1, steer: 0, roll: 0, braking: false });
+  ctx.globalAlpha = 0.7;
+  ctx.translate(g.x, g.y - 34); ctx.scale(1 / z, 1 / z);
+  text(ctx, "👻 BEST", 0, 0, 14, "#e9e4ff", "center", `700 14px ${BODY}`, true);
+  ctx.restore();
+}
+
+// where the ghost is `t` seconds into its lap (between two samples)
+const GHOST_HZ = 20;
+function ghostAt(g, t) {
+  const s = g.s, f = t * GHOST_HZ, i = Math.floor(f);
+  if (i < 0 || i >= s.length - 1) return null;
+  const a = s[i], b = s[i + 1], k = f - i;
+  return { x: a[1] + (b[1] - a[1]) * k, y: a[2] + (b[2] - a[2]) * k, a: a[3] + ad(b[3], a[3]) * k };
+}
+// how far behind (+) or ahead (−) the ghost you are, at this far round the lap
+function ghostSplit(g, lapT, prog) {
+  const s = g.s;
+  for (let i = 0; i < s.length; i++) if (s[i][4] >= prog) return lapT - s[i][0];
+  return null;
+}
+
 function drawParts(ctx, parts) {
   for (const p of parts) {
     const k = p.life / p.max;
@@ -237,6 +269,12 @@ function drawHud(ctx, w, h, S) {
   text(ctx, "LAP " + clamp(car.lap, 1, laps) + "/" + laps, w - pad, pad + 34 * s, 26 * s, "#fff", "right", DISPLAY, true);
   text(ctx, fmt(raceT > 0 && !car.finished ? raceT - car.lapStart : 0), w - pad, pad + 64 * s, 24 * s, "#fff", "right", `700 24px ${BODY}`, true);
   text(ctx, "BEST " + fmt(best), w - pad, pad + 90 * s, 19 * s, "rgba(255,255,255,.7)", "right", `700 19px ${BODY}`, true);
+  // against your best lap's ghost: green ahead, red behind
+  if (S.split != null && Math.abs(S.split) < 60) {
+    const ahead = S.split < 0;
+    // beside the lap time (under it is the map's)
+    text(ctx, `👻 ${ahead ? "−" : "+"}${Math.abs(S.split).toFixed(2)}`, w - pad - 132 * s, pad + 64 * s, 20 * s, ahead ? "#8fdb5c" : "#ff7a7a", "right", `700 20px ${BODY}`, true);
+  }
   // speed and the charge / boost bar
   const spd = Math.round(Math.hypot(car.vx, car.vy) * KMH), bw = 170 * s, bx = w / 2 - bw / 2, by = h - pad - 18 * s;
   text(ctx, String(spd), w / 2, by - 30 * s, 36 * s, "#fff", "center", DISPLAY, true);
@@ -309,6 +347,7 @@ function paint(c, w, h, G, T, view, clock, car, all, parts, conf, S) {
   ctx.translate(w / 2 + ox, h / 2 + oy); ctx.scale(z, z); ctx.translate(-view.cx, -view.cy);
   const hw = w / 2 / z + 80, hh = h / 2 / z + 80;
   drawTrack(ctx, T, G, clock, view.cx - hw, view.cy - hh, view.cx + hw, view.cy + hh);
+  if (S.ghost) drawGhost(ctx, S.ghost, z);
   for (const o of all.slice().sort((p, q) => p.y - q.y)) drawCar(ctx, o);
   drawGantry(ctx, T);
   drawParts(ctx, parts);
@@ -380,7 +419,9 @@ export default function Speedway(props) {
   const rot = useRef(upright);
   rot.current = upright;
   const [touchUi, setTouchUi] = useState(coarse);
-  const [muted, setMuted] = useState(false);
+  // one mute for every game (the 🔊 in the corner), kept in localStorage
+  const muted = useMuted();
+  const setMuted = (f) => sfx.setMuted(typeof f === "function" ? f(sfx.muted()) : f);
   const audio = useRef(null);
   if (audio.current === null) audio.current = makeAudio();
   useEffect(() => { const a = audio.current; return () => a.close(); }, []);
@@ -506,6 +547,15 @@ export default function Speedway(props) {
     let banner = null, beeped = -1, finT = 0, finPlace = 0;
     const best0 = (() => { try { return Number(localStorage.getItem("sw-best-" + code)) || 0; } catch { return 0; } })();
     let best = best0;
+    // the ghost: your best lap on this track, and this lap as it's driven
+    let ghost = (() => { try { const g = JSON.parse(localStorage.getItem("sw-ghost-" + code) || "null"); return g && Array.isArray(g.s) && g.s.length > 20 ? g : null; } catch { return null; } })();
+    let lapRec = [], lapProg0 = null, recT = 0;
+    const keepGhost = (t) => {
+      if (lapRec.length < 20 || (ghost && ghost.t <= t)) return false;
+      ghost = { t, s: lapRec };
+      try { localStorage.setItem("sw-ghost-" + code, JSON.stringify(ghost)); } catch { /* private, or full */ }
+      return true;
+    };
     const shakeBy = (a) => { view.shake = Math.max(view.shake, a); };
 
     const frame = (now) => {
@@ -544,6 +594,15 @@ export default function Speedway(props) {
         if (go) {
           const out = stepCar(T, car, inp, dt, fx);
           if (out.boosted) { A.burst(600, 0.5, 0.25); A.beep(520, 0.25, "triangle", 0.12); }
+          // this lap, as it's driven, for the ghost
+          if (!car.finished && car.lap >= 1 && lapProg0 !== null) {
+            recT += dt;
+            if (recT >= 1 / GHOST_HZ) {
+              recT -= 1 / GHOST_HZ;
+              const r1 = (v) => Math.round(v * 10) / 10;
+              lapRec.push([Math.round((raceT - car.lapStart) * 1000) / 1000, r1(car.x), r1(car.y), Math.round(car.a * 1000) / 1000, car.prog - lapProg0]);
+            }
+          }
         }
         // bumps: the computer's cars move both ways; a friend's car only moves on their phone
         const cars = [car, ...bots.current];
@@ -572,6 +631,7 @@ export default function Speedway(props) {
               const t = raceT - c.lapStart;
               c.last = t;
               if (!c.best || t < c.best) c.best = t;
+              if (c === car) keepGhost(t);
               if (c === car && !(c.lap > laps)) {
                 const newBest = !best || t < best;
                 if (newBest) { best = t; try { localStorage.setItem("sw-best-" + code, String(t)); } catch { /* private */ } }
@@ -580,6 +640,7 @@ export default function Speedway(props) {
               }
             }
             c.lapStart = raceT;
+            if (c === car) { lapRec = []; lapProg0 = c.prog; recT = 0; }
             if (c.lap > laps && !c.finished) {
               c.finished = true;
               c.finAt = elapsed;
@@ -636,8 +697,11 @@ export default function Speedway(props) {
       if (c) {
         const { w, h } = size.current;
         const count = elapsed < START_S + 1 ? clamp(elapsed, 0, 4) : null;
+        const lapT = raceT - car.lapStart;
+        const racing = go && ghost && !car.finished && car.lap >= 1 && lapProg0 !== null;
         paint(c, w, h, G, T, view, clock, car, all, parts, conf,
-          { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop: touch.current.on });
+          { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop: touch.current.on,
+            ghost: racing ? ghostAt(ghost, lapT) : null, split: racing && lapT > 1 ? ghostSplit(ghost, lapT, car.prog - lapProg0) : null });
       }
       if (now - lastHud > 250) {
         lastHud = now;
@@ -841,10 +905,7 @@ export default function Speedway(props) {
         onQuit={eng.endMatch}
         landscape
         bare
-        floatExtra={!isSpectator ? (
-          <button type="button" className="gf-btn" aria-label={muted ? "Sound on" : "Sound off"} aria-pressed={muted}
-            onClick={() => { audio.current.init(); setMuted((m) => !m); }}>{muted ? "✕ ♪" : "♪"}</button>
-        ) : null}
+        sound
       >
         {({ w, h }) => {
           if (isSpectator) {

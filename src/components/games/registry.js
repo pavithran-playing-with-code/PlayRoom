@@ -90,7 +90,7 @@ export const GAMES = [
   },
   {
     slug: "dino", name: "Dino Dash", icon: "🦖",
-    blurb: "Jump the cacti, duck the birds. Crash and you're back to slow, so keep running.",
+    blurb: "Jump the cacti, duck the birds, grab the coins, run into the night. Crash and you're back to slow.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--leaf)",
     coopMax: 4,
     coopLabel: "run side by side — save each other with ❤️",

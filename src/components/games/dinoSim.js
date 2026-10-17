@@ -19,6 +19,8 @@ export const STUN_S = 1;             // how long a crash knocks you out
 export const CRASH_COST = 25;
 export const UNITS_PER_POINT = 12;
 export const UNITS_PER_METRE = 40;
+export const COIN_PTS = 4;           // a coin grabbed
+export const COIN_R = 9;
 
 // The fastest anyone can be going after running `run` units without crashing.
 export const speedAfter = (run) => Math.min(MAX_SPEED, BASE_SPEED + run * ACCEL);
@@ -26,11 +28,19 @@ export const speedAfter = (run) => Math.min(MAX_SPEED, BASE_SPEED + run * ACCEL)
 // The same endless course for everyone in a room, built on demand. The gap
 // after each obstacle is sized for the fastest anyone could possibly be going
 // by that point, so every obstacle can always be cleared.
+//
+// Coins come from a stream of their own, so the obstacles are exactly what
+// they always were: an arc over a cactus (a good jump takes it), a row on the
+// ground under a high bird, and now and then a row in a gap.
 export function makeCourse(seed) {
   const rand = seededRand((Number(seed) || 1) * 48271 + 99);
   for (let i = 0; i < 6; i++) rand();
+  const crand = seededRand((Number(seed) || 1) * 7907 + 31);
+  for (let i = 0; i < 3; i++) crand();
   const list = [];
+  const coins = [];
   let pos = 900;
+  const row = (x0, n, y) => { for (let k = 0; k < n; k++) coins.push({ x: x0 + k * 30, y }); };
 
   function extend(upTo) {
     while (pos < upTo) {
@@ -48,10 +58,19 @@ export function makeCourse(seed) {
       }
       list.push(o);
       const loose = Math.max(0.35, 1 - d / 40000);  // obstacles bunch up the further you get
-      pos = d + o.w + speedAfter(d) * 0.62 + 170 + rand() * 460 * loose;
+      const next = d + o.w + speedAfter(d) * 0.62 + 170 + rand() * 460 * loose;
+      const c = crand();
+      if (o.kind === "cactus" && c < 0.55) {
+        // an arc where a jump's body passes (its top is ~130 up, the body 2–42
+        // above that): highest over the middle
+        const mid = d + o.w / 2;
+        for (const [dx, y] of [[-50, 122], [-17, 146], [17, 146], [50, 122]]) coins.push({ x: mid + dx, y });
+      } else if (o.kind === "bird" && o.lift >= 72) row(d - 10, 3, 20);
+      else if (c > 0.8 && next - (d + o.w) > 260) row(d + o.w + 90, 4, 20);
+      pos = next;
     }
   }
-  return { list, extend };
+  return { list, coins, extend };
 }
 
 export function newRunner() {
@@ -67,6 +86,10 @@ export function newRunner() {
     best: 0,       // longest run without a crash
     hit: new Set(),// obstacles already crashed into (you pass through those)
     first: 0,      // first obstacle that can still be on screen
+    taken: new Set(), // coins grabbed
+    cfirst: 0,     // first coin that can still be on screen
+    coins: 0,      // how many grabbed
+    events: [],    // coins grabbed this frame, for the screen to show (and clear)
   };
 }
 
@@ -123,6 +146,19 @@ export function step(s, course, dt) {
   while (s.first < list.length && list[s.first].x + list[s.first].w < s.x - DINO_X - 60) s.first++;
 
   const me = dinoBox(s);
+  // coins: any the dino's box touches
+  const coins = course.coins || [];
+  while (s.cfirst < coins.length && coins[s.cfirst].x < s.x - DINO_X - 40) s.cfirst++;
+  for (let i = s.cfirst; i < coins.length && coins[i].x - s.x < VIEW_W; i++) {
+    if (s.taken.has(i)) continue;
+    const cx = DINO_X + (coins[i].x - s.x), cy = coins[i].y;
+    if (cx + COIN_R > me.l && cx - COIN_R < me.r && cy + COIN_R > me.b && cy - COIN_R < me.t) {
+      s.taken.add(i);
+      s.coins += 1;
+      s.points += COIN_PTS;
+      s.events.push({ k: "coin", i, x: coins[i].x, y: cy });
+    }
+  }
   for (let i = s.first; i < list.length && list[i].x - s.x < VIEW_W; i++) {
     if (s.hit.has(i) || !overlap(me, obstacleBox(s, list[i]))) continue;
     s.hit.add(i);

@@ -52,8 +52,8 @@ export const HOW_TO = {
   },
   dino: {
     name: "Dino Dash",
-    goal: "Run as far as you can.",
-    steps: ["Tap (or ▲) to jump the cacti.", "Hold Duck (or ▼) to get under the birds.", "A crash knocks you back to slow and costs a few points — keep running.", "Together: a crash knocks you down — a friend grabbing a ❤️ gets you up."],
+    goal: "Run as far as you can, and grab the coins.",
+    steps: ["Tap (or ▲) to jump the cacti.", "Hold Duck (or ▼) to get under the birds.", "Coins arc over the cacti — jump in time to grab them — and line the ground under the high birds.", "A crash knocks you back to slow and costs a few points — keep running.", "Together: a crash knocks you down — a friend grabbing a ❤️ gets you up."],
     tip: "The faster you get, the earlier you need to jump.",
   },
   numbers: {

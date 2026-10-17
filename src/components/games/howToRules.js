@@ -40,7 +40,7 @@ export const HOW_TO = {
   wordrush: {
     name: "Word Rush",
     goal: "Unscramble as many words as you can.",
-    steps: ["Tap the letters in the right order to spell the word.", "Tap a letter in your answer to take it back, or ⌫ Undo.", "A finished word checks itself.", "Together: each of you has your own word from one pile — solve enough as a team."],
+    steps: ["Tap the letters in the right order to spell the word.", "Tap a letter in your answer to take it back, or ⌫ Undo.", "Words grow from 4 letters to 7. Longer words, quick solves and a streak score more; ★ golden words pay double.", "💡 Hint lights the next right letter; 👀 Answer shows the word — both cost a little.", "Together: each of you has your own word from one pile — solve enough as a team."],
     tip: "Look for the first letter and common endings like -ing, -er, -ed.",
   },
   arrows: {

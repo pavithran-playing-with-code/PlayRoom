@@ -75,7 +75,7 @@ export const GAMES = [
   },
   {
     slug: "wordrush", name: "Word Rush", icon: "🔤",
-    blurb: "Unscramble as many words as you can before time runs out.",
+    blurb: "Unscramble words from 4 letters up to 7 before time runs out. Streaks, quick solves and golden words.",
     minPlayers: 1, maxPlayers: 8, tag: "Word", col: "var(--lime)",
     coopMax: 4,
     coopLabel: "one pile of words — solve them together",

@@ -813,6 +813,49 @@ input::-ms-reveal,input::-ms-clear{display:none}
   font-family:Fredoka,sans-serif;font-weight:600;line-height:1;transition:background .12s}
 .wr-slot.filled{border-style:solid;box-shadow:0 3px 0 var(--ink)}
 .wr-tile{border-radius:12px}
+.wr-wrap{position:relative;margin:0 auto;text-align:center}
+.wr-head{display:flex;justify-content:center;align-items:center;gap:8px;min-height:30px;margin-bottom:12px}
+.wr-level{padding:3px 12px;border:2.5px solid var(--ink);border-radius:999px;background:var(--card);font-weight:800;font-size:.85rem;box-shadow:0 2px 0 var(--ink)}
+.wr-l2{background:var(--mint)}
+.wr-l3{background:var(--sky)}
+.wr-l4{background:var(--grape);color:#fff}
+.wr-goldtag{padding:3px 10px;border:2.5px solid var(--ink);border-radius:999px;background:#ffd34d;font-weight:900;font-size:.85rem;animation:smTag .6s ease-in-out infinite alternate}
+.wr-answer{position:relative}
+.wr-slot{background:transparent;transition:background .12s}
+.wr-slot.filled{background:#fff}
+.wr-in{display:inline-block;animation:wrIn .16s cubic-bezier(.3,1.6,.6,1)}
+.wr-answer.gold .wr-slot{border-color:#b07800}
+.wr-answer.good .wr-slot{background:var(--lime);animation:wrHop .35s ease-out both}
+.wr-answer.bad .wr-slot.filled{background:var(--coral);color:#fff}
+.wr-answer.bad{animation:smShake .3s}
+.wr-slot.shown{background:var(--sky,#BDE3FF)}
+.wr-slot.wr-hintback{background:#FFE3E3;outline:4px solid #ff8a3d;outline-offset:2px;animation:wrPulse .7s ease-in-out infinite alternate}
+.wr-tile{touch-action:manipulation;-webkit-tap-highlight-color:transparent;animation:wrDeal .22s cubic-bezier(.3,1.5,.6,1) both}
+.press.wr-tile.wr-hint{background:var(--mint);outline:4px solid #ff8a3d;outline-offset:2px;animation:wrPulse .7s ease-in-out infinite alternate;z-index:1}
+.wr-pop{position:absolute;left:50%;top:-10px;z-index:4;transform:translateX(-50%);white-space:nowrap;pointer-events:none;
+  font-family:Fredoka,sans-serif;font-weight:700;font-size:22px;color:#fff;-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;animation:tpFloat .9s ease-out forwards}
+.wr-pop-gold{color:#ffd34d}
+.wr-pop-quick{color:#7be08f}
+.wr-pop-bad{color:var(--coral);font-size:18px}
+.wr-meter{display:flex;align-items:center;gap:10px;margin:20px auto 0}
+.wr-flame{min-width:58px;text-align:center;padding:4px 10px;border:3px solid var(--ink);border-radius:999px;background:var(--card);box-shadow:0 3px 0 var(--ink);font-weight:900}
+.wr-mbar{flex:1;height:14px;border:3px solid var(--ink);border-radius:999px;background:var(--paper2);overflow:hidden}
+.wr-mbar i{display:block;height:100%;background:var(--lime);transition:width .18s ease-out}
+.wr-meter.hot .wr-mbar i{background:linear-gradient(90deg,#ffd34d,#ff8a3d,#ff4d6d,#ffd34d);background-size:300% 100%;animation:tpFire 1s linear infinite}
+.wr-meter.hot .wr-flame{background:var(--sun)}
+.wr-best{font-size:.82rem;color:var(--ink-soft);white-space:nowrap}
+.wr-banner{position:absolute;left:50%;top:40%;z-index:6;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;
+  padding:8px 16px;border:3px solid var(--ink);border-radius:18px;background:var(--sun);box-shadow:0 5px 0 var(--ink);
+  font-weight:900;font-size:clamp(17px,5.4vw,28px);animation:tpBanner 1.3s ease-out forwards}
+.wr-banner-level{background:var(--grape);color:#fff}
+.wr-banner-gold{background:linear-gradient(135deg,#ffe58a,#f2b632)}
+.wr-banner-streak{background:#ffb347}
+.wr-banner-lost{background:var(--paper2);color:var(--ink-soft);font-size:clamp(14px,4.2vw,20px)}
+@keyframes wrIn{0%{transform:scale(.3) translateY(10px)}100%{transform:none}}
+@keyframes wrHop{0%,100%{transform:translateY(0)}45%{transform:translateY(-8px)}}
+@keyframes wrDeal{0%{transform:scale(.5) rotate(-8deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes wrPulse{from{transform:scale(1)}to{transform:scale(1.08)}}
+@media (prefers-reduced-motion:reduce){.wr-tile,.press.wr-tile.wr-hint,.wr-answer.good .wr-slot,.wr-answer.bad,.wr-goldtag{animation:none}}
 
 /* ---------- Number Rush (.nr-): the rush, the golden number, shuffles ---------- */
 .nr-wrap{position:relative;text-align:center}

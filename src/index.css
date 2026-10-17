@@ -1234,6 +1234,25 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .mz-left{grid-area:left}
 .mz-down{grid-area:down}
 .mz-right{grid-area:right}
+/* on your own: gems in the dead ends, fog in the bigger mazes, the shows */
+.mz-gem{line-height:1;pointer-events:none;animation:mzGem 1s ease-in-out infinite alternate}
+.mz-cell.fog{background:#3b3550;border-color:#3b3550}
+.mz-cell.fog.goal{background:rgba(255,197,61,.35)}
+.mz-frame.mz-bumpA{animation:mzBumpA .2s}
+.mz-frame.mz-bumpB{animation:mzBumpB .2s}
+.mz-swipe{position:relative}
+.mz-pop{position:absolute;z-index:4;transform:translateX(-50%);white-space:nowrap;pointer-events:none;
+  font-family:Fredoka,sans-serif;font-weight:700;font-size:16px;color:#fff;-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;animation:tpFloat .9s ease-out forwards}
+.mz-banner{position:absolute;left:50%;top:42%;z-index:6;transform:translate(-50%,-50%);pointer-events:none;white-space:nowrap;
+  padding:8px 16px;border:3px solid var(--ink);border-radius:18px;background:var(--sun);box-shadow:0 5px 0 var(--ink);
+  font-weight:900;font-size:clamp(17px,5.4vw,28px);animation:tpBanner 1.4s ease-out forwards}
+.mz-banner-gems{background:#c9f0ff}
+.mz-banner-perfect{background:linear-gradient(135deg,#ffe58a,#f2b632)}
+.mz-banner-fog{background:var(--grape);color:#fff}
+@keyframes mzGem{from{transform:translateY(-1px) scale(.95)}to{transform:translateY(1px) scale(1.08)}}
+@keyframes mzBumpA{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+@keyframes mzBumpB{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+@media (prefers-reduced-motion:reduce){.mz-gem,.mz-frame.mz-bumpA,.mz-frame.mz-bumpB{animation:none}}
 
 /* ── STATION 13 in a room: the scoreboard pieces (.hmx-, from the game it
    replaced): the clock, your side's fuses, who's inside, the watching bar

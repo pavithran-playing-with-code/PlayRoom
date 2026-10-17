@@ -137,7 +137,7 @@ export const HOW_TO = {
   maze: {
     name: "Maze Runner",
     goal: "Find the way out of each maze.",
-    steps: ["Swipe or tap an arrow: the ball rolls to the next turning.", "Reach the 🚩 for a bigger maze.", "Together: someone finds the 🗝️, then anyone reaches the 🚪 to take everyone through."],
+    steps: ["On your own: 💎 gems wait in the dead ends — take them all before the 🚩 for a bonus. Match the par for a perfect route.", "From maze 4 there's fog: you only see near where you've been.", "Swipe or tap an arrow: the ball rolls to the next turning.", "Reach the 🚩 for a bigger maze.", "Together: someone finds the 🗝️, then anyone reaches the 🚪 to take everyone through."],
     tip: "Fewer moves score more.",
   },
   typing: {

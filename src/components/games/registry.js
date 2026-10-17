@@ -173,7 +173,7 @@ export const GAMES = [
   },
   {
     slug: "maze", name: "Maze Runner", icon: "🧭",
-    blurb: "One way out, and it gets bigger every time you find it.",
+    blurb: "Roll the ball through the maze to the flag. Grab the gems in the dead ends; later mazes are in fog.",
     minPlayers: 1, maxPlayers: 8, tag: "Brain", col: "var(--leaf)",
     coopMax: 4, defaultDuration: 300,
     coopLabel: "one maze — find the key, open the door",

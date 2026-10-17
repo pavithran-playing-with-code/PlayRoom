@@ -168,3 +168,39 @@ export function scoreForBoard(maze, level, moves) {
   const extra = Math.max(0, moves - fewestRolls(maze));
   return BOARD_BASE + BOARD_STEP * (Math.max(1, level) - 1) + Math.max(0, QUICK_BONUS - BONUS_PER_EXTRA * extra);
 }
+
+// ── on your own: gems in the dead ends, and fog in the bigger mazes ─────────
+// A few gems sit at the far ends of dead ends (never the start, the flag or
+// the key's cell), the same for everyone: a reason to go off the short way.
+// Take them all before the flag for a bonus. From maze FOG_FROM only what's
+// near where you've been can be seen.
+export const GEM_PTS = 10, ALL_GEMS = 30, FOG_FROM = 4, FOG_SEE = 2;
+const openCount = (maze, r, c) => DIRS.filter((d) => canMove(maze, r, c, d)).length;
+export function gemsFor(maze, seed, level) {
+  const rand = seededRand(((Number(seed) || 1) * 911 + level * 3571 + 13) % 2147483646 + 1);
+  rand(); rand();
+  const k = keyCell(maze);
+  // never beyond the flag: rolling onto it ends the maze, so a gem whose only
+  // way in passes the flag could never be taken (in a perfect maze that's when
+  // start→gem is start→flag + flag→gem)
+  const fromStart = distances(maze, maze.start), fromGoal = distances(maze, maze.goal);
+  const toGoal = fromStart[idx(maze, maze.goal.r, maze.goal.c)];
+  const ends = [];
+  for (let r = 0; r < maze.rows; r++) for (let c = 0; c < maze.cols; c++) {
+    if ((r === maze.start.r && c === maze.start.c) || (r === maze.goal.r && c === maze.goal.c) || (r === k.r && c === k.c)) continue;
+    if (fromStart[idx(maze, r, c)] === toGoal + fromGoal[idx(maze, r, c)]) continue;
+    if (openCount(maze, r, c) === 1) ends.push({ r, c });
+  }
+  const want = Math.min(ends.length, Math.min(6, 3 + Math.floor(level / 2)));
+  for (let i = ends.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [ends[i], ends[j]] = [ends[j], ends[i]]; }
+  return ends.slice(0, want);
+}
+// can (r, c) be seen, given the cells walked ("r,c" strings)? Always, before FOG_FROM.
+export function visible(level, seen, r, c) {
+  if (level < FOG_FROM) return true;
+  for (const key of seen) {
+    const [sr, sc] = key.split(",").map(Number);
+    if (Math.abs(sr - r) + Math.abs(sc - c) <= FOG_SEE) return true;
+  }
+  return false;
+}

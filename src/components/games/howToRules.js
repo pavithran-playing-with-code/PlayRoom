@@ -63,9 +63,9 @@ export const HOW_TO = {
   },
   colors: {
     name: "Color Dash",
-    goal: "Tap the colour that's named — before time's up.",
-    steps: ["A colour is named at the top.", "Tap the matching swatch within 1.5 seconds.", "Right taps build a streak worth more; a wrong tap costs points."],
-    tip: "Match the swatch shown with the name — don't stop to read.",
+    goal: "Tap the colour the card asks for — before the bar runs out.",
+    steps: ["A colour is named at the top: tap its tile.", "Later the swatch goes, then come colour words in the wrong ink — tap the WORD or the INK, as the card says.", "Then odd one out: nine tiles one colour, one a shade off.", "Right taps build a streak worth more; ★ fever rounds pay double; a wrong tap costs points."],
+    tip: "On word-vs-ink rounds, read the little label first.",
   },
   pipes: {
     name: "Pipes",

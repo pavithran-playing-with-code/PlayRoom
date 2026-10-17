@@ -108,7 +108,7 @@ export const GAMES = [
   },
   {
     slug: "colors", name: "Color Dash", icon: "🎨",
-    blurb: "Find the colour on the card before the bar runs out. Streaks score big.",
+    blurb: "Find the colour before the bar runs out — then word-vs-ink tricks and odd-one-out shades. Streaks score big.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--berry)",
     Component: ColorDash,
   },

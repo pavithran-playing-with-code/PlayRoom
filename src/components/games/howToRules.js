@@ -47,7 +47,7 @@ export const HOW_TO = {
   arrows: {
     name: "Arrow Escape",
     goal: "Get every arrow off the board.",
-    steps: ["Tap an arrow and it slides away along its path.", "It only moves if nothing is in front of its head — a blocked tap costs points and your streak.", "Arrows out in a row build a streak worth more.", "★ Golden arrows pay extra; a 💣 bomb arrow takes every arrow touching it.", "Clear a board quickly for a speed bonus, then a longer, twistier one."],
+    steps: ["Tap an arrow and it slides away along its path.", "It only moves if nothing is in front of its head.", "Clear a board to get a longer, twistier one."],
     tip: "Start with the arrows whose way out is already clear.",
   },
   dino: {

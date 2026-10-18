@@ -1,9 +1,10 @@
 // src/components/games/railScene.js
 // Rail Runner's world in 3D (three.js r128, loaded only when the game opens),
-// in the "Sky Sprint" look: a sky path over floating islands — grass on both
-// sides, red rails, lane lines — trees, cacti or neon crystals by theme,
-// floating islands drifting past, clouds, and stars at night. The themes
-// change as you run: Meadow Isles, Sunset Dunes, Neon Night.
+// in the "Sky Sprint" look: a railway over floating islands — a gravel bed
+// with a real track in each lane (sleepers and steel rails), kerbs and lamp
+// posts along it, grass on both sides — trees, cacti or neon crystals by
+// theme, floating islands drifting past, clouds, a sun (a moon at night) and
+// stars. The themes change as you run: Meadow Isles, Sunset Dunes, Neon Night.
 //
 // Only drawing: the rules stay in runnerSim.js. Its z runs forward; here the
 // runner heads down -z, so a sim distance d sits at z = -d. Lanes are -1/0/1,
@@ -17,13 +18,13 @@
 export const LANE = 3.2, CL = 36, THEME_M = 900;
 export const THEMES = ["Meadow Isles", "Sunset Dunes", "Neon Night"];
 const RAW = [
-  { top: "#3a9be8", bot: "#cfeeff", fog: "#cfeeff", hs: "#ffffff", hg: "#6a9a5a", hi: 0.95, dc: "#fff3d6", di: 0.85, grass: "#5fd06a", path: "#eadbb8", rail: "#ff6a4d", st: 0 },
-  { top: "#e8703a", bot: "#ffd9a0", fog: "#ffcf94", hs: "#fff0d8", hg: "#a07a50", hi: 0.95, dc: "#ffc880", di: 0.9, grass: "#e8c27a", path: "#b88f66", rail: "#5a2f22", st: 0 },
-  { top: "#0a0820", bot: "#3a1a7a", fog: "#2a1466", hs: "#8f7aff", hg: "#1a1038", hi: 0.7, dc: "#a58bff", di: 0.55, grass: "#2f2470", path: "#4a3f94", rail: "#37f0ff", st: 1 },
+  { top: "#2f8fe6", bot: "#d4f0ff", fog: "#cfeeff", hs: "#ffffff", hg: "#6a9a5a", hi: 0.9, dc: "#fff3d6", di: 0.9, grass: "#58c765", path: "#6c675f", rail: "#ff6a4d", slp: "#7a5536", steel: "#d8dde6", sun: "#fff4c4", sz: 1, st: 0 },
+  { top: "#d9582e", bot: "#ffd49a", fog: "#ffcf94", hs: "#fff0d8", hg: "#a07a50", hi: 0.9, dc: "#ffc070", di: 0.95, grass: "#e3b96c", path: "#8a6446", rail: "#6a3424", slp: "#5a3a22", steel: "#f0caa0", sun: "#ffb46a", sz: 1.6, st: 0 },
+  { top: "#0a0820", bot: "#3a1a7a", fog: "#2a1466", hs: "#8f7aff", hg: "#1a1038", hi: 0.7, dc: "#a58bff", di: 0.55, grass: "#2f2470", path: "#2e2758", rail: "#37f0ff", slp: "#1c1640", steel: "#5ff4ff", sun: "#dcd4ff", sz: 0.6, st: 1 },
 ];
 const HX = (x) => [1, 3, 5].map((i) => parseInt(x.substr(i, 2), 16) / 255);
-const KEYS = ["top", "bot", "fog", "hs", "hg", "dc", "grass", "path", "rail"];
-const TH = RAW.map((t) => { const o = { hi: t.hi, di: t.di, st: t.st }; for (const k of KEYS) o[k] = HX(t[k]); return o; });
+const KEYS = ["top", "bot", "fog", "hs", "hg", "dc", "grass", "path", "rail", "slp", "steel", "sun"];
+const TH = RAW.map((t) => { const o = { hi: t.hi, di: t.di, st: t.st, sz: t.sz }; for (const k of KEYS) o[k] = HX(t[k]); return o; });
 const rnd = (a, b) => a + Math.random() * (b - a), pick = (a) => a[(Math.random() * a.length) | 0], lerp = (a, b, t) => a + (b - a) * t;
 export const themeAt = (d) => Math.floor(Math.max(0, d) / THEME_M) % 3;
 
@@ -71,12 +72,13 @@ export function createRailScene(T, merge) {
   const mk = (c, o) => keep(new T.MeshPhongMaterial(Object.assign({ color: c, flatShading: true, shininess: 10, specular: 0x111111 }, o || {})));
   const cvs = (w, h, f) => { const c = document.createElement("canvas"); c.width = w; c.height = h; f(c.getContext("2d"), w, h); return keep(new T.CanvasTexture(c)); };
   const G = (g) => keep(g);
-  const cur = { ...Object.fromEntries(KEYS.map((k) => [k, [...TH[0][k]]])), hi: 0.95, di: 0.85, st: 0 };
+  const cur = { ...Object.fromEntries(KEYS.map((k) => [k, [...TH[0][k]]])), hi: TH[0].hi, di: TH[0].di, st: 0, sz: 1 };
 
   // ── sky, clouds, stars ──
   // the scenery: Lambert (lit per corner, not per pixel) — cheap on a phone, and flat faces keep it low-poly
   const mkL = (c, o) => keep(new T.MeshLambertMaterial(Object.assign({ color: c }, o || {})));
-  const mGrass = mkL(0x5fd06a), mPath = mkL(0xeadbb8), mRail = mkL(0xff6a4d), mLine = mkL(0xffffff, { transparent: true, opacity: 0.5 });
+  const mGrass = mkL(0x58c765), mPath = mkL(0x6c675f), mRail = mkL(0xff6a4d), mSlp = mkL(0x7a5536);
+  const mSteel = mk(0xd8dde6, { shininess: 90, specular: 0xffffff }), mPole = mkL(0x3a4150), mLampHd = mkL(0xfff2b0, { emissive: 0xc8a040 });
   const skyMat = keep(new T.ShaderMaterial({
     side: T.BackSide, depthWrite: false, fog: false, uniforms: { top: { value: new T.Color() }, bot: { value: new T.Color() } },
     vertexShader: "varying vec3 v;void main(){v=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
@@ -95,25 +97,55 @@ export function createRailScene(T, merge) {
   stg.setAttribute("position", new T.BufferAttribute(sa, 3));
   const stars = new T.Points(stg, keep(new T.PointsMaterial({ color: 0xffffff, size: 3, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false })));
   stars.frustumCulled = false; scene.add(stars);
+  // the sun (by night a moon): a glow far ahead, beside the path
+  const sun = new T.Sprite(keep(new T.SpriteMaterial({ map: glow, transparent: true, depthWrite: false, fog: false })));
+  scene.add(sun);
   function applyTheme(i, dt) {
     const t = TH[i], k = Math.min(1, dt * 0.7);
     for (const p of KEYS) for (let j = 0; j < 3; j++) cur[p][j] += (t[p][j] - cur[p][j]) * k;
-    cur.hi += (t.hi - cur.hi) * k; cur.di += (t.di - cur.di) * k; cur.st += (t.st - cur.st) * k;
+    cur.hi += (t.hi - cur.hi) * k; cur.di += (t.di - cur.di) * k; cur.st += (t.st - cur.st) * k; cur.sz += (t.sz - cur.sz) * k;
     skyMat.uniforms.top.value.setRGB(...cur.top); skyMat.uniforms.bot.value.setRGB(...cur.bot); scene.fog.color.setRGB(...cur.fog);
     hemi.color.setRGB(...cur.hs); hemi.groundColor.setRGB(...cur.hg); hemi.intensity = cur.hi; dir.color.setRGB(...cur.dc); dir.intensity = cur.di;
-    mGrass.color.setRGB(...cur.grass); mPath.color.setRGB(...cur.path); mRail.color.setRGB(...cur.rail); stars.material.opacity = cur.st;
+    mGrass.color.setRGB(...cur.grass); mPath.color.setRGB(...cur.path); mRail.color.setRGB(...cur.rail); mSlp.color.setRGB(...cur.slp); stars.material.opacity = cur.st;
+    mSteel.color.setRGB(...cur.steel); mSteel.emissive.setRGB(cur.steel[0] * cur.st * 0.5, cur.steel[1] * cur.st * 0.5, cur.steel[2] * cur.st * 0.5);
+    sun.material.color.setRGB(...cur.sun); sun.scale.setScalar(150 * cur.sz);
     for (const c of clouds) c.material.color.setRGB(lerp(cur.bot[0], 1, 0.5) * (1 - cur.st * 0.7), lerp(cur.bot[1], 1, 0.5) * (1 - cur.st * 0.7), lerp(cur.bot[2], 1, 0.5) * (1 - cur.st * 0.4));
   }
 
   // ── the path, and what grows by it ──
-  const gPath = G(new T.BoxGeometry(LANE * 3 + 0.4, 0.8, CL)), gSide = G(new T.BoxGeometry(14, 2.4, CL)), gRail = G(new T.BoxGeometry(0.35, 0.55, CL)), gLine = G(new T.BoxGeometry(0.1, 0.02, CL));
+  const gPath = G(new T.BoxGeometry(LANE * 3 + 0.4, 0.8, CL)), gSide = G(new T.BoxGeometry(14, 2.4, CL)), gRail = G(new T.BoxGeometry(0.35, 0.55, CL));
+  // a track in each lane: sleepers every SLP m, two steel rails; lamp posts along the kerbs
+  const SLP = 1.5, gSleeper = G(new T.BoxGeometry(2.2, 0.12, 0.42)), gSteel = G(new T.BoxGeometry(0.13, 0.16, CL));
+  const gPole = G(new T.CylinderGeometry(0.09, 0.12, 4.4, 6)), gArmP = G(new T.BoxGeometry(1.1, 0.1, 0.1)), gLampHd = G(new T.BoxGeometry(0.5, 0.16, 0.3));
   const stripe = cvs(64, 64, (g) => { g.fillStyle = "#fff"; g.fillRect(0, 0, 64, 64); g.fillStyle = "#ff4d4d"; for (let i = -64; i < 128; i += 32) { g.beginPath(); g.moveTo(i, 64); g.lineTo(i + 16, 64); g.lineTo(i + 80, 0); g.lineTo(i + 64, 0); g.fill(); } });
-  const chev = cvs(128, 128, (g) => { g.fillStyle = "#2a1a5a"; g.fillRect(0, 0, 128, 128); g.lineWidth = 14; g.strokeStyle = "#ffc83d"; for (let y = -20; y < 150; y += 44) { g.beginPath(); g.moveTo(10, y + 40); g.lineTo(64, y); g.lineTo(118, y + 40); g.stroke(); } });
-  const mStripe = mk(0xffffff, { map: stripe }), mChev = keep(new T.MeshPhongMaterial({ map: chev, flatShading: true })), mWall = mk(0x6a3fd0), mWallTop = mk(0x8a5ff0), mDark = mk(0x2a3140);
-  const mGold = mk(0xffc83d, { emissive: 0x8a5a00, shininess: 80, specular: 0xffffcc }), mHeart = mk(0xff5d73, { emissive: 0x8a1030, shininess: 60 });
+  const mStripe = mk(0xffffff, { map: stripe }), mDark = mk(0x2a3140);
+  const mGold = mk(0xffcc33, { emissive: 0xa86e00, shininess: 100, specular: 0xffffdd }), mHeart = mk(0xff5d73, { emissive: 0x8a1030, shininess: 60 });
+  // the train cars: a few liveries, each a body, a lighter roof, a stripe, a
+  // band of windows down both sides and a painted face (windscreen, a
+  // destination board, headlights) toward you
+  const LIVERY = [[0xe8433a, 0xffffff, "#e8433a", "#ffffff"], [0x2f6fe0, 0xffd23d, "#2f6fe0", "#ffd23d"], [0x18a37a, 0xffffff, "#18a37a", "#ffffff"], [0x7a4fe0, 0x37f0ff, "#7a4fe0", "#37f0ff"]];
+  const mGlass = mk(0x1a2433, { shininess: 120, specular: 0x88aacc }), mUnderT = mk(0x22262e), mHead = keep(new T.MeshBasicMaterial({ color: 0xfff6c0 }));
+  const liveries = LIVERY.map(([body, stripeC, css, cssStripe]) => ({
+    body: mk(body, { shininess: 40, specular: 0x333333 }),
+    roof: mk(new T.Color(body).lerp(new T.Color(0xffffff), 0.35).getHex()),
+    stripe: mk(stripeC),
+    face: keep(new T.MeshPhongMaterial({ flatShading: true, map: cvs(256, 288, (g, w, h) => {
+      g.fillStyle = css; g.fillRect(0, 0, w, h);
+      g.fillStyle = "rgba(255,255,255,.18)"; g.fillRect(0, 0, w, 14);                    // the roof's edge
+      g.fillStyle = "#11161f"; g.fillRect(36, 26, 184, 30);                               // the destination board
+      g.fillStyle = "#ffb43a"; g.font = "800 22px Nunito, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("EXPRESS", 128, 42);
+      g.fillStyle = "#1a2433"; g.beginPath(); g.moveTo(26, 72); g.lineTo(230, 72); g.lineTo(220, 150); g.lineTo(36, 150); g.closePath(); g.fill();   // the windscreen
+      g.fillStyle = "rgba(160,200,255,.35)"; g.beginPath(); g.moveTo(40, 80); g.lineTo(100, 80); g.lineTo(70, 142); g.lineTo(46, 142); g.closePath(); g.fill();
+      g.fillStyle = cssStripe; g.fillRect(0, 176, w, 26);                                 // the stripe, round the front
+      g.fillStyle = "#11161f"; g.fillRect(96, 214, 64, 40);                                // the coupler
+      for (const x of [52, 204]) { g.fillStyle = "#fff6c0"; g.beginPath(); g.arc(x, 232, 17, 0, 6.3); g.fill(); g.fillStyle = "#ffffff"; g.beginPath(); g.arc(x, 232, 8, 0, 6.3); g.fill(); }
+    }) })),
+  }));
+  const mBoard = mk(0xffffff, { map: stripe }), mWarn = keep(new T.MeshBasicMaterial({ color: 0xffa020 })), mRed = keep(new T.MeshBasicMaterial({ color: 0xff3b3b }));
   const gLow = G(new T.BoxGeometry(2.7, 0.95, 0.9)), gHighBar = G(new T.BoxGeometry(2.9, 0.7, 0.5)), gPost = G(new T.BoxGeometry(0.3, 3.2, 0.3)), gCoin = G(new T.CylinderGeometry(0.42, 0.42, 0.12, 14).rotateX(Math.PI / 2));
-  const gTrain = G(new T.BoxGeometry(2.7, 3.4, 1)), gTrainTop = G(new T.BoxGeometry(2.4, 0.25, 1));   // a car: stretched to its length
-  const gWallF = G(new T.PlaneGeometry(2.5, 2.3)), gLamp = G(new T.SphereGeometry(0.18, 6, 5)), mLamp = keep(new T.MeshBasicMaterial({ color: 0xff3b3b }));
+  // a car's parts, each 1 long and stretched to the car's length
+  const gTrain = G(new T.BoxGeometry(2.7, 2.9, 1)), gTrainTop = G(new T.BoxGeometry(2.45, 0.3, 1)), gBand = G(new T.BoxGeometry(2.74, 0.3, 1)), gWin = G(new T.BoxGeometry(2.76, 0.7, 1)), gChassis = G(new T.BoxGeometry(2.3, 0.5, 1));
+  const gFace = G(new T.PlaneGeometry(2.7, 2.9)), gLamp = G(new T.SphereGeometry(0.16, 8, 6)), gLegB = G(new T.BoxGeometry(0.16, 0.5, 0.16));
   const heartShape = new T.Shape(); heartShape.moveTo(0, -0.5); heartShape.bezierCurveTo(-0.9, 0.1, -0.5, 0.75, 0, 0.35); heartShape.bezierCurveTo(0.5, 0.75, 0.9, 0.1, 0, -0.5);
   const gHeart = G(new T.ExtrudeGeometry(heartShape, { depth: 0.25, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 2 }));
   const gTrunk = G(new T.CylinderGeometry(0.25, 0.35, 1.6, 6)), gCone = G(new T.ConeGeometry(1.7, 3.4, 7)), gSph = G(new T.SphereGeometry(1.7, 7, 5)), gRock = G(new T.IcosahedronGeometry(1.2, 0));
@@ -140,7 +172,15 @@ export function createRailScene(T, merge) {
     const g = new T.Group();
     pine = pick(mPine);
     g.add(mesh(gPath, mPath, 0, -0.4, 0), mesh(gSide, mGrass, -LANE * 1.5 - 7.4, -1.45, 0), mesh(gSide, mGrass, LANE * 1.5 + 7.4, -1.45, 0),
-      mesh(gRail, mRail, -LANE * 1.5 - 0.1, 0.28, 0), mesh(gRail, mRail, LANE * 1.5 + 0.1, 0.28, 0), mesh(gLine, mLine, -LANE / 2, 0.02, 0), mesh(gLine, mLine, LANE / 2, 0.02, 0));
+      mesh(gRail, mRail, -LANE * 1.5 - 0.1, 0.28, 0), mesh(gRail, mRail, LANE * 1.5 + 0.1, 0.28, 0));
+    for (const lx of [-LANE, 0, LANE]) {
+      g.add(mesh(gSteel, mSteel, lx - 0.72, 0.14, 0), mesh(gSteel, mSteel, lx + 0.72, 0.14, 0));
+      for (let z = -CL / 2 + SLP / 2; z < CL / 2; z += SLP) g.add(mesh(gSleeper, mSlp, lx, 0.04, z));
+    }
+    for (const sd of [-1, 1]) for (const z of [-CL / 4, CL / 4]) {
+      const x = sd * (LANE * 1.5 + 0.9);
+      g.add(mesh(gPole, mPole, x, 2.2, z), mesh(gArmP, mPole, x - sd * 0.5, 4.35, z), mesh(gLampHd, mLampHd, x - sd * 0.95, 4.27, z));
+    }
     for (let i = 0; i < (phone ? 5 : 8); i++) { const z = rnd(-CL / 2, CL / 2); decor(th, -(LANE * 1.5 + rnd(1.8, 12)), z, g); decor(th, LANE * 1.5 + rnd(1.8, 12), z + rnd(-2, 2), g); }
     for (const sd of [-1, 1]) if (Math.random() < 0.7) {
       const I = new T.Group();
@@ -274,15 +314,22 @@ export function createRailScene(T, merge) {
   const items = new Map();       // sim item -> mesh
   function itemMesh(o) {
     const m = new T.Group();
-    if (o.kind === "low") m.add(mesh(gLow, mStripe, 0, 0.475, 0));
-    else if (o.kind === "high") m.add(mesh(gPost, mDark, -1.4, 1.6, 0), mesh(gPost, mDark, 1.4, 1.6, 0), mesh(gHighBar, mStripe, 0, 1.65, 0));
+    if (o.kind === "low") {
+      // a barrier: a striped board on two legs, a warning lamp at each end (as tall as before: 0.95)
+      m.add(mesh(gLow, mBoard, 0, 0.7, 0, 1, 0.5, 0.5), mesh(gLegB, mDark, -1.1, 0.25, 0), mesh(gLegB, mDark, 1.1, 0.25, 0),
+        mesh(gLamp, mWarn, -1.2, 1.05, 0, 0.7), mesh(gLamp, mWarn, 1.2, 1.05, 0, 0.7));
+    } else if (o.kind === "high") m.add(mesh(gPost, mDark, -1.4, 1.6, 0), mesh(gPost, mDark, 1.4, 1.6, 0), mesh(gHighBar, mStripe, 0, 1.65, 0),
+      mesh(gLamp, mRed, -1.4, 3.25, 0), mesh(gLamp, mRed, 1.4, 3.25, 0));
     else if (o.kind === "train") {
-      // a train car: a long purple block, a chevron face toward you, lamps on top
-      const len = o.len;
-      m.add(mesh(gTrain, mWall, 0, 1.7, -len / 2, 1, 1, len));
-      m.add(mesh(gTrainTop, mWallTop, 0, 3.5, -len / 2, 1, 1, len - 0.4));
-      const f = new T.Mesh(gWallF, mChev); f.position.set(0, 1.7, 0.02); m.add(f);
-      for (const sx of [-0.9, 0.9]) m.add(mesh(gLamp, mLamp, sx, 3.55, -0.2));
+      // a train car in one of the liveries (by where it is, so it's the same on every phone)
+      const len = o.len, L = liveries[Math.abs(Math.round(o.z)) % liveries.length], mid = -len / 2;
+      m.add(mesh(gChassis, mUnderT, 0, 0.3, mid, 1, 1, len - 0.6),
+        mesh(gTrain, L.body, 0, 2.0, mid, 1, 1, len),
+        mesh(gTrainTop, L.roof, 0, 3.6, mid, 1, 1, len - 0.3),
+        mesh(gBand, L.stripe, 0, 1.4, mid, 1, 1, len - 0.1),
+        mesh(gWin, mGlass, 0, 2.55, mid, 1, 1, len - 1.4));
+      const f = new T.Mesh(gFace, L.face); f.position.set(0, 2.0, 0.01); m.add(f);
+      for (const sx of [-0.85, 0.85]) m.add(mesh(gLamp, mHead, sx, 0.95, 0.05));
     }
     scene.add(m);
     return m;
@@ -365,13 +412,16 @@ export function createRailScene(T, merge) {
     // A soft camera. Locked to the runner, the whole world lurched sideways
     // at every lane change and rose with every jump — heavy. Now it drifts a
     // little after you, so you see the runner glide across a steady path.
-    camX += (px * 0.3 - camX) * Math.min(1, dt * 5);
-    cam.position.set(camX + sx, 4.3 + sy, pz + 7.4);
-    cam.lookAt(camX * 0.8, 1.5, pz - 12);
+    // Further back and higher than it was: on an upright phone the runner sat
+    // at the screen's edge in an outside lane, under half a screen of sky.
     const portrait = cam.aspect < 1;
-    const fov = (portrait ? 78 : 64) + Math.max(0, Math.min(1, (s.speed - 14) / 16)) * 7;
+    camX += (px * (portrait ? 0.5 : 0.3) - camX) * Math.min(1, dt * 5);
+    cam.position.set(camX + sx, (portrait ? 5.6 : 4.6) + sy, pz + (portrait ? 9.4 : 7.8));
+    cam.lookAt(camX * 0.8, portrait ? 0.8 : 1.3, pz - 14);
+    const fov = (portrait ? 72 : 62) + Math.max(0, Math.min(1, (s.speed - 14) / 16)) * 7;
     if (Math.abs(cam.fov - fov) > 0.05) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 3); cam.updateProjectionMatrix(); }
     sky.position.copy(cam.position); stars.position.copy(cam.position);
+    sun.position.set(cam.position.x + 140, cam.position.y + 150 - cur.st * 40, cam.position.z - 700);
     dir.position.set(px - 20, 50, pz + 30); dir.target.position.set(px, 0, pz); dir.target.updateMatrixWorld();
     renderer.render(scene, cam);
   }

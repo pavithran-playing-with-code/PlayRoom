@@ -1,134 +1,149 @@
 // src/components/games/SlidePuzzle.jsx
-// The sliding tile puzzle: get the numbers back in order with the gap at the
-// end. Tap any tile in the gap's row or column and the whole line slides
-// (or swipe); the tiles glide rather than jump. Two 3×3 boards, then 4×4, and
-// every second board is a picture cut into tiles. A tile in its own place
-// wears a tick; a finished row chimes. Fewer moves and a quicker solve score
-// more. The rules are slideRules.js; everyone in a room gets the same boards.
+// The old sliding tile puzzle, kept to 3×3: numbers 1–8 and one empty slot.
+// Tap a tile next to the slot and it slides in. Get them back in order to
+// clear the board, then a fresh one appears. Fewer moves scores more.
+//
+// Boards are shuffled by making random legal moves from the solved state, so
+// every board can always be solved. Everyone in a room gets the same boards.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
-import sfx from "./sfx";
-import { makeBoard, slideFrom, swipe, isSolved, rowsDone, scoreFor, sizeFor, isPicture } from "./slideRules.js";
+import { seededRand } from "./seededRand";
 
-const SOLVED_MS = 1300;      // a solved board, before the next
-const SWIPE_PX = 24;
+const N = 3;                       // 3 x 3: eight tiles and a gap
+const SIZE = N * N;
+const SHUFFLE_MOVES = 56;
+const SOLVED_MS = 900;
+const scoreFor = (moves) => Math.max(50, 300 - moves * 4);
+
+const solved = () => [...Array(SIZE - 1).keys()].map((i) => i + 1).concat(0);
+const isSolved = (tiles) => tiles.every((t, i) => t === solved()[i]);
+const neighbours = (i) => {
+  const x = i % N, y = Math.floor(i / N);
+  return [[x, y - 1], [x + 1, y], [x, y + 1], [x - 1, y]]
+    .filter(([nx, ny]) => nx >= 0 && ny >= 0 && nx < N && ny < N)
+    .map(([nx, ny]) => ny * N + nx);
+};
+
+// Shuffle by sliding, never by shuffling the numbers: that way the board is
+// always solvable (a random arrangement is only solvable half the time).
+function makeBoard(seed, level) {
+  const rand = seededRand((Number(seed) || 1) * 8191 + level * 31337 + 7);
+  for (let i = 0; i < 6; i++) rand();
+  const tiles = solved();
+  let gap = SIZE - 1;
+  let last = -1;
+  for (let i = 0; i < SHUFFLE_MOVES; i++) {
+    const cameFrom = last;                                       // don't undo the move just made
+    const options = neighbours(gap).filter((n) => n !== cameFrom);
+    const pick = options[Math.floor(rand() * options.length)];
+    tiles[gap] = tiles[pick];
+    tiles[pick] = 0;
+    last = gap;
+    gap = pick;
+  }
+  // A shuffle that lands back on the solved board would be a free point.
+  if (isSolved(tiles)) return makeBoard(seed, level + 1000);
+  return tiles;
+}
 
 export default function SlidePuzzle(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
     startedAt, serverNow, isSpectator = false, spectatorWatching = null,
     spectatorState = null } = props;
 
-  // Taps act on the ref, so two taps in one tick can't both slide the same tile.
-  const live = useRef(null);
-  if (live.current === null) live.current = { level: 1, tiles: makeBoard(seed, 1).tiles, moves: 0, busy: false, began: performance.now(), rows: 0, solved: 0 };
-  const [view, setView] = useState(() => ({ level: 1, tiles: live.current.tiles, moves: 0 }));
-  const show = () => { const L = live.current; setView({ level: L.level, tiles: L.tiles, moves: L.moves }); };
-  const board = useMemo(() => makeBoard(seed, view.level), [seed, view.level]);
-  const n = board.n;
 
-  // Watching draws the same board the player is on: the tiles move rather
-  // than being rebuilt, so the arrangement itself has to travel.
+  const [level, setLevel] = useState(1);
+  const start = useMemo(() => makeBoard(seed, level), [seed, level]);
+  const [tiles, setTiles] = useState(start);
+  const [moves, setMoves] = useState(0);
+  const [done, setDone] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  // Taps act on the ref, so two taps in one tick can't both slide the same tile.
+  const live = useRef({ tiles: start, moves: 0, level: 1, busy: false });
+
+  // Watching draws the same board the player is on: the tiles move rather than being rebuilt, so the arrangement itself has to travel.
   const spectate = useSpectate({
     isSpectator, spectatorState,
     snapshot: () => ({ tiles: live.current.tiles, moves: live.current.moves, level: live.current.level }),
-    apply: (st) => { Object.assign(live.current, { tiles: st.tiles, moves: st.moves || 0, level: st.level || 1 }); show(); },
+    apply: (st) => {
+      live.current.tiles = st.tiles;
+      live.current.moves = st.moves;
+      live.current.level = st.level;
+      setTiles(st.tiles);
+      setMoves(st.moves);
+      setLevel(st.level);
+    },
   });
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
     extraState: spectate.extraState });
-  const playing = !isSpectator && !eng.gameOver;
 
-  const timers = useRef(new Set());
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-  const later = (fn, ms) => { const t = setTimeout(() => { timers.current.delete(t); fn(); }, ms); timers.current.add(t); };
+  const timers = useRef([]);
   const uid = useRef(0);
-  const [fx, setFx] = useState({ banner: null, done: null, nudge: 0 });
-  function banner(text, cls = "") {
-    const id = ++uid.current;
-    setFx((f) => ({ ...f, banner: { id, text, cls } }));
-    later(() => setFx((f) => (f.banner && f.banner.id === id ? { ...f, banner: null } : f)), 1300);
-  }
-
-  function apply(r) {
-    if (!r) { setFx((f) => ({ ...f, nudge: f.nudge + 1 })); sfx.tone(140, 0.07, 0.04, "sine", 110); return; }
-    const L = live.current;
-    L.tiles = r.tiles;
-    L.moves += r.moved;
-    eng.addMove();
-    sfx.tone(260 + r.moved * 35, 0.07, 0.09, "triangle", 190);
-    sfx.noise(0.03, 0.05, 3200, "bandpass");
-    if (isSolved(r.tiles)) {
-      L.busy = true;
-      const sc = scoreFor(n, L.moves, (performance.now() - L.began) / 1000);
-      eng.addScore(sc.total);
-      L.solved += 1;
-      sfx.sparkle(); sfx.chime(5);
-      setFx((f) => ({ ...f, banner: null, done: { moves: L.moves, ...sc } }));
-      later(() => {
-        L.level += 1; L.moves = 0; L.rows = 0; L.busy = false; L.began = performance.now();
-        L.tiles = makeBoard(seed, L.level).tiles;
-        setFx((f) => ({ ...f, done: null }));
-        show();
-        const lv = L.level;
-        banner(`Board ${lv} · ${sizeFor(lv)}×${sizeFor(lv)}${isPicture(lv) ? " picture" : ""}`, sizeFor(lv) > sizeFor(lv - 1) ? "sp-banner-new" : "");
-      }, SOLVED_MS);
-    } else {
-      const rows = rowsDone(r.tiles, n);
-      if (rows > L.rows) { sfx.chime(rows); banner(`Row ${rows} ✓`, "sp-banner-row"); }
-      L.rows = rows;
-    }
-    show();
-  }
-
-  // Tap or swipe on the board: worked out from where the finger went down and came up.
-  const press = useRef(null);
-  const geo = useRef({ cell: 0, gap: 0 });
-  function down(e) {
-    if (!playing || live.current.busy) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    press.current = { x: e.clientX, y: e.clientY, rx: e.clientX - rect.left, ry: e.clientY - rect.top };
-  }
-  function up(e) {
-    const p = press.current;
-    press.current = null;
-    if (!p || !playing || live.current.busy) return;
-    const L = live.current, dx = e.clientX - p.x, dy = e.clientY - p.y;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) >= SWIPE_PX) {
-      const dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
-      apply(swipe(L.tiles, n, dir));
-      return;
-    }
-    const { cell, gap } = geo.current;
-    const col = Math.floor(p.rx / (cell + gap)), row = Math.floor(p.ry / (cell + gap));
-    if (col < 0 || row < 0 || col >= n || row >= n) return;
-    apply(slideFrom(L.tiles, n, row * n + col));
-  }
-
-  // the last ten seconds tick; a soft beat under it
-  const secs = Math.ceil(eng.timeLeft);
-  useEffect(() => { if (playing && !eng.unlimited && secs > 0 && secs <= 10) sfx.tick(secs <= 3); }, [secs, playing, eng.unlimited]);
-  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => 84, 0.3); return () => b.stop(); }, [playing]);
-  const ended = useRef(false);
   useEffect(() => {
-    if (!eng.gameOver || isSpectator || ended.current) return;
-    ended.current = true;
-    if (eng.won || eng.rank === 1) sfx.win(); else sfx.lose();
-  }, [eng.gameOver, eng.won, eng.rank, isSpectator]);
+    const t = timers.current;
+    return () => t.forEach(clearTimeout);
+  }, []);
+  const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
+
+  function say(text, type) {
+    const n = ++uid.current;
+    setMsg({ text, type });
+    later(() => setMsg((m) => (uid.current === n ? null : m)), 1200);
+  }
+
+  function slide(i) {
+    if (eng.gameOver || isSpectator) return;
+    const s = live.current;
+    if (s.busy || s.tiles[i] === 0) return;
+    const gap = s.tiles.indexOf(0);
+    if (!neighbours(gap).includes(i)) return;        // not next to the gap: nothing happens
+
+    const next = s.tiles.slice();
+    next[gap] = next[i];
+    next[i] = 0;
+    s.tiles = next;
+    s.moves += 1;
+    setTiles(next);
+    setMoves(s.moves);
+    eng.addMove();
+
+    if (isSolved(next)) {
+      s.busy = true;
+      const gain = scoreFor(s.moves);
+      eng.addScore(gain);
+      setDone(true);
+      say(`Solved in ${s.moves} moves! +${gain}`, "success");
+      later(() => {
+        s.level += 1;
+        s.moves = 0;
+        s.busy = false;
+        setLevel(s.level);
+        setMoves(0);
+        setDone(false);
+      }, SOLVED_MS);
+    }
+  }
+
+  // A new board arrives with the level.
+  useEffect(() => {
+    live.current.tiles = start;
+    setTiles(start);
+  }, [start]);
 
   const oppList = Object.values(eng.opponents);
   const specScore = spectatorWatching?.score ?? 0;
   const stats = isSpectator
-    ? [{ label: "Score", value: Number(specScore).toLocaleString() }, { label: "Board", value: view.level }]
+    ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
-        { label: "Board", value: view.level },
-        { label: "Moves", value: view.moves },
+        { label: "Board", value: level },
+        { label: "Moves", value: moves },
       ];
-  const tiles = view.tiles.length === n * n ? view.tiles : board.tiles;     // a watcher's snapshot from another size, briefly
-  const done = !!fx.done;
 
   return (
     <>
@@ -139,59 +154,41 @@ export default function SlidePuzzle(props) {
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={oppList}
         teams={eng.teams}
+        message={msg}
         onQuit={eng.endMatch}
-        sound
       >
         {({ w, h }) => {
-          const hint = 40;
-          const side = Math.floor(Math.max(160, Math.min(w - 16, h - hint - 16, 460)));
-          const gap = Math.round(side * 0.022);
-          const cell = (side - gap * (n - 1)) / n;
-          geo.current = { cell, gap };
-          const at = (i) => `translate(${(i % n) * (cell + gap)}px, ${Math.floor(i / n) * (cell + gap)}px)`;
-          const pic = board.picture;
-          const g = tiles.indexOf(0);
-          const ready = (i) => i % n === g % n || Math.floor(i / n) === Math.floor(g / n);
+          const hint = 34;
+          const side = Math.floor(Math.max(160, Math.min(w, h - hint, 440)));
+          const gap = Math.round(side * 0.025);
+          const cell = Math.floor((side - gap * (N - 1)) / N);
+          const gapIndex = tiles.indexOf(0);
           return (
-            <div className="sp-wrap">
-              <div className={`sp-frame${done ? " done" : ""}${fx.nudge % 2 ? " sp-nudgeA" : fx.nudge ? " sp-nudgeB" : ""}`} style={{ width: side + 16 }}>
-                <div className="sp-board" style={{ width: side, height: side }}
-                  onPointerDown={down} onPointerUp={up} onPointerCancel={() => { press.current = null; }}>
-                  {Array.from({ length: n * n - 1 }, (_, k) => k + 1).map((t) => {
-                    const i = tiles.indexOf(t);
-                    const home = i === t - 1;
-                    const hx = (t - 1) % n, hy = Math.floor((t - 1) / n);
+            <div style={{ textAlign: "center" }}>
+              <div className={`sp-frame${done ? " done" : ""}`} style={{ width: side + 16 }}>
+                <div className="sp-grid" style={{ gridTemplateColumns: `repeat(${N}, ${cell}px)`, gridAutoRows: `${cell}px`, gap }}>
+                  {tiles.map((t, i) => {
+                    if (t === 0) return <span key={`gap${i}`} className="sp-gap" />;
+                    const canMove = neighbours(gapIndex).includes(i);
                     return (
-                      <div key={`${view.level}-${t}`} className={`sp-tile${home ? " home" : ""}${pic ? " pic" : ""}${playing && ready(i) ? " ready" : ""}`}
-                        role="button" aria-label={`Tile ${t}${home ? ", in place" : ""}`}
-                        style={{ width: cell, height: cell, transform: at(i), fontSize: Math.round(cell * (n > 3 ? 0.4 : 0.42)),
-                          animationDelay: done ? `${(hx + hy) * 45}ms` : undefined,
-                          ...(pic ? { background: `linear-gradient(135deg, hsl(${board.hue} 85% 78%), hsl(${(board.hue + 50) % 360} 80% 62%))`,
-                            backgroundSize: `${side}px ${side}px`, backgroundPosition: `${-hx * (cell + gap)}px ${-hy * (cell + gap)}px` } : null) }}>
-                        {pic
-                          ? <>
-                              <span className="sp-pic" style={{ width: side, height: side, left: -hx * (cell + gap), top: -hy * (cell + gap), fontSize: side * 0.78 }}>{pic}</span>
-                              <span className="sp-no">{t}</span>
-                            </>
-                          : <span className="sp-num">{t}</span>}
-                      </div>
+                      <button key={t} type="button" className={`press sp-tile${canMove ? " ready" : ""}`}
+                        style={{ fontSize: Math.round(cell * 0.42) }}
+                        aria-label={`Tile ${t}${canMove ? ", can slide" : ""}`}
+                        onClick={() => slide(i)}>
+                        {t}
+                      </button>
                     );
                   })}
-                  {done && <div className="sp-solved">
-                    <b>Solved!</b>
-                    <span>{fx.done.moves} moves · +{fx.done.pts}{fx.done.fast ? ` · fast +${fx.done.fast}` : ""}</span>
-                  </div>}
                 </div>
               </div>
-              <div className="muted sp-help">{n}×{n} · tap a tile in the gap's row or column, or swipe</div>
-              {fx.banner && <div key={fx.banner.id} className={`sp-banner ${fx.banner.cls}`}>{fx.banner.text}</div>}
+              <div className="muted sp-help">Put 1–8 back in order · tap a tile beside the gap</div>
             </div>
           );
         }}
       </GameFrame>
 
       {eng.gameOver && !isSpectator && (
-        <GameOver eng={eng} me={currentUser} extra={`Puzzles solved: ${view.level - 1}`} />
+        <GameOver eng={eng} me={currentUser} extra={`Puzzles solved: ${level - 1}`} />
       )}
     </>
   );

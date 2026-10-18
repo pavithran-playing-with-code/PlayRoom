@@ -272,21 +272,9 @@ export function createRailScene(T, merge) {
 
   // ── what's on the course: one mesh per sim item ──
   const items = new Map();       // sim item -> mesh
-  // power-ups: a glowing gem in the power's colour, with a ring round it
-  const POWER_COL = { magnet: 0xff4d6d, double: 0xffc53d, shield: 0x4cc9f0 };
-  const gPow = G(new T.IcosahedronGeometry(0.42, 0)), gRing = G(new T.TorusGeometry(0.62, 0.06, 6, 20));
-  const mPow = Object.fromEntries(Object.entries(POWER_COL).map(([k, c]) => [k, mk(c, { emissive: c, emissiveIntensity: 0.55 })]));
-  const mRing = mk(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.6 });
-  // the shield, round the runner while it lasts
-  const bubble = new T.Mesh(G(new T.SphereGeometry(1.25, 14, 10)), keep(new T.MeshBasicMaterial({ color: 0x4cc9f0, transparent: true, opacity: 0.22, depthWrite: false })));
-  bubble.visible = false; scene.add(bubble);
   function itemMesh(o) {
     const m = new T.Group();
-    if (o.kind === "power") {
-      const gem = new T.Mesh(gPow, mPow[o.p] || mPow.double); gem.position.y = 1.25; m.add(gem);
-      const ring = new T.Mesh(gRing, mRing); ring.position.y = 1.25; m.add(ring);
-      m.userData.power = true;
-    } else if (o.kind === "low") m.add(mesh(gLow, mStripe, 0, 0.475, 0));
+    if (o.kind === "low") m.add(mesh(gLow, mStripe, 0, 0.475, 0));
     else if (o.kind === "high") m.add(mesh(gPost, mDark, -1.4, 1.6, 0), mesh(gPost, mDark, 1.4, 1.6, 0), mesh(gHighBar, mStripe, 0, 1.65, 0));
     else if (o.kind === "train") {
       // a train car: a long purple block, a chevron face toward you, lamps on top
@@ -330,21 +318,12 @@ export function createRailScene(T, merge) {
         coinsNow.set(o, [x, y, z]);
         continue;
       }
-      if (o.hit) {
-        const m = items.get(o);
-        if (m) {
-          if (o.kind === "power") { const c = new T.Color(POWER_COL[o.p] || 0xffc53d); burst(m.position.x, 1.3, m.position.z, 30, c.r, c.g, c.b, 6); }
-          else burst(m.position.x, 1.2, m.position.z, 22, 1, 0.55, 0.3, 7);
-          scene.remove(m); items.delete(o);
-        }
-        continue;
-      }
+      if (o.hit) { const m = items.get(o); if (m) { burst(m.position.x, 1.2, m.position.z, 22, 1, 0.55, 0.3, 7); scene.remove(m); items.delete(o); } continue; }
       if (o.z > s.z + 200 || (o.z + (o.len || 0)) < s.z - 12) continue;
       let m = items.get(o);
       if (!m) { m = itemMesh(o); items.set(o, m); }
       seen.add(o);
-      m.position.set(o.lane * LANE, m.userData.power ? Math.sin(t * 3 + o.z) * 0.15 : 0, -o.z);
-      if (m.userData.power) { m.children[0].rotation.set(t * 1.3, t * 2.2, 0); m.children[1].rotation.set(Math.PI / 2 + Math.sin(t * 2) * 0.4, 0, t); }
+      m.position.set(o.lane * LANE, 0, -o.z);
     }
     for (const [o, m] of items) if (!seen.has(o)) { scene.remove(m); items.delete(o); }
     coinMesh.count = nc; coinMesh.instanceMatrix.needsUpdate = true;
@@ -359,9 +338,6 @@ export function createRailScene(T, merge) {
       m.position.set(0, 1.5 + Math.sin(t * 3 + at) * 0.15, -at); m.rotation.y = t * 2.5;
     }
     for (const [at, m] of hearts) if (!hseen.has(at)) { burst(m.position.x, m.position.y, m.position.z, 14, 1, 0.4, 0.5, 5); scene.remove(m); hearts.delete(at); }
-    // the shield's bubble, shimmering round you
-    bubble.visible = !!s.shield;
-    if (bubble.visible) { bubble.position.set(px, py + 1.1, pz); const k = 1 + Math.sin(t * 6) * 0.04; bubble.scale.set(k, k, k); }
     // you
     hero.g.position.z = pz;
     poseHero(hero, { x: px, y: py, grounded, sliding, stun: s.stunT > 0, safe: s.safeT > 0 && s.stunT <= 0, speed: s.speed, dt, t });

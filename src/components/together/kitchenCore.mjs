@@ -27,11 +27,6 @@ export const BURN_S = 9;              // …and this much more until it burns
 export const MAX_ORDERS = 4;
 export const FIRST_ORDER = 1.5;       // seconds in
 export const TIP = 0.5;               // a plate handed in at once earns half again
-// Orders served one after another, none running out between, build a combo:
-// each one worth 10% more than the last, up to half again. A plate nobody
-// ordered, or an order that runs out, ends it.
-export const COMBO_STEP = 0.1, COMBO_MAX = 5;
-export const comboMult = (streak) => 1 + COMBO_STEP * Math.min(COMBO_MAX, Math.max(0, streak - 1));
 
 //   # counter   T tomato  L lettuce  C cheese  B bun  M meat   (crates)
 //   K chopping board   S stove   P plates   W serving window   X bin   . floor
@@ -138,11 +133,10 @@ function whyNot(pl, it) {
 
 // How many points make one, two and three stars, for this many cooks and
 // this long. Scaled so a steady solo cook gets two stars and a team that
-// works together gets three (raised from 75 when the service combo came in,
-// so the stars mean what they meant: check-kitchen.mjs holds it there).
+// works together gets three.
 export function starLine(players, durSec) {
   const min = Math.max(1, durSec / 60);
-  const base = 95 * min * (1 + 0.6 * (Math.max(1, players) - 1));
+  const base = 75 * min * (1 + 0.6 * (Math.max(1, players) - 1));
   return [Math.round(base), Math.round(base * 2), Math.round(base * 3)];
 }
 
@@ -150,7 +144,7 @@ export function createSide(seed, { players, durMs }) {
   const s = {
     rand: seededRand((Number(seed) || 1) * 7 + 3), t: 0, dur: durMs / 1000, n: Math.max(1, players.length),
     tiles: [], at: new Map(), players: new Map(), orders: [], nextOrder: FIRST_ORDER, oid: 0,
-    score: 0, served: 0, missed: 0, ev: [], streak: 0, best: 0,
+    score: 0, served: 0, missed: 0, ev: [],
   };
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -185,16 +179,14 @@ function serve(s, pl, pid) {
     if (RECIPES[o.r].parts.join(",") !== key) continue;
     if (!best || o.until < best.until) best = o;
   }
-  if (!best) { s.ev.push({ type: "wrong", id: pid, broke: s.streak }); s.streak = 0; return 0; }
+  if (!best) { s.ev.push({ type: "wrong", id: pid }); return 0; }
   const rec = RECIPES[best.r];
   const left = Math.max(0, best.until - s.t) / best.life;
-  s.streak += 1;
-  s.best = Math.max(s.best, s.streak);
-  const pts = Math.round((rec.pts + Math.round(rec.pts * TIP * left)) * comboMult(s.streak));
+  const pts = rec.pts + Math.round(rec.pts * TIP * left);
   s.score += pts;
   s.served++;
   s.orders = s.orders.filter((o) => o !== best);
-  s.ev.push({ type: "served", id: pid, r: best.r, pts, streak: s.streak });
+  s.ev.push({ type: "served", id: pid, r: best.r, pts });
   // an empty pass: the next order comes sooner
   if (!s.orders.length) s.nextOrder = Math.min(s.nextOrder, s.t + 2);
   return pts;
@@ -291,7 +283,7 @@ export function step(s, dt) {
   }
   // the orders
   for (const o of s.orders) {
-    if (o.until <= s.t) { o.gone = true; s.missed++; s.ev.push({ type: "expired", r: o.r, broke: s.streak }); s.streak = 0; }
+    if (o.until <= s.t) { o.gone = true; s.missed++; s.ev.push({ type: "expired", r: o.r }); }
   }
   s.orders = s.orders.filter((o) => !o.gone);
   if (s.t >= s.nextOrder && s.orders.length < MAX_ORDERS) {
@@ -384,7 +376,7 @@ export function view(s, peek = false) {
     p: [...s.players.values()].map((p) => [p.id, r2(p.x), r2(p.y), r2(p.fx), r2(p.fy), packItem(p.hold), p.chop !== null ? 1 : 0, p.left ? 1 : 0]),
     i: s.tiles.filter((t) => t.item).map((t) => [t.i, packItem(t.item)]),
     o: s.orders.map((o) => [o.id, o.r, r2(o.until - s.t), o.life]),
-    sc: s.score, sv: s.served, ms: s.missed, st: stars(s), sk: s.streak,
+    sc: s.score, sv: s.served, ms: s.missed, st: stars(s),
     e: ev,
   };
 }
@@ -394,5 +386,5 @@ export function init(s) {
 }
 
 export function summary(s) {
-  return { served: s.served, missed: s.missed, stars: stars(s), line: s.line, combo: s.best };
+  return { served: s.served, missed: s.missed, stars: stars(s), line: s.line };
 }

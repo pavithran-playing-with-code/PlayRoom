@@ -29,17 +29,3 @@ export function makeBoard(seed, level) {
   }));
   return { cols, rows, n, cells };
 }
-
-// ── twists drawn on top of a grid (the numbers and their order never change) ──
-// From grid 5, every SHUFFLE_EVERY numbers the tiles trade places — the same
-// way on every phone, from the seed, the grid and how far the count has got.
-export const SHUFFLE_FROM = 5, SHUFFLE_EVERY = 6;
-export const shuffleStep = (level, next) => (level >= SHUFFLE_FROM ? Math.floor((next - 1) / SHUFFLE_EVERY) : 0);
-// where each cell sits (an index into the grid's places) after `step` shuffles
-export function placesFor(seed, level, step, n) {
-  const places = Array.from({ length: n }, (_, i) => i);
-  if (step <= 0) return places;
-  const rand = seededRand((Number(seed) || 1) * 4099 + level * 271 + step * 7919 + 11);
-  for (let i = 0; i < 3; i++) rand();
-  return shuffleInPlace(places, rand);
-}

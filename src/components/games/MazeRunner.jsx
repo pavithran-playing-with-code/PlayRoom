@@ -22,9 +22,7 @@ import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
-import { N, E, S, W, DIRS, makeMaze, isOpen, slide, scoreForBoard, keyCell, BOARD_BASE, BOARD_STEP,
-  gemsFor, visible, fewestRolls, GEM_PTS, ALL_GEMS, FOG_FROM } from "./mazeBoard";
-import sfx from "./sfx";
+import { N, E, S, W, DIRS, makeMaze, isOpen, slide, scoreForBoard, keyCell, BOARD_BASE, BOARD_STEP } from "./mazeBoard";
 
 const MATE_COLOURS = ["#4CC9F0", "#FF6B6B", "#8FDB5C", "#FF8FC7", "#FFC53D", "#C77DFF"];
 // together, a door is worth the same to everyone: no bonus for one phone's moves
@@ -52,10 +50,7 @@ export default function MazeRunner(props) {
   const [roll, setRoll] = useState(1);   // squares in the last move, so a long roll takes a little longer
 
   // Moves act on the ref: two taps in one tick must each see the other.
-  const live = useRef({ level: 1, r: 0, c: 0, moves: 0, solved: 0, busy: false, seen: ["0,0"], key: false, gems: [] });
-  // on your own: gems taken in this maze ("r,c"), the shows
-  const [gemsGot, setGemsGot] = useState([]);
-  const [fx, setFx] = useState({ banner: null, bump: 0, pops: [] });
+  const live = useRef({ level: 1, r: 0, c: 0, moves: 0, solved: 0, busy: false, seen: ["0,0"], key: false });
   // together: the others, as they last said — { lv, r, c, k, done } by user id
   const mates = useRef(new Map());
   const [, redraw] = useState(0);
@@ -75,7 +70,6 @@ export default function MazeRunner(props) {
     snapshot: () => ({
       level: live.current.level, r: live.current.r, c: live.current.c,
       moves: live.current.moves, solved: live.current.solved, seen: live.current.seen, key: live.current.key,
-      gems: live.current.gems,
     }),
     apply: (st) => {
       live.current.level = st.level;
@@ -84,8 +78,6 @@ export default function MazeRunner(props) {
       live.current.seen = st.seen || [];
       live.current.key = !!st.key;
       setHasKey(!!st.key);
-      live.current.gems = st.gems || [];
-      setGemsGot(st.gems || []);
       setLevel(st.level);
       setPos({ r: st.r, c: st.c });
       setMoves(st.moves);
@@ -102,8 +94,6 @@ export default function MazeRunner(props) {
 
   const maze = useMemo(() => makeMaze(seed, level), [seed, level]);
   const keyAt = useMemo(() => (coop ? keyCell(maze) : null), [coop, maze]);
-  const gems = useMemo(() => (coop ? [] : gemsFor(maze, seed, level)), [coop, maze, seed, level]);
-  const par = useMemo(() => (coop ? 0 : fewestRolls(maze)), [coop, maze]);
   const seats = (players || []).filter((p) => !p.is_spectator).map((p) => Number(p.user_id)).sort((a, b) => a - b);
   const colourOf = (id) => MATE_COLOURS[Math.max(0, seats.indexOf(Number(id))) % MATE_COLOURS.length];
   const nameOf = (id) => (players || []).find((p) => Number(p.user_id) === Number(id))?.username || "Someone";
@@ -120,28 +110,6 @@ export default function MazeRunner(props) {
     setMsg({ text, type });
     later(() => setMsg((m) => (uid.current === n ? null : m)), 1200);
   }
-  function banner(text, cls = "") {
-    const id = ++uid.current;
-    setFx((f) => ({ ...f, banner: { id, text, cls } }));
-    later(() => setFx((f) => (f.banner && f.banner.id === id ? { ...f, banner: null } : f)), 1400);
-  }
-  function popAt(r, c, text) {
-    const id = ++uid.current;
-    setFx((f) => ({ ...f, pops: [...f.pops.slice(-3), { id, r, c, text }] }));
-    later(() => setFx((f) => ({ ...f, pops: f.pops.filter((p) => p.id !== id) })), 900);
-  }
-
-  // the last ten seconds tick; a soft beat under it; the end
-  const playing = !isSpectator && !eng.gameOver;
-  const secs = Math.ceil(eng.timeLeft);
-  useEffect(() => { if (playing && !eng.unlimited && secs > 0 && secs <= 10) sfx.tick(secs <= 3); }, [secs, playing, eng.unlimited]);
-  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => 84, 0.3); return () => b.stop(); }, [playing]);
-  const ended = useRef(false);
-  useEffect(() => {
-    if (!eng.gameOver || isSpectator || ended.current) return;
-    ended.current = true;
-    if (coop ? live.current.solved >= 1 : (eng.won || eng.rank === 1)) sfx.win(); else sfx.lose();
-  }, [eng.gameOver, eng.won, eng.rank, isSpectator]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function step(dir) {
     if (eng.gameOver || isSpectator) return;
@@ -150,10 +118,7 @@ export default function MazeRunner(props) {
     const m = makeMaze(seed, s.level);
     // Roll to the end of the corridor (see slide() in mazeBoard.js).
     const path = slide(m, s.r, s.c, dir);
-    if (!path.length) { sfx.tone(130, 0.07, 0.05, "sine", 90); setFx((f) => ({ ...f, bump: f.bump + 1 })); return; }
-    // a roll: longer, longer sound
-    sfx.noise(0.06 + path.length * 0.025, 0.05, 700, "lowpass", 0, 300);
-    sfx.tone(240 + path.length * 20, 0.06, 0.04, "triangle", 180);
+    if (!path.length) { say("Wall!", "error"); return; }
 
     const end = path[path.length - 1];
     s.r = end.r;
@@ -169,39 +134,18 @@ export default function MazeRunner(props) {
     setSeen(new Set(s.seen));
     eng.addMove();
 
-    // on your own: gems rolled over are yours
-    if (!coop) {
-      const gemSet = new Set(gemsFor(m, seed, s.level).map((g) => `${g.r},${g.c}`));
-      for (const p of path) {
-        const k = `${p.r},${p.c}`;
-        if (gemSet.has(k) && !s.gems.includes(k)) {
-          s.gems = [...s.gems, k];
-          eng.addScore(GEM_PTS);
-          sfx.tone(sfx.note(84 + s.gems.length * 2), 0.12, 0.07, "square");
-          popAt(p.r, p.c, `+${GEM_PTS} 💎`);
-        }
-      }
-      setGemsGot(s.gems);
-    }
-
     // together: rolling over the key takes it, and the door opens for everyone
     if (coop && !s.key) {
       const k = keyCell(m);
       if (path.some((p) => p.r === k.r && p.c === k.c)) {
         s.key = true;
         setHasKey(true);
-        sfx.chime(3);
         say("🗝️ Got the key — the door is open!", "success");
       }
     }
 
     if (s.r === m.goal.r && s.c === m.goal.c) {
-      if (coop && !s.key) { sfx.thud(); say("🔒 The door's locked — someone has to find the 🗝️", "error"); tell(); return; }
-      if (!coop) {
-        const all = gemsFor(m, seed, s.level);
-        if (all.length && s.gems.length === all.length) { eng.addScore(ALL_GEMS); banner(`💎 All gems! +${ALL_GEMS}`, "mz-banner-gems"); }
-        else if (s.moves <= fewestRolls(m)) banner("✨ Perfect route!", "mz-banner-perfect");
-      }
+      if (coop && !s.key) { say("🔒 The door's locked — someone has to find the 🗝️", "error"); tell(); return; }
       clearBoard(coop ? doorPoints(s.level) : scoreForBoard(m, s.level, s.moves), null);
     }
     tell();
@@ -213,7 +157,6 @@ export default function MazeRunner(props) {
     if (s.busy) return;
     s.busy = true;
     eng.addScore(gain);
-    sfx.sparkle(); sfx.chime(4);
     s.solved += 1;
     setSolved(s.solved);
     setDone(true);
@@ -229,13 +172,7 @@ export default function MazeRunner(props) {
     s.seen = ["0,0"];
     s.busy = false;
     s.key = false;
-    s.gems = [];
-    setGemsGot([]);
     setHasKey(false);
-    if (!coop) {
-      const sz = makeMaze(seed, lv);
-      banner(lv === FOG_FROM ? `Maze ${lv} · 🌫️ fog!` : `Maze ${lv} · ${sz.rows}×${sz.cols}`, lv === FOG_FROM ? "mz-banner-fog" : "");
-    }
     setLevel(s.level);
     setPos({ r: 0, c: 0 });
     setMoves(0);
@@ -323,7 +260,7 @@ export default function MazeRunner(props) {
     // together every door counts for everyone, so this is the team's score
     { label: coop ? "Team" : "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
     { label: coop ? "Doors" : "Mazes", value: solved },
-    coop ? { label: "Key", value: hasKey ? "🗝️" : "—" } : { label: "Moves", value: `${moves} / par ${par}` },
+    coop ? { label: "Key", value: hasKey ? "🗝️" : "—" } : { label: "Moves", value: moves },
   ];
   const others = coop ? [...mates.current.values()].filter((m) => m.lv === level && Number(m.user_id) !== myId) : [];
 
@@ -358,29 +295,25 @@ export default function MazeRunner(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
-        sound
         controls={controls}
       >
         {({ w, h }) => {
           const hint = 26;
-          // the frame adds 6px of padding and a 3px border each side: leave room for them
-          const side = Math.floor(Math.max(180, Math.min(w - 18, h - hint - 18, 460)));
+          const side = Math.floor(Math.max(180, Math.min(w, h - hint, 460)));
           const cell = Math.floor(side / Math.max(maze.rows, maze.cols));
           const gw = cell * maze.cols, gh = cell * maze.rows;
           const wall = Math.max(2, Math.round(cell * 0.09));
           return (
             <div className="mz-swipe" style={{ width: w, height: h }}
               onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
-              <div className={`mz-frame${done ? " done" : ""}${fx.bump % 2 ? " mz-bumpA" : fx.bump ? " mz-bumpB" : ""}`} style={{ width: gw + 12 }}>
+              <div className={`mz-frame${done ? " done" : ""}`} style={{ width: gw + 12 }}>
                 <div className="mz-grid" style={{ width: gw, height: gh }}>
                   {maze.cells.map((bits, i) => {
                     const r = Math.floor(i / maze.cols), c = i % maze.cols;
                     const isGoal = r === maze.goal.r && c === maze.goal.c;
                     const walked = seen.has(`${r},${c}`);
-                    const fog = !coop && !visible(level, seen, r, c);
-                    const gem = !coop && !fog && gems.some((g) => g.r === r && g.c === c) && !gemsGot.includes(`${r},${c}`);
                     return (
-                      <span key={i} className={`mz-cell${walked ? " walked" : ""}${isGoal ? " goal" : ""}${fog ? " fog" : ""}`}
+                      <span key={i} className={`mz-cell${walked ? " walked" : ""}${isGoal ? " goal" : ""}`}
                         style={{
                           left: c * cell, top: r * cell, width: cell, height: cell,
                           borderTopWidth: isOpen(maze, r, c, N) ? 0 : wall,
@@ -389,7 +322,6 @@ export default function MazeRunner(props) {
                           borderLeftWidth: isOpen(maze, r, c, W) ? 0 : wall,
                         }}>
                         {isGoal && <span className={`mz-flag${coop ? (hasKey ? " open" : " locked") : ""}`} style={{ fontSize: Math.round(cell * 0.6) }}>{coop ? "🚪" : "🚩"}</span>}
-                        {gem && <span className="mz-gem" style={{ fontSize: Math.round(cell * 0.5) }}>💎</span>}
                         {coop && !hasKey && keyAt && keyAt.r === r && keyAt.c === c && <span className="mz-key" style={{ fontSize: Math.round(cell * 0.62) }}>🗝️</span>}
                       </span>
                     );
@@ -402,7 +334,6 @@ export default function MazeRunner(props) {
                         transform: `translate(${m.c * cell + cell * 0.28}px, ${m.r * cell + cell * 0.28}px)`,
                       }} />
                   ))}
-                  {fx.pops.map((p) => <span key={p.id} className="mz-pop" style={{ left: p.c * cell + cell / 2, top: p.r * cell }}>{p.text}</span>)}
                   {/* the token eases across rather than jumping */}
                   <span className="mz-token"
                     style={{
@@ -412,11 +343,10 @@ export default function MazeRunner(props) {
                     }} />
                 </div>
               </div>
-              {fx.banner && <div key={fx.banner.id} className={`mz-banner ${fx.banner.cls}`}>{fx.banner.text}</div>}
               <div className="muted mz-help">
                 {coop
                   ? (hasKey ? "The door is open — get anyone to the 🚪" : "Find the 🗝️ — then the 🚪 opens for everyone")
-                  : <>{maze.rows}×{maze.cols} · 💎 {gemsGot.length}/{gems.length} · swipe or tap an arrow — the ball rolls to the next turning</>}
+                  : <>{maze.rows}×{maze.cols} · swipe or tap an arrow — the ball rolls to the next turning</>}
               </div>
             </div>
           );

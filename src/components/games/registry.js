@@ -45,7 +45,7 @@ import HollowGame from "./HollowGame";
 export const GAMES = [
   {
     slug: "mahjong", name: "Mahjong Solitaire", icon: "🀄",
-    blurb: "Match free tiles and clear the board. Chain quick matches into combos and find the golden pair.",
+    blurb: "Match free tiles and clear the board before the clock stops.",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--sun)",
     coopMax: 4,
     coopLabel: "one stack — take pairs together",
@@ -54,7 +54,7 @@ export const GAMES = [
   },
   {
     slug: "memory", name: "Memory Match", icon: "🃏",
-    blurb: "Flip cards, remember pairs, chain combos and clear deck after deck. Watch for the golden pair!",
+    blurb: "Flip cards, remember pairs, race everyone else to the last one.",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--coral)",
     coopMax: 4,
     coopLabel: "one deck — find the pairs together",
@@ -63,19 +63,19 @@ export const GAMES = [
   },
   {
     slug: "speedmath", name: "Speed Math", icon: "➗",
-    blurb: "Sums that climb from + to ÷ and two-step puzzles. Answer fast for bonuses, build a ×2 streak, grab the ★ gold sums.",
+    blurb: "Answer fast, build a streak, watch the bonus points stack up.",
     minPlayers: 1, maxPlayers: 8, tag: "Brain", col: "var(--mint)",
     Component: SpeedMath,
   },
   {
     slug: "reaction", name: "Tap Rush", icon: "⚡",
-    blurb: "Smash the lit tiles, build a ×4 streak, crack the ice, grab the gold. Touch a bomb and the streak's gone.",
+    blurb: "Smash the lit tiles. Touch a bomb and you lose the streak.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--sky)",
     Component: TapRush,
   },
   {
     slug: "wordrush", name: "Word Rush", icon: "🔤",
-    blurb: "Unscramble words from 4 letters up to 7 before time runs out. Streaks, quick solves and golden words.",
+    blurb: "Unscramble as many words as you can before time runs out.",
     minPlayers: 1, maxPlayers: 8, tag: "Word", col: "var(--lime)",
     coopMax: 4,
     coopLabel: "one pile of words — solve them together",
@@ -90,7 +90,7 @@ export const GAMES = [
   },
   {
     slug: "dino", name: "Dino Dash", icon: "🦖",
-    blurb: "Jump the cacti, duck the birds, grab the coins, run into the night. Crash and you're back to slow.",
+    blurb: "Jump the cacti, duck the birds. Crash and you're back to slow, so keep running.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--leaf)",
     coopMax: 4,
     coopLabel: "run side by side — save each other with ❤️",
@@ -99,7 +99,7 @@ export const GAMES = [
   },
   {
     slug: "numbers", name: "Number Rush", icon: "🔢",
-    blurb: "Tap 1, 2, 3… in order. Build a rush, grab the golden number — and watch out, the tiles shuffle.",
+    blurb: "Tap 1, 2, 3… in order. Every grid you clear brings a bigger, busier one.",
     minPlayers: 1, maxPlayers: 8, tag: "Focus", col: "var(--ice)",
     coopMax: 4,
     coopLabel: "one grid — count together",
@@ -108,13 +108,13 @@ export const GAMES = [
   },
   {
     slug: "colors", name: "Color Dash", icon: "🎨",
-    blurb: "Find the colour before the bar runs out — then word-vs-ink tricks and odd-one-out shades. Streaks score big.",
+    blurb: "Find the colour on the card before the bar runs out. Streaks score big.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--berry)",
     Component: ColorDash,
   },
   {
     slug: "pipes", name: "Pipes", icon: "🚰",
-    blurb: "Turn the pipes until the water reaches every one. No loose ends, and fewest turns for a Perfect!",
+    blurb: "Turn the pipes until every one joins up to the source. No loose ends!",
     minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--pipe)",
     coopMax: 4,
     coopLabel: "one board — join the pipes together",
@@ -123,7 +123,7 @@ export const GAMES = [
   },
   {
     slug: "flappy", name: "Flappy Dash", icon: "🐤",
-    blurb: "Flap through the gaps, grab the stars, build a streak, fly into the night.",
+    blurb: "Tap to flap. Squeeze through the pipes and try not to meet one.",
     minPlayers: 1, maxPlayers: 8, tag: "Reflex", col: "var(--chick)",
     coopMax: 4,
     coopLabel: "fly side by side — save each other with ❤️",
@@ -132,13 +132,13 @@ export const GAMES = [
   },
   {
     slug: "slide", name: "Slide Puzzle", icon: "🔀",
-    blurb: "Slide the tiles back in order — then bigger boards and picture puzzles. Fewer moves, more points.",
+    blurb: "Slide the tiles until 1–8 are back in order. Fewer moves, more points.",
     minPlayers: 1, maxPlayers: 8, tag: "Puzzle", col: "var(--slate)",
     Component: SlidePuzzle,
   },
   {
     slug: "blocks", name: "Block Blast", icon: "🧱",
-    blurb: "Fit the pieces in and blast whole rows and columns. Chain combos, go for the all clear.",
+    blurb: "Fit the pieces in and clear whole rows and columns.",
     minPlayers: 1, maxPlayers: 8, tag: "Classic", col: "var(--brick)",
     Component: BlockDrop,
   },
@@ -146,13 +146,13 @@ export const GAMES = [
     // the "racer" slot: Turbo Racer once, now Road Hopper (the slug stays, so
     // old rooms and results still line up)
     slug: "racer", name: "Road Hopper", icon: "🐔",
-    blurb: "Hop across roads, rivers and railways. Build a hot streak, grab the gems, hop into winter.",
+    blurb: "Hop across roads, rivers and railways — how far can you get?",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--slate)",
     Component: RoadHopper,
   },
   {
     slug: "runner", name: "Rail Runner", icon: "🏃",
-    blurb: "Dodge, jump and slide down the rails, grab the coins and the power-ups: magnet, double, shield.",
+    blurb: "Run the rails: jump the barriers, slide under the bars, dodge the trains.",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--coral)",
     coopMax: 4,
     coopLabel: "run side by side — save each other with ❤️",
@@ -167,13 +167,13 @@ export const GAMES = [
   },
   {
     slug: "storm", name: "Dodge Storm", icon: "⚡",
-    blurb: "Dodge the storm of shards. Grab stars, shields and slow time; the longer you live, the more it pays.",
+    blurb: "Stay alive while the shards close in from every side.",
     minPlayers: 1, maxPlayers: 8, tag: "Arcade", col: "var(--berry)",
     Component: DodgeStorm,
   },
   {
     slug: "maze", name: "Maze Runner", icon: "🧭",
-    blurb: "Roll the ball through the maze to the flag. Grab the gems in the dead ends; later mazes are in fog.",
+    blurb: "One way out, and it gets bigger every time you find it.",
     minPlayers: 1, maxPlayers: 8, tag: "Brain", col: "var(--leaf)",
     coopMax: 4, defaultDuration: 300,
     coopLabel: "one maze — find the key, open the door",
@@ -182,7 +182,7 @@ export const GAMES = [
   },
   {
     slug: "typing", name: "Typing Race", icon: "⌨️",
-    blurb: "Type the words as fast as you can. Light the nitro, catch the golden words, race your friends' cars.",
+    blurb: "Type the words as fast as you can. Same words for everyone, streaks score big.",
     minPlayers: 1, maxPlayers: 8, tag: "Speed", col: "var(--ice)",
     Component: TypingRace,
   },

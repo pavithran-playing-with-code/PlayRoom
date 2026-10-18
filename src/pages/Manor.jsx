@@ -10,11 +10,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { newRun, tick, interact, toggleLight, actionLabel, timeText } from "../components/horror/s13Sim";
-import { NEED, isLit } from "../components/horror/s13Core.mjs";
+import { NEED } from "../components/horror/s13Core.mjs";
 import { createStation } from "../components/horror/s13Scene";
 import { createS13Audio } from "../components/horror/s13Audio";
 import { useSideways, goLandscape, toGame } from "../components/horror/LandscapeGate";
-import sfx, { useMuted } from "../components/games/sfx";
 
 const HUD_MS = 120;
 export const QN = ["Low", "Medium", "High"];
@@ -134,7 +133,7 @@ export default function Manor() {
       }
       for (const e of s.events) { audio.current.play(e); if (e.name === "caught") sc.flash(); }
       s.events.length = 0;
-      audio.current.tick(dt, s.P, [s.M], s.tlv, s.mode === "play" && screenRef.current === "play", { lit: isLit(s.st, s.lit, s.P.x, s.P.y), flick: s.flick });
+      audio.current.tick(dt, s.P, [s.M], s.tlv, s.mode === "play" && screenRef.current === "play");
       sc.frame({ mode: s.mode, P: s.P, monsters: [s.M], lit: s.lit, ready: s.fuses >= NEED, itemsGot: s.items.map((i) => i.got), tlv: s.tlv, flick: s.flick, shake: s.shake, catcher: 0 }, dt, t);
       if (s.mode !== lastMode.current) {
         lastMode.current = s.mode;
@@ -300,15 +299,11 @@ export default function Manor() {
 }
 
 // The battery and stamina bars, the [E] prompt, the line at the bottom, and
-// the stick under your thumb, the sound switch (every game's one mute) — the
-// same in a room.
+// the stick under your thumb — the same in a room.
 export function S13Hud({ h }) {
   const low = h.bat < 20;
-  const muted = useMuted();
   return (
     <>
-      <button type="button" className="s13-snd" aria-label={muted ? "Sound on" : "Sound off"}
-        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); sfx.setMuted(!muted); }}>{muted ? "🔇" : "🔊"}</button>
       <div className="s13-hud">
         <div className="s13-bt"><i className={low ? "low" : ""} style={{ width: `${h.bat}%` }} /></div>
         <div className="s13-st" style={{ opacity: h.stam < 0.98 ? 1 : 0 }}><i style={{ width: `${h.stam * 100}%` }} /></div>

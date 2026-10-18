@@ -5,19 +5,12 @@
 // (the seed); the room's clock decides it, and your best row counts. The
 // rules are hopperSim.js; this file draws them, blocky and a little 3D, and
 // reads the thumbs.
-//
-// Quick new rows are a hot streak (x2, x3); a gem rides a log now and then.
-// The seasons turn as you go — spring, autumn from row 50, snow from 100 —
-// every 25 rows is called out; dust on a landing, a splash in the water,
-// feathers off a car; and sound: hops that climb with the streak, a bell
-// before a train, a honk, a splash, an eagle's cry.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpecStream, { specLerp } from "./useSpecStream";
-import { newHopper, hop, step, score, rowAt, thingsAt, trainAt, gemOn, streakMult, COLS, HOP_S, GEM_PTS } from "./hopperSim.js";
-import sfx from "./sfx";
+import { newHopper, hop, step, score, rowAt, thingsAt, trainAt, COLS, HOP_S } from "./hopperSim.js";
 
 const SWIPE = 22;
 const CAR_COLOURS = ["#FF6B6B", "#4CC9F0", "#FFC53D", "#9B5DE5", "#8FDB5C", "#FF9F43"];
@@ -35,23 +28,7 @@ const shade = (hex, k) => {
   return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`;
 };
 
-// the seasons, by row: spring, autumn from 50, winter from 100
-const SEASONS = [
-  { grass: ["#8ED15A", "#83C64F"], leaf: ["#4FAE3E", "#3A8A2E", "#62C24E", "#46993A"] },
-  { grass: ["#D9B25A", "#CFA64C"], leaf: ["#E8892E", "#B9651E", "#F2A33C", "#C97624"] },
-  { grass: ["#EEF4FA", "#E2EAF2"], leaf: ["#5E9C7A", "#467A5E", "#F4F8FC", "#D5E0EA"] },
-];
-export const seasonOf = (n) => (n >= 100 ? 2 : n >= 50 ? 1 : 0);
-
-function drawGem(ctx, cx, cy, r) {
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r * 0.8, cy - r * 0.2); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r * 0.8, cy - r * 0.2); ctx.closePath();
-  ctx.fillStyle = "#6FE3F5"; ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = "#1C7A9A"; ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,.75)"; ctx.beginPath(); ctx.moveTo(cx - r * 0.3, cy - r * 0.45); ctx.lineTo(cx, cy - r * 0.75); ctx.lineTo(cx + r * 0.1, cy - r * 0.35); ctx.closePath(); ctx.fill();
-}
-
-function drawScene(ctx, W, H, h, camRow, now, fx) {
+function drawScene(ctx, W, H, h, camRow, now) {
   const S = W / COLS;
   const Y = (row) => H - (row - camRow + 1) * S;          // the top edge of a row on the screen
   const first = Math.floor(camRow) - 2, last = Math.ceil(camRow + H / S) + 2;
@@ -59,7 +36,7 @@ function drawScene(ctx, W, H, h, camRow, now, fx) {
   for (let n = last; n >= first; n--) {
     const r = rowAt(h.course, n), y = Y(n);
     if (r.kind === "grass") {
-      ctx.fillStyle = SEASONS[seasonOf(n)].grass[n % 2]; ctx.fillRect(0, y, W, S + 1);
+      ctx.fillStyle = n % 2 ? "#8ED15A" : "#83C64F"; ctx.fillRect(0, y, W, S + 1);
     } else if (r.kind === "road") {
       ctx.fillStyle = "#5A5C66"; ctx.fillRect(0, y, W, S + 1);
       const up = rowAt(h.course, n + 1);
@@ -86,10 +63,9 @@ function drawScene(ctx, W, H, h, camRow, now, fx) {
         const x = c * S;
         if (n < 0) { block(ctx, x + S * 0.06, y + S * 0.2, S * 0.88, S * 0.62, 0.3, "#4FAE3E", "#3A8A2E", S); continue; }   // behind the start: a low hedge
         ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.fillRect(x + S * 0.12, y + S * 0.72, S * 0.8, S * 0.18);
-        const lf = SEASONS[seasonOf(n)].leaf;
         block(ctx, x + S * 0.38, y + S * 0.55, S * 0.24, S * 0.22, 0.5, "#8A5A33", "#6B4423", S);
-        block(ctx, x + S * 0.12, y + S * 0.18, S * 0.76, S * 0.6, 1.1, lf[0], lf[1], S);
-        block(ctx, x + S * 0.24, y + S * 0.22, S * 0.5, S * 0.4, 1.6, lf[2], lf[3], S);
+        block(ctx, x + S * 0.12, y + S * 0.18, S * 0.76, S * 0.6, 1.1, "#4FAE3E", "#3A8A2E", S);
+        block(ctx, x + S * 0.24, y + S * 0.22, S * 0.5, S * 0.4, 1.6, "#62C24E", "#46993A", S);
       }
       if (r.coin >= 0 && !h.taken.has(n)) {
         const cx = (r.coin + 0.5) * S, cy = y + S * 0.4 + Math.sin(now * 4) * S * 0.05, sq = Math.abs(Math.cos(now * 3));
@@ -108,15 +84,13 @@ function drawScene(ctx, W, H, h, camRow, now, fx) {
         ctx.fillStyle = "#222"; for (const wx of [x + S * 0.12, x + w - S * 0.3]) ctx.fillRect(wx, y + S * 0.78, S * 0.18, S * 0.08);
       });
     } else if (r.kind === "river") {
-      const gem = h.gemTaken && h.gemTaken.has(n) ? -1 : gemOn(h, n);
-      thingsAt(r, h.t).forEach((c, li) => {
+      for (const c of thingsAt(r, h.t)) {
         const x = c.x0 * S, w = (c.x1 - c.x0) * S - S * 0.06;
         block(ctx, x, y + S * 0.22, w, S * 0.56, 0.22, "#A0703F", "#7A5230", S);
         ctx.strokeStyle = "rgba(90,60,30,.6)"; ctx.lineWidth = 1.5;
         for (let k = 1; k < (c.x1 - c.x0) * 2; k++) { ctx.beginPath(); ctx.moveTo(x + k * S * 0.5, y + S * 0.12); ctx.lineTo(x + k * S * 0.5 + S * 0.08, y + S * 0.62); ctx.stroke(); }
         ctx.fillStyle = "#C79A62"; ctx.beginPath(); ctx.ellipse(x + w, y + S * 0.38, S * 0.08, S * 0.24, 0, 0, Math.PI * 2); ctx.fill();
-        if (li === gem) drawGem(ctx, x + w / 2, y + S * 0.18 + Math.sin(now * 4) * S * 0.04, S * 0.2);
-      });
+      }
     } else {
       // the signal: red lights flashing before and while the train passes
       const tr = trainAt(r, h.t);
@@ -131,37 +105,6 @@ function drawScene(ctx, W, H, h, camRow, now, fx) {
       }
     }
     if (n === meRow) drawChicken(ctx, (hx + 0.5) * S, Y(hy) + S * 0.55, S, h, now);
-  }
-  // dust, splashes and feathers (in squares and rows, like everything else)
-  if (fx) {
-    for (const p of fx.parts) {
-      const life = Math.max(0, p.life / p.max);
-      ctx.globalAlpha = life;
-      ctx.fillStyle = p.col;
-      ctx.beginPath(); ctx.arc((p.x + 0.5) * S, Y(p.row) + S * 0.55 - p.up * S, S * p.r * (0.5 + 0.5 * life), 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    // the hot streak, in the corner
-    if (h.streak > 1) {
-      const mult = streakMult(h.streak);
-      ctx.font = `700 ${Math.round(S * 0.42)}px Fredoka, Nunito, sans-serif`;
-      ctx.textAlign = "left"; ctx.textBaseline = "top";
-      const text = `🔥 ${h.streak}${mult > 1 ? ` · ×${mult}` : ""}`;
-      ctx.lineWidth = 4; ctx.strokeStyle = "#2E2140"; ctx.strokeText(text, 8, 8);
-      ctx.fillStyle = mult >= 3 ? "#FF8A3D" : mult >= 2 ? "#FFD23F" : "#FFFFFF"; ctx.fillText(text, 8, 8);
-    }
-    if (fx.banner && now - fx.banner.at < 1.4) {
-      const t = (now - fx.banner.at) / 1.4;
-      ctx.globalAlpha = t > 0.75 ? (1 - t) / 0.25 : 1;
-      ctx.font = `700 ${Math.round(S * 0.5)}px Fredoka, Nunito, sans-serif`;
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      const bw = ctx.measureText(fx.banner.text).width + S * 0.8, by = H * 0.3 - t * 10;
-      ctx.fillStyle = fx.banner.fill; ctx.strokeStyle = "#2E2140"; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(W / 2 - bw / 2, by - S * 0.42, bw, S * 0.84, S * 0.42) : ctx.rect(W / 2 - bw / 2, by - S * 0.42, bw, S * 0.84);
-      ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#2E2140"; ctx.fillText(fx.banner.text, W / 2, by + 1);
-      ctx.globalAlpha = 1;
-    }
   }
 }
 
@@ -207,7 +150,6 @@ export default function RoadHopper(props) {
         hp: h.hop ? [h.hop.from[0], r3(h.hop.from[1]), h.hop.to[0], h.hop.to[1], r3(h.hop.t)] : 0,
         b: h.best, c: h.coins, k: h.crashes, l: h.last,
         tk: [...h.taken].filter((n) => n >= lo && n < lo + 50),
-        bo: h.bonus, sk: h.streak, gm: h.gems, gt: [...h.gemTaken].filter((n) => n >= lo && n < lo + 50),
       };
     },
   });
@@ -222,23 +164,7 @@ export default function RoadHopper(props) {
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const flash = (text, type, ms = 1400) => { setMsg({ text, type }); timers.current.push(setTimeout(() => setMsg(null), ms)); };
 
-  const go = (dir) => {
-    if (overRef.current || isSpectator) return;
-    const h = sim.current;
-    if (hop(h, dir)) sfx.tone(sfx.note(67 + Math.min(14, h.streak)), 0.07, 0.06, "triangle", null);
-  };
-  const fxRef = useRef({ parts: [], banner: null });
-  const tempoRef = useRef(90);
-  const playing = !isSpectator && !eng.gameOver;
-  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => tempoRef.current, 0.4); return () => b.stop(); }, [playing]);
-  const secs = Math.ceil(eng.timeLeft);
-  useEffect(() => { if (playing && !eng.unlimited && secs > 0 && secs <= 10) sfx.tick(secs <= 3); }, [secs, playing, eng.unlimited]);
-  const ended = useRef(false);
-  useEffect(() => {
-    if (!eng.gameOver || isSpectator || ended.current) return;
-    ended.current = true;
-    if (eng.won || eng.rank === 1) sfx.win(); else sfx.lose();
-  }, [eng.gameOver, eng.won, eng.rank, isSpectator]);
+  const go = (dir) => { if (!overRef.current && !isSpectator) hop(sim.current, dir); };
 
   // keys
   useEffect(() => {
@@ -265,53 +191,17 @@ export default function RoadHopper(props) {
   useEffect(() => {
     if (isSpectator) return undefined;
     let raf, last = performance.now(), pushed = 0, lastHud = 0, cam = -3;
-    const F = fxRef.current, rung = new Set();
-    // cosmetic only: a puff of n bits at a square, flying up and out
-    const puff = (x, row, n, col, spread, up, r = 0.07) => {
-      for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2; F.parts.push({ x, row, vx: Math.cos(a) * spread, vr: Math.sin(a) * spread * 0.4, up: 0, vu: up * (0.5 + Math.random() * 0.5), life: 0.5, max: 0.5, col, r }); }
-    };
-    let mile = 0;
     const frame = (now) => {
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));   // never backwards: the first frame can be stamped early
       last = Math.max(last, now);
       const h = sim.current;
       if (!overRef.current) {
         const out = step(h, dt);
-        if (out.crashed) {
-          flash(SAY[out.crashed] || "Ouch!", "error");
-          const w = out.crashed, at = h.x;
-          if (w === "car") { sfx.tone(392, 0.12, 0.06, "square"); sfx.tone(330, 0.16, 0.06, "square", null, 0.12); sfx.thud(); }
-          else if (w === "water" || w === "edge") sfx.noise(0.45, 0.2, 900, "lowpass", 0, 300);
-          else if (w === "train") { sfx.crack(); sfx.thud(); }
-          else if (w === "eagle") { sfx.tone(1400, 0.35, 0.06, "sawtooth", 700); sfx.whoosh(); }
-          puff(at, h.row, 10, w === "water" || w === "edge" ? "#BFE8FF" : "#FFFFFF", 2.4, 1.6, 0.09);
-        }
-        if (out.landed && !out.crashed) puff(h.x, h.row, 4, "rgba(200,190,160,.8)", 1.4, 0.5, 0.06);
-        if (out.coin) { flash("🪙 +25", "success", 700); sfx.tone(sfx.note(88), 0.1, 0.07, "square"); sfx.tone(sfx.note(93), 0.14, 0.06, "square", null, 0.07); }
-        if (out.gem) { flash(`💎 +${GEM_PTS}`, "success", 900); sfx.sparkle(); puff(h.x, h.row, 8, "#6FE3F5", 2, 1.4); }
-        if (out.multUp) { sfx.chime(streakMult(out.streak) + 2); F.banner = { text: `🔥 Hot streak ×${streakMult(out.streak)}!`, fill: "#FFB347", at: now / 1000 }; }
-        if (out.row) {
-          const m = Math.floor(h.best / 25);
-          if (m > mile) {
-            mile = m;
-            const season = h.best === 50 ? "🍂 Autumn" : h.best === 100 ? "❄️ Winter" : null;
-            sfx.chime(Math.min(6, m + 1));
-            F.banner = { text: season ? `${season} · ${h.best} rows` : `🏁 ${h.best} rows!`, fill: season ? "#C9B8FF" : "#B5E655", at: now / 1000 };
-          }
-        }
-        // a bell before a train, on a line near you
-        for (let n = h.row - 1; n <= h.row + 3; n++) {
-          const r = rowAt(h.course, n);
-          if (r.kind !== "rail") continue;
-          const tr = trainAt(r, h.t), key = `${n}@${Math.floor((h.t - r.offset) / r.period)}`;
-          if (tr.warn && !rung.has(key)) { rung.add(key); sfx.tone(1250, 0.08, 0.05, "square"); sfx.tone(1250, 0.08, 0.05, "square", null, 0.18); }
-        }
+        if (out.crashed) flash(SAY[out.crashed] || "Ouch!", "error");
+        if (out.coin) flash("🪙 +25", "success", 700);
         const target = score(h);
         if (target !== pushed) { addScore(target - pushed); pushed = target; }
       }
-      for (const p of F.parts) { p.life -= dt; p.x += p.vx * dt; p.row += p.vr * dt; p.up = Math.max(0, p.up + p.vu * dt); p.vu -= 6 * dt; }
-      if (F.parts.length) F.parts = F.parts.filter((p) => p.life > 0);
-      tempoRef.current = 88 + streakMult(h.streak) * 10;
       // the camera: keeps the chicken a third of the way up, eases along
       const want = Math.max(h.cam - 3, (h.hop ? h.hop.to[0] : h.row) - 3);
       cam += (want - cam) * Math.min(1, dt * 6);
@@ -322,9 +212,9 @@ export default function RoadHopper(props) {
         if (c.width !== Math.round(w * dpr) || c.height !== Math.round(hh * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(hh * dpr); }
         const ctx = c.getContext("2d");
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawScene(ctx, w, hh, h, cam, now / 1000, F);
+        drawScene(ctx, w, hh, h, cam, now / 1000);
       }
-      if (now - lastHud > 150) { lastHud = now; setHud({ best: h.best, coins: h.coins, crashes: h.crashes, gems: h.gems }); }
+      if (now - lastHud > 150) { lastHud = now; setHud({ best: h.best, coins: h.coins, crashes: h.crashes }); }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -350,7 +240,6 @@ export default function RoadHopper(props) {
           at = L.at;
           h.taken = new Set(f.tk || []);
           h.best = f.b; h.coins = f.c; h.crashes = f.k; h.last = f.l;
-          h.bonus = f.bo || 0; h.streak = f.sk || 0; h.gems = f.gm || 0; h.gemTaken = new Set(f.gt || []);
           if (k0 === null) setSeen(true);
           else if (f.k > k0) flash(SAY[f.l] || "Ouch!", "error");
           else if (f.c > c0) flash("🪙 +25", "success", 700);
@@ -378,9 +267,9 @@ export default function RoadHopper(props) {
           if (c.width !== Math.round(w * dpr) || c.height !== Math.round(hh * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(hh * dpr); }
           const ctx = c.getContext("2d");
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          drawScene(ctx, w, hh, h, cam, now / 1000, { parts: [], banner: null });
+          drawScene(ctx, w, hh, h, cam, now / 1000);
         }
-        if (now - lastHud > 150) { lastHud = now; setHud({ best: h.best, coins: h.coins, crashes: h.crashes, gems: h.gems }); }
+        if (now - lastHud > 150) { lastHud = now; setHud({ best: h.best, coins: h.coins, crashes: h.crashes }); }
       }
       raf = requestAnimationFrame(frame);
     };
@@ -412,7 +301,6 @@ export default function RoadHopper(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
-        sound
       >
         {({ w, h }) => {
           const cw = Math.min(w, Math.round(h * 0.68)), ch = h - 22;
@@ -443,7 +331,7 @@ export default function RoadHopper(props) {
         }}
       </GameFrame>
       {eng.gameOver && !isSpectator && (
-        <GameOver eng={eng} me={currentUser} extra={`${hud.best} rows · 🪙 ${hud.coins}${hud.gems ? ` · 💎 ${hud.gems}` : ""}`} />
+        <GameOver eng={eng} me={currentUser} extra={`${hud.best} rows · 🪙 ${hud.coins}`} />
       )}
     </>
   );

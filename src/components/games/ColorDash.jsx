@@ -1,172 +1,143 @@
 // src/components/games/ColorDash.jsx
-// Nine colour tiles and a card that says which to tap, before the bar runs
-// out. The rounds (colorDashRules.js) get trickier as you go: the name with a
-// swatch, then the name alone, then a colour word in another ink — tap the
-// WORD or the INK, as the card says — then nine tiles of one colour with one a
-// shade off. Every 10th round is a ★ fever round worth double. Right taps
-// build a streak worth more; a wrong tap costs 5 and breaks it; too slow just
-// breaks it. Either way the right tile is shown a moment before the next.
+// Nine colour swatches, one target colour named at the top: tap the matching
+// swatch before the 1.5-second round runs out. Right taps build a streak and
+// earn more; a wrong tap costs 5 and breaks the streak; too slow just breaks
+// the streak. Every round reshuffles.
 //
-// Every room plays the same rounds; the match clock is the room's. Play state
-// lives in a ref (two taps in one tick must not both count), mirrored into
-// state to draw. Taps land on touch-down.
+// Every room plays the same sequence of rounds; the match clock is the room's.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
-import sfx from "./sfx";
-import { PALETTE, WRONG, KIND_START, makeRound, windowFor, pointsFor, tileHex } from "./colorDashRules.js";
+import { seededRand, shuffleInPlace } from "./seededRand";
 
-export { PALETTE };
+// Nine colours far enough apart to tell at a glance: red, orange, yellow,
+// green, teal, blue, indigo, purple, pink. (An earlier set had two greens
+// that were almost the same colour, which made some rounds a coin toss.)
+export const PALETTE = [
+  { name: "Red",    hex: "#F2413F" },
+  { name: "Orange", hex: "#FF9233" },
+  { name: "Yellow", hex: "#FFD12E" },
+  { name: "Green",  hex: "#4CAF3F" },
+  { name: "Teal",   hex: "#17BFC0" },
+  { name: "Blue",   hex: "#2F7BEF" },
+  { name: "Indigo", hex: "#3B32A6" },
+  { name: "Purple", hex: "#BC5CEE" },
+  { name: "Pink",   hex: "#FF6FB5" },
+];
+const ROUND_MS = 1500;
+const WRONG = -5;
+const pointsFor = (streak) => 15 + streak;       // streak already includes this tap
 
-const REVEAL_MS = 450;               // a miss: how long the right tile is shown
-const STREAK_STEP = 5;
-const NOTES = [72, 74, 76, 79, 81, 84, 86, 88, 91];   // each colour sings its own note
-const INTRO = { [KIND_START.nameOnly]: "No more swatch!", [KIND_START.stroop]: "Word or ink?", [KIND_START.odd]: "Odd one out!" };
+// Round i for this room: the nine colours in a fresh order, and the target.
+function makeRound(seed, i) {
+  const rand = seededRand((Number(seed) || 1) * 2903 + i * 7717 + 3);
+  for (let k = 0; k < 4; k++) rand();
+  const order = shuffleInPlace(PALETTE.map((_, idx) => idx), rand);
+  return { order, target: order[Math.floor(rand() * order.length)] };
+}
 
 export default function ColorDash(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
     startedAt, serverNow, isSpectator = false, spectatorWatching = null,
     spectatorState = null } = props;
 
-  const live = useRef({ round: 0, streak: 0, best: 0, lock: false });
-  const [view, setView] = useState({ round: 0, streak: 0, best: 0 });
-  const show = () => { const L = live.current; setView({ round: L.round, streak: L.streak, best: L.best }); };
 
-  // a miss: { chosen (slot or null if too slow), answer }
-  const [reveal, setReveal] = useState(null);
-  const [fx, setFx] = useState({ bursts: [], pops: [], banner: null, good: 0 });
-  const fxId = useRef(0);
-  const timers = useRef(new Set());
-  const later = (fn, ms) => { const t = setTimeout(() => { timers.current.delete(t); fn(); }, ms); timers.current.add(t); };
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
-  function burst(slot, hex, text, cls) {
-    const id = ++fxId.current;
-    setFx((f) => ({ ...f, bursts: [...f.bursts.slice(-3), { id, slot, hex }], pops: [...f.pops.slice(-3), { id, slot, text, cls }] }));
-    later(() => setFx((f) => ({ ...f, bursts: f.bursts.filter((b) => b.id !== id), pops: f.pops.filter((p) => p.id !== id) })), 800);
-  }
-  function banner(text, cls) {
-    const id = ++fxId.current;
-    setFx((f) => ({ ...f, banner: { id, text, cls } }));
-    later(() => setFx((f) => (f.banner && f.banner.id === id ? { ...f, banner: null } : f)), 1100);
-  }
+  const [round, setRound] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [best, setBest] = useState(0);
+  const [flash, setFlash] = useState(null);      // { kind, n }
+  const [msg, setMsg] = useState(null);
 
-  // Watching draws the same board the player is on: the tiles come from the
-  // seed and the round number, so only the round and the streak travel.
+  const live = useRef({ round: 0, streak: 0, best: 0 });
+
+  // Watching draws the same board the player is on: the swatches come from the seed and the round number, so only the round and the streak travel.
   const spectate = useSpectate({
     isSpectator, spectatorState,
     snapshot: () => ({ round: live.current.round, streak: live.current.streak, best: live.current.best }),
-    apply: (st) => { Object.assign(live.current, { round: st.round || 0, streak: st.streak || 0, best: st.best ?? 0 }); show(); },
+    apply: (st) => {
+      live.current.round = st.round;
+      live.current.streak = st.streak;
+      live.current.best = st.best ?? 0;
+      setRound(st.round);
+      setStreak(st.streak);
+      setBest(st.best ?? 0);
+    },
   });
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
     extraState: spectate.extraState });
-  const playing = !isSpectator && !eng.gameOver;
 
-  const current = makeRound(seed, view.round);
-
-  // on to the next round, announcing what's new about it
-  function advance() {
-    const L = live.current;
-    L.round += 1;
-    const next = makeRound(seed, L.round);
-    if (INTRO[L.round]) { sfx.chime(2); banner(INTRO[L.round], "cd-banner-new"); }
-    else if (next.fever) { sfx.sparkle(); banner("★ Fever ×2", "cd-banner-fever"); }
-    show();
-  }
-
-  // a miss: the right tile rings a moment, taps refused, then the next round
-  function miss(chosen) {
-    const L = live.current, r = makeRound(seed, L.round);
-    const broke = L.streak >= STREAK_STEP;
-    L.streak = 0; L.lock = true;
-    setReveal({ chosen, answer: r.answer });
-    show();
-    if (broke) banner("streak lost", "cd-banner-lost");
-    later(() => { L.lock = false; setReveal(null); advance(); }, REVEAL_MS);
-  }
-
-  // The round clock: restarts with every round; run out and the streak breaks.
+  const uid = useRef(0);
+  const timers = useRef([]);
   useEffect(() => {
-    if (!playing) return undefined;
-    const r = view.round;
+    const t = timers.current;
+    return () => t.forEach(clearTimeout);
+  }, []);
+  const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
+
+  const current = makeRound(seed, round);
+
+  function say(text, type, kind) {
+    const n = ++uid.current;
+    setMsg({ text, type });
+    setFlash({ kind, n });
+    later(() => { if (uid.current === n) { setMsg(null); setFlash(null); } }, 700);
+  }
+
+  function nextRound(s) {
+    s.round += 1;
+    setRound(s.round);
+    setStreak(s.streak);
+    setBest(s.best);
+  }
+
+  // The round clock. Restarts with every new round; if it runs out first, the
+  // streak breaks (no points lost) and a new round starts.
+  useEffect(() => {
+    if (eng.gameOver || isSpectator) return undefined;
+    const r = round;
     const t = setTimeout(() => {
-      const L = live.current;
-      if (L.round !== r || L.lock) return;
-      sfx.whoosh();
-      burst(current.answer, null, "too slow", "cd-pop-slow");
-      miss(null);
-    }, windowFor(current));
+      const s = live.current;
+      if (s.round !== r) return;
+      s.streak = 0;
+      say("Too slow!", "info", "slow");
+      nextRound(s);
+    }, ROUND_MS);
     return () => clearTimeout(t);
-  }, [view.round, playing]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [round, eng.gameOver, isSpectator]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function tap(slot, forRound, e) {
-    if (e) e.preventDefault();
-    if (!playing) return;
-    const L = live.current;
-    if (forRound !== L.round || L.lock) return;       // a second tap on a round that's over
-    const r = makeRound(seed, L.round);
+  function tap(slot, forRound) {
+    if (eng.gameOver || isSpectator) return;
+    const s = live.current;
+    if (forRound !== s.round) return;             // a second tap on a round that's already over
+    const r = makeRound(seed, s.round);
     eng.addMove();
-    if (slot === r.answer) {
-      L.streak += 1;
-      L.best = Math.max(L.best, L.streak);
-      const gain = pointsFor(r, L.streak);
+    if (r.order[slot] === r.target) {
+      s.streak += 1;
+      s.best = Math.max(s.best, s.streak);
+      const gain = pointsFor(s.streak);
       eng.addScore(gain);
-      sfx.tone(sfx.note(NOTES[r.target]), 0.16, 0.1, "triangle");
-      sfx.tone(sfx.note(NOTES[r.target] + 12), 0.08, 0.03, "sine", null, 0.03);
-      if (r.fever) sfx.sparkle();
-      burst(slot, tileHex(r, slot), `+${gain}`, r.fever ? "cd-pop-fever" : "");
-      setFx((f) => ({ ...f, good: f.good + 1 }));
-      const milestone = L.streak % STREAK_STEP === 0;
-      if (milestone) sfx.chime(L.streak / STREAK_STEP);
-      advance();
-      if (milestone && !INTRO[L.round] && !makeRound(seed, L.round).fever) banner(`${L.streak} in a row!`, "cd-banner-streak");
+      say(s.streak > 1 ? `+${gain} · ${s.streak} in a row!` : `+${gain}`, "success", "good");
     } else {
+      s.streak = 0;
       eng.addScore(WRONG);
-      sfx.thud();
-      burst(slot, null, String(WRONG), "cd-pop-bad");
-      miss(slot);
+      say(`That's ${PALETTE[r.order[slot]].name} (${WRONG})`, "error", "bad");
     }
+    nextRound(s);
   }
-
-  // the last ten seconds tick; a beat underneath, quicker as the rounds get quicker
-  const secs = Math.ceil(eng.timeLeft);
-  useEffect(() => { if (playing && !eng.unlimited && secs > 0 && secs <= 10) sfx.tick(secs <= 3); }, [secs, playing, eng.unlimited]);
-  const tempo = useRef(96);
-  tempo.current = 92 + Math.min(view.round, 60) * 0.5 + (current.fever ? 12 : 0);
-  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => tempo.current, 0.55); return () => b.stop(); }, [playing]);
-  const ended = useRef(false);
-  useEffect(() => {
-    if (!eng.gameOver || isSpectator || ended.current) return;
-    ended.current = true;
-    if (eng.won || eng.rank === 1) sfx.win(); else sfx.lose();
-  }, [eng.gameOver, eng.won, eng.rank, isSpectator]);
 
   const oppList = Object.values(eng.opponents);
   const specScore = spectatorWatching?.score ?? 0;
   const stats = isSpectator
-    ? [{ label: "Score", value: Number(specScore).toLocaleString() }, { label: "Streak", value: `${view.streak}🔥` }]
-    : [{ label: "Score", value: eng.score.toLocaleString() }, { label: "Streak", value: view.streak ? `${view.streak}🔥` : "—" }];
-  const toNext = view.streak % STREAK_STEP;
-  const hot = view.streak >= STREAK_STEP * 2;
-
-  // what the card says, by the kind of round
-  function card() {
-    const c = current;
-    if (c.kind === "stroop") {
-      return (<>
-        <span className={`cd-rule cd-rule-${c.rule}`}>Tap the {c.rule === "word" ? "WORD" : "INK"}</span>
-        <strong className="cd-word" style={{ color: PALETTE[c.ink].hex }}>{PALETTE[c.word].name.toUpperCase()}</strong>
-      </>);
-    }
-    if (c.kind === "odd") return (<><span>Find the</span><strong>odd one out</strong></>);
-    return (<>
-      <span>Tap:</span>
-      <strong>{PALETTE[c.target].name}</strong>
-      {c.kind === "name" && <span className="cd-swatch" style={{ background: PALETTE[c.target].hex }} />}
-    </>);
-  }
+    ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
+    : [
+        { label: "Score", value: eng.score.toLocaleString() },
+        { label: "Streak", value: `×${streak}` },
+        { label: "Best", value: `×${best}` },
+      ];
+  const target = PALETTE[current.target];
 
   return (
     <>
@@ -177,58 +148,44 @@ export default function ColorDash(props) {
         timer={{ value: eng.timeLeft, max: durationSeconds }}
         opponents={oppList}
         teams={eng.teams}
+        message={msg}
         onQuit={eng.endMatch}
-        sound
       >
         {({ w, h }) => {
-          const top = 76 + 36, meter = 46;          // card + round bar; streak meter
-          const side = Math.floor(Math.max(180, Math.min(w, h - top - meter, 480)));
+          const top = 96;                         // target card + round timer bar
+          const side = Math.floor(Math.max(180, Math.min(w, h - top, 480)));
           const gap = Math.round(side * 0.04);
-          const tile = Math.floor((side - gap * 2 - 12) / 3);
+          const tile = Math.floor((side - gap * 2) / 3);
           return (
-            <div className="cd-wrap" style={{ width: side }}>
+            <div style={{ width: side }}>
               {/* No key on the round here: keying it remounted the card every
                   round, which replayed its entry animation and made the card
-                  blink out and back on every colour change. Only the words
-                  inside are keyed, and they pop in from full opacity. */}
-              <div className={`pop cd-target${current.fever ? " cd-fever" : ""}${fx.good % 2 ? " cd-goodA" : fx.good ? " cd-goodB" : ""}${reveal ? " cd-miss" : ""}`}>
-                <span key={view.round} className={`cd-say cd-k-${current.kind}`}>{card()}</span>
-                {current.fever && <span className="cd-fevertag">★ ×2</span>}
+                  blink out and back on every colour change. The name and the
+                  swatch changing is the feedback; the card should sit still. */}
+              <div className="pop cd-target">
+                <span>Tap:</span>
+                <strong>{target.name}</strong>
+                <span className="cd-swatch" style={{ background: target.hex }} />
               </div>
-              <div className={`cd-bar${current.fever ? " fever" : ""}`} aria-hidden="true">
-                {!eng.gameOver && !reveal && <span key={`b${view.round}`} style={{ animationDuration: `${windowFor(current)}ms` }} />}
+              <div className="cd-bar" aria-hidden="true">
+                {!eng.gameOver && <span key={`b${round}`} style={{ animationDuration: `${ROUND_MS}ms` }} />}
               </div>
-              <div className={`cd-grid${reveal ? " bad" : ""}`}
+              <div className={`cd-grid${flash ? ` ${flash.kind}` : ""}`}
                 style={{ gridTemplateColumns: `repeat(3, ${tile}px)`, gridAutoRows: `${tile}px`, gap }}>
-                {current.order.map((colorIdx, slot) => {
-                  const st = reveal ? (slot === reveal.answer ? " cd-right" : slot === reveal.chosen ? " cd-no" : " cd-dim") : "";
-                  const hex = tileHex(current, slot);
-                  return (
-                    <button key={slot} type="button" className={`press cd-tile${st}`}
-                      style={{ background: hex }}
-                      aria-label={current.kind === "odd" ? `tile ${slot + 1}` : PALETTE[colorIdx].name}
-                      onPointerDown={(e) => tap(slot, view.round, e)} onClick={(e) => e.preventDefault()}>
-                      {fx.bursts.filter((b) => b.slot === slot && b.hex).map((b) => (
-                        <span key={b.id} className="cd-burst">{Array.from({ length: 10 }).map((_, i) => <i key={i} style={{ "--a": `${i * 36}deg`, background: b.hex }} />)}</span>
-                      ))}
-                      {fx.pops.filter((p) => p.slot === slot).map((p) => <span key={p.id} className={`cd-pop ${p.cls}`}>{p.text}</span>)}
-                    </button>
-                  );
-                })}
+                {current.order.map((colorIdx, slot) => (
+                  <button key={`${round}-${slot}`} type="button" className="press cd-tile"
+                    style={{ background: PALETTE[colorIdx].hex }}
+                    aria-label={PALETTE[colorIdx].name}
+                    onClick={() => tap(slot, round)} />
+                ))}
               </div>
-              <div className={`cd-meter${hot ? " hot" : ""}`}>
-                <span className="cd-flame">🔥 {view.streak}</span>
-                <span className="cd-mbar"><i style={{ width: `${hot ? 100 : (toNext / STREAK_STEP) * 100}%` }} /></span>
-                <span className="cd-best">best {view.best}</span>
-              </div>
-              {fx.banner && <div key={fx.banner.id} className={`cd-banner ${fx.banner.cls}`}>{fx.banner.text}</div>}
             </div>
           );
         }}
       </GameFrame>
 
       {eng.gameOver && !isSpectator && (
-        <GameOver eng={eng} me={currentUser} extra={`Best streak ×${view.best}`} />
+        <GameOver eng={eng} me={currentUser} extra={`Best streak ×${best}`} />
       )}
     </>
   );

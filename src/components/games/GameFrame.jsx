@@ -14,7 +14,6 @@ import useMedia from "../../utils/useMedia";
 import { useSideways } from "../horror/LandscapeGate";
 import HowTo from "./HowTo";
 import { howToFor } from "./howToRules";
-import sfx, { useMuted } from "./sfx";
 
 const COMPACT = "(max-width: 600px)";
 
@@ -53,7 +52,6 @@ export default function GameFrame({
   helpOnly = false,           // bare: float only the ? — the game shows its own
                               // time and leaves through its own menu (Emberfall)
   noHelp = false,             // no ? either: the game has its own How to play (Emberfall)
-  sound = false,              // the game makes sound (sfx.js): show the 🔊 / 🔇 switch
   children,                   // node, or ({ w, h }) => node
 }) {
   const msgFill = { success: "var(--lime)", error: "var(--coral)", info: "var(--sky)" };
@@ -96,11 +94,6 @@ export default function GameFrame({
   // max 0: an unlimited match — no countdown, it ends when you leave
   const endless = !!timer && timer.max === 0;
   const [help, setHelp] = useState(false);          // the ? card: how to play
-  const muted = useMuted();
-  const soundBtn = sound && !isSpectator ? (
-    <button type="button" className={bare ? "gf-btn" : "press p-white sm gb-help"} onClick={() => sfx.setMuted(!muted)}
-      aria-label={muted ? "Sound on" : "Sound off"} aria-pressed={muted}>{muted ? "🔇" : "🔊"}</button>
-  ) : null;
 
   return (
     <div className={`gameshell${landscape ? " land" : ""}${bare ? " bare" : ""}`}>
@@ -112,7 +105,6 @@ export default function GameFrame({
             endless ? <span className="gf-clock" aria-label="No time limit">⏱ ∞</span>
               : <span className={`gf-clock${timer.value <= 20 ? " low" : ""}`} aria-label="Time left">⏱ {clock(timer.value)}</span>
           )}
-          {soundBtn}
           {floatExtra}
           {howToFor(gameName) && !noHelp && <button type="button" className="gf-btn" onClick={() => setHelp(true)} aria-label="How to play">?</button>}
           {!helpOnly && <button type="button" className="gf-btn gf-leave" onClick={onQuit} aria-label="Leave">✕ Leave</button>}
@@ -149,7 +141,6 @@ export default function GameFrame({
         </div>
 
         <div className="gb-end">
-          {soundBtn}
           {howToFor(gameName) && (
             <button className="press p-white sm gb-help" onClick={() => setHelp(true)} aria-label="How to play">?</button>
           )}

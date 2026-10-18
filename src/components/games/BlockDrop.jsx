@@ -13,10 +13,6 @@
 // Running out of room doesn't end the match — the room's clock does — so a
 // stuck board is swept and a fresh one dealt, with the score kept.
 //
-// While you drag, the rows and columns the piece would fill glow. Cleared
-// lines burst in their own colours; clear again within three placements and
-// the combo grows, each line worth more; empty the whole board for a bonus.
-//
 // The rules live in blastBoard.js. This file is the screen and the taps.
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -26,9 +22,8 @@ import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
 import {
   SIZE, PIECES, emptyBoard, canPlace, anyFits, place, clearLines,
-  PLACE_POINTS, makeDealer, wouldClear, comboStep, clearPoints, isEmpty, ALL_CLEAR, COMBO_WINDOW,
+  PLACE_POINTS, scoreForClear, makeDealer,
 } from "./blastBoard";
-import sfx from "./sfx";
 
 const SWEEP_MS = 1100;
 // A tray piece's cell size: as big as fits the slot, the same in both directions.
@@ -46,7 +41,7 @@ export default function BlockDrop(props) {
 
   const live = useRef(null);
   if (live.current === null) {
-    live.current = { board: emptyBoard(), tray: dealer.current.deal(), lines: 0, sweeps: 0, pick: null, combo: { combo: 0, since: 0 } };
+    live.current = { board: emptyBoard(), tray: dealer.current.deal(), lines: 0, sweeps: 0, pick: null };
   }
 
   const [board, setBoard] = useState(live.current.board);
@@ -67,18 +62,6 @@ export default function BlockDrop(props) {
     return () => t.forEach(clearTimeout);
   }, []);
   const later = (fn, ms) => timers.current.push(setTimeout(fn, ms));
-  // the shows: blocks popping in, lines bursting, points, banners, the combo
-  const [fx, setFx] = useState({ fresh: [], blasts: [], pops: [], banner: null, shake: 0, combo: 0, since: 0 });
-  function banner(text, cls = "") {
-    const id = ++uid.current;
-    setFx((f) => ({ ...f, banner: { id, text, cls } }));
-    later(() => setFx((f) => (f.banner && f.banner.id === id ? { ...f, banner: null } : f)), 1300);
-  }
-  function popAt(r, c, text, cls = "") {
-    const id = ++uid.current;
-    setFx((f) => ({ ...f, pops: [...f.pops.slice(-3), { id, r, c, text, cls }] }));
-    later(() => setFx((f) => ({ ...f, pops: f.pops.filter((p) => p.id !== id) })), 900);
-  }
 
   // Watching draws the same board: the pieces are dealt from the seed, but
   // where they were put is a choice, so the grid itself travels.
@@ -126,9 +109,7 @@ export default function BlockDrop(props) {
     if (!anyFits(s.board, s.tray)) {
       s.sweeps += 1;
       s.board = emptyBoard();
-      s.combo = { combo: 0, since: 0 };
       setSweeps(s.sweeps);
-      sfx.whoosh();
       say("No room left — board swept!", "error");
     }
   }
@@ -139,45 +120,23 @@ export default function BlockDrop(props) {
     if (s.pick === null) return;                      // the help line says what to do
     const piece = s.tray[s.pick];
     if (!piece) return;
-    if (!canPlace(s.board, piece, r, c)) { sfx.tone(150, 0.08, 0.05, "square", 110); say("It doesn't fit there", "error"); return; }
+    if (!canPlace(s.board, piece, r, c)) { say("It doesn't fit there", "error"); return; }
 
     s.board = place(s.board, piece, r, c);
     s.tray = s.tray.map((p, i) => (i === s.pick ? null : p));
     s.pick = null;
     eng.addMove();
     eng.addScore(piece.size * PLACE_POINTS);
-    sfx.tone(180, 0.1, 0.12, "sine", 110);
-    sfx.noise(0.04, 0.06, 1200, "lowpass");
-    const fresh = piece.cells.map(([dr, dc]) => (r + dr) * SIZE + (c + dc));
 
-    const { board: cleared, cleared: n, rows, cols } = clearLines(s.board);
-    s.combo = comboStep(s.combo, n);
-    let blasts = [];
+    const { board: cleared, cleared: n } = clearLines(s.board);
     if (n) {
-      // the lines burst in their own colours
-      const gone = new Set();
-      for (const rr of rows) for (let cc = 0; cc < SIZE; cc++) gone.add(rr * SIZE + cc);
-      for (const cc of cols) for (let rr = 0; rr < SIZE; rr++) gone.add(rr * SIZE + cc);
-      blasts = [...gone].map((i) => ({ i, colour: s.board[i] }));
       s.board = cleared;
       s.lines += n;
-      const gain = clearPoints(n, s.combo.combo);
+      const gain = scoreForClear(n);
       eng.addScore(gain);
       setLines(s.lines);
-      sfx.crack();
-      sfx.chime(Math.min(6, n + s.combo.combo - 1));
-      popAt(r, c, `+${gain}`, n > 1 ? "bb-pop-big" : "");
-      if (isEmpty(s.board)) {
-        eng.addScore(ALL_CLEAR);
-        sfx.sparkle(); sfx.win();
-        banner(`✨ All clear! +${ALL_CLEAR}`, "bb-banner-clear");
-      } else if (s.combo.combo >= 2) banner(`Combo ×${s.combo.combo}!`, "bb-banner-combo");
-      else if (n > 1) banner(`${n} lines!`, "bb-banner-lines");
       say(n > 1 ? `${n} lines at once! +${gain}` : `Line cleared! +${gain}`, "success");
-    } else popAt(r, c, `+${piece.size * PLACE_POINTS}`, "bb-pop-small");
-    const id = ++uid.current;
-    setFx((f) => ({ ...f, fresh, blasts: n ? [{ id, cells: blasts }] : f.blasts, shake: n > 1 ? f.shake + 1 : f.shake, combo: s.combo.combo, since: s.combo.since }));
-    if (n) later(() => setFx((f) => ({ ...f, blasts: f.blasts.filter((b) => b.id !== id) })), 520);
+    }
 
     refill(s);
     setPick(null);
@@ -192,9 +151,6 @@ export default function BlockDrop(props) {
         if (overRef.current || anyFits(t.board, t.tray)) return;
         t.sweeps += 1;
         t.board = emptyBoard();
-        t.combo = { combo: 0, since: 0 };
-        setFx((f) => ({ ...f, combo: 0, since: 0 }));
-        sfx.whoosh();
         setSweeps(t.sweeps);
         say("Nothing fits — board swept!", "error");
         show();
@@ -207,7 +163,6 @@ export default function BlockDrop(props) {
     const s = live.current;
     if (!s.tray[i]) return;
     s.pick = s.pick === i ? null : i;
-    if (s.pick !== null) sfx.tone(660, 0.05, 0.04, "triangle", 880);
     setPick(s.pick);
     setHover(null);
   }
@@ -242,7 +197,6 @@ export default function BlockDrop(props) {
       d.moved = true;
       live.current.pick = d.i;
       setPick(d.i);
-      sfx.tone(660, 0.05, 0.04, "triangle", 880);
     }
     setDrag({ i: d.i, x: e.clientX, y: e.clientY });
     setHover(targetFor(d.i, e.clientX, e.clientY));
@@ -256,51 +210,29 @@ export default function BlockDrop(props) {
     const at = e.type === "pointercancel" ? null : targetFor(d.i, e.clientX, e.clientY);
     const piece = live.current.tray[d.i];
     if (at && piece && canPlace(live.current.board, piece, at.r, at.c)) { drop(at.r, at.c); return; }
-    if (at) { sfx.tone(150, 0.08, 0.05, "square", 110); say("It doesn't fit there", "error"); }
+    if (at) say("It doesn't fit there", "error");
     live.current.pick = null;                           // back to the tray
     setPick(null);
     setHover(null);
   }
 
-  // the last ten seconds tick; a beat under it, quicker with the combo
-  const playing = !isSpectator && !eng.gameOver;
-  const secs = Math.ceil(eng.timeLeft);
-  useEffect(() => { if (playing && !eng.unlimited && secs > 0 && secs <= 10) sfx.tick(secs <= 3); }, [secs, playing, eng.unlimited]);
-  const tempo = useRef(90);
-  tempo.current = 88 + Math.min(fx.combo, 8) * 4;
-  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => tempo.current, 0.4); return () => b.stop(); }, [playing]);
-  const ended = useRef(false);
-  useEffect(() => {
-    if (!eng.gameOver || isSpectator || ended.current) return;
-    ended.current = true;
-    if (eng.won || eng.rank === 1) sfx.win(); else sfx.lose();
-  }, [eng.gameOver, eng.won, eng.rank, isSpectator]);
-
   const oppList = Object.values(eng.opponents);
   const stats = [
     { label: "Score", value: Number(isSpectator ? (spectatorWatching?.score ?? 0) : eng.score).toLocaleString() },
     { label: "Lines", value: lines },
-    { label: "Combo", value: fx.combo > 1 ? `×${fx.combo}` : "—" },
+    ...(sweeps ? [{ label: "Sweeps", value: sweeps }] : []),
   ];
 
   // Where the picked piece would land, so you can see before you commit.
   const ghost = new Set();
   let ghostOk = false;
-  // and the rows and columns it would fill, which glow
-  const lineSet = new Set();
   if (pick !== null && hover && tray[pick]) {
     ghostOk = canPlace(board, tray[pick], hover.r, hover.c);
     for (const [dr, dc] of tray[pick].cells) {
       const rr = hover.r + dr, cc = hover.c + dc;
       if (rr < SIZE && cc < SIZE) ghost.add(rr * SIZE + cc);
     }
-    if (ghostOk) {
-      const pv = wouldClear(board, tray[pick], hover.r, hover.c);
-      for (const rr of pv.rows) for (let cc = 0; cc < SIZE; cc++) lineSet.add(rr * SIZE + cc);
-      for (const cc of pv.cols) for (let rr = 0; rr < SIZE; rr++) lineSet.add(rr * SIZE + cc);
-    }
   }
-  const freshSet = new Set(fx.fresh);
 
   return (
     <>
@@ -313,10 +245,9 @@ export default function BlockDrop(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
-        sound
       >
         {({ w, h }) => {
-          const trayH = 128;
+          const trayH = 96;
           const gap = 3;
           const cell = Math.floor(Math.max(18, Math.min(46,
             (Math.min(w, h - trayH) - gap * (SIZE - 1)) / SIZE)));
@@ -324,7 +255,7 @@ export default function BlockDrop(props) {
           geom.current = { cell, gap };
           return (
             <div className="bb-wrap">
-              <div className={`bb-frame${fx.shake % 2 ? " bb-shakeA" : fx.shake ? " bb-shakeB" : ""}`} style={{ width: boardPx + 14 }}>
+              <div className="bb-frame" style={{ width: boardPx + 14 }}>
                 <div className="bb-grid" ref={gridRef}
                   style={{ gridTemplateColumns: `repeat(${SIZE}, ${cell}px)`, gridAutoRows: `${cell}px`, gap }}>
                   {board.map((fill, i) => {
@@ -332,23 +263,14 @@ export default function BlockDrop(props) {
                     const isGhost = ghost.has(i) && !fill;
                     return (
                       <span key={i}
-                        className={`bb-cell${fill ? " on" : ""}${isGhost ? (ghostOk ? " ghost" : " nope") : ""}${lineSet.has(i) ? " line" : ""}${fill && freshSet.has(i) ? " fresh" : ""}`}
+                        className={`bb-cell${fill ? " on" : ""}${isGhost ? (ghostOk ? " ghost" : " nope") : ""}`}
                         style={fill ? { background: fill } : undefined}
                         onPointerEnter={() => pick !== null && !drag && setHover({ r, c })}
                         onPointerDown={() => { setHover({ r, c }); drop(r, c); }}
                       />
                     );
                   })}
-                  {/* cleared lines bursting, in their own colours */}
-                  {fx.blasts.map((b) => b.cells.map(({ i, colour }) => (
-                    <span key={`${b.id}-${i}`} className="bb-blast"
-                      style={{ left: (i % SIZE) * (cell + gap), top: Math.floor(i / SIZE) * (cell + gap), width: cell, height: cell, background: colour, animationDelay: `${((i % SIZE) + Math.floor(i / SIZE)) * 12}ms` }} />
-                  )))}
-                  {fx.pops.map((p) => (
-                    <span key={p.id} className={`bb-pop ${p.cls}`} style={{ left: p.c * (cell + gap) + cell, top: p.r * (cell + gap) }}>{p.text}</span>
-                  ))}
                 </div>
-                {fx.banner && <div key={fx.banner.id} className={`bb-banner ${fx.banner.cls}`}>{fx.banner.text}</div>}
               </div>
 
               {/* the three on offer */}
@@ -379,13 +301,6 @@ export default function BlockDrop(props) {
               {!isSpectator && (
                 <div className="muted bb-help">
                   {drag ? "Let go where it fits" : pick === null ? "Drag a piece onto the board" : "Now tap where it goes — or drag it"}
-                </div>
-              )}
-              {!isSpectator && (
-                <div className={`bb-combo${fx.combo > 1 ? " on" : ""}`} aria-label={`Combo ${fx.combo}`}>
-                  <b>Combo ×{Math.max(1, fx.combo)}</b>
-                  {/* how many placements are left to keep it going */}
-                  {Array.from({ length: COMBO_WINDOW }).map((_, k) => <i key={k} className={fx.combo && k < COMBO_WINDOW - fx.since ? "lit" : ""} />)}
                 </div>
               )}
 

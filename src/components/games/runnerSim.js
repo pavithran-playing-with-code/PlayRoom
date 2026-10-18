@@ -9,10 +9,6 @@
 // or take points off: you stumble, slow right down, and run on (briefly
 // untouchable, so the thing you hit can't hit you again).
 //
-// Power-ups now and then, from a stream of their own (so the course is
-// exactly what it always was): a magnet pulls in every coin near you, double
-// makes coins worth twice, a shield takes one crash for you.
-//
 // Distances are metres; time is seconds.
 import { seededRand, shuffleInPlace } from "./seededRand.js";
 
@@ -28,10 +24,6 @@ export const STUN_S = 1.0;                    // a crash: stumbling, no steering
 export const SAFE_S = 1.6;                    // …then untouchable this long
 export const COIN_POINTS = 10;
 export const VIEW_AHEAD = 140;                // how far ahead the course is laid
-export const POWER = "power";
-export const POWERS = ["magnet", "double", "shield"];
-export const MAGNET_S = 8, DOUBLE_S = 10;
-export const MAGNET_REACH = 7;                // a magnet takes coins this far ahead, in any lane
 
 // What's in a lane at a row: a low barrier (jump it), a high bar (slide
 // under it), a train car (go round it), or nothing.
@@ -41,8 +33,6 @@ const DEPTH = { [LOW]: 0.5, [HIGH]: 0.5 };
 export function newRun(seed) {
   const s = {
     rand: seededRand((Number(seed) || 1) * 4271 + 9),
-    prand: seededRand((Number(seed) || 1) * 6113 + 5),   // the power-ups' own stream
-    magnetT: 0, doubleT: 0, shield: false, extra: 0,
     lane: 0, x: 0,                // the lane you're heading for, and where you are
     y: 0, vy: 0, slideT: 0,
     z: 0, speed: BASE_SPEED, t: 0,
@@ -85,15 +75,6 @@ function makeRow(s) {
     const low = items.find((o) => o.kind === LOW);
     if (low) for (let k = 0; k < 5; k++) items.push({ kind: "coin", lane: low.lane, z: z - 3 + k * 1.5, y: 0.6 + Math.sin((k / 4) * Math.PI) * 1.1, got: false });
   }
-  // a power-up now and then, in a lane with nothing in the way (at the end of
-  // a line of coins, maybe), a little after the row
-  if (n >= 4 && s.prand() < 0.16) {
-    const blocked = new Set(items.filter((o) => o.kind !== "coin").map((o) => o.lane));
-    const open = [-1, 0, 1].filter((l) => !blocked.has(l));
-    const lane = open.length ? open[Math.floor(s.prand() * open.length)] : null;
-    const p = POWERS[Math.floor(s.prand() * POWERS.length)];
-    if (lane !== null) items.push({ kind: POWER, p, lane, z: z + 6, y: 0.9, len: 0.5, hit: false });
-  }
   s.rows.push({ z, items });
   // the gap to the next row. You run faster the further you get, so the
   // gaps open out with distance (not speed: the course must be the same for
@@ -129,7 +110,7 @@ export function slide(s) {
 }
 
 export const sliding = (s) => s.slideT > 0 && s.y < 0.3;
-export const score = (s) => Math.floor(s.z) + s.coins * COIN_POINTS + (s.extra || 0);
+export const score = (s) => Math.floor(s.z) + s.coins * COIN_POINTS;
 
 // ── one frame ────────────────────────────────────────────────────────────────
 // dt: seconds. Returns what happened: { coins, crashed, got } — `got`: the
@@ -142,9 +123,7 @@ export const COIN_REACH = 1.6;
 const COIN_LEAD = 7;                     // the furthest a row lays its coins before itself
 export function step(s, dt) {
   const d = Math.max(0, Math.min(0.1, dt));
-  const out = { coins: 0, crashed: false, got: [], power: null, shieldUsed: false };
-  s.magnetT = Math.max(0, (s.magnetT || 0) - d);
-  s.doubleT = Math.max(0, (s.doubleT || 0) - d);
+  const out = { coins: 0, crashed: false, got: [] };
   s.t += d;
   if (s.stunT > 0) {
     s.stunT -= d;
@@ -167,49 +146,18 @@ export function step(s, dt) {
     // the first coins of a line are behind you before the row is looked at
     if (row.z - COIN_LEAD > s.z + COIN_REACH || row.z + 20 < s.z - 3) continue;
     for (const o of row.items) {
-      // a magnet: coins in any lane, a little way ahead, fly to you
-      if (o.kind === "coin" && s.magnetT > 0 && !o.got) {
-        const ahead = o.z - s.z;
-        if (ahead > -0.8 && ahead < MAGNET_REACH) {
-          o.got = true; s.coins++; out.coins++;
-          if (s.doubleT > 0) s.extra += COIN_POINTS;
-          out.got.push({ lane: o.lane, y: o.y, z: o.z, pulled: true });
-          continue;
-        }
-      }
       if (Math.abs(o.lane - s.x) > (o.kind === "coin" ? 0.6 : 0.55)) continue;
       if (o.kind === "coin") {
         const ahead = o.z - s.z;
         if (!o.got && ahead > -0.8 && ahead < COIN_REACH && Math.abs(o.y - (s.y + 0.6)) < 1.0) {
           o.got = true; s.coins++; out.coins++;
-          if (s.doubleT > 0) s.extra += COIN_POINTS;
           out.got.push({ lane: o.lane, y: o.y, z: o.z });
-        }
-        continue;
-      }
-      if (o.kind === POWER) {
-        // taken as you run through it (marked like a thing hit, so a watcher sees it go)
-        const ahead = o.z - s.z;
-        if (!o.hit && s.stunT <= 0 && ahead > -0.8 && ahead < COIN_REACH && Math.abs(o.y - (s.y + 0.6)) < 1.4) {
-          o.hit = true;
-          if (o.p === "magnet") s.magnetT = MAGNET_S;
-          else if (o.p === "double") s.doubleT = DOUBLE_S;
-          else s.shield = true;
-          out.power = o.p;
         }
         continue;
       }
       if (o.hit || s.z < o.z - 0.3 || s.z > o.z + o.len) continue;
       const cleared = (o.kind === LOW && s.y > 0.55) || (o.kind === HIGH && sliding(s));
       if (cleared || s.safeT > 0) continue;
-      if (s.shield) {
-        // the shield takes it: the thing goes, you run on, a moment untouchable
-        s.shield = false;
-        o.hit = true;
-        s.safeT = SAFE_S;
-        out.shieldUsed = true;
-        continue;
-      }
       o.hit = true;
       s.crashes++;
       s.stunT = STUN_S;

@@ -201,8 +201,7 @@ There is no test runner. What works:
   notice — a stare you can break — chase, rear and lunge), shared by the
   solo run (`s13Sim.js`, `pages/Manor.jsx`), the room's phones
   (`s13Client.js`) and the server; `s13Scene.js` draws, `s13Audio.js`
-  sounds (its own audio graph: a made reverb, tube hum where lit, a chase
-  theme, muffled in a locker; follows the shared mute through `sfx.onMute`). Online the server runs the monsters (`config/manorWorld.js`,
+  sounds. Online the server runs the monsters (`config/manorWorld.js`,
   `monstersFor`: 1–3 for 8 players); each phone moves itself and reports
   (`manor:me`), lockers are asked for (`manor:use`). Friends are drawn as
   survivors (`friendFig`) with their name and distance in metres over them

@@ -21,7 +21,6 @@ import useSpecStream from "./useSpecStream";
 import { DOWN_S, HEART_PTS, teamGoal, hearts, heartsBetween } from "./runTogether";
 import { team } from "./coopTeam";
 import { newRun, step, steer, jump, slide, score, layCourse, BASE_SPEED, SAFE_S, GRAVITY } from "./runnerSim.js";
-import sfx, { useMuted } from "./sfx";
 import { createRailScene, themeAt, THEMES } from "./railScene";
 
 const SWIPE_PX = 26;
@@ -77,12 +76,8 @@ export default function RailRunner(props) {
   const audio = useRef(null);
   if (!audio.current) audio.current = makeAudio();
   useEffect(() => { const a = audio.current; return () => a.close(); }, []);
-  // one mute for every game (the 🔊 in the corner), kept in localStorage
-  const muted = useMuted();
+  const [muted, setMuted] = useState(false);
   useEffect(() => { audio.current.mute(muted); }, [muted]);
-  const setMuted = (f) => sfx.setMuted(typeof f === "function" ? f(sfx.muted()) : f);
-  // the power-ups you have on, for the chips in the corner
-  const [powers, setPowers] = useState({ m: 0, d: 0, s: false });
 
   // together: friends beside you, hearts to save each other
   const T = useMemo(() => team(players, myId), [players, myId]);
@@ -103,7 +98,6 @@ export default function RailRunner(props) {
     sayRef.current(`❤️ ${Tref.current.nameOf(id)} saved you!`);
   } });
   const hostRef = useRef(null), distRef = useRef(null), coinRef = useRef(null);
-  const powersRef = useRef({ m: 0, d: 0, s: false });
   const size = useRef({ w: 300, h: 400 });
   const overRef = useRef(false);
   useEffect(() => { overRef.current = eng.gameOver; }, [eng.gameOver]);
@@ -140,8 +134,7 @@ export default function RailRunner(props) {
       }
       const hg = coop ? heartsBetween(heartAt, s.z - 8, s.z + 2).filter((x) => T0.got.has(x.k)).map((x) => x.k) : [];
       return { z: r2(s.z), v: r2(s.speed), x: r2(s.x), l: s.lane, y: r2(s.y), vy: r2(s.vy), sl: r2(s.slideT), st: r2(s.stunT), sf: r2(s.safeT),
-        c: s.coins, k: s.crashes, dn: T0.down ? 1 : 0, b: T0.bonus, cg, hb, hg,
-        pw: [Math.ceil(s.magnetT), Math.ceil(s.doubleT), s.shield ? 1 : 0] };
+        c: s.coins, k: s.crashes, dn: T0.down ? 1 : 0, b: T0.bonus, cg, hb, hg };
     },
     onFrame: () => { if (!specReadyRef.current) { specReadyRef.current = true; setSpecReady(true); } },
   });
@@ -226,20 +219,12 @@ export default function RailRunner(props) {
       let crashed = false;
       if (!overRef.current) {
         const z0 = s.z;
-        const out = { crashed: false, got: [], power: null, shieldUsed: false };
+        const out = { crashed: false, got: [] };
         for (let left = dt; left > 1e-6; left -= 1 / 60) {
           const o = step(s, Math.min(left, 1 / 60));
           if (o.crashed) out.crashed = true;
-          if (o.power) out.power = o.power;
-          if (o.shieldUsed) out.shieldUsed = true;
           out.got.push(...o.got);
         }
-        if (out.power === "magnet") { sfx.tone(180, 0.35, 0.07, "sawtooth", 720); say("🧲 Magnet! Coins come to you"); }
-        else if (out.power === "double") { sfx.chime(4); say("✖2 Double coins!"); }
-        else if (out.power === "shield") { sfx.sparkle(); say("🛡️ Shield on: one crash is free"); }
-        if (out.shieldUsed) { sfx.crack(); sfx.tone(880, 0.2, 0.06, "triangle", 440); buzz(60); say("🛡️ The shield saved you!"); }
-        const pw = { m: Math.ceil(s.magnetT), d: Math.ceil(s.doubleT), s: !!s.shield };
-        if (pw.m !== powersRef.current.m || pw.d !== powersRef.current.d || pw.s !== powersRef.current.s) { powersRef.current = pw; setPowers(pw); }
         crashed = out.crashed;
         const T0 = tg.current;
         if (coop) {
@@ -328,7 +313,6 @@ export default function RailRunner(props) {
           }
           lastL = L;
           ws.lane = f.l; ws.slideT = f.sl; ws.stunT = f.st; ws.safeT = f.sf; ws.coins = f.c;
-          if (f.pw) { ws.shield = !!f.pw[2]; const p2 = { m: f.pw[0], d: f.pw[1], s: !!f.pw[2] }; if (JSON.stringify(p2) !== JSON.stringify(powersRef.current)) { powersRef.current = p2; setPowers(p2); } }
           if (f.k > crashes) {
             crashed = true;
             setFlash((n) => n + 1);
@@ -402,7 +386,10 @@ export default function RailRunner(props) {
         teams={eng.teams}
         onQuit={eng.endMatch}
         bare
-        sound
+        floatExtra={!isSpectator ? (
+          <button type="button" className="gf-btn" aria-label={muted ? "Sound on" : "Sound off"} aria-pressed={muted}
+            onClick={() => { audio.current.init(); setMuted((x) => !x); }}>{muted ? "✕ ♪" : "♪"}</button>
+        ) : null}
       >
         {({ w, h }) => {
           size.current = { w, h };
@@ -416,13 +403,6 @@ export default function RailRunner(props) {
               <div className="rr-hud" aria-live="polite">
                 <div key={flash} className={`rr-flash${flash ? " on" : ""}`} />
                 <div className="rr-coins" ref={coinRef}>● {hud.coins}</div>
-                {(powers.m > 0 || powers.d > 0 || powers.s) && (
-                  <div className="rr-powers">
-                    {powers.m > 0 && <span className="rr-pw mag">🧲 {powers.m}s</span>}
-                    {powers.d > 0 && <span className="rr-pw dbl">✖2 {powers.d}s</span>}
-                    {powers.s && <span className="rr-pw shd">🛡️</span>}
-                  </div>
-                )}
                 <div className="rr-score"><span ref={distRef}>{hud.dist}</span><small>METERS</small></div>
                 {coop && (
                   <div className="rr-team">

@@ -10,11 +10,6 @@
 // same picture as anybody's pick takes the pair. The rules are coopBoards.js
 // (mahjongRules); the moves go through the server in one order
 // (useCoopBoard), so every phone shows the same stack.
-//
-// On your own (mahjongScore.js): quick matches chain into a combo worth
-// more, and from board 2 one picture is ★ golden — its pair pays double.
-// A matched pair flies together and pops; "moves open" says how many
-// pictures have a free pair right now.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./games/GameFrame";
 import GameOver from "./games/GameOver";
@@ -24,8 +19,6 @@ import { mahjongRules, GOAL, MJ_MATCH, MJ_MISS, MJ_HINT, MJ_SHUFFLE } from "./ga
 import { team, plural } from "./games/coopTeam";
 import { confetti } from "./ui/FunLayer";
 import { SLOTS, DRAW_ORDER, TOTAL_PAIRS, BOARD_W, BOARD_H, deal, isFree, findPair, reshuffle } from "./games/mahjongBoard";
-import { CLEAR_BONUS, MISS, HINT_COST, SHUFFLE_COST, comboAfter, matchPoints, goldenOf, movesOpen } from "./games/mahjongScore";
-import sfx from "./games/sfx";
 
 // ── Tile definitions ─────────────────────────────────────────────────────────
 // PICTURE TILES, not numbers.
@@ -70,10 +63,12 @@ const TILE_TYPES = TILE_CATEGORIES.flatMap((c) =>
 // NOTE: OBJECTIVE_PAIRS.mahjong in config/matchResult.js must match
 // TOTAL_PAIRS (24), or a solo clear stops counting as a win.
 const RATIO = 1.3;           // tile height / width
+const MATCH = 100;           // plus the seconds left on the clock
+const CLEAR_BONUS = 400;     // for clearing a whole board, x the board number
 const NEXT_BOARD_MS = 1400;  // long enough to enjoy having cleared it
-const FLY_MS = 420;          // a matched pair flying together
-const TYPE_KEYS = TILE_TYPES.map((t) => t.k);
-const clack = () => { sfx.noise(0.035, 0.09, 2200, "bandpass", 0, null, 4); sfx.tone(880, 0.04, 0.03, "triangle", 620); };
+const MISS = -10;
+const HINT_COST = -20;
+const SHUFFLE_COST = -50;
 
 const buildTiles = (seed) => deal(seed, TILE_TYPES);
 const matchedIndices = (tiles) => tiles.map((t, i) => (t.matched ? i : -1)).filter((i) => i >= 0);
@@ -102,7 +97,7 @@ export default function MahjongGame({
   if (live.current === null) {
     // `pairs` is this board; `total` is every board, and that is what the
     // server sees — clearing one board still counts as completing the objective.
-    live.current = { tiles: buildTiles(seed), selected: null, pairs: 0, total: 0, board: 1, combo: 0, lastAt: null };
+    live.current = { tiles: buildTiles(seed), selected: null, pairs: 0, total: 0, board: 1 };
   }
 
   const [tiles, setTiles] = useState(() => live.current.tiles);
@@ -114,33 +109,6 @@ export default function MahjongGame({
   const [hintIdx, setHintIdx] = useState([]);
   const [msg, setMsg] = useState(null);
   const msgTimer = useRef(null);
-  // the shows: a pair flying together, a stuck tile shaking, points, banners
-  const [fx, setFx] = useState({ flying: [], pops: [], banner: null, shake: null, combo: 0 });
-  const fxId = useRef(0);
-  const fxTimers = useRef(new Set());
-  useEffect(() => () => fxTimers.current.forEach(clearTimeout), []);
-  const fxLater = (fn, ms) => { const t = setTimeout(() => { fxTimers.current.delete(t); fn(); }, ms); fxTimers.current.add(t); };
-  function fly(a, b, e, gold) {
-    const id = ++fxId.current;
-    setFx((f) => ({ ...f, flying: [...f.flying.slice(-3), { id, a, b, e, gold }] }));
-    fxLater(() => setFx((f) => ({ ...f, flying: f.flying.filter((x) => x.id !== id) })), FLY_MS + 40);
-  }
-  function popAt(a, b, text, cls = "") {
-    const id = ++fxId.current;
-    setFx((f) => ({ ...f, pops: [...f.pops.slice(-3), { id, a, b, text, cls }] }));
-    fxLater(() => setFx((f) => ({ ...f, pops: f.pops.filter((x) => x.id !== id) })), 950);
-  }
-  function banner(text, cls = "") {
-    const id = ++fxId.current;
-    setFx((f) => ({ ...f, banner: { id, text, cls } }));
-    fxLater(() => setFx((f) => (f.banner && f.banner.id === id ? { ...f, banner: null } : f)), 1300);
-  }
-  function shakeTile(idx) {
-    const n = ++fxId.current;
-    setFx((f) => ({ ...f, shake: { idx, n } }));
-    fxLater(() => setFx((f) => (f.shake && f.shake.n === n ? { ...f, shake: null } : f)), 360);
-    sfx.tone(160, 0.07, 0.05, "sine", 120);
-  }
 
   // together: one stack for the side
   const R = useMemo(() => mahjongRules(seed, TILE_TYPES), [seed]);
@@ -186,8 +154,6 @@ export default function MahjongGame({
     if (eng.gameOver || isSpectator) return;
     s.board += 1;
     s.pairs = 0;
-    s.combo = 0;
-    setFx((f) => ({ ...f, combo: 0 }));
     s.tiles = buildTiles((Number(seed) || 1) + s.board * 7919);
     s.selected = null;
     setTiles(s.tiles);
@@ -195,7 +161,7 @@ export default function MahjongGame({
     setBoard(s.board);
     setSelected(null);
     setHintIdx([]);
-    banner(s.board === 2 ? "Board 2 · ★ golden pair!" : `Board ${s.board}`, "mj-banner-new");
+    showMsg(`🀄 Board ${s.board} — go!`, "info");
   }
 
   function applyShuffle(next) {
@@ -217,7 +183,6 @@ export default function MahjongGame({
       const next = reshuffle(s.tiles);
       if (next === s.tiles) { showMsg("⚠️ No moves left on the board.", "error"); return; }
       applyShuffle(next);
-      sfx.whoosh();
       showMsg("⚡ No pairs left, so the board was reshuffled", "info");
     }, 400);
     return () => clearTimeout(t);
@@ -232,9 +197,6 @@ export default function MahjongGame({
   useShows(cb.ready, v.ev, (e) => {
     const mine = e.u === myId;
     if (e.k === "pair") {
-      fly(e.i, e.j, e.e, false);
-      sfx.chime(2);
-      popAt(e.i, e.j, `+${MJ_MATCH}`);
       if (mine) {
         const r = lastTap.current;
         confetti(r ? r.x : undefined, r ? r.y : undefined, { count: 16, emojis: [e.e, "✨"] });
@@ -242,12 +204,11 @@ export default function MahjongGame({
       } else showMsg(e.with === myId ? `🎉 ${T.nameOf(e.u)} took your tile's pair!` : `🎉 ${T.nameOf(e.u)} took a pair`, "success");
       setHintIdx([]);
     } else if (e.k === "miss") {
-      if (mine) { sfx.thud(); showMsg(`✗ Not a match (-${MJ_MISS})`, "error"); }
+      if (mine) showMsg(`✗ Not a match (-${MJ_MISS})`, "error");
     } else if (e.k === "stuck") {
       showMsg("⚡ No pairs left, so the stack was shuffled", "info");
       setHintIdx([]);
     } else if (e.k === "shuffle") {
-      sfx.whoosh();
       showMsg(mine ? `🔀 Shuffled (-${MJ_SHUFFLE})` : `🔀 ${T.nameOf(e.u)} shuffled the stack`, "info");
       setHintIdx([]);
     } else if (e.k === "clear") {
@@ -255,7 +216,6 @@ export default function MahjongGame({
       clearTimeout(boardTimer.current);
       boardTimer.current = setTimeout(() => setCleared(false), NEXT_BOARD_MS);
       confetti(undefined, undefined, { count: 60, emojis: ["🀄", "🎉", "✨"] });
-      sfx.sparkle(); sfx.chime(5);
       showMsg("🎉 Stack cleared together!", "success");
     }
   });
@@ -266,8 +226,7 @@ export default function MahjongGame({
       if (cleared) return;
       const t = v.tiles[idx];
       if (!t || t.matched) return;
-      if (!isFree(v.tiles, idx)) { shakeTile(idx); showMsg("Stuck — a free tile has nothing on top and an open side", "error"); return; }
-      clack();
+      if (!isFree(v.tiles, idx)) { showMsg("Stuck — a free tile has nothing on top and an open side", "error"); return; }
       const r = ev?.currentTarget?.getBoundingClientRect?.();
       lastTap.current = r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
       setHintIdx([]);
@@ -278,26 +237,14 @@ export default function MahjongGame({
     const s = live.current;
     const tile = s.tiles[idx];
     if (!tile || tile.matched) return;
-    if (!isFree(s.tiles, idx)) { shakeTile(idx); showMsg("Stuck — a free tile has nothing on top and an open side", "error"); return; }
+    if (!isFree(s.tiles, idx)) { showMsg("Stuck — a free tile has nothing on top and an open side", "error"); return; }
     setHintIdx([]);
 
     if (s.selected === null || s.selected === idx) {
       s.selected = s.selected === idx ? null : idx;
-      clack();
     } else if (s.tiles[s.selected].k === tile.k) {
       const a = s.selected;
-      const now = performance.now();
-      s.combo = comboAfter(s.combo, s.lastAt, now);
-      s.lastAt = now;
-      const golden = tile.k === goldenOf(seed, s.board, TYPE_KEYS);
-      const gain = matchPoints({ timeLeft: eng.timeLeft, combo: s.combo, golden });
-      fly(a, idx, tile.e, golden);
-      popAt(a, idx, `+${gain}`, golden ? "mj-pop-gold" : s.combo > 1 ? "mj-pop-combo" : "");
-      setFx((f) => ({ ...f, combo: s.combo }));
-      clack();
-      sfx.tone(sfx.note(72 + Math.min(12, (s.combo - 1) * 2)), 0.18, 0.08, "triangle");
-      if (golden) { sfx.sparkle(); banner("★ Golden pair ×2", "mj-banner-gold"); }
-      else if (s.combo >= 3) { sfx.chime(Math.min(6, s.combo - 1)); banner(`Combo ×${s.combo}!`, "mj-banner-combo"); }
+      const gain = MATCH + eng.timeLeft;
       s.tiles = s.tiles.map((t, i) => (i === a || i === idx ? { ...t, matched: true } : t));
       s.selected = null;
       s.pairs += 1;
@@ -316,24 +263,16 @@ export default function MahjongGame({
         // was still playing — and froze your score there, so a genuinely
         // faster player could still be overtaken. The room's clock ends the
         // match; clearing just earns a bonus and a fresh board.
-        const bonus = CLEAR_BONUS * s.board + Math.floor(eng.timeLeft);
+        const bonus = CLEAR_BONUS * s.board + eng.timeLeft;
         eng.addScore(bonus);
-        sfx.sparkle(); sfx.chime(5);
         showMsg(`🎉 Board ${s.board} cleared! +${bonus}`, "success");
         clearTimeout(boardTimer.current);
         boardTimer.current = setTimeout(nextBoard, NEXT_BOARD_MS);
-      }
+      } else showMsg(`✓ Match! +${gain}`, "success");
     } else {
-      const was = s.selected;
       s.selected = null;
       eng.addMove();
       eng.addScore(MISS);
-      sfx.thud();
-      shakeTile(idx);
-      popAt(was, idx, String(MISS), "mj-pop-bad");
-      if (s.combo >= 3) banner("combo lost", "mj-banner-lost");
-      s.combo = 0;
-      setFx((f) => ({ ...f, combo: 0 }));
       showMsg(`✗ Not a match (${MISS})`, "error");
     }
     setSelected(s.selected);
@@ -353,7 +292,6 @@ export default function MahjongGame({
     const pair = findPair(live.current.tiles);
     if (pair) {
       setHintIdx(pair);
-      sfx.sparkle();
       eng.addScore(HINT_COST);
       showMsg(`💡 Here's a pair (${HINT_COST})`, "info");
       return;
@@ -374,7 +312,6 @@ export default function MahjongGame({
     const next = reshuffle(live.current.tiles);
     if (next === live.current.tiles) { showMsg("Nothing left to shuffle!", "error"); return; }
     applyShuffle(next);
-    sfx.whoosh();
     eng.addScore(SHUFFLE_COST);
     showMsg(`🔀 Shuffled (${SHUFFLE_COST})`, "info");
   }
@@ -385,22 +322,6 @@ export default function MahjongGame({
   const picks = {};
   if (coop) for (const [u, i] of Object.entries(v.sel)) if (Number(u) !== myId) picks[i] = Number(u);
   const mySel = coop ? (v.sel[String(myId)] ?? null) : selected;
-  const gk = coop ? null : goldenOf(seed, board, TYPE_KEYS);
-
-  // the last ten seconds tick; a soft beat under it, a little quicker with the combo
-  const playing = !isSpectator && !eng.gameOver;
-  const secs = Math.ceil(eng.timeLeft);
-  useEffect(() => { if (playing && !eng.unlimited && secs > 0 && secs <= 10) sfx.tick(secs <= 3); }, [secs, playing, eng.unlimited]);
-  const tempo = useRef(80);
-  tempo.current = 78 + Math.min(fx.combo, 6) * 4;
-  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => tempo.current, 0.3); return () => b.stop(); }, [playing]);
-  const ended = useRef(false);
-  useEffect(() => {
-    if (!eng.gameOver || isSpectator || ended.current) return;
-    ended.current = true;
-    const good = coop ? cb.agreed.boards >= GOAL.mahjong : (eng.won || eng.rank === 1 || live.current.total >= TOTAL_PAIRS);
-    if (good) sfx.win(); else sfx.lose();
-  }, [eng.gameOver, eng.won, eng.rank, isSpectator]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stats = coop
     ? [
@@ -417,7 +338,7 @@ export default function MahjongGame({
     : [
         { label: "Score", value: eng.score.toLocaleString() },
         { label: "Pairs", value: `${pairs}/${TOTAL_PAIRS}` },
-        { label: "Combo", value: fx.combo > 1 ? `×${fx.combo}` : "—" },
+        ...(board > 1 ? [{ label: "Board", value: board }] : [{ label: "Moves", value: eng.moves }]),
       ];
 
   return (
@@ -432,7 +353,6 @@ export default function MahjongGame({
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
-        sound
         controls={!isSpectator ? (
           <>
             <button className="press p-white sm" onClick={hint}>💡 Hint</button>
@@ -443,18 +363,11 @@ export default function MahjongGame({
         {({ w, h }) => {
           const L = layout(w, h);
           const lift = Math.max(4, Math.round(L.tw * 0.12));
-          const posOf = (i) => ({ x: L.ox + (SLOTS[i].x / 2) * L.tw - SLOTS[i].z * L.d, y: L.oy + (SLOTS[i].y / 2) * L.th - SLOTS[i].z * L.d });
-          const open = drawTiles.length ? movesOpen(drawTiles) : 0;
           return (
             <div className="mj-felt" style={{ width: w, height: h }}>
-              {!isSpectator && drawTiles.length > 0 && (
-                <span className={`mj-open${open <= 1 ? " low" : ""}`}>{open} {open === 1 ? "move" : "moves"} open · board {coop ? v.b : board}</span>
-              )}
               {DRAW_ORDER.map((idx) => {
                 const tile = drawTiles[idx];
                 if (!tile || tile.matched) return null;
-                const gold = gk && tile.k === gk;
-                const shaking = fx.shake && fx.shake.idx === idx;
                 const at = SLOTS[idx];
                 const free = isFree(drawTiles, idx);
                 const isSel = mySel === idx, isHint = hintIdx.includes(idx);
@@ -462,7 +375,7 @@ export default function MahjongGame({
                 const up = isSel || mate ? lift : isHint ? Math.round(lift / 2) : 0;
                 return (
                   <button key={idx} type="button" onClick={(ev) => clickTile(idx, ev)}
-                    className={`mj-tile${isSel ? " sel" : ""}${isHint ? " hint" : ""}${free ? "" : " stuck"}${gold ? " gold" : ""}${shaking ? (fx.shake.n % 2 ? " mj-shakeA" : " mj-shakeB") : ""}`}
+                    className={`mj-tile${isSel ? " sel" : ""}${isHint ? " hint" : ""}${free ? "" : " stuck"}`}
                     aria-label={`${tile.e}${free ? "" : " (stuck)"}`}
                     style={{
                       left: L.ox + (at.x / 2) * L.tw - at.z * L.d,
@@ -472,26 +385,9 @@ export default function MahjongGame({
                       boxShadow: `${L.d}px ${L.d}px 0 #c9b385, ${L.d}px ${L.d}px 0 2px var(--ink)${isSel ? ", 0 0 0 4px var(--sun)" : mate ? `, 0 0 0 4px ${mate}` : ""}`,
                     }}>
                     <span>{tile.e}</span>
-                    {gold && <i className="mj-star">★</i>}
                   </button>
                 );
               })}
-              {/* a matched pair: both fly to the middle between them and pop */}
-              {fx.flying.map((f) => {
-                const A = posOf(f.a), B = posOf(f.b), mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
-                return [A, B].map((P, k) => (
-                  <span key={`${f.id}-${k}`} className={`mj-fly${f.gold ? " gold" : ""}`}
-                    style={{ left: P.x, top: P.y, width: L.tw, height: L.th, fontSize: Math.round(L.tw * 0.6),
-                      borderRadius: Math.max(6, Math.round(L.tw * 0.14)), "--dx": `${mx - P.x}px`, "--dy": `${my - P.y}px` }}>
-                    <span>{f.e}</span>
-                  </span>
-                ));
-              })}
-              {fx.pops.map((p) => {
-                const A = posOf(p.a ?? p.b), B = posOf(p.b);
-                return <span key={p.id} className={`mj-pop ${p.cls}`} style={{ left: (A.x + B.x) / 2 + L.tw / 2, top: (A.y + B.y) / 2 }}>{p.text}</span>;
-              })}
-              {fx.banner && <div key={fx.banner.id} className={`mj-banner ${fx.banner.cls}`}>{fx.banner.text}</div>}
             </div>
           );
         }}

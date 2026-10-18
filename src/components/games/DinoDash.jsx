@@ -6,11 +6,6 @@
 //
 // Rules live in dinoSim.js. This file draws them on a canvas and wires up input.
 //
-// Coins (seeded, the same for everyone) arc over the cacti and line the
-// ground under the high birds. The sky turns from day to sunset to night and
-// back as you run; every 500 m is called out. Dust when you land, stars when
-// you crash, a sparkle on a coin — and sound for all of it.
-//
 // Together (a co-op room): your friends run beside you, see-through. A crash
 // knocks you down for a few seconds unless a friend grabs a ❤️ — then
 // everyone who's down is back up (runTogether.js). The side's points add up.
@@ -27,9 +22,8 @@ import useRunTogether from "./useRunTogether";
 import useSpecStream from "./useSpecStream";
 import { DOWN_S, HEART_PTS, teamGoal, hearts, heartsBetween } from "./runTogether";
 import { team } from "./coopTeam";
-import sfx from "./sfx";
 import {
-  VIEW_W, DINO_X, CRASH_COST, UNITS_PER_METRE, GRAVITY, JUMP_V, MAX_SPEED, BASE_SPEED, COIN_R,
+  VIEW_W, DINO_X, CRASH_COST, UNITS_PER_METRE, GRAVITY,
   makeCourse, newRunner, jump, releaseJump, setDuck, step, speedAfter,
 } from "./dinoSim";
 
@@ -168,54 +162,16 @@ function drawCloud(ctx, x, y) {
   for (const [bx, by, r] of blobs) { ctx.beginPath(); ctx.arc(x + bx, y + by, r, 0, Math.PI * 2); ctx.fillStyle = "#FFFFFF"; ctx.fill(); }
 }
 
-// ── the sky over a run: day, sunset, night, dawn, round again ───────────────
-const SKY = [[0, [255, 246, 230]], [0.4, [255, 246, 230]], [0.48, [255, 197, 154]], [0.56, [59, 53, 112]],
-  [0.86, [59, 53, 112]], [0.94, [255, 201, 181]], [1, [255, 246, 230]]];
-const DAY_LEN = 30000;                 // world units round the whole day: sunset comes about half a minute in
-function skyAt(x) {
-  const t = mod(x, DAY_LEN) / DAY_LEN;
-  let i = 0;
-  while (i < SKY.length - 2 && t > SKY[i + 1][0]) i++;
-  const [t0, a] = SKY[i], [t1, b] = SKY[i + 1], f = (t - t0) / Math.max(1e-6, t1 - t0);
-  const c = a.map((v, j) => Math.round(v + (b[j] - v) * f));
-  // how dark: 0 by day, 1 deep in the night
-  const night = t < 0.48 || t > 0.94 ? 0 : t < 0.56 ? (t - 0.48) / 0.08 : t <= 0.86 ? 1 : 1 - (t - 0.86) / 0.08;
-  return { fill: `rgb(${c.join(",")})`, night };
-}
-const STARS = Array.from({ length: 26 }, (_, i) => [(i * 137) % VIEW_W, 12 + ((i * 53) % 110), 1 + (i % 3) * 0.6]);
-
-function drawCoin(ctx, x, y, now, i) {
-  const wob = Math.cos(now / 160 + i) ;            // a coin turning: wide, then edge-on
-  const w = Math.max(2.5, Math.abs(wob) * COIN_R);
-  ctx.save();
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = INK;
-  ellipse(ctx, x, y, w, COIN_R); paint(ctx, "#FFC53D");
-  if (w > 5) { ellipse(ctx, x, y, w * 0.55, COIN_R * 0.55); ctx.strokeStyle = "#E0A100"; ctx.lineWidth = 2; ctx.stroke(); }
-  ctx.restore();
-}
-
-function draw(ctx, s, course, view, now, tg, fx) {
+function draw(ctx, s, course, view, now, tg) {
   const { WH, k } = view;
   const gy = WH - GROUND_PAD;
   ctx.setTransform(k, 0, 0, k, 0, 0);
-  const sky = skyAt(s.x);
 
-  // sky, sun (or moon and stars), clouds, far hills (slower = further away)
-  ctx.fillStyle = sky.fill;
+  // sky, sun, clouds, far hills (slower = further away)
+  ctx.fillStyle = "#FFF6E6";
   ctx.fillRect(0, 0, VIEW_W, WH);
-  if (sky.night > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${0.85 * sky.night})`;
-    for (const [sx, sy, r] of STARS) { ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill(); }
-  }
-  ctx.lineWidth = 3; ctx.strokeStyle = INK;
-  ctx.save();
-  ctx.globalAlpha = 1 - sky.night;
-  ctx.beginPath(); ctx.arc(VIEW_W - 64, 46, 22, 0, Math.PI * 2); paint(ctx, "#FFC53D");
-  ctx.globalAlpha = sky.night;
-  ctx.beginPath(); ctx.arc(VIEW_W - 64, 46, 18, 0, Math.PI * 2); paint(ctx, "#F4F1FF");
-  ctx.beginPath(); ctx.arc(VIEW_W - 70, 42, 4, 0, Math.PI * 2); ctx.fillStyle = "#D9D3F2"; ctx.fill();
-  ctx.restore();
+  ctx.beginPath(); ctx.arc(VIEW_W - 64, 46, 22, 0, Math.PI * 2);
+  ctx.lineWidth = 3; ctx.strokeStyle = INK; paint(ctx, "#FFC53D");
   for (let i = 0; i < 4; i++) drawCloud(ctx, mod(i * 190 + 40 - s.x * 0.15, VIEW_W + 160) - 80, 44 + ((i * 37) % Math.max(20, gy - 120)));
   ctx.fillStyle = "#FFE3B8";
   ctx.beginPath(); ctx.moveTo(0, gy);
@@ -229,33 +185,6 @@ function draw(ctx, s, course, view, now, tg, fx) {
   for (let i = 0; i < 16; i++) ctx.fillRect(mod(i * 97 - s.x, VIEW_W + 40) - 20, gy + 7 + ((i * 13) % 20), 6 + (i % 3) * 4, 3);
   ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(VIEW_W, gy);
   ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
-  if (sky.night > 0) {
-    // the land darkens with the sky, fading in from above the hills (no hard edge)
-    const g = ctx.createLinearGradient(0, gy - 70, 0, gy);
-    g.addColorStop(0, "rgba(28,24,70,0)");
-    g.addColorStop(1, `rgba(28,24,70,${0.38 * sky.night})`);
-    ctx.fillStyle = g; ctx.fillRect(0, gy - 70, VIEW_W, 70);
-    ctx.fillStyle = `rgba(28,24,70,${0.38 * sky.night})`; ctx.fillRect(0, gy, VIEW_W, WH - gy);
-  }
-
-  // speed lines near the top speed
-  const v = s.started && s.stun <= 0 ? speedAfter(s.run) : 0;
-  const fast = Math.max(0, (v - (MAX_SPEED - 160)) / 160);
-  if (fast > 0) {
-    ctx.strokeStyle = `rgba(46,33,64,${0.25 * fast})`; ctx.lineWidth = 2;
-    for (let i = 0; i < 6; i++) { const ly = 30 + ((i * 41) % Math.max(40, gy - 70)); const lx = mod(i * 113 - s.x * 1.4, VIEW_W + 80) - 40; ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx + 40, ly); ctx.stroke(); }
-  }
-
-  // coins (the ones still to grab)
-  const coins = course.coins || [];
-  const taken = (fx && fx.taken) || s.taken;
-  for (let i = s.cfirst || 0; i < coins.length; i++) {
-    const c = coins[i];
-    const x = DINO_X + (c.x - s.x);
-    if (x > VIEW_W + 10) break;
-    if (x < -20 || taken.has(i)) continue;
-    drawCoin(ctx, x, gy - c.y + Math.sin(now / 240 + i) * 2, now, i);
-  }
 
   const shake = s.stun > 0.75 ? Math.sin(now / 18) * 3 : 0;
   ctx.save();
@@ -296,32 +225,14 @@ function draw(ctx, s, course, view, now, tg, fx) {
     dazed: s.stun > 0,
     legs: running ? Math.floor(s.x / 38) % 2 === 0 : false,
   });
-  // dust, stars and sparkles, where they were made in the world
-  if (fx && fx.parts) {
-    for (const p of fx.parts) {
-      const life = p.life / p.max;
-      ctx.globalAlpha = Math.max(0, life);
-      ctx.fillStyle = p.col;
-      ctx.beginPath(); ctx.arc(DINO_X + (p.wx - s.x), gy - p.y, p.r * (0.6 + 0.4 * life), 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  }
   ctx.restore();
 
   // what's going on
   ctx.font = "600 15px Fredoka, Nunito, sans-serif";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  ctx.fillStyle = sky.night > 0.5 ? "#FFFFFF" : INK;
+  ctx.fillStyle = INK;
   ctx.fillText(`🏃 ${Math.floor(s.run / UNITS_PER_METRE)} m`, 12, 12);
-  if (s.coins) ctx.fillText(`🪙 ${s.coins}`, 12, 32);
-  if (fx && fx.banner && now - fx.banner.at < 1300) {
-    const t = (now - fx.banner.at) / 1300;
-    ctx.save();
-    ctx.globalAlpha = t > 0.75 ? (1 - t) / 0.25 : 1;
-    pill(ctx, fx.banner.text, VIEW_W / 2, Math.min(gy - 120, WH * 0.32) - t * 10, fx.banner.fill);
-    ctx.restore();
-  }
   if (!s.started) pill(ctx, "Tap or press Space to jump!", VIEW_W / 2, Math.min(gy - 90, WH / 2), "#FFC53D");
   else if (tg && tg.down && s.stun > 0) pill(ctx, `💤 Down ${Math.ceil(s.stun)}s — a friend's ❤️ saves you`, VIEW_W / 2, Math.min(gy - 120, WH / 2 - 10), "#C9B8FF");
   else if (s.stun > 0) pill(ctx, `Oops! −${CRASH_COST}`, DINO_X + 60, gy - 96, "#FF8A8A");
@@ -393,20 +304,6 @@ export default function DinoDash(props) {
 
   const [crashes, setCrashes] = useState(0);
   const [best, setBest] = useState(0);
-  const fxRef = useRef({ parts: [], banner: null });
-  const tempoRef = useRef(90);
-
-  // a beat under the run, quicker as you speed up; the last ten seconds tick
-  const playing = !isSpectator && !eng.gameOver;
-  useEffect(() => { if (!playing) return undefined; const b = sfx.beat(() => tempoRef.current, 0.45); return () => b.stop(); }, [playing]);
-  const secs = Math.ceil(eng.timeLeft);
-  useEffect(() => { if (playing && !eng.unlimited && secs > 0 && secs <= 10) sfx.tick(secs <= 3); }, [secs, playing, eng.unlimited]);
-  const ended = useRef(false);
-  useEffect(() => {
-    if (!eng.gameOver || isSpectator || ended.current) return;
-    ended.current = true;
-    if (eng.won || eng.rank === 1) sfx.win(); else sfx.lose();
-  }, [eng.gameOver, eng.won, eng.rank, isSpectator]);
 
   // Watching. The player sends its runner while someone watches; the watcher
   // keeps the latest frames (spec) and, a few times a second, the HUD's numbers.
@@ -424,7 +321,6 @@ export default function DinoDash(props) {
         du: s.duck ? 1 : 0, st: s.started ? 1 : 0, sn: Math.round(s.stun * 100) / 100,
         v: s.stun > 0 || !s.started || overRef.current ? 0 : Math.round(speedAfter(s.run)),
         p: Math.floor(s.points), cr: s.crashes, b: Math.round(s.best), fi: s.first, hit,
-        cf: s.cfirst, cg: [...s.taken].filter((i) => i >= s.cfirst), co: s.coins,
       };
       if (coop) {
         f.dn = T0.down ? 1 : 0;
@@ -474,14 +370,6 @@ export default function DinoDash(props) {
     let lastPush = 0;
     let pushed = 0;
     const autoStart = setTimeout(() => { sim.current.started = true; }, 3000);
-    const F = fxRef.current;
-    const puff = (wx, y, n, col, spread, up) => {
-      for (let i = 0; i < n; i++) {
-        const a = Math.random() * Math.PI * 2;          // cosmetic only
-        F.parts.push({ wx, y, vx: Math.cos(a) * spread, vy: Math.abs(Math.sin(a)) * up + 20, life: 0.5, max: 0.5, col, r: 3 + Math.random() * 3 });
-      }
-    };
-    let chain = 0, chainAt = 0, wasY = 0, wasVy = 0, mile = 0;
     const frame = (now) => {
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));   // a hidden tab mustn't teleport the dino
       last = now;
@@ -491,26 +379,7 @@ export default function DinoDash(props) {
         setCrashes(s.crashes);
         setBest(s.best);
         if (coop) { s.stun = DOWN_S; tg.current.down = true; }
-        sfx.thud(); sfx.crack();
-        puff(s.x + 36, s.y + 30, 12, "#FFC53D", 160, 140);
       }
-      // a jump, a landing, coins grabbed
-      if (s.vy > JUMP_V * 0.9 && wasVy < JUMP_V * 0.9) sfx.tone(330, 0.14, 0.07, "triangle", 720);
-      if (wasY > 0 && s.y <= 0 && s.stun <= 0) { sfx.tone(120, 0.06, 0.05, "sine", 80); puff(s.x + 20, 2, 6, "rgba(160,130,100,.7)", 70, 30); }
-      wasY = s.y; wasVy = s.vy;
-      for (const e of s.events) {
-        if (now - chainAt > 700) chain = 0;
-        chain += 1; chainAt = now;
-        sfx.tone(sfx.note(84 + Math.min(12, chain)), 0.09, 0.07, "square");
-        puff(e.x, e.y, 5, "#FFE27A", 60, 60);
-      }
-      s.events.length = 0;
-      // every 500 m
-      const m = Math.floor(s.x / UNITS_PER_METRE / 500);
-      if (m > mile) { mile = m; sfx.chime(Math.min(6, m + 1)); F.banner = { text: `🏁 ${m * 500} m!`, fill: "#B5E655", at: now }; }
-      for (const p of F.parts) { p.life -= dt; p.wx += p.vx * dt; p.y = Math.max(0, p.y + p.vy * dt); p.vy -= 400 * dt; }
-      if (F.parts.length) F.parts = F.parts.filter((p) => p.life > 0);
-      tempoRef.current = 84 + Math.round(((s.stun > 0 ? BASE_SPEED : speedAfter(s.run)) - BASE_SPEED) / 12);
       const T0 = tg.current;
       if (coop) {
         if (T0.down && s.stun <= 0) T0.down = false;
@@ -539,7 +408,7 @@ export default function DinoDash(props) {
           hearts: heartsBetween(heartAt, s.x - DINO_X - 40, s.x + VIEW_W).filter((x) => !T0.got.has(x.k)).map((x) => x.at),
           mates: mates().map((m) => ({ ...m, col: Tref.current.colourOf(m.id), name: Tref.current.nameOf(m.id) })),
         } : null;
-        draw(c.getContext("2d"), s, course, view.current, now, extra, F);
+        draw(c.getContext("2d"), s, course, view.current, now, extra);
       }
       raf = requestAnimationFrame(frame);
     };
@@ -569,9 +438,6 @@ export default function DinoDash(props) {
           lastL = L;
           s.hit = new Set(f.hit || []);
           s.first = f.fi || 0;
-          s.cfirst = f.cf || 0;
-          s.taken = new Set(f.cg || []);
-          s.coins = f.co || 0;
           got = new Set(f.hg || []);
         }
         const t = Math.min(0.35, Math.max(0, (now - L.at) / 1000));   // frames stopped: stop too
@@ -656,7 +522,6 @@ export default function DinoDash(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
-        sound
         controls={controls}
       >
         {({ w, h }) => (isSpectator ? (
@@ -676,7 +541,7 @@ export default function DinoDash(props) {
 
       {eng.gameOver && !isSpectator && (
         <GameOver eng={eng} me={currentUser}
-          extra={coop ? `Team: ${teamTotal.toLocaleString()} pts` : `Best run: ${Math.floor(bestRun / UNITS_PER_METRE)} m · 🪙 ${sim.current.coins} · Crashes: ${crashes}`}
+          extra={coop ? `Team: ${teamTotal.toLocaleString()} pts` : `Best run: ${Math.floor(bestRun / UNITS_PER_METRE)} m · Crashes: ${crashes}`}
           together={coop ? { reached: teamTotal >= goal, goal: `${goal.toLocaleString()} points`, unit: "pts", mates: T.all(scores) } : null} />
       )}
     </>

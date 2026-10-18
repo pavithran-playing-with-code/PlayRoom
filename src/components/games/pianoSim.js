@@ -29,11 +29,6 @@ export const HOLD_LINE = 1;          // a long tile is done when its top reaches
 export const HOLD_PTS = 10;          // for each extra row of a long tile, held all the way
 export const STUN_MISS = 0.8;        // seconds stood still after a miss
 export const STUN_WRONG = 0.45;      // …and after a tap on white
-export const FEVER_AT = 50;          // this many in a row: FEVER, every tile pays double
-export const GOLD_EVERY = 30, GOLD_PTS = 20;
-// every 30th tile is golden (a single, short one): +20
-export const isGold = (t) => !!t && !t.twin && t.len === 1 && t.i % GOLD_EVERY === GOLD_EVERY - 1;
-export const fever = (combo) => combo >= FEVER_AT;
 const LONG_FROM = 8;                 // no long tiles (or chords) in the first few
 
 export function newSong(seed, song = songFor(seed)) {
@@ -74,14 +69,6 @@ function ensure(s, upto) {
     }
     s.end += len;
   }
-}
-
-// The next tile, and a few after it, always dealt: tiles are dealt by how far
-// the song has scrolled, and quick taps (the keys always judge the next tile)
-// can run ahead of that — the next tile has to be there whatever.
-export function ensureNext(s) {
-  while (s.tiles.length < s.next + 3) ensure(s, s.end + 1);
-  return s.tiles[s.next];
 }
 
 export function tilePoints(combo) {
@@ -134,7 +121,7 @@ export function step(s, dt) {
     if (tile.held >= 1) out.held = endHold(s);
   }
 
-  const tile = ensureNext(s);
+  const tile = s.tiles[s.next];
   if (tile.y - s.pos < MISS_AT) {
     tile.missed = true;
     tile.at = s.t;
@@ -158,7 +145,6 @@ export function step(s, dt) {
 export function tap(s, col, yRow) {
   if (s.stunT > 0) return { kind: "none" };
   ensure(s, s.pos + VISIBLE + 4);
-  ensureNext(s);
   const on = (t) => t.col === col && yRow >= t.y - SLOP && yRow <= t.y + t.len + SLOP;
   // a chord's two tiles can be played in either order: tapping the second
   // first makes it the next one
@@ -178,11 +164,10 @@ export function tap(s, col, yRow) {
     s.combo += 1;
     s.best = Math.max(s.best, s.combo);
     s.hits += 1;
-    const gold = isGold(tile);
-    s.points += tilePoints(s.combo) * (fever(s.combo) ? 2 : 1) + (gold ? GOLD_PTS : 0);
+    s.points += tilePoints(s.combo);
     s.speed = Math.min(s.max, s.speed + SPEED_PER_TILE);
     if (tile.len > 1) { s.hold = tile.i; tile.held = holdProgress(s, tile); }
-    return { kind: "hit", tile, gold, fever: fever(s.combo), feverStart: s.combo === FEVER_AT };
+    return { kind: "hit", tile };
   }
   for (let k = s.next + 1; k < s.tiles.length; k++) {
     const t = s.tiles[k];

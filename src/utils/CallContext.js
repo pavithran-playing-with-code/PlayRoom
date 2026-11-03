@@ -84,6 +84,9 @@ const STUCK_MS = 20000, RETRY_MS = 15000;
 // a lost link waits this long to come back by itself before a new route is
 // sought; two restarts are never closer than KICK_GAP_MS
 const LOST_WAIT_MS = 2500, KICK_GAP_MS = 4000;
+// a weak link: they lose over 5% of what I send, or there's under 300 kbps
+// of upload to them; it counts as better after 15 s without either
+const WEAK_LOSS = 0.05, WEAK_UP = 300000, WEAK_HOLD_MS = 15000;
 // Ask the other side to send stereo, at film quality. A browser sends stereo
 // Opus only when the far side's description says it wants it, so this is
 // done to each description as it arrives.
@@ -248,6 +251,7 @@ export function CallProvider({ children }) {
   const tune = useCallback((pc) => {
     // a clear picture for two, a lighter one each when there are more of you
     const n = Math.max(1, pcs.current.size);
+    const P = [...pcs.current.values()].find((x) => x.pc === pc);
     for (const s of pc.getSenders()) {
       if (!s.track) continue;
       try {
@@ -264,7 +268,20 @@ export function CallProvider({ children }) {
           p.encodings[0].maxFramerate = 30;
           p.degradationPreference = "maintain-framerate";
         } else if (isScreen) p.encodings[0].maxBitrate = 160000;
-        else p.encodings[0].maxBitrate = s.track.kind === "video" ? (n === 1 ? 1500000 : n === 2 ? 900000 : 600000) : 64000;
+        else if (s.track.kind === "video") {
+          // A phone encodes my camera once for every friend, so with more of
+          // us each copy is smaller: 720p for two, 480p for three, 360p for
+          // four — a tile that size can't show more, and three full copies
+          // starved the phone until the voices broke up. On a weak link
+          // (lost packets, little upload) it drops further, so the voice
+          // always gets through.
+          const [bps, down, fps] = P && P.weak ? [150000, 3, 12] : n === 1 ? [1500000, 1, 30] : n === 2 ? [600000, 1.5, 24] : [400000, 2, 20];
+          p.encodings[0].maxBitrate = bps;
+          p.encodings[0].scaleResolutionDownBy = down;
+          p.encodings[0].maxFramerate = fps;
+          p.degradationPreference = "balanced";
+        }
+        else p.encodings[0].maxBitrate = 48000;            // one voice, clear: more is wasted upload, three times over
         // sound before pictures: on a busy connection (a film being shared)
         // the voices and the film's sound go first, so they don't break up
         const sound = s.track.kind === "audio";
@@ -274,6 +291,24 @@ export function CallProvider({ children }) {
       } catch { /* not every browser lets us */ }
     }
   }, []);
+
+  // How the link to a friend is doing, every few seconds: what they say they
+  // lost of mine, and the upload the browser thinks there is. Weak, and my
+  // camera to them goes small at once; it comes back only after a good while
+  // well, so it doesn't flap.
+  const gauge = useCallback(async (P) => {
+    let lost = 0, up = Infinity;
+    try {
+      (await P.pc.getStats()).forEach((s) => {
+        if (s.type === "remote-inbound-rtp" && s.fractionLost > lost) lost = s.fractionLost;
+        if (s.type === "candidate-pair" && s.nominated && s.state === "succeeded" && s.availableOutgoingBitrate) up = Math.min(up, s.availableOutgoingBitrate);
+      });
+    } catch { return; }
+    const bad = lost > WEAK_LOSS || up < WEAK_UP;
+    if (bad) P.goodSince = 0; else if (!P.goodSince) P.goodSince = Date.now();
+    const weak = bad || (P.weak && Date.now() - P.goodSince < WEAK_HOLD_MS);
+    if (weak !== !!P.weak) { P.weak = weak; tune(P.pc); }
+  }, [tune]);
 
   const closePeer = useCallback((id) => {
     const P = pcs.current.get(id);
@@ -348,7 +383,8 @@ export function CallProvider({ children }) {
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
       if (st === "connected") {
-        patchPeer(id, { link: "ok" }); tune(pc);
+        // everyone's copies get smaller when someone joins, not just theirs
+        patchPeer(id, { link: "ok" }); for (const x of pcs.current.values()) if (x.pc.connectionState === "connected") tune(x.pc);
         // a newcomer needs telling what's what: mic, camera, and which stream is my screen
         const c = callRef.current;
         if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: micRef.current, cam: camRef.current, screen: screenRef.current ? screenRef.current.id : null, hold: holdRef.current, turn: turnRef.current });
@@ -370,7 +406,8 @@ export function CallProvider({ children }) {
     // stop it ever finishing.)
     P.kicked = P.since;
     P.watch = setInterval(() => {
-      if (pc.connectionState === "connected" || pc.connectionState === "closed") { P.kicked = Date.now(); return; }
+      if (pc.connectionState === "connected") { P.kicked = Date.now(); gauge(P); return; }
+      if (pc.connectionState === "closed") return;
       if (!P.polite && Date.now() - P.kicked > RETRY_MS) kick(id);
       if (!P.told && Date.now() - P.since > STUCK_MS) {
         P.told = true;
@@ -384,7 +421,7 @@ export function CallProvider({ children }) {
     }, 3000);
     patchPeer(id, {});
     return P;
-  }, [myId, socket, send, patchPeer, tune, place, kick]);
+  }, [myId, socket, send, patchPeer, tune, place, kick, gauge]);
 
   const onSignal = useCallback(async ({ callId, from, data }) => {
     if (!callRef.current || callRef.current.id !== callId || !data) return;

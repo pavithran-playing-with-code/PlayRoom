@@ -630,8 +630,8 @@ export default function CallLayer() {
             <div className="call-ring-who">{ring.from.name}</div>
             <div className="call-ring-sub">{ring.members.length > 1 ? `is calling you — ${ring.members.length} in the call` : "is calling you…"}{call ? " · this ends your call" : ""}</div>
             <div className="call-ring-btns">
-              <button type="button" className="call-btn red" onClick={C.decline} aria-label="Decline">✕</button>
-              <button type="button" className="call-btn green" onClick={C.accept} aria-label="Accept"><Phone /></button>
+              <span className="call-ring-opt"><button type="button" className="call-btn red" onClick={C.decline} aria-label="Decline">✕</button>Decline</span>
+              <span className="call-ring-opt"><button type="button" className="call-btn green" onClick={C.accept} aria-label="Accept"><Phone /></button>Accept</span>
             </div>
           </div>
         </div>

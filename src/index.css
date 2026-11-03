@@ -1202,6 +1202,10 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* ── Calls (.call-): over every page, a game too ──────────────────────────── */
 .call-screen{position:fixed;inset:0;z-index:10000;background:#14101c;color:#fff;overflow:hidden;
   font-family:Nunito,system-ui,sans-serif;touch-action:manipulation}
+/* a soft dark fade under the top row and the buttons, so they read on any picture */
+.call-screen::before,.call-screen::after{content:"";position:absolute;left:0;right:0;z-index:1;pointer-events:none}
+.call-screen::before{top:0;height:calc(env(safe-area-inset-top,0px) + 110px);background:linear-gradient(rgba(10,8,16,.55),transparent)}
+.call-screen::after{bottom:0;height:calc(env(safe-area-inset-bottom,0px) + 150px);background:linear-gradient(transparent,rgba(10,8,16,.7))}
 .call-stage,.call-grid{position:absolute;inset:0}
 .call-grid{display:grid;gap:3px;background:#14101c}
 .call-screen.n2 .call-grid{grid-template-rows:1fr 1fr}
@@ -1241,7 +1245,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .call-bar{position:absolute;z-index:3;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);
   display:flex;justify-content:center;gap:14px}
-.call-btn{width:62px;height:62px;border-radius:50%;border:3px solid #fff;background:rgba(255,255,255,.22);color:#fff;
+.call-btn{width:62px;height:62px;border-radius:50%;border:3px solid #fff;background:rgba(20,16,28,.45);color:#fff;
   font-size:26px;display:grid;place-items:center;cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.35);
   -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);-webkit-tap-highlight-color:transparent}
 .call-btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.35)}
@@ -1255,9 +1259,10 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-ring{position:fixed;inset:0;z-index:10001;display:grid;place-items:center;padding:16px;
   background:rgba(20,16,28,.72);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
 .call-ring-card{width:min(340px,100%);padding:26px 18px 22px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
-.call-ring-card .call-ring-sub{text-shadow:none;color:var(--ink);opacity:.75}
-.call-ring-who{font-weight:900;font-size:24px;color:var(--ink);margin-top:10px}
+.call-ring-card .call-ring-sub{text-shadow:none;color:var(--text);opacity:.8}
+.call-ring-who{font-weight:900;font-size:24px;color:var(--text);margin-top:10px}
 .call-ring-btns{display:flex;gap:44px;margin-top:18px}
+.call-ring-opt{display:flex;flex-direction:column;align-items:center;gap:8px;font-weight:800;font-size:14px;color:var(--text)}
 .call-ring-btns .call-btn{width:70px;height:70px;border-color:var(--ink);font-size:28px}
 .call-ring-btns .call-btn.green{animation:call-wiggle 1.2s ease-in-out infinite}
 .call-pulse{position:relative}
@@ -1300,14 +1305,14 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* pinch and drag a shared screen: the fingers belong to it, not the page */
 .call-zoom{position:absolute;inset:0;overflow:hidden;touch-action:none}
 .call-zoom-in{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
-.call-unzoom{position:absolute;right:10px;bottom:64px;z-index:2;
+.call-unzoom{position:absolute;right:10px;bottom:64px;z-index:3;
   padding:6px 14px;border-radius:999px;border:3px solid #fff;background:rgba(20,16,28,.75);color:#fff;
   font:800 14px Nunito,system-ui,sans-serif;cursor:pointer}
 .call-share-tag{position:absolute;left:10px;bottom:10px;padding:3px 10px;border-radius:999px;background:rgba(0,0,0,.6);font-weight:800;font-size:13px}
 .call-share:fullscreen .call-share-tag{display:none}
 .call-big{position:absolute;right:10px;bottom:10px;width:44px;height:44px;border-radius:12px;border:3px solid #fff;
   background:rgba(0,0,0,.5);color:#fff;font-size:22px;cursor:pointer}
-.call-strip{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 92px);height:68px;
+.call-strip{position:absolute;z-index:2;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 92px);height:68px;
   display:flex;gap:8px;justify-content:center;padding:0 12px}
 .call-mini-tile{position:relative;width:62px;height:62px;border-radius:14px;overflow:hidden;border:3px solid #fff;background:#221a30;
   display:grid;place-items:center}

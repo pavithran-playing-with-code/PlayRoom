@@ -672,11 +672,11 @@ function Room() {
               </span>
             </div>}
             {canTogether && room?.mode !== "teams" && (
-              <label className="rs-row rs-together">
-                <input type="checkbox" checked={room?.mode === "coop"} disabled={savingSettings}
-                  onChange={(e) => changeSettings({ mode: e.target.checked ? "coop" : "free" })}
-                  style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
-                <span>🤝 Play as a team</span>
+              <label className={`opt rs-together${room?.mode === "coop" ? " on" : ""}`}>
+                <span className="opt-ico" aria-hidden="true">🤝</span>
+                <span className="opt-txt">Play as a team{gm?.coopLabel && <small>{gm.coopLabel}</small>}</span>
+                <input type="checkbox" className="switch" checked={room?.mode === "coop"} disabled={savingSettings}
+                  onChange={(e) => changeSettings({ mode: e.target.checked ? "coop" : "free" })} />
               </label>
             )}
           </div>

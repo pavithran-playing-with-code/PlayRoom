@@ -99,6 +99,36 @@ input.press{min-width:0;flex:1 1 150px;text-align:left}
 .c-mint{background:var(--mint)} .c-grape{background:var(--grape);color:#fff}
 .c-sky{background:var(--sky)} .c-lime{background:var(--lime)}
 
+/* ---------- an on/off option: a card you tap, a switch on its right ----------
+   <label class="opt [on] [off]"> icon · text <small>why</small> · <input type=checkbox class=switch>
+   The real checkbox stays (keyboard, screen readers); it's drawn as the switch. */
+.opts{margin-bottom:22px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;margin-bottom:10px;padding:11px 12px 11px 14px;
+  border:2.5px solid var(--ink);border-radius:var(--r);background:var(--card);box-shadow:0 3px 0 var(--ink);
+  cursor:pointer;font-size:.98rem;font-weight:800;line-height:1.25;color:var(--text);
+  transition:transform .06s ease, box-shadow .06s ease, background .18s ease;-webkit-tap-highlight-color:transparent;user-select:none}
+.opt:last-child{margin-bottom:0}
+.opt:hover{transform:translateY(-1px);box-shadow:0 4px 0 var(--ink)}
+.opt:active{transform:translateY(3px);box-shadow:0 0 0 var(--ink)}
+.opt.on{background:var(--paper2)}
+.opt.on{background:color-mix(in srgb, var(--leaf) 20%, var(--card))}
+html[data-theme="dark"] .opt.on{background:color-mix(in srgb, var(--grape) 26%, var(--card))}
+.opt.off{opacity:.5;cursor:not-allowed}
+.opt.off:hover,.opt.off:active{transform:none;box-shadow:0 3px 0 var(--ink)}
+.opt-ico{flex:none;width:30px;font-size:1.3rem;text-align:center;line-height:1}
+.opt-txt{flex:1;min-width:0}
+.opt-txt small{display:block;margin-top:2px;font-size:.8rem;font-weight:700;color:var(--ink-soft)}
+.switch{-webkit-appearance:none;appearance:none;flex:none;position:relative;box-sizing:border-box;width:52px;height:31px;margin:0;
+  border:2.5px solid var(--ink);border-radius:999px;background:var(--paper2);cursor:inherit;
+  box-shadow:inset 0 3px 0 rgba(0,0,0,.13);transition:background .2s ease}
+.switch::before{content:"";position:absolute;top:2px;left:2px;box-sizing:border-box;width:22px;height:22px;border-radius:50%;
+  background:#fff;border:2.5px solid var(--ink);box-shadow:0 2px 0 var(--ink);
+  transition:transform .22s cubic-bezier(.34,1.56,.64,1)}
+.switch:checked{background:var(--leaf)}
+.switch:checked::before{transform:translateX(21px)}
+.switch:focus-visible{outline:3px solid var(--grape);outline-offset:3px}
+.switch:disabled{cursor:not-allowed}
+
 .face{
   border:3px solid var(--ink);border-radius:999px;display:inline-flex;
   align-items:center;justify-content:center;flex-shrink:0;position:relative;background:var(--sun);
@@ -1539,9 +1569,7 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .room-settings .rs-label{font-weight:800}
 .room-settings .rs-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
 .room-settings .rs-opts .press.dur{width:100%;padding:10px 6px;font-size:.95rem;white-space:nowrap}
-.room-settings .rs-together{cursor:pointer;font-size:.95rem;flex-wrap:nowrap;align-items:flex-start}
-.room-settings .rs-together input{flex:none;margin-top:2px}
-.room-settings .rs-together span{flex:1;min-width:0}
+.room-settings .rs-together{margin:0}
 
 /* Emberfall: the game is its own page in a frame (public/emberfall/) */
 .ef-frame{display:block;border:0;background:#0b1522}

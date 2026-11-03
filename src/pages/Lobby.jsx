@@ -274,39 +274,31 @@ export default function Lobby() {
                 🧍 Solo run — private by default. No room code to share, no invites, no chat.
               </div>
             ) : (
-              <>
-                <label className="row" style={{ gap: 11, fontSize: ".95rem", marginBottom: 12, cursor: "pointer" }}>
-                  <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)}
-                    style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
-                  🔒 Keep it private — invite only
+              <div className="opts">
+                <label className={`opt${isPrivate ? " on" : ""}`}>
+                  <span className="opt-ico" aria-hidden="true">🔒</span>
+                  <span className="opt-txt">Keep it private<small>Only people you invite can join</small></span>
+                  <input type="checkbox" className="switch" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
                 </label>
                 {/* Needs four seats: two sides of two. */}
-                <label className="row"
-                  style={{ gap: 11, fontSize: ".95rem", marginBottom: coopMax ? 12 : 22,
-                    cursor: canTeam ? "pointer" : "not-allowed", opacity: canTeam ? 1 : .45 }}>
-                  <input type="checkbox" checked={teams} disabled={!canTeam}
-                    onChange={(e) => { setTeamMode(e.target.checked); if (e.target.checked) setCoopMode(false); }}
-                    style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
-                  <span>
-                    ⚔️ Team match — play as sides, highest total wins
-                    {!canTeam && <span className="muted"> · needs {MIN_TEAM_SEATS}+ seats</span>}
-                  </span>
+                <label className={`opt${teams ? " on" : ""}${canTeam ? "" : " off"}`}>
+                  <span className="opt-ico" aria-hidden="true">⚔️</span>
+                  <span className="opt-txt">Team match
+                    <small>{canTeam ? "Play as sides — highest total wins" : `Needs ${MIN_TEAM_SEATS}+ seats`}</small></span>
+                  <input type="checkbox" className="switch" checked={teams} disabled={!canTeam}
+                    onChange={(e) => { setTeamMode(e.target.checked); if (e.target.checked) setCoopMode(false); }} />
                 </label>
                 {/* Together: one side against the game. */}
                 {coopMax > 0 && (
-                  <label className="row"
-                    style={{ gap: 11, fontSize: ".95rem", marginBottom: 22,
-                      cursor: canCoop ? "pointer" : "not-allowed", opacity: canCoop ? 1 : .45 }}>
-                    <input type="checkbox" checked={coop} disabled={!canCoop}
-                      onChange={(e) => { setCoopMode(e.target.checked); if (e.target.checked) setTeamMode(false); }}
-                      style={{ width: 20, height: 20, accentColor: "var(--grape)" }} />
-                    <span>
-                      🤝 Play as a team
-                      {!canCoop && <span className="muted"> · 2 to {coopMax} players</span>}
-                    </span>
+                  <label className={`opt${coop ? " on" : ""}${canCoop ? "" : " off"}`}>
+                    <span className="opt-ico" aria-hidden="true">🤝</span>
+                    <span className="opt-txt">Play as a team
+                      <small>{canCoop ? (selected.coopLabel || "All of you on one side") : `2 to ${coopMax} players`}</small></span>
+                    <input type="checkbox" className="switch" checked={coop} disabled={!canCoop}
+                      onChange={(e) => { setCoopMode(e.target.checked); if (e.target.checked) setTeamMode(false); }} />
                   </label>
                 )}
-              </>
+              </div>
             )}
 
             {/* Piano Tiles: pick the song — everyone in the room plays it */}

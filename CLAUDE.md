@@ -305,7 +305,18 @@ There is no test runner. What works:
   slot is reused. To test it, replace `getDisplayMedia` with the fake
   camera (a canvas stops making frames in a background tab, and the real
   desktop starves the machine), and allow tens of seconds: three tabs of
-  software video make every step slow here, not stuck. Chat in a call
+  software video make every step slow here, not stuck. 🖥️ opens a Share
+  menu: the screen (computers), or **a video watched together** — everyone
+  plays their own copy of the same file (full quality, nothing streamed);
+  the server keeps only what's on and where on its clock
+  (`config/callWatch.js`, `call:watch`, also in `call:state`), and each
+  phone steers its player to it (`watchSync.js`: a touch faster or slower,
+  a jump past 0.5 s). Same file = same size. `check-watch.mjs` tests the
+  rules; two phones in step were tested with a recorded .webm through
+  `DOM.setFileInputFiles`. A link drops the camera to a smaller size with
+  more of you (720p for two, 360p for four) and further on a weak link
+  (`gauge`): three full copies starved a phone until voices broke up.
+  Changing networks restarts ICE at once (`kick`). Chat in a call
   (`call:chat`) is relayed to the call's members and never stored; the
   chat panel stops key events reaching the page, or a game listening for
   Space eats the spaces typed into it. On a computer the call floats in a

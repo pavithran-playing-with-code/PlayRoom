@@ -9,6 +9,7 @@
 // The call itself lives in CallContext.
 import React, { useEffect, useRef, useState } from "react";
 import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallContext";
+import CallWatch from "./CallWatch";
 import { usePresence } from "../utils/PresenceContext";
 import { canDocPip, openPip, updatePip, closePip, pipOpen } from "../utils/callPip";
 import { canFloatBoth, createFloat } from "../utils/callFloat";
@@ -284,6 +285,7 @@ export default function CallLayer() {
   const { friends } = usePresence();
   const [now, setNow] = useState(Date.now());
   const [tapForSound, setTapForSound] = useState(false);
+  const [shareMenu, setShareMenu] = useState(false); // 🎬 a video together, 🖥️ my screen
   const [picking, setPicking] = useState(false);   // the "add a friend" list
   const [swapped, setSwapped] = useState(false);   // one-to-one: me big, them in the corner (tap the corner to swap, like WhatsApp)
   const meDrag = useDrag(), chatDrag = useDrag();
@@ -296,7 +298,7 @@ export default function CallLayer() {
   const [facesOpen, setFacesOpen] = useState(false);
   const [facesNote, setFacesNote] = useState("");
   const seen = (key) => !hidden.has(String(key));   // the small picture and the chat, wherever you put them
-  const { call, ring, local, peers, mic, cam, facing, notice, expanded, screen, chat = [], unread = 0, chatOpen } = C;
+  const { call, ring, local, peers, mic, cam, facing, notice, expanded, screen, chat = [], unread = 0, chatOpen, watch } = C;
   // a message arriving with the chat closed: shown for a moment at the top
   const [peek, setPeek] = useState(null);
   const lastSeen = useRef(0);
@@ -609,6 +611,28 @@ export default function CallLayer() {
   };
   const floatsNow = floating || (canDocPip() && pipOpen());
 
+  // everyone's face beside a shared screen or a video — theirs and mine — like Discord
+  const strip = (
+    <div className="call-strip">
+      {shownOthers.map((m) => {
+        const p = peers[m.id] || {};
+        const v = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
+        return (
+          <div className="call-mini-tile" key={m.id} title={m.name}>
+            {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
+            <span className="call-mini-name">{m.name}{p.mic === false ? " 🔇" : ""}</span>
+          </div>
+        );
+      })}
+      {showMe && (
+        <div className="call-mini-tile me" title="You">
+          {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
+          <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className={`call-root${layerTurn === 90 ? " rot" : layerTurn === -90 ? " rot-ccw" : ""}`}>
       {active && VIDEO_PIP && <video ref={pipVid} className="call-pipvid" autoPlay playsInline muted aria-hidden="true" />}
@@ -638,7 +662,7 @@ export default function CallLayer() {
       )}
 
       {call && expanded && (
-        <div className={`call-screen n${Math.max(1, seats)}${shown ? " sharing" : ""}${chatOpen ? " chatting" : ""}`} role="dialog" aria-label="Call">
+        <div className={`call-screen n${Math.max(1, seats)}${shown || watch ? " sharing" : ""}${chatOpen ? " chatting" : ""}`} role="dialog" aria-label="Call">
           {call.phase === "outgoing" ? (
             <div className="call-stage">
               {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <Face avatar={avatarOf(call.first?.id)} big />}
@@ -647,6 +671,11 @@ export default function CallLayer() {
                 <div className="call-ring-sub">Calling…</div>
               </div>
             </div>
+          ) : watch ? (
+            <>
+              <CallWatch C={C} names={call.names || {}} myId={C.myId} shareRef={shareRef} pseudo={pseudo} onBig={big} />
+              {strip}
+            </>
           ) : shown ? (
             <>
               <div className={`call-share${pseudo ? " pfull" : ""}`} ref={shareRef}>
@@ -687,25 +716,7 @@ export default function CallLayer() {
                   </button>
                 )}
               </div>
-              {/* everyone's face beside the screen — theirs and mine — like Discord */}
-              <div className="call-strip">
-                {shownOthers.map((m) => {
-                  const p = peers[m.id] || {};
-                  const v = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
-                  return (
-                    <div className="call-mini-tile" key={m.id} title={m.name}>
-                      {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
-                      <span className="call-mini-name">{m.name}{p.mic === false ? " 🔇" : ""}</span>
-                    </div>
-                  );
-                })}
-                {showMe && (
-                  <div className="call-mini-tile me" title="You">
-                    {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
-                    <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
-                  </div>
-                )}
-              </div>
+              {strip}
             </>
           ) : (
             <div className="call-grid">
@@ -799,9 +810,8 @@ export default function CallLayer() {
               </>
             )}
             {call.phase === "active" && (
-              <button type="button" className={`call-btn${screen ? " off" : ""}${canShareScreen() ? "" : " cant"}`} onClick={C.share}
-                aria-label={screen ? "Stop sharing your screen" : canShareScreen() ? "Share your screen" : "Screen sharing (needs a computer)"}
-                aria-pressed={!!screen}>🖥️</button>
+              <button type="button" className={`call-btn${screen || watch ? " off" : ""}`} onClick={() => (screen ? C.share() : setShareMenu(true))}
+                aria-label={screen ? "Stop sharing your screen" : "Share"} aria-pressed={!!screen}>🖥️</button>
             )}
             {active && (
               <button type="button" className={`call-btn call-chat-btn${chatOpen ? " off" : ""}`} onClick={() => C.setChatOpen(!chatOpen)}
@@ -817,6 +827,32 @@ export default function CallLayer() {
             <button type="button" className="call-peek" onClick={() => { setPeek(null); C.setChatOpen(true); }} aria-label="Open the chat">
               <b>{peek.name}</b> {peek.text}
             </button>
+          )}
+
+          {shareMenu && (
+            <div className="call-pick" role="dialog" aria-label="Share"
+              onClick={(e) => { if (e.target === e.currentTarget) setShareMenu(false); }}>
+              <div className="call-pick-card pop">
+                <div className="call-pick-head"><b>Share with the call</b>
+                  <button type="button" className="press p-white sm" onClick={() => setShareMenu(false)} aria-label="Close">✕</button></div>
+                <label className="call-share-opt">
+                  <span className="call-share-opt-icon">🎬</span>
+                  <span><b>{watch ? "Put on a different video" : "Watch a video together"}</b>
+                    <small>Everyone picks the same file: full quality, in sync</small></span>
+                  <input type="file" accept="video/*,.mkv,.mov,.mp4,.webm" hidden aria-label="Pick a video to watch together" onChange={async (e) => {
+                    const file = e.target.files && e.target.files[0]; e.target.value = "";
+                    setShareMenu(false);
+                    if (file) { const r = await C.pickWatchFile(file, true); if (!r.ok) C.say && C.say("This phone can't play that file. Try an .mp4 copy."); }
+                  }} />
+                </label>
+                <button type="button" className={`call-share-opt${canShareScreen() ? "" : " cant"}`} disabled={!canShareScreen()}
+                  onClick={() => { setShareMenu(false); C.share(); }}>
+                  <span className="call-share-opt-icon">🖥️</span>
+                  <span><b>Share your screen</b>
+                    <small>{canShareScreen() ? "A tab, a window or the whole screen" : "Needs a computer: phone browsers don't let websites share the screen"}</small></span>
+                </button>
+              </div>
+            </div>
           )}
 
           {C.shareHelp && (

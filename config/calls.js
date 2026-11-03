@@ -16,6 +16,7 @@
 // the call itself carries on phone to phone. They have GRACE_MS to come back
 // (call:rejoin) before the others are told they left.
 const presence = require("./presence");
+const { step: watchStep } = require("./callWatch");
 
 const MAX = 4;
 const CHAT_MAX = 500;
@@ -89,6 +90,7 @@ function view(c) {
     callId: c.id,
     members: [...c.members].map(([id, m]) => ({ id, name: m.name, away: !!m.gone })),
     invited: [...c.invited.keys()],
+    watch: c.watch ? { ...c.watch, now: Date.now() } : null,     // a video being watched together (callWatch.js)
   };
 }
 
@@ -283,6 +285,25 @@ function attach(io) {
       const key = typeof msg.key === "string" ? msg.key.slice(0, 40) : String(now);
       toMembers(c, "call:chat", { callId: c.id, id: uid, name, text, at: now, key }, uid);
     });
+
+    // Watching a video together: everyone plays their own copy; this keeps
+    // what's on and where (callWatch.js) and tells the whole call, me too,
+    // stamped with the server's time. call:watch-time lets a phone set its
+    // clock against the server's.
+    let watchTimes = [];
+    socket.on("call:watch", (msg) => {
+      const c = calls.get(msg && msg.callId);
+      if (!c || !c.members.has(uid) || c.members.get(uid).sid !== socket.id) return;
+      const now = Date.now();
+      watchTimes = watchTimes.filter((t) => now - t < 2000);
+      if (watchTimes.length >= 10) return;
+      watchTimes.push(now);
+      const next = watchStep(c.watch || null, msg, uid, now);
+      if (next === undefined) return;
+      c.watch = next;
+      toMembers(c, "call:watch", { callId: c.id, watch: next ? { ...next, now } : null, by: uid, name });
+    });
+    socket.on("call:watch-time", (msg, ack) => { if (typeof ack === "function") ack(Date.now()); });
 
     socket.on("disconnect", () => {
       const c = calls.get(inCall.get(uid));

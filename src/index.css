@@ -1287,7 +1287,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-tile.ringing .call-pulse::before{border-color:var(--sky)}
 .call-pick{position:absolute;inset:0;z-index:5;display:grid;place-items:end center;padding:12px;background:rgba(20,16,28,.55)}
 @media (orientation:landscape){ .call-pick{place-items:center} }
-.call-pick-card{width:min(380px,100%);max-height:min(70vh,520px);overflow:auto;padding:14px;color:var(--ink);
+.call-pick-card{width:min(380px,100%);max-height:min(70vh,520px);overflow:auto;padding:14px;color:var(--text);
   display:flex;flex-direction:column;gap:8px}
 .call-pick-head{display:flex;align-items:center;justify-content:space-between;font-size:18px}
 .call-pick-row{display:flex;align-items:center;gap:12px;width:100%;padding:8px 10px;border:3px solid var(--ink);border-radius:var(--r);
@@ -1308,6 +1308,39 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-unzoom{position:absolute;right:10px;bottom:64px;z-index:3;
   padding:6px 14px;border-radius:999px;border:3px solid #fff;background:rgba(20,16,28,.75);color:#fff;
   font:800 14px Nunito,system-ui,sans-serif;cursor:pointer}
+/* a video watched together (CallWatch): everyone's own copy, the controls over it */
+.cw .call-fit{z-index:0}
+.cw-ui{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:40px 10px 10px;display:flex;flex-direction:column;gap:8px;
+  background:linear-gradient(transparent,rgba(10,8,16,.8));transition:opacity .25s}
+.cw-ui.gone{opacity:0;pointer-events:none}
+.cw-title{display:flex;align-items:center;gap:8px}
+.cw-name{flex:1;min-width:0;font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cw-x{width:34px;height:34px;flex:none;border-radius:50%;border:3px solid #fff;background:rgba(20,16,28,.6);color:#fff;font-weight:900;cursor:pointer}
+.cw-bar{display:flex;align-items:center;gap:8px}
+.cw-play,.cw-big{width:44px;height:44px;flex:none;border-radius:12px;border:3px solid #fff;background:rgba(20,16,28,.6);color:#fff;font-size:20px;cursor:pointer}
+.cw-play{background:var(--sun);color:var(--ink);border-color:var(--ink);box-shadow:0 3px 0 var(--ink)}
+.cw-play:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.cw-seek{flex:1;min-width:0;height:28px;accent-color:var(--sun);cursor:pointer}
+.cw-time{flex:none;font:800 12px Nunito,system-ui,sans-serif;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cw-tap{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;padding:12px 18px;border-radius:999px;
+  border:3px solid var(--ink);background:var(--sun);color:var(--ink);font:900 16px Nunito,system-ui,sans-serif;box-shadow:0 4px 0 var(--ink);cursor:pointer}
+.cw-card{position:relative;z-index:1;width:min(340px,calc(100% - 32px));max-height:calc(100% - 24px);overflow:auto;padding:16px;
+  display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;color:var(--text)}
+.cw-card-icon{font-size:40px;line-height:1}
+.cw-card-name{font-size:17px;word-break:break-word}
+.cw-card-sub,.cw-ready{font-size:13px;font-weight:700;opacity:.8}
+.cw-card-how{font-size:14px;font-weight:600}
+.cw-warn{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px;border-radius:12px;border:2px dashed var(--coral,#e5484d);font-size:14px;font-weight:700}
+.cw-pick{cursor:pointer;padding:10px 22px}
+.cw-link{border:0;background:none;color:inherit;opacity:.7;font:700 13px Nunito,system-ui,sans-serif;text-decoration:underline;cursor:pointer}
+/* the 🖥️ menu: a video together, or my screen */
+.call-share-opt{display:flex;align-items:center;gap:12px;width:100%;margin-top:10px;padding:10px 12px;text-align:left;cursor:pointer;
+  border:3px solid var(--ink);border-radius:var(--r);background:var(--card);color:var(--text);box-shadow:0 3px 0 var(--ink);font:inherit}
+.call-share-opt:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
+.call-share-opt b{display:block;font-size:16px}
+.call-share-opt small{display:block;font-size:13px;font-weight:600;opacity:.75}
+.call-share-opt.cant{opacity:.55;cursor:default;box-shadow:none}
+.call-share-opt-icon{font-size:28px;flex:none}
 .call-share-tag{position:absolute;left:10px;bottom:10px;padding:3px 10px;border-radius:999px;background:rgba(0,0,0,.6);font-weight:800;font-size:13px}
 .call-share:fullscreen .call-share-tag{display:none}
 .call-big{position:absolute;right:10px;bottom:10px;width:44px;height:44px;border-radius:12px;border:3px solid #fff;

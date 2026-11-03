@@ -207,6 +207,21 @@ export function CallProvider({ children }) {
   const chatOpenRef = useRef(false);
   const setChatOpen = useCallback((v) => { chatOpenRef.current = v; setChatOpenState(v); if (v) setUnread(0); }, []);
 
+  // Watching a video together (config/callWatch.js): what's on and where, as
+  // the server last said, and my own copy of the file. Kept here, not in the
+  // player, so shrinking the call to the bubble doesn't lose it.
+  const [watch, setWatchState] = useState(null);    // { src, by, playing, pos, at, rev, ready, now } | null
+  const watchRef = useRef(null);
+  const [watchFile, setWatchFile] = useState(null); // { url, name, size, dur } — the file I picked
+  const watchFileRef = useRef(null); watchFileRef.current = watchFile;
+  const clockGap = useRef(0);                       // server clock − mine, ms
+  const setWatch = useCallback((w) => {
+    if (w && watchRef.current && w.rev < watchRef.current.rev) return;            // stale (every change counts up)
+    if (w && !watchRef.current) clockGap.current = w.now - Date.now();          // a first guess, bettered by a ping
+    watchRef.current = w; setWatchState(w);
+    if (!w) setWatchFile((f) => { if (f) URL.revokeObjectURL(f.url); return null; });
+  }, []);
+
   const callRef = useRef(null); callRef.current = call;
   const localRef = useRef(null); localRef.current = local;
   const micRef = useRef(true); micRef.current = mic;
@@ -461,13 +476,15 @@ export function CallProvider({ children }) {
     callRef.current = null;
     setCall(null); setPeers({}); setExpanded(true);
     setChat([]); setUnread(0); chatOpenRef.current = false; setChatOpenState(false);
+    setWatch(null);
     holdRef.current = false; setOnHold(false);
-  }, [closePeer, stopMedia, say]);
+  }, [closePeer, stopMedia, say, setWatch]);
 
   // members changed: connect to newcomers, let go of whoever left
   const apply = useCallback((st) => {
     const c = callRef.current;
     if (!c || c.id !== st.callId) return;
+    if ("watch" in st && (!st.watch || !watchRef.current || st.watch.rev !== watchRef.current.rev)) setWatch(st.watch);
     const others = st.members.filter((m) => m.id !== myId);
     for (const m of others) peer(m.id);
     for (const id of [...pcs.current.keys()]) if (!others.some((m) => m.id === id)) closePeer(id);
@@ -477,7 +494,7 @@ export function CallProvider({ children }) {
     if (active && c.phase !== "active") tones.current.stop();
     setCall({ ...c, phase: active ? "active" : "outgoing", members: st.members, invited: st.invited, names,
       startedAt: active ? c.startedAt || Date.now() : null });
-  }, [myId, peer, closePeer]);
+  }, [myId, peer, closePeer, setWatch]);
 
   const startCall = useCallback(async (friend) => {
     if (!socket) return say("Not connected — try again in a moment.");
@@ -733,6 +750,60 @@ export function CallProvider({ children }) {
     socket.emit("call:chat", { callId: c.id, text: t, key });
   }, [socket, myId]);
 
+  // ── watching a video together ──────────────────────────────────────────────
+  const sendWatch = useCallback((msg) => {
+    const c = callRef.current;
+    if (socket && c && c.id) socket.emit("call:watch", { ...msg, callId: c.id });
+  }, [socket]);
+  // the server's clock, as near as a phone can tell
+  const serverNow = useCallback(() => Date.now() + clockGap.current, []);
+  // A video file I picked: its length from the file itself. First one in the
+  // call starts the watching; after that it's my copy of what's on — the
+  // same file if it's the same size.
+  // (`fresh`: put this file on for everyone, instead of what's on now)
+  const pickWatchFile = useCallback((file, fresh = false) => new Promise((resolve) => {
+    if (!file) return resolve({ ok: false });
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    v.preload = "metadata"; v.muted = true;
+    const done = (dur) => {
+      v.removeAttribute("src"); v.load();
+      if (!(dur > 0) || !Number.isFinite(dur)) { URL.revokeObjectURL(url); return resolve({ ok: false, why: "unplayable" }); }
+      const mine = { url, name: file.name, size: file.size, dur };
+      setWatchFile((old) => { if (old) URL.revokeObjectURL(old.url); return mine; });
+      const w = fresh ? null : watchRef.current;
+      if (!w) sendWatch({ op: "open", src: { kind: "file", name: file.name, size: file.size, dur } });
+      else if (w.src.size === file.size) sendWatch({ op: "ready" });
+      resolve({ ok: true, same: !w || w.src.size === file.size });
+    };
+    // Some recordings (a phone's screen recorder's .webm) don't say how long
+    // they are: jumping far past the end makes the browser work it out.
+    v.onloadedmetadata = () => {
+      if (Number.isFinite(v.duration)) return done(v.duration);
+      v.ontimeupdate = () => { v.ontimeupdate = null; done(v.duration); };
+      v.currentTime = 1e101;
+    };
+    v.onerror = () => done(0);
+    v.src = url;
+  }), [sendWatch]);
+  // Set my clock against the server's while something's on: the quickest of
+  // a few round trips, halved.
+  const watching = !!watch;
+  useEffect(() => {
+    if (!watching || !socket) return undefined;
+    let best = Infinity, stop = false;
+    const ping = () => {
+      const t0 = Date.now();
+      socket.emit("call:watch-time", {}, (srv) => {
+        const t1 = Date.now();
+        if (stop || typeof srv !== "number" || t1 - t0 >= best) return;
+        best = t1 - t0; clockGap.current = srv - (t0 + t1) / 2;
+      });
+    };
+    ping(); const a = setTimeout(ping, 400), b = setTimeout(ping, 1200), every = setInterval(() => { best = Infinity; ping(); }, 30000);
+    return () => { stop = true; clearTimeout(a); clearTimeout(b); clearInterval(every); };
+  }, [watching, socket]);
+
   // ── sharing my screen ──────────────────────────────────────────────────────
   const stopShare = useCallback(() => {
     const scr = screenRef.current;
@@ -855,18 +926,27 @@ export function CallProvider({ children }) {
       tones.current.blip(true);
     };
     socket.on("call:chat", onChat);
+    const onWatch = ({ callId, watch: w, by, name: who }) => {
+      if (!callRef.current || callRef.current.id !== callId) return;
+      const had = watchRef.current;
+      setWatch(w);
+      if (by === myId) return;
+      if (w && (!had || had.src.size !== w.src.size)) say(`🎬 ${who} put on “${w.src.name}”`);
+      else if (!w && had) say(`${who} stopped the video`);
+    };
+    socket.on("call:watch", onWatch);
     socket.on("call:mine", onMine); socket.on("call:moved", onMoved);
     if (socket.connected) socket.emit("call:mine");      // listening now: am I in a call somewhere?
     socket.on("connect", onConnect);
     return () => {
-      socket.off("call:chat", onChat);
+      socket.off("call:chat", onChat); socket.off("call:watch", onWatch);
       socket.off("call:mine", onMine); socket.off("call:moved", onMoved);
       socket.off("call:ring", onRing); socket.off("call:ring-stop", onRingStop); socket.off("call:state", onState);
       socket.off("call:ended", onEnded); socket.off("call:left", onLeft); socket.off("call:declined", onDeclined);
       socket.off("call:missed", onMissed); socket.off("call:media", onMedia); socket.off("call:signal", onSignal);
       socket.off("connect", onConnect);
     };
-  }, [socket, apply, finish, closePeer, patchPeer, onSignal, say, place, kickAll]);
+  }, [socket, apply, finish, closePeer, patchPeer, onSignal, say, place, kickAll, setWatch, myId]);
 
   // The phone moved networks (Wi-Fi to mobile data and back): the old route
   // is about to die, so start finding the new one now, before the sound cuts.
@@ -888,8 +968,9 @@ export function CallProvider({ children }) {
   const value = useMemo(() => ({
     call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn, mics, setMics, listMics, chooseMic,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
+    watch, watchFile, sendWatch, pickWatchFile, serverNow, say,
   }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere, mics, listMics, chooseMic,
-    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen]);
+    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

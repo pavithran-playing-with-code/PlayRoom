@@ -12,9 +12,7 @@
 // you can hit or take comes from the sim, so it's the same for everyone.
 //
 // createRailScene(THREE) -> { canvas, resize(w, h), frame(state), fx, dispose }
-//   frame({ s, t, dt, mates, hearts, crashed })
-//     s: the run (runnerSim); mates: [{ id, d, l, y, dn, col }] (together);
-//     hearts: [distance] still to grab
+//   frame({ s, t, dt, crashed })   s: the run (runnerSim)
 export const LANE = 3.2, CL = 36, THEME_M = 900;
 export const THEMES = ["Meadow Isles", "Sunset Dunes", "Neon Night"];
 const RAW = [
@@ -119,7 +117,7 @@ export function createRailScene(T, merge) {
   const gPole = G(new T.CylinderGeometry(0.09, 0.12, 4.4, 6)), gArmP = G(new T.BoxGeometry(1.1, 0.1, 0.1)), gLampHd = G(new T.BoxGeometry(0.5, 0.16, 0.3));
   const stripe = cvs(64, 64, (g) => { g.fillStyle = "#fff"; g.fillRect(0, 0, 64, 64); g.fillStyle = "#ff4d4d"; for (let i = -64; i < 128; i += 32) { g.beginPath(); g.moveTo(i, 64); g.lineTo(i + 16, 64); g.lineTo(i + 80, 0); g.lineTo(i + 64, 0); g.fill(); } });
   const mStripe = mk(0xffffff, { map: stripe }), mDark = mk(0x2a3140);
-  const mGold = mk(0xffcc33, { emissive: 0xa86e00, shininess: 100, specular: 0xffffdd }), mHeart = mk(0xff5d73, { emissive: 0x8a1030, shininess: 60 });
+  const mGold = mk(0xffcc33, { emissive: 0xa86e00, shininess: 100, specular: 0xffffdd });
   // the train cars: a few liveries, each a body, a lighter roof, a stripe, a
   // band of windows down both sides and a painted face (windscreen, a
   // destination board, headlights) toward you
@@ -146,8 +144,6 @@ export function createRailScene(T, merge) {
   // a car's parts, each 1 long and stretched to the car's length
   const gTrain = G(new T.BoxGeometry(2.7, 2.9, 1)), gTrainTop = G(new T.BoxGeometry(2.45, 0.3, 1)), gBand = G(new T.BoxGeometry(2.74, 0.3, 1)), gWin = G(new T.BoxGeometry(2.76, 0.7, 1)), gChassis = G(new T.BoxGeometry(2.3, 0.5, 1));
   const gFace = G(new T.PlaneGeometry(2.7, 2.9)), gLamp = G(new T.SphereGeometry(0.16, 8, 6)), gLegB = G(new T.BoxGeometry(0.16, 0.5, 0.16));
-  const heartShape = new T.Shape(); heartShape.moveTo(0, -0.5); heartShape.bezierCurveTo(-0.9, 0.1, -0.5, 0.75, 0, 0.35); heartShape.bezierCurveTo(0.5, 0.75, 0.9, 0.1, 0, -0.5);
-  const gHeart = G(new T.ExtrudeGeometry(heartShape, { depth: 0.25, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 2 }));
   const gTrunk = G(new T.CylinderGeometry(0.25, 0.35, 1.6, 6)), gCone = G(new T.ConeGeometry(1.7, 3.4, 7)), gSph = G(new T.SphereGeometry(1.7, 7, 5)), gRock = G(new T.IcosahedronGeometry(1.2, 0));
   const gCact = G(new T.CylinderGeometry(0.4, 0.45, 3.4, 8)), gArm = G(new T.CylinderGeometry(0.25, 0.25, 1.1, 6)), gCry = G(new T.OctahedronGeometry(1, 0));
   const gIsl = G(new T.ConeGeometry(5, 7, 7).rotateX(Math.PI)), gIslTop = G(new T.CylinderGeometry(5, 5, 0.8, 7));
@@ -197,14 +193,14 @@ export function createRailScene(T, merge) {
   }
   const dropChunk = (c) => { scene.remove(c.g); for (const geo of c.g.userData.geos || []) geo.dispose(); };
 
-  // ── the runner (and friends, see-through) ──
+  // ── the runner ──
   // A street kid, Subway Surfers style: a backwards cap, a hoodie in your
   // colour (hood down, a pocket in front), jeans, big sneakers, a backpack and
   // headphones. The camera is behind, so the back — cap, hood, pack — carries
   // the look. Legs swing from the hip and arms from the shoulder (poseHero).
-  function mkHero(colour, ghost) {
+  function mkHero(colour) {
     const g = new T.Group(), inner = new T.Group(); g.add(inner);
-    const M = (c, o) => mk(c, Object.assign({ shininess: 30 }, ghost ? { transparent: true, opacity: 0.45, depthWrite: false } : {}, o || {}));
+    const M = (c, o) => mk(c, Object.assign({ shininess: 30 }, o || {}));
     const SKIN = 0xf2c39a, HAIR = 0x3a2416, JEANS = 0x2f4f8f, CAP = 0xffd23d, SHOE = 0xff3b5c, SOLE = 0xffffff, PACK = 0x37c8e6, DARK = 0x1b2233;
     const hood = M(colour), skin = M(SKIN);
     // the hoodie: a body a little wider at the hips, the hood rolled down at the back, a pocket in front
@@ -247,12 +243,12 @@ export function createRailScene(T, merge) {
         mesh(G(new T.SphereGeometry(0.09, 8, 6)), skin, 0, -0.53, 0));
       inner.add(a); arms.push(a);
     }
-    const sh = new T.Mesh(G(new T.PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2)), keep(new T.MeshBasicMaterial({ map: glow, color: 0x000000, transparent: true, opacity: ghost ? 0.2 : 0.45, depthWrite: false })));
+    const sh = new T.Mesh(G(new T.PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2)), keep(new T.MeshBasicMaterial({ map: glow, color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false })));
     sh.position.y = 0.03;
     scene.add(g, sh);
     return { g, inner, legs, arms, sh, phase: Math.random() * 6 };
   }
-  const hero = mkHero(0xff7a3d, false);
+  const hero = mkHero(0xff7a3d);
   // A jump is drawn higher than the rules' 1.3 m (JUMP_LOOK): next to a 2 m
   // runner the real height looked like a small, slow hop. What you clear or
   // hit is still the rules', unchanged.
@@ -275,18 +271,6 @@ export function createRailScene(T, merge) {
       h.arms[0].rotation.x = grounded ? -a * 0.8 : -2.4; h.arms[1].rotation.x = grounded ? -b * 0.8 : -2.4;
     }
     h.g.visible = safe ? Math.sin(t * 40) > 0 : true;
-  }
-  const mates = new Map();
-  // a name over a friend
-  function nameTag(name, colour) {
-    const c = document.createElement("canvas"); c.width = 256; c.height = 64;
-    const g = c.getContext("2d");
-    g.font = "800 34px Nunito, 'Trebuchet MS', sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
-    g.lineWidth = 7; g.strokeStyle = "rgba(16,32,58,.85)"; g.strokeText(name.slice(0, 14), 128, 34);
-    g.fillStyle = colour; g.fillText(name.slice(0, 14), 128, 34);
-    const sp = new T.Sprite(keep(new T.SpriteMaterial({ map: keep(new T.CanvasTexture(c)), transparent: true, depthWrite: false, fog: false })));
-    sp.scale.set(2.6, 0.65, 1); sp.position.y = 2.5;
-    return sp;
   }
 
   // ── particles ──
@@ -334,7 +318,6 @@ export function createRailScene(T, merge) {
     scene.add(m);
     return m;
   }
-  const hearts = new Map();      // distance -> mesh
   // all the coins in one draw (one coin shape, placed many times): drawn one
   // by one, the coins alone were ~60 draws a frame
   const MAXC = 160, coinMesh = new T.InstancedMesh(gCoin, mGold, MAXC);
@@ -347,7 +330,7 @@ export function createRailScene(T, merge) {
   let shake = 0, prevY = 0, camX = 0;
   function resize(w, h) { renderer.setSize(Math.max(1, w), Math.max(1, h), false); cam.aspect = Math.max(1, w) / Math.max(1, h); cam.updateProjectionMatrix(); }
 
-  function frame({ s, t, dt, mates: friends = [], hearts: hs = [], crashed = false }) {
+  function frame({ s, t, dt, crashed = false }) {
     const pz = -s.z, px = s.x * LANE, py = s.y, grounded = s.y <= 0.001, sliding = s.slideT > 0 && s.y < 0.3;
     const th = themeAt(s.z);
     // the path ahead, and nothing behind
@@ -376,15 +359,6 @@ export function createRailScene(T, merge) {
     coinMesh.count = nc; coinMesh.instanceMatrix.needsUpdate = true;
     for (const [o, at] of coinsWere) if (o.got && !coinsNow.has(o)) burst(at[0], at[1], at[2], 4, 1, 0.85, 0.2, 2.5);   // taken: a sparkle
     coinsWere = coinsNow;
-    // hearts (together)
-    const hseen = new Set();
-    for (const at of hs) {
-      hseen.add(at);
-      let m = hearts.get(at);
-      if (!m) { m = new T.Group(); m.add(mesh(gHeart, mHeart, 0, 0, -0.12)); scene.add(m); hearts.set(at, m); }
-      m.position.set(0, 1.5 + Math.sin(t * 3 + at) * 0.15, -at); m.rotation.y = t * 2.5;
-    }
-    for (const [at, m] of hearts) if (!hseen.has(at)) { burst(m.position.x, m.position.y, m.position.z, 14, 1, 0.4, 0.5, 5); scene.remove(m); hearts.delete(at); }
     // you
     hero.g.position.z = pz;
     poseHero(hero, { x: px, y: py, grounded, sliding, stun: s.stunT > 0, safe: s.safeT > 0 && s.stunT <= 0, speed: s.speed, dt, t });
@@ -393,16 +367,6 @@ export function createRailScene(T, merge) {
     if (prevY > 0.05 && grounded) burst(px, 0.1, pz, 6, 0.8, 0.8, 0.7, 2.5);
     prevY = py;
     if (crashed) { shake = 0.8; burst(px, 1, pz, 26, 1, 0.55, 0.2, 8); }
-    // friends, see-through, beside you
-    const fseen = new Set();
-    for (const f of friends) {
-      fseen.add(f.id);
-      let h = mates.get(f.id);
-      if (!h) { h = mkHero(new T.Color(f.col || "#4cc9f0").getHex(), true); h.g.add(nameTag(f.name || "Friend", f.col || "#4cc9f0")); mates.set(f.id, h); }
-      h.g.position.z = -f.d;
-      poseHero(h, { x: f.l * LANE, y: f.y, grounded: f.y <= 0.01, sliding: false, stun: !!f.dn, safe: false, speed: f.v || s.speed, dt, t });
-    }
-    for (const [id, h] of mates) if (!fseen.has(id)) { scene.remove(h.g, h.sh); mates.delete(id); }
     // the world around
     updP(dt);
     shake = Math.max(0, shake - dt * 1.6);

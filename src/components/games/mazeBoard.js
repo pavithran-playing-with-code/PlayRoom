@@ -123,19 +123,6 @@ export function distances(maze, from = maze.start) {
 
 export const shortestPath = (maze) => distances(maze)[idx(maze, maze.goal.r, maze.goal.c)];
 
-// Together: the door (the goal) is locked, and the key is the cell as far
-// as it can be from both the start and the door — a trip of its own. The
-// same maze gives the same key for everyone; ties go to the first cell.
-export function keyCell(maze) {
-  const a = distances(maze, maze.start), b = distances(maze, maze.goal);
-  let best = -1, at = 0;
-  for (let i = 0; i < a.length; i++) {
-    const v = Math.min(a[i], b[i]);
-    if (v > best) { best = v; at = i; }
-  }
-  return { r: Math.floor(at / maze.cols), c: at % maze.cols };
-}
-
 // The fewest moves (rolls) that get from the start to the flag.
 export function fewestRolls(maze) {
   const key = (r, c) => r * maze.cols + c;

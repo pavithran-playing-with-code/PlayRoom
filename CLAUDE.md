@@ -99,7 +99,7 @@ clock (`settleIfExpired` skips it, the engine's `timeLeft` holds at
 `UNLIMITED_LEFT`, `GameFrame` shows ∞). It ends when its players leave:
 leaving keeps your seat and score (`leftUnlimited` in rooms.js), and the
 last one out finishes and records it; the sweep ends an idle one. Goals that
-scale with the clock (co-op runners, Word Rush) use the time played.
+scale with the clock (Word Rush together) use the time played.
 
 **Play again is together**: the results card (`AgainPanel`) shows who in the
 room is ready (`POST /:code/again`, `room:again`); when everyone still there
@@ -155,11 +155,11 @@ There is no test runner. What works:
   database, so they can be exercised from a Node script directly
   (`scripts/check-runner.mjs`, `scripts/check-speedway.mjs`, `scripts/check-piano.mjs`,
   `scripts/check-mahjong.mjs`, `scripts/check-maze.mjs`, `check-manor*`).
-- **Maze Runner together** is relayed, not server-run: each phone moves its
-  own ball and sends `maze:pos` (maze, where, key taken, door reached);
-  `config/socket.js` passes it on, and a phone that missed something catches
-  up from the next message.
-- **Memory, Mahjong, Number Rush and Pipes together** share one board through
+- **Played alone or against each other only** (no "Play together"): Dino
+  Dash, Flappy Dash, Rail Runner, Maze Runner, Number Rush and Pipes, like
+  the other score-attack games. Their co-op modes were removed (2026-11):
+  an old co-op room of one is ranked on the scores.
+- **Memory and Mahjong together** share one board through
   a move log: `config/coopBoard.js` numbers every move (`cb:act`) and keeps
   the room's list; each phone plays the list through the rules in
   `src/components/games/coopBoards.js` (`coopLog.js`, `useCoopBoard.js`), its
@@ -168,11 +168,6 @@ There is no test runner. What works:
   `scripts/check-coop.mjs` proves crossed moves from three phones converge.
   A side wins by reaching `COOP_GOAL` in `config/matchResult.js`. Word Rush
   together uses the same log (who has which word).
-- **Rail Runner, Dino Dash and Flappy Dash together** relay positions
-  (`run:pos`, `useRunTogether.js`): friends drawn as ghosts, a crash is "down"
-  until a friend grabs a seeded ❤️ (`runTogether.js`). The side wins on its
-  points added up against `COOP_PACE` × seconds × players — keep the client
-  and server paces equal (check-coop proves it).
 - **The together games run on the server** — Kitchen Rush:
   `config/togetherWorld.js` keeps a world per side (one each,
   per team, or one for a co-op room) on the rules in

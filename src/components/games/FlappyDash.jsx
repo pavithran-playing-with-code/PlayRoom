@@ -6,22 +6,14 @@
 //
 // The rules live in flappySim.js. This file draws the bird and takes the taps.
 //
-// Together (a co-op room): your friends fly beside you, see-through. A crash
-// knocks you down for a few seconds unless a friend flies through a ❤️ —
-// then everyone who's down is back up (runTogether.js). The side's points
-// add up.
-//
 // Watched (a spectator): the player's phone sends a small frame of its flight
 // (useSpecStream) and the watcher flies the same seeded course from it,
 // carrying the bird on at its speed between frames so it moves at 60 fps.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
-import useRunTogether from "./useRunTogether";
 import useSpecStream from "./useSpecStream";
-import { DOWN_S, HEART_PTS, teamGoal, hearts, heartsBetween } from "./runTogether";
-import { team } from "./coopTeam";
 import {
   VIEW_W, VIEW_H, GROUND, BIRD_X, BIRD_RY, GAP, PIPE_W, CRASH_COST, SPEED, GRAVITY, SPACING,
   makeCourse, newBird, flap, step,
@@ -148,7 +140,7 @@ function drawPipe(ctx, left, gapY) {
   rrect(ctx, left - 5, botY, PIPE_W + 10, lip, 6); paint(ctx, PIPE_DARK);
 }
 
-function draw(ctx, s, course, k, now, tg, idle = "Tap or press Space to flap!") {
+function draw(ctx, s, course, k, now, idle = "Tap or press Space to flap!") {
   ctx.setTransform(k, 0, 0, k, 0, 0);
   // sky
   const sky = ctx.createLinearGradient(0, 0, 0, VIEW_H);
@@ -185,30 +177,6 @@ function draw(ctx, s, course, k, now, tg, idle = "Tap or press Space to flap!") 
   ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(VIEW_W, gy); ctx.stroke();
 
-  // together: hearts in the gaps, and friends flying beside you
-  if (tg) {
-    ctx.font = "24px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    for (const i of tg.hearts) {
-      const p = course.list[i];
-      if (!p || p.gone) continue;
-      const x = p.x - s.x + PIPE_W / 2;
-      if (x < -20 || x > VIEW_W + 20) continue;
-      ctx.fillText("❤️", x, p.gapY + Math.sin(now / 240 + i) * 4);
-    }
-    for (const m of tg.mates) {
-      const x = BIRD_X + (m.d - s.x);
-      if (x < -30 || x > VIEW_W + 30) continue;
-      ctx.save();
-      ctx.globalAlpha = 0.42;
-      drawBird(ctx, x, m.y, 0, 0, m.dn);
-      ctx.restore();
-      ctx.font = "600 11px Fredoka, Nunito, sans-serif";
-      ctx.fillStyle = m.col;
-      ctx.fillText(m.dn ? `💤 ${m.name}` : m.name, x, m.y - 24);
-    }
-  }
   // the bird: nose up while rising, nose down while falling
   const tilt = Math.max(-0.45, Math.min(0.9, s.vy / 620));
   const since = now - s.flapAt;
@@ -216,13 +184,12 @@ function draw(ctx, s, course, k, now, tg, idle = "Tap or press Space to flap!") 
   drawBird(ctx, BIRD_X, s.y, s.started ? tilt : 0, wing, s.stun > 0);
 
   if (!s.started || s.stun > 0) {
-    const down = tg && tg.down;
-    const text = !s.started ? idle : down ? `💤 Down ${Math.ceil(s.stun)}s — wait for a ❤️` : `Ouch! ${CRASH_COST}`;
+    const text = !s.started ? idle : `Ouch! ${CRASH_COST}`;
     ctx.font = "600 17px Fredoka, Nunito, sans-serif";
     const w = ctx.measureText(text).width + 28;
     ctx.lineWidth = 3;
     rrect(ctx, VIEW_W / 2 - w / 2, 78, w, 34, 17);
-    paint(ctx, !s.started ? "#FFC53D" : down ? "#C9B8FF" : "#FF8A8A");
+    paint(ctx, !s.started ? "#FFC53D" : "#FF8A8A");
     ctx.fillStyle = INK;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -250,34 +217,11 @@ function Stage({ w, h, canvasRef, view, onDown, label = "Flappy Dash: tap to fla
 
 export default function FlappyDash(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null, mode } = props;
-  const coop = mode === "coop" && !!roomCode;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
   const myId = Number(currentUser?.id);
 
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const { addScore } = eng;
-
-  // together: friends beside you, hearts to save each other
-  const T = useMemo(() => team(players, myId), [players, myId]);
-  const Tref = useRef(T);
-  Tref.current = T;
-  const heartAt = useMemo(() => hearts(seed, "flappy"), [seed]);
-  const tg = useRef({ down: false, h: 0, got: new Set() });
-  const [msg, setMsg] = useState(null);
-  const msgTimer = useRef(null);
-  useEffect(() => () => clearTimeout(msgTimer.current), []);
-  const say = useCallback((text, type) => {
-    setMsg({ text, type });
-    clearTimeout(msgTimer.current);
-    msgTimer.current = setTimeout(() => setMsg(null), 1400);
-  }, []);
-  const { tell, mates } = useRunTogether({ on: coop, roomCode, isSpectator, myId, onRevive: (id) => {
-    const s = sim.current;
-    if (!tg.current.down || s.stun <= 0) return;
-    s.stun = 0;
-    tg.current.down = false;
-    say(`❤️ ${Tref.current.nameOf(id)} saved you!`, "success");
-  } });
 
   const course = useMemo(() => makeCourse(seed), [seed]);
   const sim = useRef(null);
@@ -313,29 +257,11 @@ export default function FlappyDash(props) {
       const s = sim.current;
       if (!overRef.current) {
         const before = s.pipes;
-        const crashed = step(s, course, dt) === "crash";
+        step(s, course, dt);
         if (s.pipes !== before) setPipes(s.pipes);
         // setBest with the same value is no change: the loop must not restart
         // on it, or the score it has already handed over is handed over again
         setBest(s.best);
-        if (coop && crashed) { s.stun = DOWN_S; tg.current.down = true; }
-      }
-      const T0 = tg.current;
-      if (coop) {
-        if (T0.down && s.stun <= 0) T0.down = false;
-        // a heart flown through (its pipe passed, not crashed past) is yours
-        if (!T0.down) {
-          for (const { k, at } of heartsBetween(heartAt, Math.max(0, s.first - 2), s.first + 3)) {
-            const p = course.list[at];
-            if (T0.got.has(k) || !p || !p.passed || p.gone) continue;
-            T0.got.add(k);
-            T0.h += 1;
-            s.points += HEART_PTS.flappy;
-            const anyDown = mates().some((m) => m.dn);
-            say(anyDown ? "❤️ You saved your friends!" : `❤️ +${HEART_PTS.flappy}`, "success");
-          }
-        }
-        tell({ d: s.x, v: s.stun > 0 || !s.started ? 0 : SPEED, y: s.y, l: 0, dn: T0.down, h: T0.h });
       }
       if (now - lastPush > 100) {
         lastPush = now;
@@ -343,19 +269,12 @@ export default function FlappyDash(props) {
         if (target !== pushed) { addScore(target - pushed); pushed = target; }
       }
       const c = canvasRef.current;
-      if (c) {
-        const extra = coop ? {
-          down: T0.down,
-          hearts: heartsBetween(heartAt, s.first, s.first + 4).filter((x) => !T0.got.has(x.k)).map((x) => x.at),
-          mates: mates().map((m) => ({ ...m, col: Tref.current.colourOf(m.id), name: Tref.current.nameOf(m.id) })),
-        } : null;
-        draw(c.getContext("2d"), s, course, view.current, now, extra);
-      }
+      if (c) draw(c.getContext("2d"), s, course, view.current, now);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [isSpectator, course, addScore, coop, heartAt, tell, mates, say]);
+  }, [isSpectator, course, addScore]);
 
   // Being watched: a small picture of the flight, ~15 times a second. The
   // pipes come from the seed; only the ones a crash knocked off (`g`) and
@@ -367,17 +286,12 @@ export default function FlappyDash(props) {
     frame: () => {
       const s = sim.current, list = course.list, g = [];
       for (let i = s.first; i < list.length && list[i].x - s.x <= VIEW_W + SPACING; i++) if (list[i].gone) g.push(i);
-      const f = {
+      return {
         x: Math.round(s.x * 10) / 10, y: Math.round(s.y * 10) / 10, vy: Math.round(s.vy),
         st: s.started ? 1 : 0, sn: Math.round(s.stun * 100) / 100,
         fa: Math.min(9999, Math.round(performance.now() - s.flapAt)),
         fi: s.first, g, p: Math.floor(s.points), pi: s.pipes, r: s.run, b: s.best,
       };
-      if (coop) {
-        f.dn = tg.current.down ? 1 : 0;
-        f.hs = heartsBetween(heartAt, s.first, s.first + 4).filter((x) => !tg.current.got.has(x.k)).map((x) => x.at);
-      }
-      return f;
     },
     onFrame: (f) => {
       const key = `${f.p}|${f.pi}|${f.r}|${f.b}`;
@@ -445,33 +359,18 @@ export default function FlappyDash(props) {
       }
       const c = canvasRef.current;
       if (c) {
-        const extra = coop && L && L.f ? {
-          down: !!L.f.dn,
-          hearts: L.f.hs || [],
-          mates: mates().filter((m) => m.id !== Number(watchId))
-            .map((m) => ({ ...m, col: Tref.current.colourOf(m.id), name: Tref.current.nameOf(m.id) })),
-        } : null;
         const who = spectatorWatching?.username || "them";
-        draw(c.getContext("2d"), s, course, view.current, now, extra, `Waiting for ${who} to flap…`);
+        draw(c.getContext("2d"), s, course, view.current, now, `Waiting for ${who} to flap…`);
       }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [isSpectator, spec, course, coop, mates, watchId, spectatorWatching?.username]);
+  }, [isSpectator, spec, course, spectatorWatching?.username]);
 
   const oppList = Object.values(eng.opponents);
   const specScore = spectatorWatching?.score ?? 0;
-  // together: the side's points, against the team goal
-  const seats = (players || []).filter((p) => !p.is_spectator);
-  const goal = teamGoal("flappy", durationSeconds || Math.max(60, eng.elapsed), seats.length);   // no time limit: paced on the time played
-  const teamTotal = eng.score + oppList.reduce((t, o) => t + (Number(o.score) || 0), 0);
-  const scores = { [myId]: eng.score };
-  for (const o of oppList) scores[o.user_id] = Number(o.score) || 0;
-  const stats = coop
-    ? [{ label: "Team", value: teamTotal.toLocaleString() },
-       { label: "Goal", value: teamTotal >= goal ? "✓" : goal.toLocaleString() }]
-    : isSpectator
+  const stats = isSpectator
     ? [
         { label: "Score", value: Number(specHud ? specHud.points : specScore).toLocaleString() },
         { label: "Pipes", value: specHud ? specHud.pipes : 0 },
@@ -490,9 +389,8 @@ export default function FlappyDash(props) {
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
-        opponents={coop ? [] : oppList}
+        opponents={oppList}
         teams={eng.teams}
-        message={msg}
         onQuit={eng.endMatch}
         controls={!isSpectator ? (
           <button className="press p-sun fl-btn" onPointerDown={(e) => { e.preventDefault(); tap(); }}
@@ -517,8 +415,7 @@ export default function FlappyDash(props) {
 
       {eng.gameOver && !isSpectator && (
         <GameOver eng={eng} me={currentUser}
-          extra={coop ? `Team: ${teamTotal.toLocaleString()} pts` : `Pipes cleared: ${pipes} · Best run: ${Math.max(best, sim.current.run)}`}
-          together={coop ? { reached: teamTotal >= goal, goal: `${goal.toLocaleString()} points`, unit: "pts", mates: T.all(scores) } : null} />
+          extra={`Pipes cleared: ${pipes} · Best run: ${Math.max(best, sim.current.run)}`} />
       )}
     </>
   );

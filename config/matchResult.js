@@ -17,14 +17,10 @@ const OBJECTIVE_PAIRS = { mahjong: 24, memory: 10, emberfall: 1, hollow: 1 };
 // GOAL in src/components/games/coopBoards.js (scripts/check-coop.mjs proves it).
 // Sunshard Jump: pairs_matched is 1 once the side has lit the temple;
 // Emberfall: 1 once the Cinder Colossus is down (alone, that is the win too).
-const COOP_GOAL = { maze: 1, memory: 1, mahjong: 1, numbers: 5, pipes: 3, sunshard: 1, emberfall: 1, hollow: 1 };
+const COOP_GOAL = { memory: 1, mahjong: 1, sunshard: 1, emberfall: 1, hollow: 1 };
 // Word Rush together: words solved as a side, more for a longer clock and a
 // bigger side. = wordGoal in coopBoards.js.
 const wordGoal = (secs, n) => Math.max(4, Math.round((3 * (Number(secs) || 120) * Math.max(1, n)) / 60));
-// Running together: everyone's points added up, against PACE points a second
-// for each player. = PACE / teamGoal in src/components/games/runTogether.js.
-const COOP_PACE = { runner: 22, dino: 18, flappy: 2 };
-const teamGoal = (slug, secs, n) => Math.round(((COOP_PACE[slug] || 0) * (Number(secs) || 120) * Math.max(1, n)) / 10) * 10;
 
 const cap = (n) => Math.max(0, Math.min(Number(n) || 0, MAX_SCORE_PER_GAME));
 
@@ -130,16 +126,10 @@ function resultsFor(room, seated) {
   if (TOGETHER_GAMES.has(room.game_slug)) return togetherResults(room, seated);
   const out = new Map();
 
-  // Played together on one board (Maze Runner, and Memory, Mahjong, Number
-  // Rush and Pipes — config/coopBoard.js): one side, one score, and
-  // pairs_matched is the boards the side has cleared. Reaching the game's
-  // goal is a win for everyone; short of it, a loss.
-  if (room.mode === "coop" && COOP_PACE[room.game_slug]) {
-    const total = seated.reduce((t, p) => t + cap(p.score), 0);
-    const won = total >= teamGoal(room.game_slug, room.duration_seconds, seated.length);
-    for (const p of seated) out.set(Number(p.user_id), won ? "win" : "loss");
-    return out;
-  }
+  // Played together on one board (Memory, Mahjong — config/coopBoard.js —
+  // and Word Rush): one side, one score, and pairs_matched is the boards the
+  // side has cleared. Reaching the game's goal is a win for everyone; short
+  // of it, a loss.
   if (room.mode === "coop" && room.game_slug === "wordrush") {
     const won = seated.some((p) => (Number(p.pairs_matched) || 0) >= wordGoal(room.duration_seconds, seated.length));
     for (const p of seated) out.set(Number(p.user_id), won ? "win" : "loss");
@@ -172,4 +162,4 @@ function resultsFor(room, seated) {
   return out;
 }
 
-module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, COOP_GOAL, COOP_PACE, teamGoal, wordGoal, ESCAPE_POINTS, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults, togetherResults, TOGETHER_GAMES };
+module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, COOP_GOAL, wordGoal, ESCAPE_POINTS, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults, togetherResults, TOGETHER_GAMES };

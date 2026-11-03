@@ -877,8 +877,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 /* ── Rail Runner (.rr-) and Speedway (.sw-) ──────────────────────────────────
    The whole board takes swipes / holds, so it never scrolls under a thumb. */
 /* Pipes together: a pipe a friend just turned */
-.pp-touch{pointer-events:none;animation:ppTouch .6s ease-out forwards}
-@keyframes ppTouch{0%{opacity:1}70%{opacity:.9}100%{opacity:0}}
 .rh-pad{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;touch-action:none;
   user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .rh-canvas{border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
@@ -938,12 +936,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .mz-cell.goal{background:rgba(255,197,61,.45)}
 .mz-flag{line-height:1;pointer-events:none}
 /* together: a locked door, then an open one; the key; the others' balls */
-.mz-flag.locked{filter:grayscale(.6) brightness(.85)}
-.mz-flag.open{filter:drop-shadow(0 0 6px rgba(143,219,92,.95));animation:mzDoor 1s ease-in-out infinite alternate}
-.mz-key{line-height:1;pointer-events:none;animation:mzKey 1.2s ease-in-out infinite alternate}
-.mz-mate{border:2px solid var(--ink);opacity:.92;transition:transform .25s ease}
-@keyframes mzKey{from{transform:translateY(-2px) rotate(-8deg)}to{transform:translateY(2px) rotate(8deg)}}
-@keyframes mzDoor{from{transform:scale(1)}to{transform:scale(1.12)}}
 .mz-token{position:absolute;left:0;top:0;border-radius:999px;background:var(--sky);
   border:3px solid var(--ink);box-shadow:0 2px 0 var(--ink);
   transition-property:transform;transition-timing-function:cubic-bezier(.34,1.4,.64,1);

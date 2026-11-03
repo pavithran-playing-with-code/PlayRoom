@@ -1,6 +1,6 @@
 // src/components/games/coopBoards.js
-// The rules for playing together on one board: Memory Match, Mahjong, Number
-// Rush and Pipes. No React, so scripts/check-coop.mjs plays them.
+// The rules for playing together on one board: Memory Match, Mahjong and
+// Word Rush. No React, so scripts/check-coop.mjs plays them.
 //
 // Every phone plays the same numbered moves through these (coopLog.js), so
 // they must give the same answer everywhere: no clock, no Math.random, and
@@ -16,13 +16,11 @@
 // been cleared — the match is a win for the team once it reaches GOAL.
 import { buildCards, deckSeed, TOTAL_PAIRS as MEM_PAIRS } from "./memoryDeck.js";
 import { deal, isFree, findPair, reshuffle, TOTAL_PAIRS as MJ_PAIRS } from "./mahjongBoard.js";
-import { makeBoard as makeGrid, HIT, MISS, clearBonus } from "./numberBoard.js";
-import { makeBoard as makePipes, currentMasks, flow, isSolved } from "./pipesBoard.js";
 import { seededRand } from "./seededRand.js";
 
 // Boards to clear together for the match to count as a win. Must match
 // COOP_GOAL in config/matchResult.js (check-coop proves it).
-export const GOAL = { memory: 1, mahjong: 1, numbers: 5, pipes: 3 };
+export const GOAL = { memory: 1, mahjong: 1 };
 
 const blank = (b) => ({ b, score: 0, boards: 0, by: {}, ev: [], done: null });
 // a little show for the phones to play once: { id, k, u, … }
@@ -155,75 +153,6 @@ export function mahjongRules(seed, types) {
     return s;
   }
   return { init, rules };
-}
-
-// ── Number Rush ──────────────────────────────────────────────────────────────
-// One grid, one count: whoever taps the next number moves everyone on. Two
-// people tapping the same number — the first one counts, the second does
-// nothing. Tapping the one after next costs nothing either: on a shared
-// grid that's somebody who saw the next one go a moment early.
-export function numbersRules(seed) {
-  const grids = new Map();
-  const grid = (lv) => { if (!grids.has(lv)) grids.set(lv, makeGrid(seed, lv)); return grids.get(lv); };
-  const init = { ...blank(1), next: 1, hits: {} };       // hits: number → who tapped it
-  function rules(st, { u, a, c }) {
-    if (!a || a.t !== "tap" || a.b !== st.b) return st;
-    const n = int(a.n), g = grid(st.b);
-    if (!(n >= 1 && n <= g.n) || n < st.next) return st;
-    if (n === st.next) {
-      const s = { ...st, next: st.next + 1, score: st.score + HIT, hits: { ...st.hits, [n]: u } };
-      credit(s, u);
-      if (s.next > g.n) {
-        s.score += clearBonus(s.b);
-        s.boards += 1;
-        s.done = { b: s.b, hits: s.hits };
-        said(s, c, { k: "clear", u, b: s.b, bonus: clearBonus(s.b) });
-        s.b += 1;
-        s.next = 1;
-        s.hits = {};
-      }
-      return s;
-    }
-    if (n === st.next + 1) return st;
-    const s = { ...st };
-    lose(s, -MISS);
-    said(s, c, { k: "miss", u, n, want: st.next });
-    return s;
-  }
-  return { init, rules, grid };
-}
-
-// ── Pipes ────────────────────────────────────────────────────────────────────
-// One board; anyone turns any pipe. A point for each pipe the water reaches
-// for the first time on a board, and a bonus when they're all joined.
-export const solveBonus = (n) => 20 + 2 * n;
-
-export function pipesRules(seed) {
-  const boards = new Map();
-  const board = (lv) => { if (!boards.has(lv)) boards.set(lv, makePipes(seed, lv)); return boards.get(lv); };
-  const init = { ...blank(1), turns: board(1).solution.map(() => 0), best: 1 };
-  function rules(st, { u, a, c }) {
-    if (!a || a.t !== "turn" || a.b !== st.b) return st;
-    const bd = board(st.b), i = int(a.i);
-    if (!(i >= 0 && i < bd.n)) return st;
-    const s = { ...st, turns: st.turns.map((t, x) => (x === i ? t + (a.d < 0 ? -1 : 1) : t)) };
-    credit(s, u);
-    said(s, c, { k: "turn", u, i });
-    const masks = currentMasks(bd, s.turns);
-    const wet = flow(masks, bd.cols, bd.rows, bd.source).size;
-    if (wet > s.best) { s.score += wet - s.best; s.best = wet; }
-    if (isSolved(masks, bd.cols, bd.rows, bd.source)) {
-      s.score += solveBonus(bd.n);
-      s.boards += 1;
-      s.done = { b: s.b, turns: s.turns };
-      said(s, c, { k: "clear", u, b: s.b, bonus: solveBonus(bd.n) });
-      s.b += 1;
-      s.turns = board(s.b).solution.map(() => 0);
-      s.best = 1;
-    }
-    return s;
-  }
-  return { init, rules, board };
 }
 
 // ── Word Rush ────────────────────────────────────────────────────────────────

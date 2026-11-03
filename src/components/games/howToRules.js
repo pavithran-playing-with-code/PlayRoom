@@ -52,13 +52,13 @@ export const HOW_TO = {
   dino: {
     name: "Dino Dash",
     goal: "Run as far as you can.",
-    steps: ["Tap (or ▲) to jump the cacti.", "Hold Duck (or ▼) to get under the birds.", "A crash knocks you back to slow and costs a few points — keep running.", "Together: a crash knocks you down — a friend grabbing a ❤️ gets you up."],
+    steps: ["Tap (or ▲) to jump the cacti.", "Hold Duck (or ▼) to get under the birds.", "A crash knocks you back to slow and costs a few points — keep running."],
     tip: "The faster you get, the earlier you need to jump.",
   },
   numbers: {
     name: "Number Rush",
     goal: "Tap the numbers in order, 1, 2, 3…",
-    steps: ["Find 1, then 2, then 3 — as fast as you can.", "Clear a grid and the next is bigger, with colours and tilted numbers to fool you.", "Together: one grid — whoever taps the next number moves everyone on. Clear 5 grids to win."],
+    steps: ["Find 1, then 2, then 3 — as fast as you can.", "Clear a grid and the next is bigger, with colours and tilted numbers to fool you."],
     tip: "Look ahead for the next number while you tap this one.",
   },
   colors: {
@@ -70,13 +70,13 @@ export const HOW_TO = {
   pipes: {
     name: "Pipes",
     goal: "Connect every pipe to the water.",
-    steps: ["Tap a tile to turn its pipe.", "Pipes joined to the source fill with water.", "Join them all with no loose ends to clear the board.", "Together: one board — anyone can turn any pipe. Join 3 boards to win."],
+    steps: ["Tap a tile to turn its pipe.", "Pipes joined to the source fill with water.", "Join them all with no loose ends to clear the board."],
     tip: "Start from the corners and edges — they can only turn so many ways.",
   },
   flappy: {
     name: "Flappy Dash",
     goal: "Fly through as many gaps as you can.",
-    steps: ["Tap to flap — let go and you fall.", "Each gap you get through is 10 points.", "A crash costs 10 and dazes you, then you fly on.", "Together: a crash knocks you down — a friend flying through a ❤️ gets you up."],
+    steps: ["Tap to flap — let go and you fall.", "Each gap you get through is 10 points.", "A crash costs 10 and dazes you, then you fly on."],
     tip: "Small, steady taps beat big panicky ones.",
   },
   slide: {
@@ -100,7 +100,7 @@ export const HOW_TO = {
   runner: {
     name: "Rail Runner",
     goal: "Run as far as you can and grab coins.",
-    steps: ["Swipe ◀ ▶ to change lane.", "Swipe ▲ to jump barriers, ▼ to slide under bars.", "Swerve round the trains — you can't jump them.", "Together: a crash knocks you down — a friend grabbing a ❤️ gets you up."],
+    steps: ["Swipe ◀ ▶ to change lane.", "Swipe ▲ to jump barriers, ▼ to slide under bars.", "Swerve round the trains — you can't jump them."],
     tip: "Your score is metres run + 10 for every coin. A crash slows you right down.",
   },
   sunshard: {
@@ -136,7 +136,7 @@ export const HOW_TO = {
   maze: {
     name: "Maze Runner",
     goal: "Find the way out of each maze.",
-    steps: ["Swipe or tap an arrow: the ball rolls to the next turning.", "Reach the 🚩 for a bigger maze.", "Together: someone finds the 🗝️, then anyone reaches the 🚪 to take everyone through."],
+    steps: ["Swipe or tap an arrow: the ball rolls to the next turning.", "Reach the 🚩 for a bigger maze."],
     tip: "Fewer moves score more.",
   },
   typing: {

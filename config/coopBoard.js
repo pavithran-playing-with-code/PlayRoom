@@ -1,5 +1,5 @@
-// config/coopBoard.js — one board for everybody: Memory Match, Mahjong,
-// Number Rush and Pipes played together (a co-op room).
+// config/coopBoard.js — one board for everybody: Memory Match, Mahjong and
+// Word Rush played together (a co-op room).
 //
 // The server doesn't know these games' rules. It does one thing: puts every
 // move from every phone in one order, numbers it, and tells the whole room
@@ -26,7 +26,7 @@
 const db = require("./db");
 const { roomChannel } = require("./socket");
 
-const GAMES = new Set(["memory", "mahjong", "numbers", "pipes", "wordrush"]);
+const GAMES = new Set(["memory", "mahjong", "wordrush"]);
 const CODE_RE = /^[A-Z0-9]{4,8}$/;
 const MAX_MOVE = 200;            // characters of JSON: a move is a tap
 const MAX_ACTS = 20000;          // a long match on a busy board is ~2,000

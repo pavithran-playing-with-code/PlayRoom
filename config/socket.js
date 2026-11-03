@@ -186,34 +186,6 @@ function initSocket(httpServer) {
       });
     });
 
-    // Maze Runner together: where my ball is in the shared maze, and what I
-    // know — which maze we're on, whether the key's been taken, whether this
-    // maze is done. Every phone keeps the latest it has heard, so one that
-    // missed something catches up from the next message.
-    socket.on("maze:pos", (msg) => {
-      const code = msg && msg.code;
-      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
-      const n = (v, lo, hi) => { const x = Math.floor(Number(v)); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
-      socket.to(roomChannel(code)).emit("maze:pos", {
-        user_id: uid, lv: n(msg.lv, 1, 999), r: n(msg.r, 0, 63), c: n(msg.c, 0, 63), k: msg.k ? 1 : 0, done: msg.done ? 1 : 0,
-      });
-    });
-
-    // Running together (Rail Runner, Dino Dash, Flappy Dash in a co-op room):
-    // where my runner is, how fast, whether I'm down, and how many hearts
-    // I've grabbed — a friend's count going up brings back whoever is down
-    // (src/components/games/runTogether.js). Relayed only, like race:pos.
-    socket.on("run:pos", (msg) => {
-      const code = msg && msg.code;
-      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
-      const n = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
-      socket.to(roomChannel(code)).emit("run:pos", {
-        user_id: uid,
-        d: n(msg.d, -1e3, 1e8), v: n(msg.v, 0, 1e4), y: n(msg.y, -1e3, 1e4), l: n(msg.l, -5, 5),
-        dn: msg.dn ? 1 : 0, h: Math.floor(n(msg.h, 0, 1e5)),
-      });
-    });
-
     // Sunshard Jump: where my explorer is and what they're doing — so
     // everyone draws everyone on the same islands — plus my shards (a bit
     // each: together, any of us taking one counts for all), gems, how far

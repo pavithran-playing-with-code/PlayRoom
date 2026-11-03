@@ -1,5 +1,5 @@
-// scripts/check-coop.mjs — the together boards (Memory, Mahjong, Number Rush,
-// Pipes), without React, a browser or a server.
+// scripts/check-coop.mjs — the together boards (Memory, Mahjong, Word Rush),
+// without React, a browser or a server.
 //   node scripts/check-coop.mjs
 //
 // The part that matters most: phones that see the same numbered moves end up
@@ -7,15 +7,12 @@
 // late the server's answers come back.
 import { createRequire } from "module";
 import { newLog, take, propose, view, differs, restart } from "../src/components/games/coopLog.js";
-import { GOAL, memoryRules, mahjongRules, numbersRules, pipesRules, wordRules, wordGoal, MEM_PAIR, MJ_MISS } from "../src/components/games/coopBoards.js";
-import { teamGoal, hearts, heartsBetween, PACE } from "../src/components/games/runTogether.js";
+import { GOAL, memoryRules, mahjongRules, wordRules, wordGoal, MEM_PAIR, MJ_MISS } from "../src/components/games/coopBoards.js";
 import { buildCards, TOTAL_PAIRS } from "../src/components/games/memoryDeck.js";
 import { isFree, findPair, SLOTS } from "../src/components/games/mahjongBoard.js";
-import { makeBoard as gridOf } from "../src/components/games/numberBoard.js";
-import { makeBoard as pipesOf, currentMasks, isSolved } from "../src/components/games/pipesBoard.js";
 
 const require = createRequire(import.meta.url);
-const { COOP_GOAL, COOP_PACE, teamGoal: serverTeamGoal, wordGoal: serverWordGoal, resultsFor } = require("../config/matchResult.js");
+const { COOP_GOAL, wordGoal: serverWordGoal, resultsFor } = require("../config/matchResult.js");
 
 let fails = 0;
 const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? "PASS" : "FAIL"}  ${name}${extra ? "  " + extra : ""}`); };
@@ -107,42 +104,6 @@ for (const g of Object.keys(GOAL)) check(`${g}: goal ${GOAL[g]} matches the serv
   check("mahjong: 48 places", SLOTS.length === 48);
 }
 
-// ── Number Rush ──────────────────────────────────────────────────────────────
-{
-  const R = numbersRules(SEED);
-  const g = gridOf(SEED, 1);
-  let s = freeze(R.init);
-  s = freeze(play(R, s, 1, { t: "tap", b: 1, n: 1 }));
-  check("numbers: the next number moves everyone on", s.next === 2 && s.score === 3);
-  check("numbers: the same number tapped twice counts once", play(R, s, 2, { t: "tap", b: 1, n: 1 }) === s);
-  check("numbers: the one after next is forgiven", play(R, s, 2, { t: "tap", b: 1, n: 3 }) === s);
-  const wrong = play(R, s, 2, { t: "tap", b: 1, n: 7 });
-  check("numbers: a wrong number costs 2", wrong.score === 1 && wrong.next === 2 && wrong.ev.at(-1).k === "miss");
-  for (let n = 2; n <= g.n; n++) s = play(R, s, n % 2 ? 1 : 2, { t: "tap", b: 1, n });
-  check("numbers: the last number clears the grid", s.b === 2 && s.next === 1 && s.boards === 1);
-  check("numbers: taps on the old grid do nothing", play(R, s, 1, { t: "tap", b: 1, n: 1 }) === s);
-}
-
-// ── Pipes ────────────────────────────────────────────────────────────────────
-{
-  const R = pipesRules(SEED);
-  const bd = pipesOf(SEED, 1);
-  let s = freeze(R.init);
-  // the turns that put every tile back: (4 - start) % 4, shared between two people
-  let k = 0;
-  for (let i = 0; i < bd.n; i++) for (let t = 0; t < (4 - (bd.start[i] % 4)) % 4; t++) {
-    if (s.b !== 1) break;
-    s = freeze(play(R, s, k++ % 2 ? 1 : 2, { t: "turn", b: 1, i, d: 1 }));
-  }
-  check("pipes: the board solved together clears", s.b === 2 && s.boards === 1, `b=${s.b}`);
-  check("pipes: everybody's turns counted", (s.by["1"] || 0) + (s.by["2"] || 0) === k);
-  check("pipes: the score paid for water and the bonus", s.score > 0);
-  check("pipes: a turn on the old board does nothing", play(R, s, 1, { t: "turn", b: 1, i: 0, d: 1 }) === s);
-  const back = play(R, play(R, R.init, 1, { t: "turn", b: 1, i: 0, d: 1 }), 2, { t: "turn", b: 1, i: 0, d: -1 });
-  check("pipes: a turn and a turn back leaves the pipe as it was", back.turns[0] === 0);
-  check("pipes: solved check sanity", !isSolved(currentMasks(bd, bd.solution.map(() => 0)), bd.cols, bd.rows, bd.source));
-}
-
 // ── many phones, moves crossing in the post ─────────────────────────────────
 // Three phones tap at random; the server numbers moves in the order they
 // arrive; each phone hears the numbered moves late and in bursts. Whatever
@@ -191,27 +152,24 @@ fuzz("mahjong", mahjongRules(SEED, TYPES), (s, rand) => {
   if (rand() < 0.02) return { t: "shuf", b: s.b, r: 1 + Math.floor(rand() * 1e6) };
   return free.length ? { t: "tap", b: s.b, i: free[Math.floor(rand() * free.length)] } : null;
 }, 2500);
-const nr = numbersRules(SEED);
-fuzz("numbers", nr, (s, rand) => ({ t: "tap", b: s.b, n: rand() < 0.7 ? s.next : 1 + Math.floor(rand() * nr.grid(s.b).n) }), 2000);
-const pr = pipesRules(SEED);
-fuzz("pipes", pr, (s, rand) => ({ t: "turn", b: s.b, i: Math.floor(rand() * pr.board(s.b).n), d: rand() < 0.8 ? 1 : -1 }), 1500);
 
 // ── the log itself ──────────────────────────────────────────────────────────
 {
-  const R = numbersRules(SEED);
+  // on Word Rush's rules: taking a word, solving it
+  const R = wordRules();
   const L = newLog(R.rules, R.init);
-  propose(L, 1, { t: "tap", b: 1, n: 1 }, "me.1");
-  check("log: my move shows before the server answers", view(L).next === 2 && L.agreed.next === 1);
-  take(L, { s: 0, u: 2, a: { t: "tap", b: 1, n: 1 }, c: "them.1" });
-  check("log: a friend beat me to it — my move comes to nothing, no double count", view(L).next === 2 && view(L).score === 3);
-  take(L, { s: 1, u: 1, a: { t: "tap", b: 1, n: 1 }, c: "me.1" });
+  propose(L, 1, { t: "take" }, "me.1");
+  check("log: my move shows before the server answers", view(L).taken["1"] === 0 && L.agreed.next === 0);
+  take(L, { s: 0, u: 2, a: { t: "take" }, c: "them.1" });
+  check("log: a friend got in first — my move is played after theirs", view(L).taken["2"] === 0 && view(L).taken["1"] === 1 && view(L).next === 2);
+  take(L, { s: 1, u: 1, a: { t: "take" }, c: "me.1" });
   check("log: …and my move, answered, leaves the pile", L.pending.length === 0 && L.n === 2);
-  take(L, { s: 3, u: 2, a: { t: "tap", b: 1, n: 3 }, c: "them.3" });
-  check("log: a move that comes before the one it follows waits", L.n === 2 && view(L).next === 2);
-  take(L, { s: 2, u: 2, a: { t: "tap", b: 1, n: 2 }, c: "them.2" });
-  check("log: …and plays once the gap is filled", L.n === 4 && view(L).next === 4);
-  take(L, { s: 1, u: 1, a: { t: "tap", b: 1, n: 1 }, c: "me.1" });
-  check("log: a move heard twice plays once", L.n === 4);
+  take(L, { s: 3, u: 2, a: { t: "solve", i: 0 }, c: "them.3" });
+  check("log: a move that comes before the one it follows waits", L.n === 2 && view(L).solved === 0);
+  take(L, { s: 2, u: 1, a: { t: "solve", i: 1 }, c: "me.2" });
+  check("log: …and plays once the gap is filled", L.n === 4 && view(L).solved === 2);
+  take(L, { s: 1, u: 1, a: { t: "take" }, c: "me.1" });
+  check("log: a move heard twice plays once", L.n === 4 && view(L).solved === 2);
   check("log: a different move under a number we've played is noticed", differs(L, { s: 1, c: "other" }) && !differs(L, { s: 1, c: "me.1" }));
   restart(L);
   check("log: starting again goes back to the first board", L.n === 0 && L.agreed === R.init);
@@ -221,12 +179,16 @@ fuzz("pipes", pr, (s, rand) => ({ t: "turn", b: s.b, i: Math.floor(rand() * pr.b
 {
   const room = (slug) => ({ mode: "coop", game_slug: slug });
   const seat = (id, boards) => ({ user_id: id, score: 500, pairs_matched: boards });
-  const r1 = resultsFor(room("numbers"), [seat(1, 5), seat(2, 5)]);
-  const r2 = resultsFor(room("numbers"), [seat(1, 4), seat(2, 4)]);
+  const r1 = resultsFor(room("memory"), [seat(1, 1), seat(2, 1)]);
+  const r2 = resultsFor(room("memory"), [seat(1, 0), seat(2, 0)]);
   check("result: a together side that reached its goal all win", r1.get(1) === "win" && r1.get(2) === "win");
   check("result: short of the goal, all lose — not a draw", r2.get(1) === "loss" && r2.get(2) === "loss");
-  const r3 = resultsFor(room("maze"), [seat(1, 1), seat(2, 1)]);
-  check("result: Maze Runner together still wins on one door", r3.get(1) === "win");
+  // games that are no longer played together: a co-op room left over from
+  // before is ranked like any other, on the scores
+  for (const slug of ["dino", "flappy", "runner", "maze", "numbers", "pipes"]) {
+    const r = resultsFor(room(slug), [{ user_id: 1, score: 300, pairs_matched: 9 }, { user_id: 2, score: 100, pairs_matched: 9 }]);
+    check(`result: an old together room of ${slug} is ranked on the scores`, r.get(1) === "win" && r.get(2) === "loss");
+  }
   const r4 = resultsFor({ mode: "free", game_slug: "memory" }, [{ user_id: 1, score: 9, pairs_matched: 1 }, { user_id: 2, score: 5, pairs_matched: 1 }]);
   check("result: against each other is unchanged", r4.get(1) === "win" && r4.get(2) === "loss");
 }
@@ -250,27 +212,11 @@ fuzz("pipes", pr, (s, rand) => ({ t: "turn", b: s.b, i: Math.floor(rand() * pr.b
   check("words: after all that, nobody shares a word", new Set(given).size === given.length, JSON.stringify(fin.taken));
 }
 
-// ── running together ────────────────────────────────────────────────────────
-for (const slug of ["runner", "dino", "flappy"]) {
-  check(`${slug}: pace is the same on both ends`, COOP_PACE[slug] === PACE[slug]);
-  let ok = true;
-  for (const secs of [120, 180, 300]) for (const n of [2, 3, 4]) if (teamGoal(slug, secs, n) !== serverTeamGoal(slug, secs, n)) ok = false;
-  check(`${slug}: team goal the same on both ends`, ok, `2 players, 2 min: ${teamGoal(slug, 120, 2)}`);
-  const far = slug === "flappy" ? 200 : 20000;
-  const la = heartsBetween(hearts(SEED, slug), 0, far).map((x) => x.at);
-  const lb = heartsBetween(hearts(SEED, slug), 0, far).map((x) => x.at);
-  check(`${slug}: hearts in the same places for everyone`, la.length > 3 && same(la, lb), la.slice(0, 4).map((x) => Math.round(x)).join(", "));
-  check(`${slug}: hearts in order, spread out`, la.every((x, i) => i === 0 || x > la[i - 1]));
-}
 {
   let ok = true;
   for (const secs of [120, 180, 300]) for (const n of [2, 3, 4]) if (wordGoal(secs, n) !== serverWordGoal(secs, n)) ok = false;
   check("words: goal the same on both ends", ok, `2 players, 2 min: ${wordGoal(120, 2)} words`);
   const room = (slug, secs) => ({ mode: "coop", game_slug: slug, duration_seconds: secs });
-  const g = teamGoal("dino", 120, 2);
-  const w = resultsFor(room("dino", 120), [{ user_id: 1, score: g / 2 }, { user_id: 2, score: g / 2 }]);
-  const l = resultsFor(room("dino", 120), [{ user_id: 1, score: g / 2 }, { user_id: 2, score: g / 2 - 10 }]);
-  check("result: runners together win on the points added up", w.get(1) === "win" && w.get(2) === "win" && l.get(1) === "loss" && l.get(2) === "loss");
   const ww = resultsFor(room("wordrush", 120), [{ user_id: 1, score: 1, pairs_matched: wordGoal(120, 2) }, { user_id: 2, score: 1, pairs_matched: wordGoal(120, 2) }]);
   check("result: Word Rush together wins on words solved", ww.get(1) === "win" && ww.get(2) === "win");
 }

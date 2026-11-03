@@ -6,10 +6,6 @@
 //
 // Rules live in dinoSim.js. This file draws them on a canvas and wires up input.
 //
-// Together (a co-op room): your friends run beside you, see-through. A crash
-// knocks you down for a few seconds unless a friend grabs a ❤️ — then
-// everyone who's down is back up (runTogether.js). The side's points add up.
-//
 // Watching: the player's phone sends its runner ~15 times a second while a
 // friend watches (useSpecStream); the watcher builds the same course from the
 // seed and draws the run from those frames, carried on at the runner's speed
@@ -18,10 +14,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
-import useRunTogether from "./useRunTogether";
 import useSpecStream from "./useSpecStream";
-import { DOWN_S, HEART_PTS, teamGoal, hearts, heartsBetween } from "./runTogether";
-import { team } from "./coopTeam";
 import {
   VIEW_W, DINO_X, CRASH_COST, UNITS_PER_METRE, GRAVITY,
   makeCourse, newRunner, jump, releaseJump, setDuck, step, speedAfter,
@@ -162,7 +155,7 @@ function drawCloud(ctx, x, y) {
   for (const [bx, by, r] of blobs) { ctx.beginPath(); ctx.arc(x + bx, y + by, r, 0, Math.PI * 2); ctx.fillStyle = "#FFFFFF"; ctx.fill(); }
 }
 
-function draw(ctx, s, course, view, now, tg) {
+function draw(ctx, s, course, view, now) {
   const { WH, k } = view;
   const gy = WH - GROUND_PAD;
   ctx.setTransform(k, 0, 0, k, 0, 0);
@@ -198,27 +191,6 @@ function draw(ctx, s, course, view, now, tg) {
     if (o.kind === "cactus") drawCactus(ctx, x, gy, o, s.hit.has(i));
     else drawBird(ctx, x, gy - o.lift - o.h, flap, s.hit.has(i));
   }
-  // together: the hearts on the course, and friends running beside you
-  if (tg) {
-    ctx.font = "26px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    for (const at of tg.hearts) {
-      const x = DINO_X + (at - s.x) + 20;
-      ctx.fillText("❤️", x, gy - 104 + Math.sin(now / 220 + at) * 5);
-    }
-    for (const m of tg.mates) {
-      const x = DINO_X + (m.d - s.x);
-      if (x < -60 || x > VIEW_W + 20) continue;
-      ctx.save();
-      ctx.globalAlpha = 0.42;
-      drawDino(ctx, x, gy - m.y, { duck: false, dazed: m.dn, legs: !m.dn && Math.floor(m.d / 38) % 2 === 0 });
-      ctx.restore();
-      ctx.font = "600 12px Fredoka, Nunito, sans-serif";
-      ctx.fillStyle = m.col;
-      ctx.fillText(m.dn ? `💤 ${m.name}` : m.name, x + 26, gy - m.y - 62);
-    }
-  }
   const running = s.started && s.stun <= 0 && s.y <= 0;
   drawDino(ctx, DINO_X, gy - s.y, {
     duck: s.duck && s.y <= 0,
@@ -234,7 +206,6 @@ function draw(ctx, s, course, view, now, tg) {
   ctx.fillStyle = INK;
   ctx.fillText(`🏃 ${Math.floor(s.run / UNITS_PER_METRE)} m`, 12, 12);
   if (!s.started) pill(ctx, "Tap or press Space to jump!", VIEW_W / 2, Math.min(gy - 90, WH / 2), "#FFC53D");
-  else if (tg && tg.down && s.stun > 0) pill(ctx, `💤 Down ${Math.ceil(s.stun)}s — a friend's ❤️ saves you`, VIEW_W / 2, Math.min(gy - 120, WH / 2 - 10), "#C9B8FF");
   else if (s.stun > 0) pill(ctx, `Oops! −${CRASH_COST}`, DINO_X + 60, gy - 96, "#FF8A8A");
 }
 
@@ -264,35 +235,11 @@ function Stage({ w, h, canvasRef, view, onDown, onUp, children }) {
 
 export default function DinoDash(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
-    startedAt, serverNow, isSpectator = false, spectatorWatching = null, mode } = props;
-  const coop = mode === "coop" && !!roomCode;
+    startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
   const myId = Number(currentUser?.id);
 
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const { addScore } = eng;
-
-  // together: friends beside you, hearts to save each other
-  const T = useMemo(() => team(players, myId), [players, myId]);
-  const heartAt = useMemo(() => hearts(seed, "dino"), [seed]);
-  const tg = useRef({ down: false, h: 0, got: new Set(), saved: null });
-  const [msg, setMsg] = useState(null);
-  const msgTimer = useRef(null);
-  useEffect(() => () => clearTimeout(msgTimer.current), []);
-  const say = useCallback((text, type) => {
-    setMsg({ text, type });
-    clearTimeout(msgTimer.current);
-    msgTimer.current = setTimeout(() => setMsg(null), 1400);
-  }, []);
-  const Tref = useRef(T);
-  Tref.current = T;
-  const rt = useRunTogether({ on: coop, roomCode, isSpectator, myId, onRevive: (id) => {
-    const s = sim.current;
-    if (!tg.current.down || s.stun <= 0) return;
-    s.stun = 0;
-    tg.current.down = false;
-    say(`❤️ ${Tref.current.nameOf(id)} saved you!`, "success");
-  } });
-  const { tell, mates } = rt;
 
   const course = useMemo(() => makeCourse(seed), [seed]);
   const sim = useRef(null);
@@ -312,22 +259,16 @@ export default function DinoDash(props) {
   const hudAt = useRef(0);
   const spec = useSpecStream({ roomCode, isSpectator, myId, watchId,
     frame: () => {
-      const s = sim.current, T0 = tg.current;
+      const s = sim.current;
       const r1 = (n) => Math.round(n * 10) / 10;
       const hit = [];
       for (const i of s.hit) if (i >= s.first) hit.push(i);
-      const f = {
+      return {
         x: r1(s.x), r: r1(s.run), y: r1(s.y), vy: Math.round(s.vy),
         du: s.duck ? 1 : 0, st: s.started ? 1 : 0, sn: Math.round(s.stun * 100) / 100,
         v: s.stun > 0 || !s.started || overRef.current ? 0 : Math.round(speedAfter(s.run)),
         p: Math.floor(s.points), cr: s.crashes, b: Math.round(s.best), fi: s.first, hit,
       };
-      if (coop) {
-        f.dn = T0.down ? 1 : 0;
-        // hearts this runner has taken that are still on (or coming onto) the screen
-        f.hg = heartsBetween(heartAt, s.x - DINO_X - 40, s.x + VIEW_W + 400).filter((x) => T0.got.has(x.k)).map((x) => x.k);
-      }
-      return f;
     },
     onFrame: (f) => {
       const now = performance.now();
@@ -374,27 +315,9 @@ export default function DinoDash(props) {
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));   // a hidden tab mustn't teleport the dino
       last = now;
       const s = sim.current;
-      const x0 = s.x;
       if (!overRef.current && step(s, course, dt) === "crash") {
         setCrashes(s.crashes);
         setBest(s.best);
-        if (coop) { s.stun = DOWN_S; tg.current.down = true; }
-      }
-      const T0 = tg.current;
-      if (coop) {
-        if (T0.down && s.stun <= 0) T0.down = false;
-        // a heart passed while running is yours: everybody down gets up
-        if (!T0.down && s.x > x0) {
-          for (const { k } of heartsBetween(heartAt, x0 - 20, s.x - 20)) {
-            if (T0.got.has(k)) continue;
-            T0.got.add(k);
-            T0.h += 1;
-            s.points += HEART_PTS.dino;
-            const anyDown = mates().some((m) => m.dn);
-            say(anyDown ? "❤️ You saved your friends!" : `❤️ +${HEART_PTS.dino}`, "success");
-          }
-        }
-        tell({ d: s.x, v: s.stun > 0 || !s.started ? 0 : speedAfter(s.run), y: s.y, l: 0, dn: T0.down, h: T0.h });
       }
       if (now - lastPush > 100) {
         lastPush = now;
@@ -402,19 +325,12 @@ export default function DinoDash(props) {
         if (target !== pushed) { addScore(target - pushed); pushed = target; }
       }
       const c = canvasRef.current;
-      if (c) {
-        const extra = coop ? {
-          down: T0.down,
-          hearts: heartsBetween(heartAt, s.x - DINO_X - 40, s.x + VIEW_W).filter((x) => !T0.got.has(x.k)).map((x) => x.at),
-          mates: mates().map((m) => ({ ...m, col: Tref.current.colourOf(m.id), name: Tref.current.nameOf(m.id) })),
-        } : null;
-        draw(c.getContext("2d"), s, course, view.current, now, extra);
-      }
+      if (c) draw(c.getContext("2d"), s, course, view.current, now);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => { cancelAnimationFrame(raf); clearTimeout(autoStart); };
-  }, [isSpectator, course, addScore, coop, heartAt, tell, mates, say]);
+  }, [isSpectator, course, addScore]);
 
   // The watcher's loop: the watched run, drawn from its frames. Distance runs
   // on at the frame's speed and is eased onto where the frames say; a jump
@@ -427,7 +343,6 @@ export default function DinoDash(props) {
     let shown = false;
     const s = newRunner();
     s.started = true;                // no "tap to jump" under the connecting note
-    let got = new Set();
     const frame = (now) => {
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
       last = now;
@@ -438,7 +353,6 @@ export default function DinoDash(props) {
           lastL = L;
           s.hit = new Set(f.hit || []);
           s.first = f.fi || 0;
-          got = new Set(f.hg || []);
         }
         const t = Math.min(0.35, Math.max(0, (now - L.at) / 1000));   // frames stopped: stop too
         const v = t < 0.35 ? f.v || 0 : 0;
@@ -458,34 +372,17 @@ export default function DinoDash(props) {
         course.extend(s.x + VIEW_W + 400);
       }
       const c = canvasRef.current;
-      if (c) {
-        const extra = coop ? {
-          down: !!(L && L.f.dn),
-          hearts: heartsBetween(heartAt, s.x - DINO_X - 40, s.x + VIEW_W).filter((x) => !got.has(x.k)).map((x) => x.at),
-          mates: mates().filter((m) => m.id !== Number(watchId))
-            .map((m) => ({ ...m, col: Tref.current.colourOf(m.id), name: Tref.current.nameOf(m.id) })),
-        } : null;
-        draw(c.getContext("2d"), s, course, view.current, now, extra);
-      }
+      if (c) draw(c.getContext("2d"), s, course, view.current, now);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [isSpectator, spec, watchId, course, coop, heartAt, mates]);
+  }, [isSpectator, spec, watchId, course]);
 
   const oppList = Object.values(eng.opponents);
   const specScore = hud ? hud.p : spectatorWatching?.score ?? 0;
   const bestRun = Math.max(best, sim.current.run);
-  // together: the side's points, against the team goal
-  const seats = (players || []).filter((p) => !p.is_spectator);
-  const goal = teamGoal("dino", durationSeconds || Math.max(60, eng.elapsed), seats.length);   // no time limit: paced on the time played
-  const teamTotal = eng.score + oppList.reduce((t, o) => t + (Number(o.score) || 0), 0);
-  const scores = { [myId]: eng.score };
-  for (const o of oppList) scores[o.user_id] = Number(o.score) || 0;
-  const stats = coop
-    ? [{ label: "Team", value: teamTotal.toLocaleString() },
-       { label: "Goal", value: teamTotal >= goal ? "✓" : goal.toLocaleString() }]
-    : isSpectator
+  const stats = isSpectator
     ? [
         { label: "Score", value: Number(specScore).toLocaleString() },
         ...(hud ? [{ label: "Best run", value: `${Math.floor(hud.b / UNITS_PER_METRE)}m` }, { label: "Crashes", value: hud.cr }] : []),
@@ -518,9 +415,8 @@ export default function DinoDash(props) {
         isSpectator={isSpectator} spectatorName={spectatorWatching?.username}
         stats={stats}
         timer={{ value: eng.timeLeft, max: durationSeconds }}
-        opponents={coop ? [] : oppList}
+        opponents={oppList}
         teams={eng.teams}
-        message={msg}
         onQuit={eng.endMatch}
         controls={controls}
       >
@@ -541,8 +437,7 @@ export default function DinoDash(props) {
 
       {eng.gameOver && !isSpectator && (
         <GameOver eng={eng} me={currentUser}
-          extra={coop ? `Team: ${teamTotal.toLocaleString()} pts` : `Best run: ${Math.floor(bestRun / UNITS_PER_METRE)} m · Crashes: ${crashes}`}
-          together={coop ? { reached: teamTotal >= goal, goal: `${goal.toLocaleString()} points`, unit: "pts", mates: T.all(scores) } : null} />
+          extra={`Best run: ${Math.floor(bestRun / UNITS_PER_METRE)} m · Crashes: ${crashes}`} />
       )}
     </>
   );

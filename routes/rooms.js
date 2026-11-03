@@ -86,10 +86,8 @@ const MIN_TEAM_PLAYERS = MIN_PER_TEAM * 2;
 // Co-op: everyone on one side against the game itself. Only the games with a
 // side to be on — Station 13 and the together games (config/togetherWorld.js)
 // — and a world for more than four gets crowded.
-// maze: one maze, a key, a door (MazeRunner.jsx); and the shared boards
-// (config/coopBoard.js): Memory, Mahjong, Number Rush, Pipes, Word Rush; and
-// the runners, side by side with hearts to save each other (runTogether.js)
-const COOP_GAMES = new Set([manor.GAME, ...together.COOP, "maze", ...coopBoard.GAMES, "runner", "dino", "flappy", "sunshard", "emberfall", "hollow"]);
+// And the shared boards (config/coopBoard.js): Memory, Mahjong, Word Rush.
+const COOP_GAMES = new Set([manor.GAME, ...together.COOP, ...coopBoard.GAMES, "sunshard", "emberfall", "hollow"]);
 // Games whose scores the server keeps itself, from what happened in its world.
 const serverScored = (slug) => slug === manor.GAME || together.isTogether(slug);
 const COOP_MAX = 4;

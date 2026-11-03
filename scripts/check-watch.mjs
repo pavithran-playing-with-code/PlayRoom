@@ -42,6 +42,22 @@ check("another video replaces it: back to the start, counted on", w2.src.name ==
 check("close: nothing on", W.step(w2, { op: "close" }, 1, 31000) === null);
 check("an unknown op is ignored", W.step(w2, { op: "explode" }, 1, 31000) === undefined);
 
+// YouTube, and waiting for someone stuck (an ad, loading)
+let y = W.step(null, { op: "open", src: { kind: "yt", id: "M7lc1UVf-VE", title: "Tea time", ch: "Chan", dur: 212, extra: 1 } }, 1, 0);
+check("a YouTube video opens", y && y.src.kind === "yt" && y.src.id === "M7lc1UVf-VE" && y.src.name === "Tea time" && y.src.ch === "Chan" && !("extra" in y.src));
+check("a bad YouTube id is refused", W.step(null, { op: "open", src: { kind: "yt", id: "x\"><script>", dur: 9 } }, 1, 0) === undefined
+  && W.step(null, { op: "open", src: { kind: "yt", id: "M7lc1UVf-VE", dur: 0 } }, 1, 0) === undefined);
+check("nobody waits while it's paused", W.step(y, { op: "wait", pos: 1 }, 2, 100) === undefined);
+y = W.step(y, { op: "play", pos: 0 }, 1, 1000);
+y = W.step(y, { op: "wait", pos: 3 }, 2, 5000);
+check("someone stuck: everyone holds where they are", !y.playing && y.hold === 2 && y.pos === 3);
+check("a second wait while holding is ignored", W.step(y, { op: "wait", pos: 1 }, 3, 5100) === undefined);
+check("only the one held for says go", W.step(y, { op: "go", pos: 3 }, 1, 6000) === undefined);
+const yg = W.step(y, { op: "go", pos: 3.2 }, 2, 9000);
+check("they go: everyone carries on from there", yg.playing && yg.hold === null && yg.pos === 3.2 && yg.at === 9000);
+const yp = W.step(y, { op: "play", pos: 3 }, 1, 7000);
+check("play anyway ends the hold", yp.playing && yp.hold === null);
+
 // the phone's steering
 const pw = { src: FILM, playing: true, pos: 100, at: 5000 };
 check("the phone works out the same position", posAt(pw, 7000) === 102 && W.posAt(pw, 7000) === 102);
@@ -66,6 +82,10 @@ for (let i = 0; i < 40; i++) {           // 400 ms ticks, 16 s
   cur += 0.4 * st.rate; t += 400;
 }
 check("a player 0.45 s behind catches up within seconds, without a jump", Math.abs(posAt(live, t) - cur) < 0.12, (posAt(live, t) - cur).toFixed(3));
+s = steer(50, 50.5, true, false);
+check("YouTube (no fine rate): a half-second gap is left", s.seek === null && s.rate === 1);
+s = steer(50, 51, true, false);
+check("YouTube: further off, a jump", s.seek === 51);
 check("times read well", clockOf(3909) === "1:05:09" && clockOf(247) === "4:07" && clockOf(-5) === "0:00");
 check("sizes read well", sizeOf(1400000000) === "1.4 GB" && sizeOf(730000000) === "730 MB" && sizeOf(1304539) === "1.3 MB" && sizeOf(239771) === "0.2 MB");
 

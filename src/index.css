@@ -1333,6 +1333,38 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .cw-warn{display:flex;flex-direction:column;align-items:center;gap:8px;padding:10px;border-radius:12px;border:2px dashed var(--coral,#e5484d);font-size:14px;font-weight:700}
 .cw-pick{cursor:pointer;padding:10px 22px}
 .cw-link{border:0;background:none;color:inherit;opacity:.7;font:700 13px Nunito,system-ui,sans-serif;text-decoration:underline;cursor:pointer}
+/* over the picture: a tap shows the controls (it never reaches YouTube's player, which would pause just mine) */
+.cw-cover{position:absolute;inset:0;z-index:1}
+.cw-wait{position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 70px);transform:translateX(-50%);z-index:4;
+  display:flex;align-items:center;gap:8px;max-width:calc(100% - 24px);padding:7px 12px;border-radius:999px;border:3px solid #fff;
+  background:rgba(20,16,28,.8);color:#fff;font:800 13px Nunito,system-ui,sans-serif;white-space:nowrap}
+.cw-wait button{border:0;border-radius:999px;padding:4px 10px;background:var(--sun);color:var(--ink);font:900 12px Nunito,system-ui,sans-serif;cursor:pointer}
+.cw-name small{font-weight:700;opacity:.75}
+.yt-box,.yt-box iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+/* finding a YouTube video: the feed, the shelves, search — like the app */
+.yt-sheet{position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;background:#14101c;color:#fff;
+  padding-top:env(safe-area-inset-top,0px);font-family:Nunito,system-ui,sans-serif}
+.yt-head{display:flex;align-items:center;gap:8px;padding:10px 12px}
+.yt-back,.yt-go,.yt-clear{width:42px;height:42px;flex:none;border-radius:50%;border:3px solid #fff;background:rgba(255,255,255,.08);color:#fff;font-size:17px;font-weight:900;cursor:pointer}
+.yt-q{flex:1;min-width:0;height:42px;padding:0 16px;border-radius:999px;border:3px solid #fff;background:#221a30;color:#fff;font:700 16px Nunito,system-ui,sans-serif;outline:none}
+.yt-q::placeholder{color:#9b90b3}
+.yt-shelves{display:flex;gap:8px;overflow-x:auto;padding:2px 12px 10px;scrollbar-width:none;flex:none}
+.yt-shelves::-webkit-scrollbar{display:none}
+.yt-shelves .chip{flex:none;cursor:pointer;white-space:nowrap}
+.yt-shelves .chip.on{background:var(--sun);color:var(--ink)}
+.yt-list{flex:1;overflow-y:auto;padding:4px 12px calc(env(safe-area-inset-bottom,0px) + 16px);display:grid;gap:16px;align-content:start;
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));-webkit-overflow-scrolling:touch}
+.yt-card{display:flex;flex-direction:column;gap:8px;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer}
+.yt-card:active{transform:scale(.98)}
+.yt-thumb{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:16px;overflow:hidden;border:3px solid #fff;background:#221a30}
+.yt-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.yt-dur{position:absolute;right:6px;bottom:6px;padding:1px 6px;border-radius:6px;background:rgba(0,0,0,.8);font:800 12px Nunito,system-ui,sans-serif}
+.yt-meta{display:flex;flex-direction:column;gap:2px;padding:0 2px}
+.yt-title{font-size:15px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.yt-sub{font-size:13px;font-weight:700;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.yt-note{grid-column:1/-1;text-align:center;font-weight:800;opacity:.75;padding:20px}
+.yt-more{grid-column:1/-1;justify-self:center}
+.yt-end{grid-column:1/-1;height:1px}
 /* the 🖥️ menu: a video together, or my screen */
 .call-share-opt{display:flex;align-items:center;gap:12px;width:100%;margin-top:10px;padding:10px 12px;text-align:left;cursor:pointer;
   border:3px solid var(--ink);border-radius:var(--r);background:var(--card);color:var(--text);box-shadow:0 3px 0 var(--ink);font:inherit}

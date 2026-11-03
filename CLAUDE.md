@@ -311,9 +311,18 @@ There is no test runner. What works:
   the server keeps only what's on and where on its clock
   (`config/callWatch.js`, `call:watch`, also in `call:state`), and each
   phone steers its player to it (`watchSync.js`: a touch faster or slower,
-  a jump past 0.5 s). Same file = same size. `check-watch.mjs` tests the
-  rules; two phones in step were tested with a recorded .webm through
-  `DOM.setFileInputFiles`. A link drops the camera to a smaller size with
+  a jump past 0.5 s). Same file = same size. Or **YouTube together**:
+  browse trending / shelves / search (`routes/youtube.js`, the key
+  `YOUTUBE_API_KEY` only on the server, answers cached, 40 searches an hour
+  each) and everyone's own YouTube player (`CallYouTube.jsx`, jumps only:
+  it takes no fine rates). A player that should play and doesn't move (an
+  ad, loading, a tap needed) asks everyone to `wait`; it says `go` once it
+  moves. Ads are YouTube's, per person: never block or strip them (its
+  embed terms). `check-watch.mjs` tests the rules, `check-youtube.js` the
+  route with a pretend YouTube; two phones in step were tested with a
+  recorded .webm through `DOM.setFileInputFiles`, and with the real
+  YouTube player (the feed answered through CDP `Fetch`, CORS preflight
+  included). A link drops the camera to a smaller size with
   more of you (720p for two, 360p for four) and further on a weak link
   (`gauge`): three full copies starved a phone until voices broke up.
   Changing networks restarts ICE at once (`kick`). Chat in a call

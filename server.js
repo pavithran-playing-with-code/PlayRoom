@@ -31,6 +31,7 @@ const roomRoutes = require("./routes/rooms");
 const gameRoutes = require("./routes/games");
 const leaderboardRoutes = require("./routes/leaderboard");
 const friendsRoutes = require("./routes/friends");
+const youtubeRoutes = require("./routes/youtube");
 
 const app = express();
 const PORT = process.env.PORT || 4321;
@@ -202,6 +203,7 @@ app.use("/api/rooms", roomRoutes);
 app.use("/api/games", gameRoutes);
 app.use("/api/leaderboard", leaderboardRoutes);
 app.use("/api/friends", friendsRoutes);
+app.use("/api/youtube", youtubeRoutes);
 
 // ── Serve React production build ──────────────────────────────────────────────
 // Dev  → React runs on :3333, proxies /api/* here automatically (package.json proxy)

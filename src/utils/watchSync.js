@@ -15,11 +15,16 @@ export const JUMP_S = 0.5;      // further off than this: jump there (a blink, b
 export const NEAR_S = 0.12;     // closer than this: leave it be
 export const NUDGE = 0.1;       // at most 10% faster or slower while catching up (the browser keeps the pitch)
 
+export const JUMP_COARSE_S = 0.7;  // a player that can't play a touch faster (YouTube's): jump past this
+
 // How to steer a player at `cur` toward `target` (seconds).
 // { seek: a time to jump to, or null; rate: the playback rate to use }
-export function steer(cur, target, playing) {
+// `fine`: the player takes any rate (a file); YouTube's only takes steps
+// like 1.25, so it only ever jumps.
+export function steer(cur, target, playing, fine = true) {
   const d = target - cur;
   if (!playing) return { seek: Math.abs(d) > 0.25 ? target : null, rate: 1 };
+  if (!fine) return { seek: Math.abs(d) > JUMP_COARSE_S ? target : null, rate: 1 };
   if (Math.abs(d) > JUMP_S) return { seek: target, rate: 1 };
   if (Math.abs(d) < NEAR_S) return { seek: null, rate: 1 };
   // close the gap over ~2 s

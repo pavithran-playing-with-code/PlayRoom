@@ -931,7 +931,8 @@ export function CallProvider({ children }) {
       const had = watchRef.current;
       setWatch(w);
       if (by === myId) return;
-      if (w && (!had || had.src.size !== w.src.size)) say(`🎬 ${who} put on “${w.src.name}”`);
+      const what = (x) => x && `${x.src.kind}|${x.src.id || ""}|${x.src.size || ""}|${x.src.name}`;
+      if (w && what(w) !== what(had)) say(`${w.src.kind === "yt" ? "▶️" : "🎬"} ${who} put on “${w.src.name}”`);
       else if (!w && had) say(`${who} stopped the video`);
     };
     socket.on("call:watch", onWatch);

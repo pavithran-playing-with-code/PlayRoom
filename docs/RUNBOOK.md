@@ -106,6 +106,7 @@ Set in Render → Environment. Values are not recorded here.
 | `MAIL_SECRET` | The secret word in that script's `SECRET` line. Both must match. |
 | `CF_TURN_KEY_ID` `CF_TURN_KEY_TOKEN` | The TURN relay for video calls: Cloudflare Realtime → TURN → the key's ID and API token. **Needed in practice**: without a relay, phones on Indian mobile networks (one shared address for many phones) usually can't reach each other, and the call sits on "Connecting…" then "Can't get through yet". `config/calls.js` fetches short-lived credentials from Cloudflare and reuses them for hours. A stuck call logs `call not connecting … relay MISSING` (or `configured`) in the service log. |
 | `TURN_URLS` `TURN_USERNAME` `TURN_CREDENTIAL` | Optional, instead of Cloudflare: any other TURN service, e.g. `turn:host:3478,turns:host:443?transport=tcp`. |
+| `YOUTUBE_API_KEY` | YouTube together in calls (browse and search): Google Cloud → APIs & Services → enable **YouTube Data API v3** → Credentials → API key, restricted to that API, no application restriction (it is only used by the server). Free quota 10,000 units a day: trending costs 1, a search 101; `routes/youtube.js` caches answers and allows 40 searches an hour per person. Without it the YouTube option says it isn't set up. |
 
 **Never set `PORT`.** Render assigns it; overriding it makes the service
 unreachable.

@@ -10,6 +10,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallContext";
 import CallWatch from "./CallWatch";
+import { YtBrowse } from "./CallYouTube";
 import { usePresence } from "../utils/PresenceContext";
 import { canDocPip, openPip, updatePip, closePip, pipOpen } from "../utils/callPip";
 import { canFloatBoth, createFloat } from "../utils/callFloat";
@@ -285,7 +286,8 @@ export default function CallLayer() {
   const { friends } = usePresence();
   const [now, setNow] = useState(Date.now());
   const [tapForSound, setTapForSound] = useState(false);
-  const [shareMenu, setShareMenu] = useState(false); // 🎬 a video together, 🖥️ my screen
+  const [shareMenu, setShareMenu] = useState(false); // 🎬 a video together, ▶️ YouTube, 🖥️ my screen
+  const [ytOpen, setYtOpen] = useState(false);       // finding a YouTube video to watch together
   const [picking, setPicking] = useState(false);   // the "add a friend" list
   const [swapped, setSwapped] = useState(false);   // one-to-one: me big, them in the corner (tap the corner to swap, like WhatsApp)
   const meDrag = useDrag(), chatDrag = useDrag();
@@ -673,7 +675,7 @@ export default function CallLayer() {
             </div>
           ) : watch ? (
             <>
-              <CallWatch C={C} names={call.names || {}} myId={C.myId} shareRef={shareRef} pseudo={pseudo} onBig={big} />
+              <CallWatch C={C} names={call.names || {}} myId={C.myId} shareRef={shareRef} pseudo={pseudo} onBig={big} onPickYt={() => setYtOpen(true)} />
               {strip}
             </>
           ) : shown ? (
@@ -829,6 +831,13 @@ export default function CallLayer() {
             </button>
           )}
 
+          {ytOpen && (
+            <YtBrowse onClose={() => setYtOpen(false)} onPick={(v) => {
+              setYtOpen(false);
+              C.sendWatch({ op: "open", src: { kind: "yt", id: v.id, title: v.title, ch: v.ch, dur: v.dur } });
+            }} />
+          )}
+
           {shareMenu && (
             <div className="call-pick" role="dialog" aria-label="Share"
               onClick={(e) => { if (e.target === e.currentTarget) setShareMenu(false); }}>
@@ -845,6 +854,11 @@ export default function CallLayer() {
                     if (file) { const r = await C.pickWatchFile(file, true); if (!r.ok) C.say && C.say("This phone can't play that file. Try an .mp4 copy."); }
                   }} />
                 </label>
+                <button type="button" className="call-share-opt" onClick={() => { setShareMenu(false); setYtOpen(true); }}>
+                  <span className="call-share-opt-icon">▶️</span>
+                  <span><b>YouTube together</b>
+                    <small>Find a video and everyone watches it in sync</small></span>
+                </button>
                 <button type="button" className={`call-share-opt${canShareScreen() ? "" : " cant"}`} disabled={!canShareScreen()}
                   onClick={() => { setShareMenu(false); C.share(); }}>
                   <span className="call-share-opt-icon">🖥️</span>

@@ -1,54 +1,101 @@
 // src/components/CallWatch.jsx — a video everyone in the call watches
-// together, on the stage where a shared screen would be.
+// together, on the stage where a shared screen would be: a file, or YouTube.
 //
-// Everyone plays their own copy of the same file, so it's the file's own
-// quality and nothing is sent but play / pause / where. The server keeps
-// what's on (config/callWatch.js); this player steers itself to it
-// (watchSync.js) every moment. Someone without the file yet is asked to
-// pick their copy; a different file (another size) is caught.
-import React, { useEffect, useRef, useState } from "react";
+// Nothing of the video is sent between phones. A file: everyone plays their
+// own copy of the same one (its own quality). YouTube: everyone's own
+// YouTube player. The server keeps what's on and where (config/callWatch.js);
+// this steers the player to it (watchSync.js) every moment.
+//
+// A player that's stuck — YouTube showing someone an ad, still loading, or a
+// phone waiting for a tap before it plays sound — asks everyone to wait
+// ("wait"); once it moves, it says "go" and all carry on together.
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { posAt, steer, clockOf, sizeOf } from "../utils/watchSync";
+import { YtPlayer } from "./CallYouTube";
 
 const HOLD_MS = 1500;           // after my own tap, wait this long for the server before steering again
 const HIDE_MS = 3000;           // the controls fade while it plays
+const STUCK_MS = 2500;          // meant to be playing and hasn't moved for this long: ask everyone to wait
+const WAIT_GAP_MS = 6000;       // and not more often than this
 
-export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig }) {
-  const w = C.watch, f = C.watchFile;
+// A file's <video>, with the same handful of controls as YouTube's player.
+const FilePlayer = forwardRef(function FilePlayer({ url, onFail }, ref) {
   const v = useRef(null);
+  useImperativeHandle(ref, () => ({
+    ok: () => !!v.current && v.current.readyState >= 1,
+    time: () => (v.current ? v.current.currentTime : 0),
+    state: () => (!v.current ? -1 : v.current.ended ? 0 : v.current.paused ? 2 : 1),
+    paused: () => !v.current || v.current.paused,
+    play: () => (v.current ? v.current.play() : Promise.resolve()),
+    pause: () => v.current && v.current.pause(),
+    seek: (t) => { if (v.current) v.current.currentTime = t; },
+    rate: (r) => { if (v.current && v.current.playbackRate !== r) v.current.playbackRate = r; },
+    fine: true,
+  }), []);
+  return <video ref={v} className="call-fit" src={url} playsInline preload="auto" onError={() => onFail("This phone can't play that file.")} />;
+});
+
+export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onPickYt }) {
+  const w = C.watch, f = C.watchFile, yt = w.src.kind === "yt";
+  const player = useRef(null);
   const [anyway, setAnyway] = useState(false);     // a different file, watched anyway
-  const [bad, setBad] = useState("");              // this phone can't play the file
-  const [needTap, setNeedTap] = useState(false);   // the phone wants a tap before it plays sound
+  const [bad, setBad] = useState("");              // this phone can't play it
+  const [needTap, setNeedTap] = useState(false);   // the phone wants a tap before it plays
   const [shown, setShown] = useState(true);        // the controls
   const [drag, setDrag] = useState(null);          // the seek bar, while a finger's on it
   const [t, setT] = useState(0);
   const hold = useRef({ until: 0, rev: 0 });
   const hideT = useRef(null);
-  const same = !!f && f.size === w.src.size;
-  const playable = !!f && (same || anyway) && !bad;
+  const seen = useRef({ t: -1, at: 0, waited: 0, stillSince: 0 });
+  const same = yt || (!!f && f.size === w.src.size);
   const fileUrl = f ? f.url : null;
-  useEffect(() => { setAnyway(false); setBad(""); }, [w.src.size, fileUrl]);
+  const playable = (yt || (!!f && (same || anyway))) && !bad;
+  useEffect(() => { setAnyway(false); setBad(""); setNeedTap(false); }, [w.src.size, w.src.id, fileUrl]);
 
   // steer my player to everyone's, now and every moment
   useEffect(() => {
     if (!playable) return undefined;
     const tick = () => {
-      const el = v.current;
-      if (!el || el.readyState < 1) return;
-      setT(el.currentTime);
-      if (Date.now() < hold.current.until && C.watch.rev <= hold.current.rev) return;
-      const W = C.watch, target = posAt(W, C.serverNow());
-      if (W.playing && el.paused && target < W.src.dur - 0.3) {
-        const p = el.play();
-        if (p && p.catch) p.then(() => setNeedTap(false)).catch(() => setNeedTap(true));
-      } else if (!W.playing && !el.paused) el.pause();
-      const { seek, rate } = steer(el.currentTime, target, W.playing && !el.paused);
-      if (seek != null) el.currentTime = seek;
-      if (el.playbackRate !== rate) el.playbackRate = rate;
+      const p = player.current;
+      if (!p || !p.ok()) return;
+      const W = C.watch, now = p.time(), at = Date.now(), S = seen.current;
+      setT(now);
+      const moved = Math.abs(now - S.t) > 0.15;
+      if (moved || S.t < 0) { S.t = now; S.stillSince = at; }
+      const still = at - S.stillSince;
+      // I'm the one everyone's waiting for: keep my player going (an ad
+      // plays out; a tap may be needed), and once it moves, carry on
+      if (W.hold === myId) {
+        if (p.paused()) p.play().catch(() => setNeedTap(true));
+        if (moved && p.state() === 1) C.sendWatch({ op: "go", pos: now });
+        return;
+      }
+      if (Date.now() < hold.current.until && W.rev <= hold.current.rev) return;
+      const target = posAt(W, C.serverNow());
+      const wantPlay = W.playing && target < W.src.dur - 0.3;
+      if (!wantPlay) S.stillSince = at;                  // standing still is only "stuck" while it should play
+      if (wantPlay && p.paused()) {
+        p.play().then(() => setNeedTap(false)).catch(() => setNeedTap(true));
+        if (yt && still > 1200 && [-1, 2, 5].includes(p.state())) setNeedTap(true);
+      } else if (!W.playing && !p.paused()) p.pause();
+      if (!p.paused()) setNeedTap(false);
+      // meant to be playing, not moving: hold everyone till I catch up
+      if (wantPlay && !W.hold && still > STUCK_MS && at - S.waited > WAIT_GAP_MS && p.state() !== 0) {
+        S.waited = at;
+        C.sendWatch({ op: "wait", pos: now });
+        return;
+      }
+      const { seek, rate } = steer(now, target, W.playing && !p.paused(), p.fine);
+      // (a jump that doesn't take — YouTube showing an ad ignores it — isn't
+      // tried again at once, and doesn't count as moving: that's how a stuck
+      // player is noticed)
+      if (seek != null && (still < 1000 || at - (S.jumped || 0) > 2000)) { S.jumped = at; p.seek(seek); }
+      p.rate(rate);
     };
     tick();
     const id = setInterval(tick, 400);
     return () => clearInterval(id);
-  }, [playable, w, C]);
+  }, [playable, w, C, myId, yt]);
 
   // the controls fade while it plays; a tap brings them back
   const poke = () => {
@@ -63,16 +110,16 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig }) {
     C.sendWatch({ op, pos });
   };
   const toggle = () => {
-    const el = v.current;
-    if (!el) return;
+    const p = player.current;
+    if (!p) return;
     poke();
-    if (needTap) { el.play().then(() => setNeedTap(false)).catch(() => {}); if (w.playing) return; }
-    if (w.playing) { el.pause(); mine("pause", el.currentTime); }
-    else { el.play().catch(() => {}); mine("play", el.currentTime); }
+    if (needTap) { p.play().then(() => setNeedTap(false)).catch(() => {}); if (w.playing || w.hold) return; }
+    if (w.playing) { p.pause(); mine("pause", p.time()); }
+    else { p.play().catch(() => {}); mine("play", p.time()); }
   };
   const seekTo = (s) => {
-    const el = v.current;
-    if (el) el.currentTime = s;
+    const p = player.current;
+    if (p) p.seek(s);
     setDrag(null); poke();
     mine("seek", s);
   };
@@ -85,20 +132,28 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig }) {
     if (!r.ok) setBad("This phone can't play that file.");
   };
 
-  const by = w.by === myId ? "You" : names[w.by] || "Someone";
-  const ready = (w.ready || []).map((id) => (id === myId ? "You" : names[id] || "Someone"));
+  const who = (id) => (id === myId ? "You" : names[id] || "Someone");
+  const ready = (w.ready || []).map(who);
   const cur = drag != null ? drag : t;
+  const waitingOn = w.hold && w.hold !== myId ? who(w.hold) : null;
+  // YouTube's own buttons (Skip ad) must be tappable while it's me it shows an ad to
+  const coverYt = yt && w.hold !== myId;
 
   return (
-    <div className={`call-share cw${pseudo ? " pfull" : ""}`} ref={shareRef}>
+    <div className={`call-share cw${yt ? " cw-yt" : ""}${pseudo ? " pfull" : ""}`} ref={shareRef}>
       {playable ? (
         <>
-          <video ref={v} className="call-fit" src={f.url} playsInline preload="auto" onClick={() => (shown && w.playing ? setShown(false) : poke())}
-            onError={() => setBad("This phone can't play that file.")} />
+          {yt ? <YtPlayer ref={player} id={w.src.id} onFail={setBad} onState={() => {}} />
+            : <FilePlayer ref={player} url={f.url} onFail={setBad} />}
+          {/* a tap on the picture shows or hides the controls; it never pauses it for everyone */}
+          {(coverYt || !yt) && <div className="cw-cover" onClick={() => (shown && w.playing ? setShown(false) : poke())} />}
           {needTap && <button type="button" className="cw-tap" onClick={toggle}>🔊 Tap to watch with sound</button>}
+          {waitingOn && <div className="cw-wait">⏳ Waiting for {waitingOn}… <button type="button" onClick={() => mine("play", player.current ? player.current.time() : w.pos)}>Play anyway</button></div>}
+          {w.hold === myId && <div className="cw-wait">⏳ Catching up: the others are waiting for you</div>}
           <div className={`cw-ui${shown || !w.playing ? "" : " gone"}`} onPointerDown={poke}>
             <div className="cw-title">
-              <span className="cw-name">🎬 {w.src.name}</span>
+              <span className="cw-name">{yt ? "▶️" : "🎬"} {w.src.name}{yt && w.src.ch ? <small> · {w.src.ch}</small> : null}</span>
+              {yt && onPickYt && <button type="button" className="cw-x" onClick={onPickYt} aria-label="Pick another YouTube video">🔍</button>}
               <button type="button" className="cw-x" onClick={() => C.sendWatch({ op: "close" })} aria-label="Stop the video for everyone">✕</button>
             </div>
             <div className="cw-bar">
@@ -115,21 +170,24 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig }) {
         </>
       ) : (
         <div className="cw-card pop">
-          <div className="cw-card-icon">🎬</div>
+          <div className="cw-card-icon">{yt ? "▶️" : "🎬"}</div>
           <b className="cw-card-name">{w.src.name}</b>
-          <div className="cw-card-sub">{by} put this on · {clockOf(w.src.dur)} · {sizeOf(w.src.size)}</div>
-          {bad ? <div className="cw-warn">{bad} Try an .mp4 copy.</div>
+          <div className="cw-card-sub">{who(w.by)} put this on · {clockOf(w.src.dur)}{yt ? "" : ` · ${sizeOf(w.src.size)}`}</div>
+          {yt ? <div className="cw-warn">{bad}{onPickYt && <button type="button" className="press p-sun sm" onClick={onPickYt}>Pick another video</button>}</div>
+            : bad ? <div className="cw-warn">{bad} Try an .mp4 copy.</div>
             : f && !same ? (
               <div className="cw-warn">
                 That's a different file ({sizeOf(f.size)}), so it won't line up. Pick the same file they have.
                 <button type="button" className="press p-sun sm" onClick={() => setAnyway(true)}>Watch mine anyway</button>
               </div>
             ) : <div className="cw-card-how">Everyone plays their own copy, so it's full quality. Get the same file (sent on WhatsApp, say), then pick it here.</div>}
-          <label className="press p-lime cw-pick">
-            Pick my copy
-            <input type="file" accept="video/*,.mkv,.mov,.mp4,.webm" onChange={pick} hidden />
-          </label>
-          <div className="cw-ready">Ready: {ready.join(", ") || "nobody yet"}</div>
+          {!yt && (
+            <label className="press p-lime cw-pick">
+              Pick my copy
+              <input type="file" accept="video/*,.mkv,.mov,.mp4,.webm" onChange={pick} hidden />
+            </label>
+          )}
+          {!yt && <div className="cw-ready">Ready: {ready.join(", ") || "nobody yet"}</div>}
           <button type="button" className="cw-link" onClick={() => C.sendWatch({ op: "close" })}>Stop the video for everyone</button>
         </div>
       )}

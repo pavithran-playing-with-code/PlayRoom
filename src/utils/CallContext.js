@@ -81,6 +81,9 @@ const SCREEN = {
 // installed app) — so the button shows everywhere and says so if it can't.
 export const canShareScreen = () => typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia;
 const STUCK_MS = 20000, RETRY_MS = 15000;
+// a lost link waits this long to come back by itself before a new route is
+// sought; two restarts are never closer than KICK_GAP_MS
+const LOST_WAIT_MS = 2500, KICK_GAP_MS = 4000;
 // Ask the other side to send stereo, at film quality. A browser sends stereo
 // Opus only when the far side's description says it wants it, so this is
 // done to each description as it arrives.
@@ -279,6 +282,20 @@ export function CallProvider({ children }) {
     setPeers((all) => { const n = { ...all }; delete n[id]; return n; });
   }, []);
 
+  // Find a new route to a friend: the offering side restarts ICE, the other
+  // side asks it to. A connected link keeps playing on its old route while
+  // the new one is found, so this is safe to do whenever the network moves.
+  const kick = useCallback((id) => {
+    const P = pcs.current.get(id);
+    if (!P || P.pc.connectionState === "closed" || Date.now() - (P.lastKick || 0) < KICK_GAP_MS) return;
+    P.kicked = P.lastKick = Date.now();
+    if (P.polite) send(id, { restart: 1 });
+    else try { P.pc.restartIce(); } catch { /* old browser */ }
+  }, [send]);
+  const kickAll = useCallback((all) => {
+    for (const [id, P] of pcs.current) if (all || P.pc.connectionState !== "connected") kick(id);
+  }, [kick]);
+
   // which of a friend's pictures is their camera, and which their screen
   const place = useCallback((id) => {
     const S = streams.current.get(id);
@@ -336,8 +353,14 @@ export function CallProvider({ children }) {
         const c = callRef.current;
         if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: micRef.current, cam: camRef.current, screen: screenRef.current ? screenRef.current.id : null, hold: holdRef.current, turn: turnRef.current });
       }
-      else if (st === "disconnected") patchPeer(id, { link: "lost" });
-      else if (st === "failed") { patchPeer(id, { link: "lost" }); if (!P.polite) try { pc.restartIce(); } catch { /* old browser */ } }
+      // Lost the route (Wi-Fi to mobile data, a lift, a tunnel): a blip
+      // often comes back by itself, so give it a moment, then look for a new
+      // route rather than waiting the browser's half a minute for "failed".
+      else if (st === "disconnected") {
+        patchPeer(id, { link: "lost" });
+        setTimeout(() => { if (["disconnected", "failed"].includes(pc.connectionState)) kick(id); }, LOST_WAIT_MS);
+      }
+      else if (st === "failed") { patchPeer(id, { link: "lost" }); kick(id); }
     };
     // not through yet: try again (the offering side), and keep trying. Still
     // not through after a while: say so, and tell the server's log which
@@ -348,7 +371,7 @@ export function CallProvider({ children }) {
     P.kicked = P.since;
     P.watch = setInterval(() => {
       if (pc.connectionState === "connected" || pc.connectionState === "closed") { P.kicked = Date.now(); return; }
-      if (!P.polite && Date.now() - P.kicked > RETRY_MS) { P.kicked = Date.now(); try { pc.restartIce(); } catch { /* old browser */ } }
+      if (!P.polite && Date.now() - P.kicked > RETRY_MS) kick(id);
       if (!P.told && Date.now() - P.since > STUCK_MS) {
         P.told = true;
         patchPeer(id, { link: "blocked" });
@@ -361,13 +384,15 @@ export function CallProvider({ children }) {
     }, 3000);
     patchPeer(id, {});
     return P;
-  }, [myId, socket, send, patchPeer, tune, place]);
+  }, [myId, socket, send, patchPeer, tune, place, kick]);
 
   const onSignal = useCallback(async ({ callId, from, data }) => {
     if (!callRef.current || callRef.current.id !== callId || !data) return;
     const P = peer(Number(from)), pc = P.pc;
     try {
-      if (data.description) {
+      if (data.restart) {                                // they moved networks: the offering side restarts
+        if (!P.polite) kick(Number(from));
+      } else if (data.description) {
         const collide = data.description.type === "offer" && (P.makingOffer || pc.signalingState !== "stable");
         P.ignoreOffer = !P.polite && collide;
         if (P.ignoreOffer) return;
@@ -384,7 +409,7 @@ export function CallProvider({ children }) {
         else await pc.addIceCandidate(data.candidate).catch(() => {});
       }
     } catch { /* a stale message from a negotiation that was replaced */ }
-  }, [peer, send, tune]);
+  }, [peer, send, tune, kick]);
 
   // ── the whole call ─────────────────────────────────────────────────────────
   const finish = useCallback((reason) => {
@@ -774,7 +799,11 @@ export function CallProvider({ children }) {
       socket.emit("call:mine");
       const c = callRef.current;
       if (!c || !c.id) return;
-      socket.emit("call:rejoin", { callId: c.id }, (r) => { if (!r || !r.ok) finish("dropped"); else apply(r); });
+      socket.emit("call:rejoin", { callId: c.id }, (r) => {
+        if (!r || !r.ok) return finish("dropped");
+        apply(r);
+        kickAll(false);                                  // signalling is back: mend any link that broke meanwhile
+      });
     };
     socket.on("call:ring", onRing); socket.on("call:ring-stop", onRingStop); socket.on("call:state", onState);
     socket.on("call:ended", onEnded); socket.on("call:left", onLeft); socket.on("call:declined", onDeclined);
@@ -797,7 +826,20 @@ export function CallProvider({ children }) {
       socket.off("call:missed", onMissed); socket.off("call:media", onMedia); socket.off("call:signal", onSignal);
       socket.off("connect", onConnect);
     };
-  }, [socket, apply, finish, closePeer, patchPeer, onSignal, say, place]);
+  }, [socket, apply, finish, closePeer, patchPeer, onSignal, say, place, kickAll]);
+
+  // The phone moved networks (Wi-Fi to mobile data and back): the old route
+  // is about to die, so start finding the new one now, before the sound cuts.
+  useEffect(() => {
+    const moved = () => { if (callRef.current) kickAll(true); };
+    const conn = navigator.connection;
+    window.addEventListener("online", moved);
+    if (conn && conn.addEventListener) conn.addEventListener("change", moved);
+    return () => {
+      window.removeEventListener("online", moved);
+      if (conn && conn.removeEventListener) conn.removeEventListener("change", moved);
+    };
+  }, [kickAll]);
 
   // logged out, or the socket is gone for good: no call
   useEffect(() => { if (!user) { setRing(null); finish(null); } }, [user, finish]);

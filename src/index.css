@@ -1297,6 +1297,12 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-share{position:absolute;inset:0;bottom:calc(env(safe-area-inset-bottom,0px) + 168px);background:#000;display:grid;place-items:center}
 .call-share:fullscreen{bottom:0;inset:0}
 .call-fit{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+/* pinch and drag a shared screen: the fingers belong to it, not the page */
+.call-zoom{position:absolute;inset:0;overflow:hidden;touch-action:none}
+.call-zoom-in{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
+.call-unzoom{position:absolute;right:10px;bottom:64px;z-index:2;
+  padding:6px 14px;border-radius:999px;border:3px solid #fff;background:rgba(20,16,28,.75);color:#fff;
+  font:800 14px Nunito,system-ui,sans-serif;cursor:pointer}
 .call-share-tag{position:absolute;left:10px;bottom:10px;padding:3px 10px;border-radius:999px;background:rgba(0,0,0,.6);font-weight:800;font-size:13px}
 .call-share:fullscreen .call-share-tag{display:none}
 .call-big{position:absolute;right:10px;bottom:10px;width:44px;height:44px;border-radius:12px;border:3px solid #fff;

@@ -263,8 +263,11 @@ export function CallProvider({ children }) {
           // friend gets their own copy, encoded separately, so with more
           // watching each copy is smaller — or the sharer's computer can't
           // keep up (1080p for one, ~900p for two, ~720p for three)
-          p.encodings[0].maxBitrate = n === 1 ? 4000000 : n === 2 ? 2500000 : 1800000;
-          p.encodings[0].scaleResolutionDownBy = n === 1 ? 1 : n === 2 ? 1.2 : 1.5;
+          // A friend on a weak link (a phone on mobile data) gets a lighter
+          // copy, ~540p: a film that keeps moving, not a sharp one that freezes.
+          const weak = P && P.weak;
+          p.encodings[0].maxBitrate = weak ? 900000 : n === 1 ? 4000000 : n === 2 ? 2500000 : 1800000;
+          p.encodings[0].scaleResolutionDownBy = weak ? 2 : n === 1 ? 1 : n === 2 ? 1.2 : 1.5;
           p.encodings[0].maxFramerate = 30;
           p.degradationPreference = "maintain-framerate";
         } else if (isScreen) p.encodings[0].maxBitrate = 160000;

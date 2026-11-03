@@ -62,6 +62,84 @@ function useHeldSideways(on) {
   return deg;
 }
 
+// A shared screen up close: a computer's whole screen on a phone is small
+// print. Two fingers pinch it bigger (around where they are), one finger
+// drags it about once it's bigger, a double tap goes in where you tapped and
+// back out. Positions in the call's own frame (`at`), so it works turned too.
+// Kept to the picture itself, not its letterbox: it can't be dragged off
+// into black, and a side still narrower than the screen stays centred.
+const ZOOM_MAX = 5, ZOOM_TAP = 2.5;
+// one axis: the picture spans [off, off+len] of a box `W` wide, at scale s
+const keep = (t, W, off, len, s) => (len * s >= W ? Math.min(-off * s, Math.max(W - (off + len) * s, t)) : (W - len * s) / 2 - off * s);
+function useZoom(key) {
+  const box = useRef(null);
+  const [z, setZ] = useState({ s: 1, x: 0, y: 0 });
+  const live = useRef({ s: 1, x: 0, y: 0 });
+  const touch = useRef({ pts: new Map(), start: null, lastTap: 0, tapAt: null, moved: false });
+  const put = (n) => {
+    const r = box.current ? layerRect(box.current) : { width: 0, height: 0 };
+    const s = Math.min(ZOOM_MAX, Math.max(1, n.s));
+    // where the picture sits in its box (object-fit: contain)
+    const v = box.current && box.current.querySelector("video");
+    const k = v && v.videoWidth && v.videoHeight ? Math.min(r.width / v.videoWidth, r.height / v.videoHeight) : 0;
+    const cw = k ? v.videoWidth * k : r.width, ch = k ? v.videoHeight * k : r.height;
+    const x = keep(n.x, r.width, (r.width - cw) / 2, cw, s);
+    const y = keep(n.y, r.height, (r.height - ch) / 2, ch, s);
+    live.current = s === 1 ? { s: 1, x: 0, y: 0 } : { s, x, y };
+    setZ(live.current);
+  };
+  useEffect(() => { put({ s: 1, x: 0, y: 0 }); }, [key]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const local = (e) => { const p = at(e), r = layerRect(box.current); return { x: p.x - r.left, y: p.y - r.top }; };
+  const T = touch.current;
+  const spread = () => { const [a, b] = [...T.pts.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }; };
+  const begin = () => {
+    const v = live.current;
+    T.start = T.pts.size === 2 ? { ...spread(), v } : { p: [...T.pts.values()][0], v };
+  };
+  const handlers = {
+    onPointerDown: (e) => {
+      if (e.target.closest("button")) return;
+      T.pts.set(e.pointerId, local(e)); T.moved = T.pts.size > 1;
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
+      begin();
+    },
+    onPointerMove: (e) => {
+      if (!T.pts.has(e.pointerId) || !T.start) return;
+      const p = local(e); T.pts.set(e.pointerId, p);
+      const { v } = T.start;
+      if (T.pts.size === 2 && T.start.d) {
+        // the point under the fingers' middle stays under it
+        const { d, m } = spread(), s = v.s * d / T.start.d;
+        const cx = (T.start.m.x - v.x) / v.s, cy = (T.start.m.y - v.y) / v.s;
+        put({ s, x: m.x - cx * s, y: m.y - cy * s });
+        T.moved = true;
+      } else if (T.pts.size === 1 && T.start.p) {
+        const dx = p.x - T.start.p.x, dy = p.y - T.start.p.y;
+        if (Math.hypot(dx, dy) > 8) T.moved = true;
+        if (v.s > 1) put({ s: v.s, x: v.x + dx, y: v.y + dy });
+      }
+    },
+    onPointerUp: (e) => {
+      if (!T.pts.has(e.pointerId)) return;
+      const p = T.pts.get(e.pointerId);
+      T.pts.delete(e.pointerId);
+      if (T.pts.size) { begin(); return; }           // one finger lifted from a pinch: carry on dragging with the other
+      T.start = null;
+      if (T.moved) { T.lastTap = 0; return; }
+      const now = Date.now();
+      if (now - T.lastTap < 320 && T.tapAt && Math.hypot(p.x - T.tapAt.x, p.y - T.tapAt.y) < 40) {
+        T.lastTap = 0;
+        const v = live.current;
+        if (v.s > 1) put({ s: 1, x: 0, y: 0 });
+        else put({ s: ZOOM_TAP, x: p.x - p.x * ZOOM_TAP, y: p.y - p.y * ZOOM_TAP });
+      } else { T.lastTap = now; T.tapAt = p; }
+    },
+  };
+  handlers.onPointerCancel = handlers.onPointerUp;
+  const style = z.s === 1 ? undefined : { transform: `translate(${z.x}px,${z.y}px) scale(${z.s})` };
+  return { box, handlers, style, zoomed: z.s > 1, scale: z.s, reset: () => put({ s: 1, x: 0, y: 0 }) };
+}
+
 const two = (n) => String(n).padStart(2, "0");
 const BUBBLE_MIN = 0.8, BUBBLE_MAX = 2.4;        // how small and how big the bubble can be made
 const clock = (ms) => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${two(s % 60)}`; };
@@ -327,6 +405,7 @@ export default function CallLayer() {
   // a friend sharing their screen (the first, if two are)
   const sharer = others.find((m) => peers[m.id]?.screen);
   const shown = sharer ? peers[sharer.id].screen : null;
+  const zoom = useZoom(shown ? shown.id : "");
   const big = async () => {
     const el = shareRef.current;
     if (!el) return;
@@ -570,8 +649,15 @@ export default function CallLayer() {
             </div>
           ) : shown ? (
             <>
-              <div className={`call-share${pseudo ? " pfull" : ""}`} ref={shareRef} onDoubleClick={big}>
-                <Vid stream={shown} className="call-fit" />
+              <div className={`call-share${pseudo ? " pfull" : ""}`} ref={shareRef}>
+                <div className="call-zoom" ref={zoom.box} {...zoom.handlers}>
+                  <div className="call-zoom-in" style={zoom.style}><Vid stream={shown} className="call-fit" /></div>
+                </div>
+                {zoom.zoomed && (
+                  <button type="button" className="call-unzoom" onClick={zoom.reset} aria-label="Back to the whole screen">
+                    {zoom.scale.toFixed(1)}× · 1×
+                  </button>
+                )}
                 <div className="call-share-tag">🖥️ {sharer.name}'s screen</div>
                 <button type="button" className="call-big" onClick={big} aria-label="Full screen">⛶</button>
                 {/* full screen, the film fills the screen: the faces come with it, small, over the top corner — tap to tuck them away */}

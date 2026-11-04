@@ -266,7 +266,8 @@ function attach(io) {
       if (!c || !c.members.has(uid) || c.members.get(uid).sid !== socket.id) return;
       const screen = typeof msg.screen === "string" && /^[\w{}-]{1,100}$/.test(msg.screen) ? msg.screen : null;
       toMembers(c, "call:media", { callId: c.id, id: uid, mic: !!msg.mic, cam: !!msg.cam, screen, hold: !!msg.hold,
-        turn: [90, -90, 180].includes(msg.turn) ? msg.turn : 0 }, uid);         // a camera turned a quarter (a sideways game)
+        turn: [90, -90, 180].includes(msg.turn) ? msg.turn : 0,
+        film: typeof msg.film === "string" && screen ? msg.film.replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 100) : null }, uid);   // a camera turned a quarter (a sideways game); a video they're playing to the call
     });
 
     // Chat in the call: passed to the others in it, never stored. A message

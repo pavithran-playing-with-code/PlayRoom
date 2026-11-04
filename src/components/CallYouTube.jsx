@@ -23,24 +23,31 @@ function loadYt() {
   return apiReady;
 }
 
-// YouTube's player, with the same handful of controls as a file's <video>
-// (CallWatch steers either). `onState`: its state changed (-1 not started,
-// 0 ended, 1 playing, 2 paused, 3 loading, 5 ready); `onFail`: it can't be
-// played here (the owner doesn't allow it outside YouTube).
+// YouTube's player with its own controls — captions, quality, speed, full
+// screen — and the same handful of calls as a file's <video> (CallWatch
+// steers either). `onState`: its state changed (-1 not started, 0 ended,
+// 1 playing, 2 paused, 3 loading, 5 ready); `onFail`: it can't be played
+// here. `busy()`: we moved it ourselves a moment ago, so a change of state
+// now is ours, not the viewer's.
+const WHY = { 2: "That video link isn't valid.", 5: "This phone's player couldn't play it.", 100: "That video was removed or made private.",
+  101: "The owner doesn't let this video play outside YouTube.", 150: "The owner doesn't let this video play outside YouTube." };
 export const YtPlayer = forwardRef(function YtPlayer({ id, onState, onFail }, ref) {
   const box = useRef(null);
   const p = useRef(null);
   const ready = useRef(false);
+  const cmd = useRef(0);
   const cb = useRef({ onState, onFail }); cb.current = { onState, onFail };
+  const did = () => { cmd.current = Date.now(); };
   useImperativeHandle(ref, () => ({
     ok: () => ready.current,
     time: () => (ready.current ? p.current.getCurrentTime() || 0 : 0),
     state: () => (ready.current ? p.current.getPlayerState() : -1),
     paused() { const s = this.state(); return s !== 1 && s !== 3; },
-    play: () => { if (ready.current) p.current.playVideo(); return Promise.resolve(); },
-    pause: () => { if (ready.current) p.current.pauseVideo(); },
-    seek: (t) => { if (ready.current) p.current.seekTo(t, true); },
+    play: () => { if (ready.current) { did(); p.current.playVideo(); } return Promise.resolve(); },
+    pause: () => { if (ready.current) { did(); p.current.pauseVideo(); } },
+    seek: (t) => { if (ready.current) { did(); p.current.seekTo(t, true); } },
     rate: () => {},
+    busy: () => Date.now() - cmd.current < 1500,
     fine: false,
   }), []);
   useEffect(() => {
@@ -51,15 +58,22 @@ export const YtPlayer = forwardRef(function YtPlayer({ id, onState, onFail }, re
       if (gone) return;
       p.current = new YT.Player(el, {
         videoId: id, width: "100%", height: "100%",
-        playerVars: { playsinline: 1, controls: 0, rel: 0, modestbranding: 1, disablekb: 1, fs: 0, iv_load_policy: 3, autoplay: 0 },
+        // YouTube's own controls; it must know which site it's on (origin,
+        // and the page's referrer — server.js), or it refuses to play
+        playerVars: { playsinline: 1, controls: 1, rel: 0, modestbranding: 1, fs: 1, iv_load_policy: 3, autoplay: 0, cc_load_policy: 0,
+          widget_referrer: window.location.href },
         events: {
           onReady: () => { ready.current = true; cb.current.onState && cb.current.onState(5); },
           onStateChange: (e) => cb.current.onState && cb.current.onState(e.data),
-          onError: (e) => cb.current.onFail && cb.current.onFail(e.data === 101 || e.data === 150 ? "The owner doesn't let this video play outside YouTube." : "YouTube couldn't play this video."),
+          onError: (e) => cb.current.onFail && cb.current.onFail(`${WHY[e.data] || "YouTube couldn't play this video."} (YouTube error ${e.data})`),
         },
       });
       const f = p.current.getIframe && p.current.getIframe();
-      if (f) f.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture");
+      if (f) {
+        f.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
+        f.setAttribute("allowfullscreen", "");
+        f.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+      }
     }).catch(() => cb.current.onFail && cb.current.onFail("YouTube didn't load. Check the connection."));
     return () => { gone = true; ready.current = false; try { p.current && p.current.destroy(); } catch { /* gone */ } p.current = null; };
   }, [id]);
@@ -70,7 +84,9 @@ export const YtPlayer = forwardRef(function YtPlayer({ id, onState, onFail }, re
 const SHELVES = [["", "🔥 Trending"], ["music", "🎵 Music"], ["films", "🎬 Films"], ["comedy", "😂 Comedy"], ["gaming", "🎮 Gaming"], ["sports", "🏏 Sports"]];
 const views = (n) => (n >= 1e7 ? `${Math.round(n / 1e6)}M` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n));
 
-export function YtBrowse({ onPick, onClose }) {
+// `docked`: under the playing video, so you can keep scrolling while it plays
+// (no close button: the video's ✕ ends it); otherwise a sheet over the call.
+export function YtBrowse({ onPick, onClose, docked = false, playing = null }) {
   const [shelf, setShelf] = useState("");
   const [q, setQ] = useState("");                  // what's typed
   const [query, setQuery] = useState("");          // what was searched (empty: a shelf)
@@ -108,9 +124,10 @@ export function YtBrowse({ onPick, onClose }) {
   }, [next, busy, query, load]);
 
   return (
-    <div className="yt-sheet" role="dialog" aria-label="YouTube" onKeyDown={(e) => e.stopPropagation()} onKeyUp={(e) => e.stopPropagation()}>
+    <div className={docked ? "yt-docked" : "yt-sheet"} role={docked ? "region" : "dialog"} aria-label={docked ? "More videos" : "YouTube"}
+      onKeyDown={(e) => e.stopPropagation()} onKeyUp={(e) => e.stopPropagation()}>
       <form className="yt-head" onSubmit={(e) => { e.preventDefault(); setQuery(q.trim()); }}>
-        <button type="button" className="yt-back" onClick={onClose} aria-label="Close YouTube">✕</button>
+        {!docked && <button type="button" className="yt-back" onClick={onClose} aria-label="Close YouTube">✕</button>}
         <input className="yt-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search YouTube" aria-label="Search YouTube"
           enterKeyHint="search" maxLength={100} autoComplete="off" />
         {query ? <button type="button" className="yt-clear" onClick={() => { setQ(""); setQuery(""); }} aria-label="Back to trending">↺</button>
@@ -124,7 +141,7 @@ export function YtBrowse({ onPick, onClose }) {
         </div>
       )}
       <div className="yt-list" ref={scroller}>
-        {list.map((v) => (
+        {list.filter((v) => v.id !== playing).map((v) => (
           <button type="button" key={v.id} className="yt-card" onClick={() => onPick(v)} aria-label={`Watch ${v.title}`}>
             <span className="yt-thumb"><img src={v.thumb} alt="" loading="lazy" /><span className="yt-dur">{clockOf(v.dur)}</span></span>
             <span className="yt-meta"><b className="yt-title">{v.title}</b><span className="yt-sub">{v.ch}{v.views ? ` · ${views(v.views)} views` : ""}</span></span>

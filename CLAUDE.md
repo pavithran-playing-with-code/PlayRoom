@@ -306,12 +306,14 @@ There is no test runner. What works:
   camera (a canvas stops making frames in a background tab, and the real
   desktop starves the machine), and allow tens of seconds: three tabs of
   software video make every step slow here, not stuck. 🖥️ opens a Share
-  menu: the screen (computers), or **a video watched together** — everyone
-  plays their own copy of the same file (full quality, nothing streamed);
-  the server keeps only what's on and where on its clock
-  (`config/callWatch.js`, `call:watch`, also in `call:state`), and each
-  phone steers its player to it (`watchSync.js`: a touch faster or slower,
-  a jump past 0.5 s). Same file = same size. Or **YouTube together**:
+  menu: the screen (computers), **a video watched together** — a file from
+  your phone plays on it (`playFilm`, its own controls, `FilmStage`) and
+  goes to everyone as your shared screen, so they need nothing: the
+  player's `captureStream()`, or on an iPhone a canvas plus Web Audio;
+  `call:media` carries its name (`film`). (It first required everyone to
+  pick the same file and only synced play/pause — nobody expected that, so
+  it was dropped; that sync engine, `config/callWatch.js` `call:watch`,
+  `watchSync.js`, now serves YouTube.) Or **YouTube together**:
   browse trending / shelves / search (`routes/youtube.js`, the key
   `YOUTUBE_API_KEY` only on the server, answers cached, 40 searches an hour
   each) and everyone's own YouTube player (`CallYouTube.jsx`, jumps only:

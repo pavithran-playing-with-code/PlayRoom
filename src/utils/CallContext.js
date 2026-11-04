@@ -177,6 +177,10 @@ export function CallProvider({ children }) {
   const [notice, setNotice] = useState(null);      // a short line after a call: { text, n }
   const [expanded, setExpanded] = useState(true);  // the full call screen, or the bubble
   const [screen, setScreen] = useState(null);      // the screen I'm sharing
+  // A video of mine playing to the call: it plays here and goes to everyone
+  // as my shared screen (picture and sound), so they need nothing.
+  const [film, setFilm] = useState(null);          // { name, v } | null
+  const filmRef = useRef(null);                    // { v, url, name, stop }
   const [onHold, setOnHold] = useState(false);     // my side's on hold (a phone call)
   const holdRef = useRef(false);
   // My account in a call on another device of mine: { callId, sid, with: [names] }.
@@ -405,7 +409,7 @@ export function CallProvider({ children }) {
         patchPeer(id, { link: "ok" }); for (const x of pcs.current.values()) if (x.pc.connectionState === "connected") tune(x.pc);
         // a newcomer needs telling what's what: mic, camera, and which stream is my screen
         const c = callRef.current;
-        if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: micRef.current, cam: camRef.current, screen: screenRef.current ? screenRef.current.id : null, hold: holdRef.current, turn: turnRef.current });
+        if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: micRef.current, cam: camRef.current, screen: screenRef.current ? screenRef.current.id : null, hold: holdRef.current, turn: turnRef.current, film: filmRef.current ? filmRef.current.name : null });
       }
       // Lost the route (Wi-Fi to mobile data, a lift, a tunnel): a blip
       // often comes back by itself, so give it a moment, then look for a new
@@ -467,18 +471,35 @@ export function CallProvider({ children }) {
   }, [peer, send, tune, kick]);
 
   // ── the whole call ─────────────────────────────────────────────────────────
+  // The film's player has to stay in the page while it plays (a player taken
+  // out of the page pauses), so when the call shrinks it waits out of sight.
+  const hideFilm = useCallback((v) => {
+    let box = document.getElementById("call-film-hold");
+    if (!box) { box = document.createElement("div"); box.id = "call-film-hold"; document.body.appendChild(box); }
+    box.appendChild(v);
+  }, []);
+  const endFilm = useCallback(() => {
+    const f = filmRef.current;
+    if (!f) return;
+    filmRef.current = null; setFilm(null);
+    try { f.v.pause(); } catch { /* gone */ }
+    f.stop();
+    f.v.removeAttribute("src"); f.v.remove();
+    URL.revokeObjectURL(f.url);
+  }, []);
   const finish = useCallback((reason) => {
     tones.current.stop();
     for (const id of [...pcs.current.keys()]) closePeer(id);
     stopMedia();
     if (screenRef.current) { screenRef.current.getTracks().forEach((t) => t.stop()); screenRef.current = null; setScreen(null); }
+    endFilm();
     if (callRef.current && reason) say(ENDED[reason] || "Call ended");
     callRef.current = null;
     setCall(null); setPeers({}); setExpanded(true);
     setChat([]); setUnread(0); chatOpenRef.current = false; setChatOpenState(false);
     setWatch(null);
     holdRef.current = false; setOnHold(false);
-  }, [closePeer, stopMedia, say, setWatch]);
+  }, [closePeer, stopMedia, say, setWatch, endFilm]);
 
   // members changed: connect to newcomers, let go of whoever left
   const apply = useCallback((st) => {
@@ -570,7 +591,8 @@ export function CallProvider({ children }) {
   // ── mic, camera, which camera ──────────────────────────────────────────────
   const tellMedia = useCallback((m, k) => {
     const c = callRef.current;
-    if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: m, cam: k, screen: screenRef.current ? screenRef.current.id : null, hold: holdRef.current, turn: turnRef.current });
+    if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: m, cam: k, screen: screenRef.current ? screenRef.current.id : null, hold: holdRef.current, turn: turnRef.current,
+      film: filmRef.current ? filmRef.current.name : null });
   }, [socket]);
   useEffect(() => {
     if (turnRef.current === turn) return;
@@ -816,8 +838,61 @@ export function CallProvider({ children }) {
     }
     scr.getTracks().forEach((t) => t.stop());
     screenRef.current = null; setScreen(null);
+    endFilm();
     tellMedia(micRef.current, camRef.current);
-  }, [tellMedia]);
+  }, [tellMedia, endFilm]);
+  // Play a video of mine to the call: it plays here (with its own controls)
+  // and its picture and sound go to everyone as my shared screen. Chrome
+  // and Android capture the player itself; an iPhone (no captureStream on a
+  // <video>) draws it onto a canvas and takes its sound through Web Audio.
+  const playFilm = useCallback(async (file) => {
+    if (!file) return;
+    if (screenRef.current) stopShare();
+    const url = URL.createObjectURL(file);
+    const v = document.createElement("video");
+    v.src = url; v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto"; v.controls = true; v.className = "call-fit";
+    hideFilm(v);
+    const ok = await new Promise((res) => { v.onloadedmetadata = () => res(true); v.onerror = () => res(false); });
+    if (!ok) { v.remove(); URL.revokeObjectURL(url); say("This phone can't play that video. Try an .mp4."); return; }
+    try { await v.play(); } catch { /* the controls' ▶ starts it */ }
+    let stream = null, stop = () => {};
+    const cap = v.captureStream || v.mozCaptureStream;
+    if (cap) {
+      try { stream = cap.call(v); } catch { stream = null; }
+    }
+    if (!stream) {
+      const c = document.createElement("canvas");
+      const k = Math.min(1, 1280 / (v.videoWidth || 1280));
+      c.width = Math.round((v.videoWidth || 1280) * k); c.height = Math.round((v.videoHeight || 720) * k);
+      const g = c.getContext("2d");
+      let raf = 0;
+      const draw = () => { try { g.drawImage(v, 0, 0, c.width, c.height); } catch { /* not yet */ } raf = requestAnimationFrame(draw); };
+      draw();
+      stream = c.captureStream(30);
+      let ac = null;
+      try {
+        ac = new (window.AudioContext || window.webkitAudioContext)();
+        const src = ac.createMediaElementSource(v), dest = ac.createMediaStreamDestination();
+        src.connect(dest); src.connect(ac.destination);
+        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+      } catch { /* picture only */ }
+      stop = () => { cancelAnimationFrame(raf); if (ac) ac.close().catch(() => {}); };
+    }
+    filmRef.current = { v, url, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), stop };
+    setFilm({ name: filmRef.current.name, v });
+    const go = () => {
+      if (!filmRef.current || filmRef.current.v !== v) return;
+      const vt = stream.getVideoTracks()[0];
+      if (!vt) { setTimeout(go, 200); return; }        // the player's tracks arrive once it has a frame
+      if (vt) { try { vt.contentHint = "motion"; } catch { /* fine */ } }
+      stream.getAudioTracks().forEach((t) => { try { t.contentHint = "music"; } catch { /* fine */ } });
+      screenRef.current = stream; setScreen(stream);
+      for (const P of pcs.current.values()) shareInto(P, stream);
+      tellMedia(micRef.current, camRef.current);
+      say("🎬 Everyone in the call can see and hear it. 🎧 headphones keep your mic from picking it up.");
+    };
+    go();
+  }, [stopShare, tellMedia, say, hideFilm]);
   const share = useCallback(async () => {
     if (screenRef.current) return stopShare();
     if (!canShareScreen()) {
@@ -895,14 +970,14 @@ export function CallProvider({ children }) {
     };
     const onDeclined = ({ callId, id }) => { const c = callRef.current; if (c && c.id === callId && c.members.length > 1) say(`${c.names[id] || "They"} can't join right now`); };
     const onMissed = ({ callId, id }) => { const c = callRef.current; if (c && c.id === callId && c.members.length > 1) say(`${c.names[id] || "They"} didn't answer`); };
-    const onMedia = ({ callId, id, mic: m, cam: k, screen: sid, hold, turn: tn }) => {
+    const onMedia = ({ callId, id, mic: m, cam: k, screen: sid, hold, turn: tn, film: fm }) => {
       if (!callRef.current || callRef.current.id !== callId) return;
       const S = streams.current.get(id);
       if (S) {
         if (S.screenId && S.screenId !== sid) S.all.delete(S.screenId);     // they stopped sharing
         S.screenId = sid || null;
       }
-      patchPeer(id, { mic: m, cam: k, hold: !!hold, turn: [90, -90, 180].includes(tn) ? tn : 0 });
+      patchPeer(id, { mic: m, cam: k, hold: !!hold, turn: [90, -90, 180].includes(tn) ? tn : 0, film: typeof fm === "string" ? fm : null });
       place(id);
     };
     // the socket came back: pick the call up where it was
@@ -969,9 +1044,9 @@ export function CallProvider({ children }) {
   const value = useMemo(() => ({
     call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn, mics, setMics, listMics, chooseMic,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
-    watch, watchFile, sendWatch, pickWatchFile, serverNow, say,
+    watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm,
   }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere, mics, listMics, chooseMic,
-    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say]);
+    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

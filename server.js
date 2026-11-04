@@ -37,7 +37,10 @@ const app = express();
 const PORT = process.env.PORT || 4321;
 
 // ── Security ──────────────────────────────────────────────────────────────────
-app.use(helmet({ contentSecurityPolicy: false }));
+// The referrer goes out as just our origin (the browser default): helmet's
+// "no-referrer" made YouTube refuse every embedded video ("YouTube couldn't
+// play this video") — it won't play for a page that doesn't say who it is.
+app.use(helmet({ contentSecurityPolicy: false, referrerPolicy: { policy: "strict-origin-when-cross-origin" } }));
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 // Policy lives in config/cors.js and is shared with the Socket.io hub.

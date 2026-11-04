@@ -7,7 +7,7 @@
 //   • someone sharing their screen: it takes the stage (⛶ for full screen,
 //     sideways on a phone), the cameras in a strip
 // The call itself lives in CallContext.
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallContext";
 import CallWatch from "./CallWatch";
 import { YtBrowse } from "./CallYouTube";
@@ -140,6 +140,25 @@ function useZoom(key) {
   handlers.onPointerCancel = handlers.onPointerUp;
   const style = z.s === 1 ? undefined : { transform: `translate(${z.x}px,${z.y}px) scale(${z.s})` };
   return { box, handlers, style, zoomed: z.s > 1, scale: z.s, reset: () => put({ s: 1, x: 0, y: 0 }) };
+}
+
+// My video, playing to the call: the player itself (CallContext made it and
+// streams it) is set into the stage, with its own controls; when the call
+// shrinks it goes back out of sight and keeps playing.
+function FilmStage({ film, hide }) {
+  const box = useRef(null);
+  useLayoutEffect(() => {
+    const el = box.current, v = film.v;
+    if (!el || !v) return undefined;
+    el.appendChild(v);
+    return () => hide(v);
+  }, [film, hide]);
+  return (
+    <div className="call-share cw-film">
+      <div className="cw-film-box" ref={box} />
+      <div className="call-share-tag">🎬 {film.name}</div>
+    </div>
+  );
 }
 
 const two = (n) => String(n).padStart(2, "0");
@@ -664,7 +683,7 @@ export default function CallLayer() {
       )}
 
       {call && expanded && (
-        <div className={`call-screen n${Math.max(1, seats)}${shown || watch ? " sharing" : ""}${chatOpen ? " chatting" : ""}`} role="dialog" aria-label="Call">
+        <div className={`call-screen n${Math.max(1, seats)}${shown || watch || C.film ? " sharing" : ""}${chatOpen ? " chatting" : ""}`} role="dialog" aria-label="Call">
           {call.phase === "outgoing" ? (
             <div className="call-stage">
               {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <Face avatar={avatarOf(call.first?.id)} big />}
@@ -673,6 +692,11 @@ export default function CallLayer() {
                 <div className="call-ring-sub">Calling…</div>
               </div>
             </div>
+          ) : C.film ? (
+            <>
+              <FilmStage film={C.film} hide={C.hideFilm} />
+              {strip}
+            </>
           ) : watch ? (
             <>
               <CallWatch C={C} names={call.names || {}} myId={C.myId} shareRef={shareRef} pseudo={pseudo} onBig={big} onPickYt={() => setYtOpen(true)} />
@@ -689,7 +713,7 @@ export default function CallLayer() {
                     {zoom.scale.toFixed(1)}× · 1×
                   </button>
                 )}
-                <div className="call-share-tag">🖥️ {sharer.name}'s screen</div>
+                <div className="call-share-tag">{peers[sharer.id].film ? `🎬 ${peers[sharer.id].film} · from ${sharer.name}` : `🖥️ ${sharer.name}'s screen`}</div>
                 <button type="button" className="call-big" onClick={big} aria-label="Full screen">⛶</button>
                 {/* full screen, the film fills the screen: the faces come with it, small, over the top corner — tap to tuck them away */}
                 {(full || pseudo) && (
@@ -792,7 +816,7 @@ export default function CallLayer() {
 
           {screen && (
             <div className="call-sharing" role="status">
-              🖥️ You're sharing your screen
+              {C.film ? "🎬 Everyone's watching your video" : "🖥️ You're sharing your screen"}
               <button type="button" className="press p-coral sm" onClick={C.share}>Stop</button>
             </div>
           )}
@@ -846,12 +870,12 @@ export default function CallLayer() {
                   <button type="button" className="press p-white sm" onClick={() => setShareMenu(false)} aria-label="Close">✕</button></div>
                 <label className="call-share-opt">
                   <span className="call-share-opt-icon">🎬</span>
-                  <span><b>{watch ? "Put on a different video" : "Watch a video together"}</b>
-                    <small>Everyone picks the same file: full quality, in sync</small></span>
-                  <input type="file" accept="video/*,.mkv,.mov,.mp4,.webm" hidden aria-label="Pick a video to watch together" onChange={async (e) => {
+                  <span><b>{C.film ? "Play a different video" : "Watch a video together"}</b>
+                    <small>Pick a video from your phone: everyone in the call sees and hears it</small></span>
+                  <input type="file" accept="video/*,.mkv,.mov,.mp4,.webm" hidden aria-label="Pick a video to watch together" onChange={(e) => {
                     const file = e.target.files && e.target.files[0]; e.target.value = "";
                     setShareMenu(false);
-                    if (file) { const r = await C.pickWatchFile(file, true); if (!r.ok) C.say && C.say("This phone can't play that file. Try an .mp4 copy."); }
+                    if (file) { if (watch) C.sendWatch({ op: "close" }); C.playFilm(file); }
                   }} />
                 </label>
                 <button type="button" className="call-share-opt" onClick={() => { setShareMenu(false); setYtOpen(true); }}>

@@ -11,7 +11,7 @@
 // ("wait"); once it moves, it says "go" and all carry on together.
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { posAt, steer, clockOf, sizeOf } from "../utils/watchSync";
-import { YtPlayer } from "./CallYouTube";
+import { YtPlayer, YtBrowse } from "./CallYouTube";
 
 const HOLD_MS = 1500;           // after my own tap, wait this long for the server before steering again
 const HIDE_MS = 3000;           // the controls fade while it plays
@@ -30,6 +30,7 @@ const FilePlayer = forwardRef(function FilePlayer({ url, onFail }, ref) {
     pause: () => v.current && v.current.pause(),
     seek: (t) => { if (v.current) v.current.currentTime = t; },
     rate: (r) => { if (v.current && v.current.playbackRate !== r) v.current.playbackRate = r; },
+    busy: () => false,
     fine: true,
   }), []);
   return <video ref={v} className="call-fit" src={url} playsInline preload="auto" onError={() => onFail("This phone can't play that file.")} />;
@@ -60,6 +61,12 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
       if (!p || !p.ok()) return;
       const W = C.watch, now = p.time(), at = Date.now(), S = seen.current;
       setT(now);
+      // a jump made with YouTube's own bar (not ours, not an ad standing still)
+      if (yt && S.pt != null && !p.busy() && !W.hold && Math.abs(now - S.pt) > 1) {
+        const expect = S.pt + (p.state() === 1 ? (at - S.pat) / 1000 : 0);
+        if (Math.abs(now - expect) > 2.5) { S.pt = now; S.pat = at; S.t = now; S.stillSince = at; mineRef.current("seek", now); return; }
+      }
+      S.pt = now; S.pat = at;
       const moved = Math.abs(now - S.t) > 0.15;
       if (moved || S.t < 0) { S.t = now; S.stillSince = at; }
       const still = at - S.stillSince;
@@ -67,6 +74,8 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
       // plays out; a tap may be needed), and once it moves, carry on
       if (W.hold === myId) {
         if (p.paused()) p.play().catch(() => setNeedTap(true));
+        if (yt && still > 1200 && [-1, 2, 5].includes(p.state())) setNeedTap(true);
+        if (!p.paused()) setNeedTap(false);
         if (moved && p.state() === 1) C.sendWatch({ op: "go", pos: now });
         return;
       }
@@ -105,10 +114,20 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
   };
   useEffect(() => { poke(); return () => clearTimeout(hideT.current); }, [w.playing]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // YouTube's own play and pause buttons: for everyone
+  const onYtState = (st) => {
+    const p = player.current, W = C.watch;
+    if (!p || !W || !p.ok() || p.busy() || W.hold) return;
+    if (st === 1 && !W.playing) mine("play", p.time());
+    else if (st === 2 && W.playing) mine("pause", p.time());
+  };
+  const mineRef = useRef(null);
+  const putOn = (v) => C.sendWatch({ op: "open", src: { kind: "yt", id: v.id, title: v.title, ch: v.ch, dur: v.dur } });
   const mine = (op, pos) => {
     hold.current = { until: Date.now() + HOLD_MS, rev: C.watch.rev };
     C.sendWatch({ op, pos });
   };
+  mineRef.current = mine;
   const toggle = () => {
     const p = player.current;
     if (!p) return;
@@ -139,8 +158,28 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
   // YouTube's own buttons (Skip ad) must be tappable while it's me it shows an ad to
   const coverYt = yt && w.hold !== myId;
 
+  if (yt) {
+    return (
+      <div className={`call-share cw cw-yt${pseudo ? " pfull" : ""}`} ref={shareRef}>
+        <div className="cw-yt-top">
+          <span className="cw-name">▶️ {w.src.name}{w.src.ch ? <small> · {w.src.ch}</small> : null}</span>
+          <button type="button" className="cw-x" onClick={() => C.sendWatch({ op: "close" })} aria-label="Stop the video for everyone">✕</button>
+        </div>
+        <div className="cw-yt-player">
+          {bad ? <div className="cw-yt-bad">{bad}<small>Pick another video below.</small></div>
+            : <YtPlayer ref={player} id={w.src.id} onFail={setBad} onState={onYtState} />}
+          {/* a phone only lets YouTube start after a tap on YouTube's own ▶ — so ask for that, without covering it */}
+          {needTap && !bad && !waitingOn && <div className="cw-wait cw-hint" role="status">👆 Tap ▶ on the video to join in</div>}
+          {waitingOn && <div className="cw-wait">⏳ Waiting for {waitingOn}… <button type="button" onClick={() => mine("play", player.current ? player.current.time() : w.pos)}>Play anyway</button></div>}
+          {w.hold === myId && !needTap && <div className="cw-wait">⏳ The others are waiting for you</div>}
+        </div>
+        <YtBrowse docked playing={w.src.id} onPick={putOn} />
+      </div>
+    );
+  }
+
   return (
-    <div className={`call-share cw${yt ? " cw-yt" : ""}${pseudo ? " pfull" : ""}`} ref={shareRef}>
+    <div className={`call-share cw${pseudo ? " pfull" : ""}`} ref={shareRef}>
       {playable ? (
         <>
           {yt ? <YtPlayer ref={player} id={w.src.id} onFail={setBad} onState={() => {}} />

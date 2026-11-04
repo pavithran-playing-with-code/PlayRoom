@@ -68,6 +68,45 @@ async function peakOf(track, ms) {
     return peak;
   } catch { return null; } finally { if (ac) ac.close().catch(() => {}); }
 }
+// A computer's webcam can whine into its own microphone: on one laptop, the
+// moment the camera came on the mic picked up a steady 8 kHz tone (and 16 kHz),
+// 22 dB over the room — the "insect" friends heard, there in the mic's sound
+// before anything was sent. So on a computer the mic is cut above a voice's
+// range first (a steep low-pass, and a notch on the whine).
+// Phones don't get it (no such whine, and a phone's audio is touchier). If
+// sound can't run yet, the mic goes as it is.
+const DESKTOP = typeof navigator !== "undefined" && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+async function cleanMic(raw) {
+  if (!raw || !DESKTOP || raw.__raw) return raw;
+  let ac;
+  try {
+    ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+    if (ac.state !== "running") await Promise.race([ac.resume(), new Promise((r) => setTimeout(r, 500))]).catch(() => {});
+    if (ac.state !== "running") { ac.close().catch(() => {}); return raw; }
+    let node = ac.createMediaStreamSource(new MediaStream([raw]));
+    // a voice up to 6.5 kHz (clearer than a phone call), everything above
+    // cut steeply, and a deep notch on the whine itself (it wanders ±500 Hz)
+    for (const [type, hz, q] of [["lowpass", 6500, 0.54], ["lowpass", 6500, 1.31], ["notch", 8000, 4]]) {
+      const f = ac.createBiquadFilter();
+      f.type = type; f.frequency.value = hz; f.Q.value = q;
+      node.connect(f); node = f;
+    }
+    const dest = ac.createMediaStreamDestination();
+    dest.channelCount = 1;
+    node.connect(dest);
+    const out = dest.stream.getAudioTracks()[0];
+    try { out.contentHint = "speech"; } catch { /* fine */ }
+    out.__raw = raw;
+    const end = out.stop.bind(out);
+    out.stop = () => { end(); raw.stop(); ac.close().catch(() => {}); };
+    return out;
+  } catch {
+    if (ac) ac.close().catch(() => {});
+    return raw;
+  }
+}
+const micId = (t) => { const r = (t && t.__raw) || t; return r && r.getSettings ? r.getSettings().deviceId : null; };
+
 const video = (facing) => ({ facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } });
 // a screen: full HD, smooth, and its sound left alone (no echo or noise
 // cancelling — that would eat the music)
@@ -270,6 +309,8 @@ export function CallProvider({ children }) {
       try { s = await navigator.mediaDevices.getUserMedia({ audio: AUDIO }); }
       catch { throw new Error(e && e.name === "NotAllowedError" ? "Allow the microphone (and camera) to call." : "Couldn't open the microphone."); }
     }
+    const raw = s.getAudioTracks()[0], clean = await cleanMic(raw);
+    if (clean !== raw) { s.removeTrack(raw); s.addTrack(clean); }
     localRef.current = s;
     setLocal(s); setMic(true); setCam(s.getVideoTracks().length > 0); setFacing("user");
     return s;
@@ -642,8 +683,9 @@ export function CallProvider({ children }) {
     try {
       const want = { audio: dead.some((t) => t.kind === "audio") ? AUDIO : false, video: dead.some((t) => t.kind === "video") ? video(facing) : false };
       const fresh = await navigator.mediaDevices.getUserMedia(want);
-      for (const t of fresh.getTracks()) {
+      for (let t of fresh.getTracks()) {
         const old = dead.find((d) => d.kind === t.kind);
+        if (old && t.kind === "audio") t = await cleanMic(t);
         if (!old) { t.stop(); continue; }
         t.enabled = t.kind === "audio" ? micRef.current : camRef.current;
         s.removeTrack(old); s.addTrack(t);
@@ -702,14 +744,14 @@ export function CallProvider({ children }) {
     try {
       const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
       const cur = localRef.current && localRef.current.getAudioTracks()[0];
-      const curId = cur && cur.getSettings ? cur.getSettings().deviceId : null;
+      const curId = micId(cur);
       setMics(all.map((d, i) => ({ id: d.deviceId, label: d.label || `Microphone ${i + 1}`, on: d.deviceId === curId })));
     } catch { setMics([]); }
   }, []);
   const chooseMic = useCallback(async (id) => {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: { ...AUDIO, deviceId: { exact: id } } });
-      await swapMic(s.getAudioTracks()[0]);
+      await swapMic(await cleanMic(s.getAudioTracks()[0]));
       setMics(null);
       say("Microphone changed");
     } catch { say("Couldn't open that microphone"); }
@@ -735,7 +777,7 @@ export function CallProvider({ children }) {
         tried.current.add(t.id);
         let all = [];
         try { all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput"); } catch { /* none listed */ }
-        const curId = t.getSettings ? t.getSettings().deviceId : null;
+        const curId = micId(t);
         const order = [...all.filter((d) => d.deviceId === "communications"), ...all.filter((d) => d.deviceId !== "communications" && d.deviceId !== "default")]
           .filter((d) => d.deviceId && d.deviceId !== curId);
         for (const d of order) {
@@ -744,7 +786,7 @@ export function CallProvider({ children }) {
           try { fresh = (await navigator.mediaDevices.getUserMedia({ audio: { ...AUDIO, deviceId: { exact: d.deviceId } } })).getAudioTracks()[0]; } catch { continue; }
           const p2 = await peakOf(fresh, 1500);
           if (p2 != null && p2 >= MIC_SILENT && !stop) {
-            await swapMic(fresh);
+            await swapMic(await cleanMic(fresh));
             say(`Your microphone wasn't sending any sound — switched to ${d.label || "another microphone"}`);
             return;
           }

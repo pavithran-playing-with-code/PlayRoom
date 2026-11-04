@@ -362,7 +362,10 @@ There is no test runner. What works:
   decoded frames) and shows their face, not black. Sound goes first:
   audio senders have high priority, every Opus slot gets stereo + in-band
   FEC, and the mic asks for one channel (not voice isolation: it could
-  silence some laptops). A mic that sends digital silence (a laptop's
+  silence some laptops). On a computer the mic goes through `cleanMic`
+  first (a 6.5 kHz low-pass and an 8 kHz notch): a laptop's webcam whined
+  into its own mic at 8 kHz the moment it came on — the "insect" friends
+  heard — measured in the mic's own track, so not the network. A mic that sends digital silence (a laptop's
   "Default" being an empty socket or Stereo Mix — friends hear nothing,
   you hear them) is caught by measuring it (`peakOf`): the other mics are
   tried, "communications" first, the first that hears anything swapped in

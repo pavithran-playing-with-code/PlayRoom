@@ -18,7 +18,7 @@ const HIDE_MS = 3000;           // the controls fade while it plays
 const STUCK_MS = 2500;          // meant to be playing and hasn't moved for this long: ask everyone to wait
 const WAIT_GAP_MS = 6000;       // and not more often than this
 const MAX_WAITS = 2;            // a player that asked twice and still lags just catches up by jumping
-const JUMP_GAP_YT_MS = 8000;    // YouTube, after a jump, gets this long to load before another
+const JUMP_GAP_YT_MS = 3000;    // YouTube, after a jump, gets this long to load before another
 const SILENT_MS = 1500;         // YouTube that won't start (no tap yet) starts silent after this
 
 // A file's <video>, with the same handful of controls as YouTube's player.
@@ -104,7 +104,10 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
       if (wantPlay && p.paused()) {
         p.play().then(() => setNeedTap(false)).catch(() => setNeedTap(true));
         if (yt && still > 1200 && [-1, 2, 5].includes(p.state())) setNeedTap(true);
-      } else if (!W.playing && !p.paused()) p.pause();
+      } else if (!W.playing && !p.paused() && !(yt && p.state() === 3 && !p.busy())) p.pause();
+      // (YouTube loading by itself is someone's tap on its ▶, about to play:
+      // pausing it there cancelled every tap — a black player, and nothing
+      // sent to the others. Once it plays, onYtState tells everyone.)
       if (!p.paused()) setNeedTap(false);
       // meant to be playing, not moving: hold everyone till I catch up
       if (wantPlay && !W.hold && still > STUCK_MS && at - S.waited > WAIT_GAP_MS && p.state() !== 0 && (S.waits || 0) < MAX_WAITS) {

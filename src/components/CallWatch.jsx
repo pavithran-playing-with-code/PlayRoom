@@ -18,6 +18,7 @@ const HIDE_MS = 3000;           // the controls fade while it plays
 const STUCK_MS = 2500;          // meant to be playing and hasn't moved for this long: ask everyone to wait
 const WAIT_GAP_MS = 6000;       // and not more often than this
 const MAX_WAITS = 2;            // a player that asked twice and still lags just catches up by jumping
+const JUMP_GAP_YT_MS = 8000;    // YouTube, after a jump, gets this long to load before another
 const SILENT_MS = 1500;         // YouTube that won't start (no tap yet) starts silent after this
 
 // A file's <video>, with the same handful of controls as YouTube's player.
@@ -115,7 +116,13 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
       // (a jump that doesn't take — YouTube showing an ad ignores it — isn't
       // tried again at once, and doesn't count as moving: that's how a stuck
       // player is noticed)
-      if (seek != null && (still < 1000 || at - (S.jumped || 0) > 2000)) { S.jumped = at; p.seek(seek); }
+      // YouTube is only jumped while it's actually playing or paused, and not
+      // again for a while: a jump while it loads starts the loading over, and
+      // on a slow link that was a black player for good
+      const loading = yt && [-1, 3, 5].includes(p.state());
+      const since = at - (S.jumped || 0);
+      const may = yt ? !loading && since > JUMP_GAP_YT_MS : still < 1000 || since > 2000;
+      if (seek != null && may) { S.jumped = at; p.seek(seek); }
       p.rate(rate);
     };
     tick();

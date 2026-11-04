@@ -63,7 +63,7 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
       setT(now);
       // a jump made with YouTube's own bar (not ours, not an ad standing still)
       if (yt && S.pt != null && !p.busy() && !W.hold && Math.abs(now - S.pt) > 1) {
-        const expect = S.pt + (p.state() === 1 ? (at - S.pat) / 1000 : 0);
+        const expect = S.pt + (p.state() === 1 ? ((at - S.pat) / 1000) * (W.rate || 1) : 0);
         if (Math.abs(now - expect) > 2.5) { S.pt = now; S.pat = at; S.t = now; S.stillSince = at; mineRef.current("seek", now); return; }
       }
       S.pt = now; S.pat = at;
@@ -80,6 +80,7 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
         return;
       }
       if (Date.now() < hold.current.until && W.rev <= hold.current.rev) return;
+      if (yt && !p.busy() && p.speed() !== (W.rate || 1)) p.setSpeed(W.rate || 1);   // the speed everyone's at
       const target = posAt(W, C.serverNow());
       const wantPlay = W.playing && target < W.src.dur - 0.3;
       if (!wantPlay) S.stillSince = at;                  // standing still is only "stuck" while it should play
@@ -122,6 +123,13 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
     else if (st === 2 && W.playing) mine("pause", p.time());
   };
   const mineRef = useRef(null);
+  // YouTube's ⚙️ speed: for everyone
+  const onYtRate = (r) => {
+    const p = player.current, W = C.watch;
+    if (!p || !W || p.busy() || r === (W.rate || 1)) return;
+    hold.current = { until: Date.now() + HOLD_MS, rev: W.rev };
+    C.sendWatch({ op: "rate", rate: r, pos: p.time() });
+  };
   const putOn = (v) => C.sendWatch({ op: "open", src: { kind: "yt", id: v.id, title: v.title, ch: v.ch, dur: v.dur } });
   const mine = (op, pos) => {
     hold.current = { until: Date.now() + HOLD_MS, rev: C.watch.rev };
@@ -167,7 +175,7 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
         </div>
         <div className="cw-yt-player">
           {bad ? <div className="cw-yt-bad">{bad}<small>Pick another video below.</small></div>
-            : <YtPlayer ref={player} id={w.src.id} onFail={setBad} onState={onYtState} />}
+            : <YtPlayer ref={player} id={w.src.id} onFail={setBad} onState={onYtState} onRate={onYtRate} />}
           {/* a phone only lets YouTube start after a tap on YouTube's own ▶ — so ask for that, without covering it */}
           {needTap && !bad && !waitingOn && <div className="cw-wait cw-hint" role="status">👆 Tap ▶ on the video to join in</div>}
           {waitingOn && <div className="cw-wait">⏳ Waiting for {waitingOn}… <button type="button" onClick={() => mine("play", player.current ? player.current.time() : w.pos)}>Play anyway</button></div>}

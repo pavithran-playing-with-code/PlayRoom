@@ -33,10 +33,12 @@ function cleanSrc(s) {
   return null;
 }
 
-// Where the video is at `now` (server ms).
+const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];   // YouTube's speeds
+
+// Where the video is at `now` (server ms), at its speed.
 function posAt(w, now) {
   if (!w) return 0;
-  const p = w.playing ? w.pos + (now - w.at) / 1000 : w.pos;
+  const p = w.playing ? w.pos + ((now - w.at) / 1000) * (w.rate || 1) : w.pos;
   return Math.max(0, Math.min(w.src.dur, p));
 }
 
@@ -61,10 +63,12 @@ function step(w, msg, uid, now) {
     case "seek": return { ...w, pos: at(msg.pos), at: now, rev: w.rev + 1, hold: null };
     case "wait": return w.playing && !w.hold ? { ...w, playing: false, pos: at(msg.pos), at: now, rev: w.rev + 1, hold: uid } : undefined;
     case "go": return w.hold === uid ? { ...w, playing: true, pos: at(msg.pos), at: now, rev: w.rev + 1, hold: null } : undefined;
+    case "rate": return RATES.includes(Number(msg.rate)) && Number(msg.rate) !== (w.rate || 1)
+      ? { ...w, pos: at(msg.pos), at: now, rate: Number(msg.rate), rev: w.rev + 1 } : undefined;
     case "ready": return w.ready.includes(uid) ? undefined : { ...w, ready: [...w.ready, uid], rev: w.rev + 1 };
     case "close": return null;
     default: return undefined;
   }
 }
 
-module.exports = { cleanSrc, posAt, step };
+module.exports = { cleanSrc, posAt, step, RATES };

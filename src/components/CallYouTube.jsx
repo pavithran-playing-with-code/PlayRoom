@@ -31,12 +31,12 @@ function loadYt() {
 // now is ours, not the viewer's.
 const WHY = { 2: "That video link isn't valid.", 5: "This phone's player couldn't play it.", 100: "That video was removed or made private.",
   101: "The owner doesn't let this video play outside YouTube.", 150: "The owner doesn't let this video play outside YouTube." };
-export const YtPlayer = forwardRef(function YtPlayer({ id, onState, onFail }, ref) {
+export const YtPlayer = forwardRef(function YtPlayer({ id, onState, onFail, onRate }, ref) {
   const box = useRef(null);
   const p = useRef(null);
   const ready = useRef(false);
   const cmd = useRef(0);
-  const cb = useRef({ onState, onFail }); cb.current = { onState, onFail };
+  const cb = useRef({ onState, onFail, onRate }); cb.current = { onState, onFail, onRate };
   const did = () => { cmd.current = Date.now(); };
   useImperativeHandle(ref, () => ({
     ok: () => ready.current,
@@ -47,6 +47,8 @@ export const YtPlayer = forwardRef(function YtPlayer({ id, onState, onFail }, re
     pause: () => { if (ready.current) { did(); p.current.pauseVideo(); } },
     seek: (t) => { if (ready.current) { did(); p.current.seekTo(t, true); } },
     rate: () => {},
+    speed: () => (ready.current ? p.current.getPlaybackRate() || 1 : 1),
+    setSpeed: (r) => { if (ready.current) { did(); p.current.setPlaybackRate(r); } },
     busy: () => Date.now() - cmd.current < 1500,
     fine: false,
   }), []);
@@ -65,6 +67,7 @@ export const YtPlayer = forwardRef(function YtPlayer({ id, onState, onFail }, re
         events: {
           onReady: () => { ready.current = true; cb.current.onState && cb.current.onState(5); },
           onStateChange: (e) => cb.current.onState && cb.current.onState(e.data),
+          onPlaybackRateChange: (e) => cb.current.onRate && cb.current.onRate(e.data),
           onError: (e) => cb.current.onFail && cb.current.onFail(`${WHY[e.data] || "YouTube couldn't play this video."} (YouTube error ${e.data})`),
         },
       });

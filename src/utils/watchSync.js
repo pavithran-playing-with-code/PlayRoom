@@ -7,7 +7,7 @@
 // Where the video is at `now` (server ms).
 export function posAt(w, now) {
   if (!w) return 0;
-  const p = w.playing ? w.pos + (now - w.at) / 1000 : w.pos;
+  const p = w.playing ? w.pos + ((now - w.at) / 1000) * (w.rate || 1) : w.pos;
   return Math.max(0, Math.min(w.src.dur, p));
 }
 

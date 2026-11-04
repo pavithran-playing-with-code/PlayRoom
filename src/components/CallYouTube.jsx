@@ -49,6 +49,10 @@ export const YtPlayer = forwardRef(function YtPlayer({ id, onState, onFail, onRa
     rate: () => {},
     speed: () => (ready.current ? p.current.getPlaybackRate() || 1 : 1),
     setSpeed: (r) => { if (ready.current) { did(); p.current.setPlaybackRate(r); } },
+    // a phone that won't start it with sound still starts it silent
+    mute: () => { if (ready.current) p.current.mute(); },
+    unMute: () => { if (ready.current) { p.current.unMute(); p.current.setVolume(100); } },
+    muted: () => (ready.current ? p.current.isMuted() : false),
     busy: () => Date.now() - cmd.current < 1500,
     fine: false,
   }), []);

@@ -17,6 +17,8 @@ const HOLD_MS = 1500;           // after my own tap, wait this long for the serv
 const HIDE_MS = 3000;           // the controls fade while it plays
 const STUCK_MS = 2500;          // meant to be playing and hasn't moved for this long: ask everyone to wait
 const WAIT_GAP_MS = 6000;       // and not more often than this
+const MAX_WAITS = 2;            // a player that asked twice and still lags just catches up by jumping
+const SILENT_MS = 1500;         // YouTube that won't start (no tap yet) starts silent after this
 
 // A file's <video>, with the same handful of controls as YouTube's player.
 const FilePlayer = forwardRef(function FilePlayer({ url, onFail }, ref) {
@@ -42,6 +44,7 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
   const [anyway, setAnyway] = useState(false);     // a different file, watched anyway
   const [bad, setBad] = useState("");              // this phone can't play it
   const [needTap, setNeedTap] = useState(false);   // the phone wants a tap before it plays
+  const [silent, setSilent] = useState(false);     // YouTube started muted (the phone wouldn't with sound)
   const [shown, setShown] = useState(true);        // the controls
   const [drag, setDrag] = useState(null);          // the seek bar, while a finger's on it
   const [t, setT] = useState(0);
@@ -51,7 +54,10 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
   const same = yt || (!!f && f.size === w.src.size);
   const fileUrl = f ? f.url : null;
   const playable = (yt || (!!f && (same || anyway))) && !bad;
-  useEffect(() => { setAnyway(false); setBad(""); setNeedTap(false); }, [w.src.size, w.src.id, fileUrl]);
+  useEffect(() => {
+    setAnyway(false); setBad(""); setNeedTap(false); setSilent(false);
+    Object.assign(seen.current, { waits: 0, wantSince: 0, mutedOnce: false, soundAsked: false });
+  }, [w.src.size, w.src.id, fileUrl]);
 
   // steer my player to everyone's, now and every moment
   useEffect(() => {
@@ -70,6 +76,16 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
       const moved = Math.abs(now - S.t) > 0.15;
       if (moved || S.t < 0) { S.t = now; S.stillSince = at; }
       const still = at - S.stillSince;
+      // A phone won't let YouTube start with sound until someone taps the
+      // video itself — so it starts silent (always allowed) and in step, and
+      // a button offers the sound. Before, it sat there, everyone waited.
+      const shouldPlay = W.hold === myId || (W.playing && posAt(W, C.serverNow()) < W.src.dur - 0.3);
+      if (!(shouldPlay && p.paused())) S.wantSince = 0;
+      else if (!S.wantSince) S.wantSince = at;
+      if (yt && shouldPlay && p.paused() && S.wantSince && at - S.wantSince > SILENT_MS && !S.mutedOnce && !S.soundAsked) {
+        S.mutedOnce = true; p.mute(); p.play(); setSilent(true); setNeedTap(false);
+      }
+      if (silent && yt && !p.muted()) setSilent(false);
       // I'm the one everyone's waiting for: keep my player going (an ad
       // plays out; a tap may be needed), and once it moves, carry on
       if (W.hold === myId) {
@@ -90,8 +106,8 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
       } else if (!W.playing && !p.paused()) p.pause();
       if (!p.paused()) setNeedTap(false);
       // meant to be playing, not moving: hold everyone till I catch up
-      if (wantPlay && !W.hold && still > STUCK_MS && at - S.waited > WAIT_GAP_MS && p.state() !== 0) {
-        S.waited = at;
+      if (wantPlay && !W.hold && still > STUCK_MS && at - S.waited > WAIT_GAP_MS && p.state() !== 0 && (S.waits || 0) < MAX_WAITS) {
+        S.waited = at; S.waits = (S.waits || 0) + 1;
         C.sendWatch({ op: "wait", pos: now });
         return;
       }
@@ -105,7 +121,7 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
     tick();
     const id = setInterval(tick, 400);
     return () => clearInterval(id);
-  }, [playable, w, C, myId, yt]);
+  }, [playable, w, C, myId, yt, silent]);
 
   // the controls fade while it plays; a tap brings them back
   const poke = () => {
@@ -136,6 +152,13 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
     C.sendWatch({ op, pos });
   };
   mineRef.current = mine;
+  const sound = () => {
+    const p = player.current;
+    if (!p) return;
+    seen.current.soundAsked = true;
+    p.unMute(); p.play();
+    setSilent(false);
+  };
   const toggle = () => {
     const p = player.current;
     if (!p) return;
@@ -177,7 +200,8 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
           {bad ? <div className="cw-yt-bad">{bad}<small>Pick another video below.</small></div>
             : <YtPlayer ref={player} id={w.src.id} onFail={setBad} onState={onYtState} onRate={onYtRate} />}
           {/* a phone only lets YouTube start after a tap on YouTube's own ▶ — so ask for that, without covering it */}
-          {needTap && !bad && !waitingOn && <div className="cw-wait cw-hint" role="status">👆 Tap ▶ on the video to join in</div>}
+          {needTap && !bad && !waitingOn && !silent && <div className="cw-wait cw-hint" role="status">👆 Tap ▶ on the video to join in</div>}
+          {silent && !bad && !waitingOn && <button type="button" className="cw-wait cw-sound" onClick={sound}>🔇 Tap for sound</button>}
           {waitingOn && <div className="cw-wait">⏳ Waiting for {waitingOn}… <button type="button" onClick={() => mine("play", player.current ? player.current.time() : w.pos)}>Play anyway</button></div>}
           {w.hold === myId && !needTap && <div className="cw-wait">⏳ The others are waiting for you</div>}
         </div>

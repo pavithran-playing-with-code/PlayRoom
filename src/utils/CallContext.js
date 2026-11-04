@@ -139,6 +139,25 @@ function makeTones() {
 // sharing again fills the same two. Adding fresh ones each time made every
 // offer bigger — a second share's no longer fit the server's limit, and
 // never arrived.
+// A film's picture goes as H.264 where this phone can make it: phones have a
+// chip for it, so a 1080p film stays 1080p. In VP8 (the default) the phone
+// encodes in software, can't keep up, and the browser shrinks the picture —
+// the soft, blurry film friends saw. Only a phone that lists H.264 (it has the
+// chip) asks for it; the others keep the default.
+function preferH264(tx) {
+  try {
+    if (!tx.setCodecPreferences || !window.RTCRtpReceiver?.getCapabilities || !window.RTCRtpSender?.getCapabilities) return;
+    const sends = (RTCRtpSender.getCapabilities("video")?.codecs || []).some((c) => /h264/i.test(c.mimeType));
+    const all = RTCRtpReceiver.getCapabilities("video")?.codecs || [];
+    if (!sends || !all.some((c) => /h264/i.test(c.mimeType))) return;
+    const h = all.filter((c) => /h264/i.test(c.mimeType));
+    // the high-quality profiles first (profile-level-id 64… high, 4d… main)
+    const rank = (c) => (/profile-level-id=64/i.test(c.sdpFmtpLine || "") ? 0 : /profile-level-id=4d/i.test(c.sdpFmtpLine || "") ? 1 : 2);
+    h.sort((a, b) => rank(a) - rank(b));
+    tx.setCodecPreferences([...h, ...all.filter((c) => !/h264/i.test(c.mimeType))]);
+  } catch { /* the default, then */ }
+}
+
 function shareInto(P, scr) {
   if (!P.screenTx) P.screenTx = [];
   for (const t of scr.getTracks()) {
@@ -156,7 +175,7 @@ function shareInto(P, scr) {
     try {
       const snd = P.pc.addTrack(t, scr);
       const fresh = P.pc.getTransceivers().find((x) => x.sender === snd);
-      if (fresh) P.screenTx.push(fresh);
+      if (fresh) { if (t.kind === "video") preferH264(fresh); P.screenTx.push(fresh); }
     } catch { /* closed */ }
   }
 }
@@ -283,16 +302,17 @@ export function CallProvider({ children }) {
           // watching each copy is smaller — or the sharer's computer can't
           // keep up (1080p for one, ~900p for two, ~720p for three)
           // A friend on a weak link (a phone on mobile data) gets a lighter
-          // copy, ~540p: a film that keeps moving, not a sharp one that freezes.
+          // copy, ~720p: a film that keeps moving, not a sharp one that freezes.
           // Never above 1080p (a phone can't send 4K live): a taller source
           // is sized down to it first.
           const weak = P && P.weak;
           const tall = (s.track.getSettings && s.track.getSettings().height) || 1080;
           const fit = Math.max(1, tall / 1080);
-          p.encodings[0].maxBitrate = weak ? 900000 : n === 1 ? 6000000 : n === 2 ? 4500000 : 3000000;
-          p.encodings[0].scaleResolutionDownBy = fit * (weak ? 2 : n === 1 ? 1 : n === 2 ? 1.2 : 1.5);
+          p.encodings[0].maxBitrate = weak ? 1500000 : n === 1 ? 6000000 : n === 2 ? 4500000 : 3000000;
+          p.encodings[0].scaleResolutionDownBy = fit * (weak ? 1.5 : n === 1 ? 1 : n === 2 ? 1.2 : 1.5);
           p.encodings[0].maxFramerate = 30;
-          p.degradationPreference = "maintain-framerate";
+          // squeezed, give up a little of each — not all the sharpness
+          p.degradationPreference = "balanced";
         } else if (isScreen) p.encodings[0].maxBitrate = 160000;
         else if (s.track.kind === "video") {
           // A phone encodes my camera once for every friend, so with more of

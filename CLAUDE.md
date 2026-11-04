@@ -310,14 +310,16 @@ There is no test runner. What works:
   your phone plays on it (`playFilm`, its own controls, `FilmStage`) and
   goes to everyone as your shared screen, so they need nothing: the
   player's `captureStream()`, or on an iPhone a canvas plus Web Audio;
-  `call:media` carries its name (`film`). (It first required everyone to
+  `call:media` carries its name (`film`); its picture slot
+  prefers H.264 (`preferH264`: a phone's chip, so 1080p stays 1080p). (It first required everyone to
   pick the same file and only synced play/pause — nobody expected that, so
   it was dropped; that sync engine, `config/callWatch.js` `call:watch`,
   `watchSync.js`, now serves YouTube.) Or **YouTube together**:
   browse trending / shelves / search (`routes/youtube.js`, the key
   `YOUTUBE_API_KEY` only on the server, answers cached, 40 searches an hour
   each) and everyone's own YouTube player (`CallYouTube.jsx`, jumps only:
-  it takes no fine rates). A player that should play and doesn't move (an
+  it takes no fine rates; a phone that won't start it with sound
+  before a tap starts it muted, in step, with 🔇 Tap for sound). A player that should play and doesn't move (an
   ad, loading, a tap needed) asks everyone to `wait`; it says `go` once it
   moves. Ads are YouTube's, per person: never block or strip them (its
   embed terms). `check-watch.mjs` tests the rules, `check-youtube.js` the

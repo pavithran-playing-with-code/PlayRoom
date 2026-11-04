@@ -1798,6 +1798,7 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
   color:#e6dcc4;background:rgba(6,6,12,.72);border:1px solid rgba(106,96,76,.6);text-shadow:0 1px 6px #000;pointer-events:none}
 /* a spectator: whose game this is */
 .hh-watching{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);z-index:6;font-style:italic;letter-spacing:.1em;color:#e6dcc4;opacity:.75;text-shadow:0 1px 6px #000;pointer-events:none}
+.cw-wait.cw-sound{cursor:pointer;background:var(--sun);color:var(--ink);border-color:var(--ink);font:900 14px Nunito,system-ui,sans-serif}
 .cw-wait.cw-hint{pointer-events:none;background:var(--sun);color:var(--ink);border-color:var(--ink)}
 /* a video of mine playing to the call (FilmStage): its own controls; out of sight but playing when the call shrinks */
 .cw-film-box{position:absolute;inset:0}

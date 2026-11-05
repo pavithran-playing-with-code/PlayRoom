@@ -4,9 +4,13 @@ import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { shelve } from "../components/games/shelves";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
+import { usePresence } from "../utils/PresenceContext";
+import { useCall } from "../utils/CallContext";
+import { presenceLabel } from "../utils/timeAgo";
+import { readLastPlay, saveLastPlay } from "../utils/lastPlay";
 import { GAME_MAP } from "../components/games/registry";
 import useGames from "../components/games/useGames";
-import { useToast } from "../components/ui";
+import { useToast, Avatar } from "../components/ui";
 import GameIcon from "../components/games/GameIcon";
 import { SONGS, LEVELS } from "../components/games/pianoSongs";
 import HowTo from "../components/games/HowTo";
@@ -23,18 +27,24 @@ const DURATIONS = [
   { s: 0, label: "♾️", name: "Unlimited" },        // the icon alone: the word didn't fit a phone's button
 ];
 const lengthText = (secs) => (secs === 0 ? "no time limit" : `${Math.round(secs / 60)} min`);
+const shortLen = (secs) => (secs === 0 ? "♾️" : `${Math.round(secs / 60)} min`);
 
-// The Play tab. Games on shelves you swipe sideways; tap one and its settings
-// slide up from the bottom with Start pinned under your thumb — no scrolling
-// past every option to find it. Joining someone else's room is /rooms.
+// The Play tab: friends online at the top (tap one to invite them into
+// whatever you pick), your last match one tap away, then every game as an
+// icon tile, in its group, with a search. Tapping a game slides
+// its settings up from the bottom with Start pinned under your thumb.
+// Joining someone else's room is /rooms.
 export default function Lobby() {
   const { user } = useAuth();
+  const { friends } = usePresence();
+  const { call: onCall, startCall } = useCall();
   const navigate = useNavigate();
   const toast = useToast();
+  const last = useRef(readLastPlay()).current;
 
   // The open game lives in the URL (?game=arrows): a game card on the home
-  // page opens its sheet straight away, a refresh keeps it, and Back closes
-  // it. Games in the database's order (game_types.sort_order).
+  // page opens its sheet straight away, a refresh keeps
+  // it, and Back closes it. Games in the database's order.
   const GAMES = useGames();
   const [params, setParams] = useSearchParams();
   const sheetOpen = !!GAME_MAP[params.get("game")];
@@ -49,14 +59,21 @@ export default function Lobby() {
   };
 
   const [onlyTogether, setOnlyTogether] = useState(false);
-  const [maxPlayers, setMaxPlayers] = useState(2);
-  const [duration, setDuration] = useState(120);
-  const [isPrivate, setIsPrivate] = useState(false);
+  const [query, setQuery] = useState("");
+  // Your last settings come back with you.
+  const [maxPlayers, setMaxPlayers] = useState(last?.maxPlayers || 2);
+  const [duration, setDuration] = useState(last?.duration ?? 120);
+  const [isPrivate, setIsPrivate] = useState(!!last?.isPrivate);
   const [teamMode, setTeamMode] = useState(false);
   const [coopMode, setCoopMode] = useState(false);
   const [song, setSong] = useState(0);             // Piano Tiles: which song
   const [creating, setCreating] = useState(false);
   const [openRooms, setOpenRooms] = useState(0);
+  // A friend tapped in the strip: whatever you start next, they're invited.
+  const [invitee, setInvitee] = useState(null);
+  // A friend tapped in the strip: their card (call, invite, watch) is open.
+  const [pickedId, setPickedId] = useState(null);
+  const [watching, setWatching] = useState(false);
 
   const selected = GAME_MAP[game] || GAMES[0];
   // Solo = 1 seat. Nobody can join, so the room is implicitly private and the
@@ -77,6 +94,11 @@ export default function Lobby() {
     setMaxPlayers((mp) => Math.min(mp, selected.maxPlayers));
   }, [selected.maxPlayers]);
 
+  // Inviting someone: a solo room has no seat for them.
+  useEffect(() => {
+    if (invitee && sheetOpen && selected.maxPlayers >= 2) setMaxPlayers((mp) => Math.max(mp, 2));
+  }, [invitee, sheetOpen, selected.maxPlayers]);
+
   // Dropping below four seats leaves no room for two teams.
   useEffect(() => {
     if (!canTeam) setTeamMode(false);
@@ -89,7 +111,7 @@ export default function Lobby() {
 
   // Play as a team starts ticked for the games made for it (coopDefault:
   // Kitchen Rush, Station 13, Sunshard Jump), and for any game picked while
-  // the shelves show team games only; for the rest you tick it.
+  // showing team games only; for the rest you tick it.
   useEffect(() => {
     if (selected.coopDefault || onlyTogether) { setCoopMode(true); setTeamMode(false); } else setCoopMode(false);
   }, [selected.slug, selected.coopDefault, onlyTogether]);
@@ -116,29 +138,78 @@ export default function Lobby() {
     return () => { alive = false; };
   }, []);
 
-  async function handleCreate() {
+  // Make the room (and start it, solo), invite whoever was picked, go in.
+  async function createRoom(s) {
     setCreating(true);
     try {
+      const solo = s.maxPlayers === 1;
       const res = await api.post("/api/rooms", {
-        game_slug: game, max_players: maxPlayers,
-        is_private: isSolo ? true : isPrivate,   // solo rooms are never listed
-        duration_seconds: duration,
-        mode: teams ? "teams" : coop ? "coop" : "free",
-        ...(game === "piano" ? { song } : {}),
+        game_slug: s.slug, max_players: s.maxPlayers,
+        is_private: solo ? true : s.isPrivate,   // solo rooms are never listed
+        duration_seconds: s.duration,
+        mode: s.mode,
+        ...(s.slug === "piano" ? { song: s.song || 0 } : {}),
       });
       const data = await res.json();
       if (!data.success) { toast.error(data.message || "Failed to create room."); return; }
+      const code = data.room.room_code;
+      saveLastPlay(s);
       // Solo: you've already pressed Start, so start it — straight into the
       // game, no waiting room on the way. (If that fails, the room's own
       // Start button is still there.)
-      if (isSolo) { try { await api.patch(`/api/rooms/${data.room.room_code}/start`, {}); } catch { /* the room page can start it */ } }
-      // In place of the open sheet: Back from the room comes to the shelves.
-      navigate(`/room/${data.room.room_code}`, { replace: true });
+      if (solo) { try { await api.patch(`/api/rooms/${code}/start`, {}); } catch { /* the room page can start it */ } }
+      else if (invitee) {
+        try {
+          const r = await api.post(`/api/rooms/${code}/invite`, { user_id: invitee.id });
+          const d = await r.json();
+          if (d.success) toast.success(`Invited ${invitee.username}`);
+          else toast.error(d.message || `Couldn't invite ${invitee.username}.`);
+        } catch { toast.error(`Couldn't invite ${invitee.username}.`); }
+      }
+      // In place of the open sheet: Back from the room comes to this page.
+      navigate(`/room/${code}`, { replace: sheetOpen });
     } catch { toast.error("Failed to create room."); }
     finally { setCreating(false); }
   }
 
-  const shelves = shelve(GAMES.filter((g) => !onlyTogether || g.coopMax > 0));
+  // Drop in on a friend's match: joining a room under way seats you as a
+  // spectator (the same call the friends dock makes).
+  async function watch(f) {
+    const code = f.playing?.room_code;
+    if (!code || watching) return;
+    setWatching(true);
+    try {
+      const res = await api.post("/api/rooms/join", { room_code: code });
+      const data = await res.json();
+      if (data.success) navigate(`/room/${code}?watch=${f.id}`);
+      else toast.error(data.message || "Couldn't watch right now.");
+    } catch { toast.error("Couldn't watch right now."); }
+    finally { setWatching(false); }
+  }
+
+  function inviteToGame(f) {
+    setInvitee(f);
+    setPickedId(null);
+    setTimeout(() => document.getElementById("qp-games")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  }
+
+  const handleCreate = () => createRoom({
+    slug: game, maxPlayers, duration, isPrivate, song,
+    mode: teams ? "teams" : coop ? "coop" : "free",
+  });
+
+  const lastGame = last && GAME_MAP[last.slug];
+  const q = query.trim().toLowerCase();
+  const pool = GAMES.filter((g) => !onlyTogether || g.coopMax > 0);
+  // Searching shows one flat list of matches; otherwise the games sit in
+  // their groups.
+  const groups = q
+    ? [{ key: "found", title: null, games: pool.filter((g) => g.name.toLowerCase().includes(q)) }]
+    : shelve(pool);
+  const found = groups.reduce((n, r) => n + r.games.length, 0);
+  const online = friends.filter((f) => f.online);
+  const strip = online.length ? online : friends.slice(0, 8);
+  const picked = friends.find((f) => f.id === pickedId) || null;
 
   return (
     <div className="wrap play-wrap">
@@ -150,10 +221,64 @@ export default function Lobby() {
           </span>
           <div style={{ minWidth: 0, flex: 1 }}>
             <h1>Hey {user?.username}! 👋</h1>
-            <p className="muted">Pick a game to play.</p>
+            <p className="muted">Who are we beating today?</p>
           </div>
           <Link to="/rooms" className="press p-mint sm play-join">🔗 Join</Link>
         </div>
+
+        {/* Friends: online first. Tap one for their card: call them, invite
+            them into a game, or watch the match they're in. */}
+        {friends.length > 0 && (
+          <section className="qp-sec">
+            <h2 className="shelf-h">
+              {online.length ? <>🟢 Online now<span className="muted">{online.length}</span></> : "👥 Your friends"}
+            </h2>
+            <div className="qp-friends">
+              {strip.map((f) => {
+                const on = pickedId === f.id || invitee?.id === f.id;
+                return (
+                  <button key={f.id} type="button" className={`qp-friend${on ? " on" : ""}`} aria-pressed={on}
+                    aria-expanded={pickedId === f.id}
+                    onClick={() => setPickedId((v) => (v === f.id ? null : f.id))}>
+                    <Avatar emoji={f.avatar} size={50} seed={f.id} online={f.online} className={f.online ? "" : "is-off"} />
+                    <span>{f.username}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {picked ? (
+              <div className="qp-fcard">
+                <div className="qp-fcard-top">
+                  <Avatar emoji={picked.avatar} size={40} seed={picked.id} online={picked.online} />
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <b>{picked.username}</b>
+                    <small className="muted">
+                      {picked.playing ? <>Playing <GameIcon icon={picked.playing.game_icon} /> {picked.playing.game_name}</> : presenceLabel(picked)}
+                    </small>
+                  </div>
+                  <button type="button" className="qp-x" onClick={() => setPickedId(null)} aria-label="Close">✕</button>
+                </div>
+                <div className="qp-fcard-acts">
+                  <button type="button" className="press p-lime sm" onClick={() => { startCall(picked); setPickedId(null); }}
+                    disabled={!!onCall && onCall.members.some((m) => Number(m.id) === Number(picked.id))}>📞 Call</button>
+                  <button type="button" className="press p-sun sm" onClick={() => inviteToGame(picked)}>💌 Invite to a game</button>
+                  {picked.playing && (
+                    <button type="button" className="press p-sky sm" onClick={() => watch(picked)} disabled={watching}>
+                      {watching ? "…" : "👁️ Watch"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : invitee ? (
+              <div className="qp-inviting">
+                <span>💌 Pick a game to play with <b>{invitee.username}</b></span>
+                <button type="button" onClick={() => setInvitee(null)} aria-label="Stop inviting">✕</button>
+              </div>
+            ) : (
+              <p className="muted qp-tip">{online.length ? "Tap a friend to call or invite them." : "No one's online — tap a friend to call or invite them anyway."}</p>
+            )}
+          </section>
+        )}
 
         {openRooms > 0 && (
           <Link to="/rooms" className="play-nudge">
@@ -162,8 +287,27 @@ export default function Lobby() {
           </Link>
         )}
 
-        {/* Which games can be played as a team is there when you ask for it —
-            a toggle that narrows the shelves — not a badge on every card. */}
+        {/* Your last match, one tap from playing again with the same settings. */}
+        {lastGame && (
+          <section className="qp-sec">
+            <h2 className="shelf-h">⚡ Play again</h2>
+            <div className="qp-again" style={{ background: lastGame.col }}>
+              <span className="qp-again-ic"><GameIcon icon={lastGame.icon} /></span>
+              <span className="qp-again-txt">
+                <b>{lastGame.name}</b>
+                <small>
+                  {last.maxPlayers === 1 ? "🧍 Solo" : `👥 ${last.maxPlayers}`}
+                  {!lastGame.endless && ` · ⏱️ ${shortLen(last.duration)}`}
+                  {last.mode === "coop" ? " · 🤝 Team" : last.mode === "teams" ? " · ⚔️ Teams" : ""}
+                </small>
+              </span>
+              <button type="button" className="press p-coral qp-again-go" disabled={creating}
+                onClick={() => createRoom(last)}>{creating ? "…" : "▶ Play"}</button>
+            </div>
+            <button type="button" className="qp-change" onClick={() => openGame(lastGame.slug)}>Change settings</button>
+          </section>
+        )}
+
         <div className="play-filter">
           <button type="button" className={`chip lb-together${onlyTogether ? " on" : ""}`} aria-pressed={onlyTogether}
             onClick={() => setOnlyTogether((o) => !o)}>
@@ -171,20 +315,29 @@ export default function Lobby() {
           </button>
         </div>
 
-        {shelves.map((row) => (
-          <section key={row.key} className="shelf">
-            <h2 className="shelf-h">{row.title}<span className="muted">{row.games.length}</span></h2>
-            <div className="shelf-row">
-              {row.games.map((g) => (
-                <button key={g.slug} type="button" className="press shelf-card" data-game={g.slug}
-                  style={{ background: g.col }} onClick={() => openGame(g.slug)}>
-                  <span className="shelf-ic"><GameIcon icon={g.icon} /></span>
-                  <span className="shelf-name">{g.name}</span>
-                </button>
-              ))}
+        <section className="qp-sec" id="qp-games">
+          <div className="qp-allh">
+            <h2 className="shelf-h">🎲 Games<span className="muted">{pool.length}</span></h2>
+            <label className="qp-search">
+              <span aria-hidden="true">🔍</span>
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search games" />
+            </label>
+          </div>
+          {found === 0 && <p className="muted" style={{ padding: "16px 0" }}>No game called “{query}”.</p>}
+          {groups.filter((r) => r.games.length).map((row) => (
+            <div key={row.key} className="qp-group">
+              {row.title && <h3 className="qp-group-h">{row.title}<span className="muted">{row.games.length}</span></h3>}
+              <div className="qp-grid">
+                {row.games.map((g) => (
+                  <button key={g.slug} type="button" className="qp-tile" data-game={g.slug} onClick={() => openGame(g.slug)}>
+                    <span className="qp-tile-ic" style={{ background: g.col }}><GameIcon icon={g.icon} /></span>
+                    <span className="qp-tile-name">{g.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </section>
-        ))}
+          ))}
+        </section>
       </div>
 
       {sheetOpen && (
@@ -201,6 +354,13 @@ export default function Lobby() {
             </div>
 
             <div className="lsheet-body">
+              {invitee && !isSolo && (
+                <div className="qp-inviting" style={{ marginBottom: 16 }}>
+                  <span>💌 <b>{invitee.username}</b> gets an invite when you create it</span>
+                  <button type="button" onClick={() => setInvitee(null)} aria-label="Stop inviting">✕</button>
+                </div>
+              )}
+
               {/* an endless game (Station 13, Sunshard Jump, Emberfall) has no clock to pick */}
               {!selected.endless && (
                 <>
@@ -313,10 +473,11 @@ export default function Lobby() {
                 {!isSolo && isPrivate && <span className="chip c-sun">🔒 Private</span>}
                 {teams && <span className="chip c-grape">⚔️ Teams</span>}
                 {coop && <span className="chip c-grape">🤝 Team</span>}
+                {!isSolo && invitee && <span className="chip c-coral">💌 {invitee.username}</span>}
                 {game === "piano" && <span className="chip c-sun">{SONGS[song].icon} {SONGS[song].name}</span>}
               </div>
               <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
-                {creating ? "Creating…" : isSolo ? "🎯 Start solo" : "🚀 Create room"}
+                {creating ? "Creating…" : isSolo ? "🎯 Start solo" : invitee ? `🚀 Create & invite` : "🚀 Create room"}
               </button>
             </div>
           </div>

@@ -1883,3 +1883,55 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
   .play-hi h1{font-size:1.35rem}
   .shelf-row{margin:0 -14px;padding:8px 14px 14px;scroll-padding:0 14px}
 }
+
+/* ── PLAY home (.qp-): friends strip, play again, the games as grouped icon tiles ── */
+.qp-sec{margin-bottom:18px}
+.qp-tip{font-size:.8rem;margin-top:2px}
+.qp-friends{display:flex;gap:10px;overflow-x:auto;margin:0 -20px;padding:6px 20px 8px;scrollbar-width:none}
+.qp-friends::-webkit-scrollbar{display:none}
+.qp-friend{flex:none;width:64px;display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px 2px;
+  border:2.5px solid transparent;border-radius:18px;-webkit-tap-highlight-color:transparent}
+.qp-friend span:last-child{max-width:100%;font-size:.72rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qp-friend.on{background:var(--sun);border-color:var(--ink);color:#2E2140;box-shadow:0 3px 0 var(--ink)}
+.qp-inviting{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 8px 8px 14px;
+  border:2.5px solid var(--ink);border-radius:var(--r);background:var(--bubble);color:#2E2140;font-size:.86rem;font-weight:800}
+.qp-inviting button{flex:none;width:30px;height:30px;border-radius:999px;border:2.5px solid var(--ink);background:var(--card);
+  color:var(--text);font-weight:900}
+.qp-fcard{padding:12px;border:3px solid var(--ink);border-radius:var(--r);background:var(--card);box-shadow:0 4px 0 var(--ink);
+  animation:lsFade .15s ease}
+.qp-fcard-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.qp-fcard-top b{display:block;font-family:Fredoka,sans-serif;font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qp-fcard-top small{display:block;font-size:.78rem}
+.qp-x{flex:none;width:30px;height:30px;border-radius:999px;border:2.5px solid var(--ink);background:var(--card);color:var(--text);font-weight:900}
+.qp-fcard-acts{display:flex;flex-wrap:wrap;gap:8px}
+.qp-fcard-acts .press{flex:1 1 auto;color:#2E2140}
+.qp-again{display:flex;align-items:center;gap:12px;padding:12px;border:3px solid var(--ink);border-radius:var(--r-lg);
+  box-shadow:0 5px 0 var(--ink);color:#2E2140}
+.qp-again-ic{flex:none;width:52px;height:52px;display:grid;place-items:center;font-size:1.9rem;line-height:1;
+  background:rgba(255,255,255,.55);border:3px solid var(--ink);border-radius:15px}
+.qp-again-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.qp-again-txt b{font-family:Fredoka,sans-serif;font-weight:700;font-size:1.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qp-again-txt small{font-size:.8rem;font-weight:800;opacity:.85}
+.press.qp-again-go{flex:none;padding:11px 18px;--lift:4px}
+.qp-change{display:block;margin:8px 0 0 auto;font-size:.82rem;font-weight:800;color:var(--ink-soft);text-decoration:underline}
+.qp-allh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.qp-allh .shelf-h{margin:0}
+.qp-search{display:flex;align-items:center;gap:6px;width:min(150px,45%);padding:6px 10px;border:2.5px solid var(--ink);
+  border-radius:999px;background:var(--card);box-shadow:0 2px 0 var(--ink)}
+.qp-search input{min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--text);font:inherit;font-size:.85rem}
+.qp-group{margin-top:14px}
+.qp-group-h{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;font-size:1.02rem}
+.qp-group-h .muted{font-size:.75rem;font-family:Nunito,sans-serif}
+.qp-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 8px;padding-top:6px}
+@media(min-width:601px){ .qp-grid{grid-template-columns:repeat(auto-fill,minmax(92px,1fr))} }
+.qp-tile{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;-webkit-tap-highlight-color:transparent}
+.qp-tile-ic{width:100%;max-width:72px;aspect-ratio:1;display:grid;place-items:center;font-size:2rem;line-height:1;
+  border:3px solid var(--ink);border-radius:20px;box-shadow:0 4px 0 var(--ink);transition:transform .06s ease, box-shadow .06s ease}
+.qp-tile:active .qp-tile-ic{transform:translateY(4px);box-shadow:0 0 0 var(--ink)}
+.qp-tile-name{max-width:100%;font-size:.7rem;font-weight:800;line-height:1.15;text-align:center;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@media(max-width:600px){
+  .qp-friends{margin:0 -14px;padding:6px 14px 8px}
+  .wrap.play-wrap{padding-bottom:120px}
+  #qp-games{scroll-margin-top:70px}
+}

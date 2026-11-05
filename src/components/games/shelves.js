@@ -1,5 +1,5 @@
 // src/components/games/shelves.js
-// How the Play page groups the games into rows. Display only: the order
+// How the Play page groups the games. Display only: the order
 // within a row is still the database's (useGames), and a game no row names
 // (a new one) lands on "More games" so it never goes missing.
 export const SHELVES = [

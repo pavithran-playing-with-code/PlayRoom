@@ -11,3 +11,4 @@ export { default as Input, Field, Select } from "./Input";
 export { default as PasswordInput } from "./PasswordInput";
 export { ToastProvider, useToast } from "./Toast";
 export { default as FunLayer, confetti } from "./FunLayer";
+export { default as Icon } from "./Icon";

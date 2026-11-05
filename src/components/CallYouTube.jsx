@@ -2,6 +2,7 @@
 // (YtBrowse: trending, a few shelves, search — routes/youtube.js asks
 // YouTube) and playing it (YtPlayer: YouTube's own player, which CallWatch
 // keeps in step with everyone's).
+import Icon from "./ui/Icon";
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { api } from "../utils/api";
 import { clockOf } from "../utils/watchSync";
@@ -136,11 +137,11 @@ export function YtBrowse({ onPick, onClose, docked = false, playing = null }) {
     <div className={docked ? "yt-docked" : "yt-sheet"} role={docked ? "region" : "dialog"} aria-label={docked ? "More videos" : "YouTube"}
       onKeyDown={(e) => e.stopPropagation()} onKeyUp={(e) => e.stopPropagation()}>
       <form className="yt-head" onSubmit={(e) => { e.preventDefault(); setQuery(q.trim()); }}>
-        {!docked && <button type="button" className="yt-back" onClick={onClose} aria-label="Close YouTube">✕</button>}
+        {!docked && <button type="button" className="yt-back" onClick={onClose} aria-label="Close YouTube"><Icon name="close" size={16} stroke={3} /></button>}
         <input className="yt-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search YouTube" aria-label="Search YouTube"
           enterKeyHint="search" maxLength={100} autoComplete="off" />
         {query ? <button type="button" className="yt-clear" onClick={() => { setQ(""); setQuery(""); }} aria-label="Back to trending">↺</button>
-          : <button type="submit" className="yt-go" aria-label="Search">🔍</button>}
+          : <button type="submit" className="yt-go" aria-label="Search"><Icon name="search" size={17} stroke={3} /></button>}
       </form>
       {!query && (
         <div className="yt-shelves">

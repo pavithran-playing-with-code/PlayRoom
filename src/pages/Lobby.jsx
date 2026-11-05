@@ -10,7 +10,7 @@ import { presenceLabel } from "../utils/timeAgo";
 import { readLastPlay, saveLastPlay } from "../utils/lastPlay";
 import { GAME_MAP } from "../components/games/registry";
 import useGames from "../components/games/useGames";
-import { useToast, Avatar } from "../components/ui";
+import { useToast, Avatar, Icon } from "../components/ui";
 import GameIcon from "../components/games/GameIcon";
 import { SONGS, LEVELS } from "../components/games/pianoSongs";
 import HowTo from "../components/games/HowTo";
@@ -24,14 +24,14 @@ const CREW_COLS = ["var(--sun)", "var(--sky)", "var(--coral)", "var(--mint)",
 const DURATIONS = [
   { s: 120, label: "2 min" },
   { s: 300, label: "5 min" },
-  { s: 0, label: "♾️", name: "Unlimited" },        // the icon alone: the word didn't fit a phone's button
+  { s: 0, label: <Icon name="infinity" size={26} stroke={2.6} />, name: "Unlimited" },        // the icon alone: the word didn't fit a phone's button
 ];
 const lengthText = (secs) => (secs === 0 ? "no time limit" : `${Math.round(secs / 60)} min`);
 // The chips over the games: every game, a group, the team games, or search.
-const CAT_LABEL = { quick: "⚡ Quick", puzzle: "🧩 Puzzles", action: "🏁 Racing", big: "🌋 Adventures" };
-const CATS = [{ key: "all", label: "🎲 All" },
-  ...SHELVES.map((s) => ({ key: s.key, label: CAT_LABEL[s.key] || s.title })),
-  { key: "team", label: "🤝 Team" }];
+const CAT_LABEL = { quick: ["bolt", "Quick"], puzzle: ["puzzle", "Puzzles"], action: ["flag", "Racing"], big: ["mountain", "Adventures"] };
+const CATS = [{ key: "all", icon: "grid", label: "All" },
+  ...SHELVES.map((s) => ({ key: s.key, icon: (CAT_LABEL[s.key] || [])[0], label: (CAT_LABEL[s.key] || [null, s.title])[1] })),
+  { key: "team", icon: "team", label: "Team" }];
 const CAT_KEY = "pr_play_cat";
 const savedCat = () => { try { const c = localStorage.getItem(CAT_KEY); return CATS.some((x) => x.key === c) ? c : "all"; } catch { return "all"; } };
 
@@ -235,7 +235,7 @@ export default function Lobby() {
             <h1>Hey {user?.username}! 👋</h1>
             <p className="muted">Who are we beating today?</p>
           </div>
-          <Link to="/rooms" className="press p-mint sm play-join">🔗 Join</Link>
+          <Link to="/rooms" className="press p-mint sm play-join"><Icon name="link" size={17} stroke={2.8} /> Join</Link>
         </div>
 
         {/* Friends: online first. Tap one for their card: call them, invite
@@ -243,7 +243,7 @@ export default function Lobby() {
         {friends.length > 0 && (
           <section className="pc-sec">
             <div className="pc-friends">
-              <span className="pc-friends-l">{online.length ? <>🟢<b>{online.length}</b></> : "👥"}</span>
+              <span className="pc-friends-l">{online.length ? <><span className="pc-dot" aria-hidden="true" /><b>{online.length}</b></> : <Icon name="people" size={20} />}</span>
               {strip.map((f) => {
                 const on = pickedId === f.id || invitee?.id === f.id;
                 return (
@@ -266,23 +266,23 @@ export default function Lobby() {
                       {picked.playing ? <>Playing <GameIcon icon={picked.playing.game_icon} /> {picked.playing.game_name}</> : presenceLabel(picked)}
                     </small>
                   </div>
-                  <button type="button" className="qp-x" onClick={() => setPickedId(null)} aria-label="Close">✕</button>
+                  <button type="button" className="qp-x" onClick={() => setPickedId(null)} aria-label="Close"><Icon name="close" size={15} stroke={3} /></button>
                 </div>
                 <div className="qp-fcard-acts">
                   <button type="button" className="press p-lime sm" onClick={() => { startCall(picked); setPickedId(null); }}
-                    disabled={!!onCall && onCall.members.some((m) => Number(m.id) === Number(picked.id))}>📞 Call</button>
-                  <button type="button" className="press p-sun sm" onClick={() => inviteToGame(picked)}>💌 Invite to a game</button>
+                    disabled={!!onCall && onCall.members.some((m) => Number(m.id) === Number(picked.id))}><Icon name="phone" size={16} /> Call</button>
+                  <button type="button" className="press p-sun sm" onClick={() => inviteToGame(picked)}><Icon name="mail" size={17} /> Invite to a game</button>
                   {picked.playing && (
                     <button type="button" className="press p-sky sm" onClick={() => watch(picked)} disabled={watching}>
-                      {watching ? "…" : "👁️ Watch"}
+                      {watching ? "…" : <><Icon name="eye" size={17} /> Watch</>}
                     </button>
                   )}
                 </div>
               </div>
             ) : invitee ? (
               <div className="qp-inviting">
-                <span>💌 Pick a game to play with <b>{invitee.username}</b></span>
-                <button type="button" onClick={() => setInvitee(null)} aria-label="Stop inviting">✕</button>
+                <span><Icon name="mail" size={17} /> Pick a game to play with <b>{invitee.username}</b></span>
+                <button type="button" onClick={() => setInvitee(null)} aria-label="Stop inviting"><Icon name="close" size={13} stroke={3.2} /></button>
               </div>
             ) : null}
           </section>
@@ -290,8 +290,8 @@ export default function Lobby() {
 
         {openRooms > 0 && (
           <Link to="/rooms" className="play-nudge">
-            <span>🌐 <b>{openRooms}</b> open room{openRooms > 1 ? "s" : ""} you can hop into</span>
-            <span aria-hidden="true">→</span>
+            <span><Icon name="globe" size={18} /> <b>{openRooms}</b> open room{openRooms > 1 ? "s" : ""} you can hop into</span>
+            <Icon name="arrow" size={18} stroke={2.8} />
           </Link>
         )}
 
@@ -306,12 +306,12 @@ export default function Lobby() {
                 <b>{lastGame.name}</b>
               </span>
               <span className="pc-again-set">
-                {last.maxPlayers === 1 ? "🧍" : `👥${last.maxPlayers}`}
-                {!lastGame.endless && ` · ${shortLen(last.duration)}`}
+                {last.maxPlayers === 1 ? <Icon name="user" size={13} stroke={2.8} /> : <><Icon name="people" size={13} stroke={2.8} />{last.maxPlayers}</>}
+                {!lastGame.endless && <> · {last.duration === 0 ? <Icon name="infinity" size={14} stroke={2.8} /> : shortLen(last.duration)}</>}
               </span>
             </button>
             <button type="button" className="press p-coral pc-again-go" disabled={creating}
-              onClick={() => createRoom(last)} aria-label={`Play ${lastGame.name} again`}>{creating ? "…" : "▶"}</button>
+              onClick={() => createRoom(last)} aria-label={`Play ${lastGame.name} again`}>{creating ? "…" : <Icon name="play" size={20} />}</button>
           </div>
         )}
 
@@ -320,16 +320,16 @@ export default function Lobby() {
             {CATS.map((c) => (
               <button key={c.key} type="button" role="tab" aria-selected={!searching && cat === c.key}
                 className={`pc-cat${!searching && cat === c.key ? " on" : ""}`}
-                onClick={() => { setSearching(false); setQuery(""); setCat(c.key); }}>{c.label}</button>
+                onClick={() => { setSearching(false); setQuery(""); setCat(c.key); }}>{c.icon && <Icon name={c.icon} size={16} stroke={2.6} />} {c.label}</button>
             ))}
             <button type="button" className={`pc-cat${searching ? " on" : ""}`} aria-pressed={searching} aria-label="Search games"
-              onClick={() => { setSearching((x) => !x); setQuery(""); }}>🔍</button>
+              onClick={() => { setSearching((x) => !x); setQuery(""); }}><Icon name="search" size={16} stroke={2.8} /></button>
           </div>
           {searching && (
             <label className="pc-search">
-              <span aria-hidden="true">🔍</span>
+              <Icon name="search" size={18} stroke={2.6} />
               <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a game" aria-label="Find a game" />
-              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear">✕</button>}
+              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear"><Icon name="close" size={12} stroke={3.2} /></button>}
             </label>
           )}
           {shown.length === 0 ? (
@@ -357,21 +357,21 @@ export default function Lobby() {
                 <h2>{selected.name}</h2>
                 {selected.blurb && <p>{selected.blurb}</p>}
               </div>
-              <button type="button" className="lsheet-x" onClick={closeSheet} aria-label="Close">✕</button>
+              <button type="button" className="lsheet-x" onClick={closeSheet} aria-label="Close"><Icon name="close" size={17} stroke={3} /></button>
             </div>
 
             <div className="lsheet-body">
               {invitee && !isSolo && (
                 <div className="qp-inviting" style={{ marginBottom: 16 }}>
-                  <span>💌 <b>{invitee.username}</b> gets an invite when you create it</span>
-                  <button type="button" onClick={() => setInvitee(null)} aria-label="Stop inviting">✕</button>
+                  <span><Icon name="mail" size={17} /> <b>{invitee.username}</b> gets an invite when you create it</span>
+                  <button type="button" onClick={() => setInvitee(null)} aria-label="Stop inviting"><Icon name="close" size={13} stroke={3.2} /></button>
                 </div>
               )}
 
               {/* an endless game (Station 13, Sunshard Jump, Emberfall) has no clock to pick */}
               {!selected.endless && (
                 <>
-                  <div className="lsheet-lbl">⏱️ Clock</div>
+                  <div className="lsheet-lbl"><Icon name="clock" size={17} stroke={2.6} /> Clock</div>
                   <div className="durrow">
                     {DURATIONS.map((d) => (
                       <button key={d.s} className="press dur p-white" aria-pressed={duration === d.s}
@@ -383,18 +383,18 @@ export default function Lobby() {
                 </>
               )}
 
-              <div className="lsheet-lbl">👥 Players</div>
+              <div className="lsheet-lbl"><Icon name="people" size={17} stroke={2.6} /> Players</div>
               {/* Solo and 2 are the usual picks, so they're one tap. Past that,
                   the crew grows a face at a time up to 8. */}
               <div className="seatpick" id="seats">
                 <button className="press seat p-white" aria-pressed={maxPlayers === 1}
-                  onClick={() => setMaxPlayers(1)}>🧍 Solo</button>
+                  onClick={() => setMaxPlayers(1)}><Icon name="user" size={18} stroke={2.6} /> Solo</button>
                 {/* a solo-only game (Emberfall, for now) offers just Solo */}
                 {selected.maxPlayers >= 2 && <button className="press seat p-white" aria-pressed={maxPlayers === 2}
-                  onClick={() => setMaxPlayers(2)}>👥 2</button>}
+                  onClick={() => setMaxPlayers(2)}><Icon name="people" size={18} stroke={2.6} /> 2</button>}
                 {selected.maxPlayers < 3 ? null : maxPlayers < 3 ? (
                   <button className="press seat p-white" onClick={() => setMaxPlayers(3)}
-                    aria-label="More players">➕ More</button>
+                    aria-label="More players"><Icon name="plus" size={18} stroke={3} /> More</button>
                 ) : (
                   <span className="seatstep">
                     <button className="press p-white step" aria-label="One player fewer"
@@ -416,23 +416,23 @@ export default function Lobby() {
               </div>
               <div className="muted seathint">
                 {isSolo
-                  ? (selected.maxPlayers === 1 ? "🧍 Solo — this game is played alone for now."
-                    : selected.endless ? "🧍 Solo — no clock, play as long as you like." : "🧍 Solo — just you and the clock.")
-                  : `👥 ${maxPlayers} players — everyone has to join before the game can start.`}
+                  ? (selected.maxPlayers === 1 ? "Solo — this game is played alone for now."
+                    : selected.endless ? "Solo — no clock, play as long as you like." : "Solo — just you and the clock.")
+                  : `${maxPlayers} players — everyone has to join before the game can start.`}
               </div>
 
               {/* Private and teams mean nothing for a solo run, so they're not asked. */}
               {!isSolo && (
                 <div className="opts">
                   <label className={`opt${isPrivate ? " on" : ""}`}>
-                    <span className="opt-ico" aria-hidden="true">🔒</span>
+                    <span className="opt-ico" aria-hidden="true"><Icon name="lock" size={22} /></span>
                     <span className="opt-txt">Keep it private<small>Only people you invite can join</small></span>
                     <input type="checkbox" className="switch" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
                   </label>
                   {/* Together: one side against the game. */}
                   {coopMax > 0 && (
                     <label className={`opt${coop ? " on" : ""}${canCoop ? "" : " off"}`}>
-                      <span className="opt-ico" aria-hidden="true">🤝</span>
+                      <span className="opt-ico" aria-hidden="true"><Icon name="team" size={22} /></span>
                       <span className="opt-txt">Play as a team
                         <small>{canCoop ? (selected.coopLabel || "All of you on one side") : `2 to ${coopMax} players`}</small></span>
                       <input type="checkbox" className="switch" checked={coop} disabled={!canCoop}
@@ -442,7 +442,7 @@ export default function Lobby() {
                   {/* Two sides of two: offered only once there are four seats. */}
                   {canTeam && (
                     <label className={`opt${teams ? " on" : ""}`}>
-                      <span className="opt-ico" aria-hidden="true">⚔️</span>
+                      <span className="opt-ico" aria-hidden="true"><Icon name="versus" size={22} /></span>
                       <span className="opt-txt">Team match<small>Play as sides — highest total wins</small></span>
                       <input type="checkbox" className="switch" checked={teams}
                         onChange={(e) => { setTeamMode(e.target.checked); if (e.target.checked) setCoopMode(false); }} />
@@ -467,7 +467,7 @@ export default function Lobby() {
 
               {/* How to play it, before you start — folded away until asked for */}
               <details className="howto-box">
-                <summary>📖 How to play</summary>
+                <summary><Icon name="book" size={17} stroke={2.6} /> How to play</summary>
                 <HowTo game={selected.slug} title={false} />
               </details>
             </div>
@@ -475,16 +475,16 @@ export default function Lobby() {
             {/* Always in reach: what you're about to make, and the button. */}
             <div className="lsheet-foot">
               <div className="lobby-sum" aria-live="polite">
-                {!selected.endless && <span className="chip c-sky">{duration === 0 ? "♾️ No limit" : `⏱️ ${length}`}</span>}
-                <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} players`}</span>
-                {!isSolo && isPrivate && <span className="chip c-sun">🔒 Private</span>}
-                {teams && <span className="chip c-grape">⚔️ Teams</span>}
-                {coop && <span className="chip c-grape">🤝 Team</span>}
-                {!isSolo && invitee && <span className="chip c-coral">💌 {invitee.username}</span>}
+                {!selected.endless && <span className="chip c-sky">{duration === 0 ? <><Icon name="infinity" size={14} stroke={2.8} /> No limit</> : <><Icon name="clock" size={13} stroke={2.8} /> {length}</>}</span>}
+                <span className="chip c-lime">{isSolo ? <><Icon name="user" size={13} stroke={2.8} /> Solo</> : <><Icon name="people" size={13} stroke={2.8} /> {maxPlayers} players</>}</span>
+                {!isSolo && isPrivate && <span className="chip c-sun"><Icon name="lock" size={13} stroke={2.8} /> Private</span>}
+                {teams && <span className="chip c-grape"><Icon name="versus" size={13} stroke={2.8} /> Teams</span>}
+                {coop && <span className="chip c-grape"><Icon name="team" size={13} stroke={2.8} /> Team</span>}
+                {!isSolo && invitee && <span className="chip c-coral"><Icon name="mail" size={13} stroke={2.8} /> {invitee.username}</span>}
                 {game === "piano" && <span className="chip c-sun">{SONGS[song].icon} {SONGS[song].name}</span>}
               </div>
               <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
-                {creating ? "Creating…" : isSolo ? "🎯 Start solo" : invitee ? `🚀 Create & invite` : "🚀 Create room"}
+                {creating ? "Creating…" : <><Icon name="play" size={20} /> {isSolo ? "Start solo" : invitee ? "Create & invite" : "Create room"}</>}
               </button>
             </div>
           </div>

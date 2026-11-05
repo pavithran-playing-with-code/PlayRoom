@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../utils/api";
 import { GAME_MAP } from "../components/games/registry";
-import { useToast } from "../components/ui";
+import { useToast, Icon } from "../components/ui";
 import PeekBuddy from "../components/characters/PeekBuddy";
 import GameIcon from "../components/games/GameIcon";
 
@@ -57,7 +57,7 @@ export default function Rooms() {
     <div className="wrap">
       <div className="mid">
         <div className="pop rm-code">
-          <h2 style={{ fontSize: "1.35rem", marginBottom: 4 }}>🔗 Got a code?</h2>
+          <h2 className="rm-h"><Icon name="link" size={22} stroke={2.8} /> Got a code?</h2>
           <p className="muted" style={{ fontSize: ".9rem", marginBottom: 14 }}>
             Type the six letters your friend sent you.
           </p>
@@ -75,14 +75,14 @@ export default function Rooms() {
                          border: 0, padding: 0, background: "transparent", cursor: "text" }} />
             </div>
             <button type="submit" className="press p-mint full" disabled={joining || !joinCode.trim()}>
-              {joining ? "Joining…" : "🔗 Join room"}
+              {joining ? "Joining…" : <><Icon name="arrow" size={18} stroke={2.8} /> Join room</>}
             </button>
           </form>
         </div>
 
         <section className="sec" style={{ marginTop: 30 }}>
           <div className="sec-h">
-            <h2>🌐 Open rooms</h2>
+            <h2 className="rm-h"><Icon name="globe" size={26} stroke={2.6} /> Open rooms</h2>
             <span className="chip c-mint">{rooms.length} open</span>
           </div>
 
@@ -92,7 +92,7 @@ export default function Rooms() {
             <div className="pop" style={{ padding: "40px 20px", textAlign: "center" }}>
               <div style={{ fontSize: "3rem", marginBottom: 10 }}>🪑</div>
               <p className="muted">No open rooms right now.</p>
-              <Link to="/lobby" className="press p-coral" style={{ marginTop: 16 }}>🎮 Start one</Link>
+              <Link to="/lobby" className="press p-coral" style={{ marginTop: 16 }}><Icon name="play" size={18} /> Start one</Link>
             </div>
           ) : (
             <div className="tiles">
@@ -113,8 +113,8 @@ export default function Rooms() {
                       <p style={{ marginBottom: 10 }}>Hosted by {room.host_name}</p>
                       <span className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
                         <span className="row" style={{ gap: 6 }}>
-                          <span className="chip c-lime">👥 {room.player_count}/{room.max_players}</span>
-                          <span className="chip c-sky">⏱️ {mins}</span>
+                          <span className="chip c-lime"><Icon name="people" size={13} stroke={2.8} /> {room.player_count}/{room.max_players}</span>
+                          <span className="chip c-sky"><Icon name="clock" size={13} stroke={2.8} /> {mins}</span>
                         </span>
                         <span className="display" style={{ letterSpacing: ".14em", fontSize: "1rem" }}>{room.room_code}</span>
                       </span>

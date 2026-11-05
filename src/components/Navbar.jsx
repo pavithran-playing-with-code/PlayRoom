@@ -14,7 +14,7 @@ import useMedia from "../utils/useMedia";
 import Logo from "./Logo";
 import Runner from "./characters/Runner";
 import FriendsDock from "./FriendsDock";
-import { Avatar } from "./ui";
+import { Avatar, Icon } from "./ui";
 import useTheme from "../utils/theme";
 
 export default function Navbar() {
@@ -40,8 +40,8 @@ export default function Navbar() {
 
   function handleLogout() { setOpen(false); logout(); navigate("/login"); }
 
-  const navLink = (to, label) => (
-    <Link key={to} to={to} className="navlink" aria-current={location.pathname === to}>{label}</Link>
+  const navLink = (to, label, icon) => (
+    <Link key={to} to={to} className="navlink" aria-current={location.pathname === to}>{icon && <Icon name={icon} size={17} stroke={2.6} />}{label}</Link>
   );
 
   return (
@@ -55,10 +55,10 @@ export default function Navbar() {
         {isLoggedIn ? (
           <>
             <div className="navlinks">
-              {navLink("/lobby", "🎮 Play")}
-              {navLink("/rooms", "🚪 Rooms")}
-              {navLink("/leaderboard", "🏆 Board")}
-              {navLink("/friends", pendingCt ? `👥 Friends (${pendingCt})` : "👥 Friends")}
+              {navLink("/lobby", "Play", "gamepad")}
+              {navLink("/rooms", "Rooms", "door")}
+              {navLink("/leaderboard", "Board", "trophy")}
+              {navLink("/friends", pendingCt ? `Friends (${pendingCt})` : "Friends", "people")}
             </div>
 
             <div className="navme">

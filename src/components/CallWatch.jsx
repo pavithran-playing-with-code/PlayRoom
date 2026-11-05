@@ -9,6 +9,7 @@
 // A player that's stuck — YouTube showing someone an ad, still loading, or a
 // phone waiting for a tap before it plays sound — asks everyone to wait
 // ("wait"); once it moves, it says "go" and all carry on together.
+import Icon from "./ui/Icon";
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { posAt, steer, clockOf, sizeOf } from "../utils/watchSync";
 import { YtPlayer, YtBrowse } from "./CallYouTube";
@@ -203,19 +204,19 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, full, onBi
     return (
       <div className={`call-share cw cw-yt${pseudo ? " pfull" : ""}${full || pseudo ? " big" : ""}`} ref={shareRef}>
         <div className="cw-yt-top">
-          <span className="cw-name">▶️ {w.src.name}{w.src.ch ? <small> · {w.src.ch}</small> : null}</span>
+          <span className="cw-name"><Icon name="youtube" size={16} /> {w.src.name}{w.src.ch ? <small> · {w.src.ch}</small> : null}</span>
           {/* our full screen, not YouTube's: theirs is the player alone, with no faces */}
-          <button type="button" className="cw-x" onClick={onBig} aria-label={full || pseudo ? "Leave full screen" : "Full screen"}>⛶</button>
-          <button type="button" className="cw-x" onClick={() => C.sendWatch({ op: "close" })} aria-label="Stop the video for everyone">✕</button>
+          <button type="button" className="cw-x" onClick={onBig} aria-label={full || pseudo ? "Leave full screen" : "Full screen"}><Icon name="expand" size={16} stroke={3} /></button>
+          <button type="button" className="cw-x" onClick={() => C.sendWatch({ op: "close" })} aria-label="Stop the video for everyone"><Icon name="close" size={16} stroke={3} /></button>
         </div>
         <div className="cw-yt-player">
           {bad ? <div className="cw-yt-bad">{bad}<small>Pick another video below.</small></div>
             : <YtPlayer ref={player} id={w.src.id} onFail={setBad} onState={onYtState} onRate={onYtRate} />}
           {/* a phone only lets YouTube start after a tap on YouTube's own ▶ — so ask for that, without covering it */}
           {needTap && !bad && !waitingOn && !silent && <div className="cw-wait cw-hint" role="status">👆 Tap ▶ on the video to join in</div>}
-          {silent && !bad && !waitingOn && <button type="button" className="cw-wait cw-sound" onClick={sound}>🔇 Tap for sound</button>}
-          {waitingOn && <div className="cw-wait">⏳ Waiting for {waitingOn}… <button type="button" onClick={() => mine("play", player.current ? player.current.time() : w.pos)}>Play anyway</button></div>}
-          {w.hold === myId && !needTap && <div className="cw-wait">⏳ The others are waiting for you</div>}
+          {silent && !bad && !waitingOn && <button type="button" className="cw-wait cw-sound" onClick={sound}><Icon name="sound" size={15} /> Tap for sound</button>}
+          {waitingOn && <div className="cw-wait"><Icon name="clock" size={14} /> Waiting for {waitingOn}… <button type="button" onClick={() => mine("play", player.current ? player.current.time() : w.pos)}>Play anyway</button></div>}
+          {w.hold === myId && !needTap && <div className="cw-wait"><Icon name="clock" size={14} /> The others are waiting for you</div>}
         </div>
         <YtBrowse docked playing={w.src.id} onPick={putOn} />
         {faces}
@@ -231,31 +232,31 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, full, onBi
             : <FilePlayer ref={player} url={f.url} onFail={setBad} />}
           {/* a tap on the picture shows or hides the controls; it never pauses it for everyone */}
           {(coverYt || !yt) && <div className="cw-cover" onClick={() => (shown && w.playing ? setShown(false) : poke())} />}
-          {needTap && <button type="button" className="cw-tap" onClick={toggle}>🔊 Tap to watch with sound</button>}
-          {waitingOn && <div className="cw-wait">⏳ Waiting for {waitingOn}… <button type="button" onClick={() => mine("play", player.current ? player.current.time() : w.pos)}>Play anyway</button></div>}
-          {w.hold === myId && <div className="cw-wait">⏳ Catching up: the others are waiting for you</div>}
+          {needTap && <button type="button" className="cw-tap" onClick={toggle}><Icon name="sound" size={18} /> Tap to watch with sound</button>}
+          {waitingOn && <div className="cw-wait"><Icon name="clock" size={14} /> Waiting for {waitingOn}… <button type="button" onClick={() => mine("play", player.current ? player.current.time() : w.pos)}>Play anyway</button></div>}
+          {w.hold === myId && <div className="cw-wait"><Icon name="clock" size={14} /> Catching up: the others are waiting for you</div>}
           {faces}
           <div className={`cw-ui${shown || !w.playing ? "" : " gone"}`} onPointerDown={poke}>
             <div className="cw-title">
-              <span className="cw-name">{yt ? "▶️" : "🎬"} {w.src.name}{yt && w.src.ch ? <small> · {w.src.ch}</small> : null}</span>
-              {yt && onPickYt && <button type="button" className="cw-x" onClick={onPickYt} aria-label="Pick another YouTube video">🔍</button>}
-              <button type="button" className="cw-x" onClick={() => C.sendWatch({ op: "close" })} aria-label="Stop the video for everyone">✕</button>
+              <span className="cw-name"><Icon name={yt ? "youtube" : "film"} size={16} /> {w.src.name}{yt && w.src.ch ? <small> · {w.src.ch}</small> : null}</span>
+              {yt && onPickYt && <button type="button" className="cw-x" onClick={onPickYt} aria-label="Pick another YouTube video"><Icon name="search" size={16} stroke={3} /></button>}
+              <button type="button" className="cw-x" onClick={() => C.sendWatch({ op: "close" })} aria-label="Stop the video for everyone"><Icon name="close" size={16} stroke={3} /></button>
             </div>
             <div className="cw-bar">
               <button type="button" className="cw-play" onClick={toggle} aria-label={w.playing ? "Pause for everyone" : "Play for everyone"}>
-                {w.playing ? "⏸" : "▶"}
+                <Icon name={w.playing ? "pause" : "play"} size={20} />
               </button>
               <input type="range" className="cw-seek" min={0} max={w.src.dur} step={0.5} value={Math.min(cur, w.src.dur)} aria-label="Where in the video"
                 onChange={(e) => setDrag(Number(e.target.value))}
                 onPointerUp={(e) => seekTo(Number(e.currentTarget.value))} onKeyUp={(e) => seekTo(Number(e.currentTarget.value))} />
               <span className="cw-time">{clockOf(cur)} / {clockOf(w.src.dur)}</span>
-              <button type="button" className="cw-big" onClick={onBig} aria-label="Full screen">⛶</button>
+              <button type="button" className="cw-big" onClick={onBig} aria-label="Full screen"><Icon name="expand" size={20} stroke={2.8} /></button>
             </div>
           </div>
         </>
       ) : (
         <div className="cw-card pop">
-          <div className="cw-card-icon">{yt ? "▶️" : "🎬"}</div>
+          <div className="cw-card-icon"><Icon name={yt ? "youtube" : "film"} size={42} stroke={2.2} /></div>
           <b className="cw-card-name">{w.src.name}</b>
           <div className="cw-card-sub">{who(w.by)} put this on · {clockOf(w.src.dur)}{yt ? "" : ` · ${sizeOf(w.src.size)}`}</div>
           {yt ? <div className="cw-warn">{bad}{onPickYt && <button type="button" className="press p-sun sm" onClick={onPickYt}>Pick another video</button>}</div>

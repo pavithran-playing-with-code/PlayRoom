@@ -12,6 +12,7 @@ import { useCall as useCallCtx, CALL_MAX, canShareScreen } from "../utils/CallCo
 import CallWatch from "./CallWatch";
 import { YtBrowse } from "./CallYouTube";
 import { usePresence } from "../utils/PresenceContext";
+import Icon from "./ui/Icon";
 import { canDocPip, openPip, updatePip, closePip, pipOpen } from "../utils/callPip";
 import { canFloatBoth, createFloat } from "../utils/callFloat";
 import { useDrawnSideways, isDrawnSideways, toGame, gameRect, isInstalled } from "./horror/LandscapeGate";
@@ -156,8 +157,8 @@ function FilmStage({ film, hide, shareRef, onBig, faces }) {
   return (
     <div className="call-share cw-film" ref={shareRef}>
       <div className="cw-film-box" ref={box} />
-      <div className="call-share-tag">🎬 {film.name}</div>
-      <button type="button" className="call-big" onClick={onBig} aria-label="Full screen">⛶</button>
+      <div className="call-share-tag"><Icon name="film" size={14} /> {film.name}</div>
+      <button type="button" className="call-big" onClick={onBig} aria-label="Full screen"><Icon name="expand" size={22} stroke={2.8} /></button>
       {faces}
     </div>
   );
@@ -213,12 +214,10 @@ function Sound({ stream, onNeedTap }) {
   return <audio ref={ref} className="call-sound" autoPlay />;
 }
 
-// a white handset: the 📞 emoji is red itself, and vanishes on a red button
-const Phone = () => (
-  <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
-    <path fill="#fff" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z" />
-  </svg>
-);
+// a white handset (the theme's icon): the 📞 emoji is red itself, and vanishes on a red button
+const Phone = () => <Icon name="phone" size={30} />;
+// a muted mic beside a name
+const Muted = () => <Icon name="micOff" size={11} stroke={3} className="call-muted-ico" />;
 
 // Drag something anywhere on the screen. A press that doesn't move is still
 // a tap (the corner picture swaps who's big); one that moves is a drag.
@@ -268,8 +267,8 @@ function ChatPanel({ chat, onSend, onClose, drag }) {
       <div className="call-chat-head" title="Drag to move the chat"
         onPointerDown={(e) => { if (e.target.closest("button")) return; drag.start(e, panel.current); }}
         onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.end}>
-        <b>💬 Chat</b><span className="call-chat-note">only in this call · not saved</span>
-        <button type="button" className="call-chat-x" onClick={onClose} aria-label="Close the chat">✕</button>
+        <b><Icon name="chat" size={17} /> Chat</b><span className="call-chat-note">only in this call · not saved</span>
+        <button type="button" className="call-chat-x" onClick={onClose} aria-label="Close the chat"><Icon name="close" size={16} stroke={3} /></button>
       </div>
       <div className="call-chat-list" ref={listRef}>
         {chat.length === 0 && <div className="call-chat-empty">Say hi 👋</div>}
@@ -645,14 +644,14 @@ export default function CallLayer() {
         return (
           <div className="call-mini-tile" key={m.id} title={m.name}>
             {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
-            <span className="call-mini-name">{m.name}{p.mic === false ? " 🔇" : ""}</span>
+            <span className="call-mini-name">{m.name}{p.mic === false && <Muted />}</span>
           </div>
         );
       })}
       {showMe && (
         <div className="call-mini-tile me" title="You">
           {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
-          <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
+          <span className="call-mini-name">You{!mic && <Muted />}</span>
         </div>
       )}
     </div>
@@ -672,17 +671,17 @@ export default function CallLayer() {
             return (
               <span className="call-share-face" key={m.id}>
                 {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
-                <span className="call-mini-name">{m.name}{p.mic === false ? " 🔇" : ""}</span>
+                <span className="call-mini-name">{m.name}{p.mic === false && <Muted />}</span>
               </span>
             );
           })}
           {showMe && (
             <span className="call-share-face">
               {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
-              <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
+              <span className="call-mini-name">You{!mic && <Muted />}</span>
             </span>
           )}
-          <span className="call-share-faces-hide" aria-hidden="true">✕</span>
+          <span className="call-share-faces-hide" aria-hidden="true"><Icon name="close" size={12} stroke={3.2} /></span>
         </>
       )}
     </button>
@@ -694,7 +693,7 @@ export default function CallLayer() {
       {notice && !ringing && <div className="call-notice" role="status">{notice.text}</div>}
       {C.elsewhere && !call && !ringing && (
         <div className="call-elsewhere" role="status">
-          <span>📞 {C.elsewhere.sid ? "In a call" : "Your call"} on your other device{C.elsewhere.with.length ? ` · ${C.elsewhere.with.join(", ")}` : ""}</span>
+          <span><Icon name="phone" size={14} /> {C.elsewhere.sid ? "In a call" : "Your call"} on your other device{C.elsewhere.with.length ? ` · ${C.elsewhere.with.join(", ")}` : ""}</span>
           <button type="button" onClick={C.moveHere}>Move here</button>
         </div>
       )}
@@ -709,7 +708,7 @@ export default function CallLayer() {
             <div className="call-ring-who">{ring.from.name}</div>
             <div className="call-ring-sub">{ring.members.length > 1 ? `is calling you — ${ring.members.length} in the call` : "is calling you…"}{call ? " · this ends your call" : ""}</div>
             <div className="call-ring-btns">
-              <span className="call-ring-opt"><button type="button" className="call-btn red" onClick={C.decline} aria-label="Decline">✕</button>Decline</span>
+              <span className="call-ring-opt"><button type="button" className="call-btn red" onClick={C.decline} aria-label="Decline"><Icon name="close" size={28} stroke={3} /></button>Decline</span>
               <span className="call-ring-opt"><button type="button" className="call-btn green" onClick={C.accept} aria-label="Accept"><Phone /></button>Accept</span>
             </div>
           </div>
@@ -747,8 +746,8 @@ export default function CallLayer() {
                     {zoom.scale.toFixed(1)}× · 1×
                   </button>
                 )}
-                <div className="call-share-tag">{peers[sharer.id].film ? `🎬 ${peers[sharer.id].film} · from ${sharer.name}` : `🖥️ ${sharer.name}'s screen`}</div>
-                <button type="button" className="call-big" onClick={big} aria-label="Full screen">⛶</button>
+                <div className="call-share-tag"><Icon name={peers[sharer.id].film ? "film" : "screen"} size={14} /> {peers[sharer.id].film ? `${peers[sharer.id].film} · from ${sharer.name}` : `${sharer.name}'s screen`}</div>
+                <button type="button" className="call-big" onClick={big} aria-label="Full screen"><Icon name="expand" size={22} stroke={2.8} /></button>
                 {stageFaces}
               </div>
               {strip}
@@ -770,9 +769,9 @@ export default function CallLayer() {
                   <div className="call-tile" key={m.id}>
                     {showVid && <Vid stream={p.stream} className="call-full" turn={p.turn} />}
                     {!showVid && <Face avatar={avatarOf(m.id)} name={seats > 1 ? m.name : null} big={seats === 1} />}
-                    <div className="call-tag">{m.name}{p.mic === false ? " · 🔇" : ""}</div>
+                    <div className="call-tag">{m.name}{p.mic === false && <Muted />}</div>
                     {(p.hold || m.away) ? (
-                      <div className="call-weak hold"><b>⏸ On hold</b><span>{m.name} stepped away — the call carries on when they're back</span></div>
+                      <div className="call-weak hold"><b><Icon name="pause" size={16} /> On hold</b><span>{m.name} stepped away — the call carries on when they're back</span></div>
                     ) : p.link === "lost" ? <div className="call-weak">Reconnecting…</div> : null}
                     {p.link === "connecting" && !m.away && !p.hold && <div className="call-weak">Connecting…</div>}
                     {p.link === "blocked" && !m.away && !p.hold && (
@@ -800,23 +799,23 @@ export default function CallLayer() {
               aria-label={canSwap ? (swap ? "Make them big" : "Make me big") : "Your camera"} disabled={!canSwap}>
               {swap
                 ? (theirVid ? <Vid stream={peers[others[0].id].stream} className="call-full" turn={peers[others[0].id].turn} /> : <span className="call-emoji">{avatarOf(others[0].id) || "🙂"}</span>)
-                : cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <div className="call-me-off">📷 off</div>}
+                : cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <div className="call-me-off"><Icon name="camOff" size={22} /></div>}
             </button>
           )}
 
           <div className="call-top">
             <button type="button" className="call-mini" onClick={minimise} aria-label="Shrink the call" title="Minimise — the call floats over your apps">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              <Icon name="down" size={22} stroke={3} />
             </button>
             {active && room && (
               <button type="button" className="call-mini" onClick={() => setPicking(true)} aria-label="Add a friend to the call">
-                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></svg>
+                <Icon name="plus" size={20} stroke={3} />
               </button>
             )}
             {active && others.length > 0 && (
               <button type="button" className="call-mini" onClick={() => { setFacesNote(""); setFacesOpen(true); }} aria-label="Choose whose faces you see"
                 title="Choose whose faces you see in the mini screen">
-                <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true"><circle cx="9" cy="8" r="3.4" fill="none" stroke="#fff" strokeWidth="2.4" /><path d="M2.8 19c.6-3.4 3.2-5.2 6.2-5.2s5.6 1.8 6.2 5.2" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" /><path d="M16 5.2a3.2 3.2 0 0 1 0 6.1M18.3 14.3c1.6.8 2.6 2.4 2.9 4.7" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" /></svg>
+                <Icon name="people" size={21} />
                 {hiddenN > 0 && <span className="call-badge" aria-hidden="true">{hiddenN}</span>}
               </button>
             )}
@@ -825,33 +824,33 @@ export default function CallLayer() {
 
           {screen && (
             <div className="call-sharing" role="status">
-              {C.film ? "🎬 Everyone's watching your video" : "🖥️ You're sharing your screen"}
+              <Icon name={C.film ? "film" : "screen"} size={17} /> {C.film ? "Everyone's watching your video" : "You're sharing your screen"}
               <button type="button" className="press p-coral sm" onClick={C.share}>Stop</button>
             </div>
           )}
 
           {tapForSound && (
             <button type="button" className="call-tap" onClick={() => { document.querySelectorAll("audio.call-sound").forEach((a) => a.play().catch(() => {})); setTapForSound(false); }}>
-              🔊 Tap to hear them
+              <Icon name="sound" size={20} /> Tap to hear them
             </button>
           )}
 
           <div className="call-bar">
-            <button type="button" className={`call-btn${mic ? "" : " off"}`} onClick={C.toggleMic} aria-label={mic ? "Mute" : "Unmute"} aria-pressed={!mic}>{mic ? "🎤" : "🔇"}</button>
+            <button type="button" className={`call-btn${mic ? "" : " off"}`} onClick={C.toggleMic} aria-label={mic ? "Mute" : "Unmute"} aria-pressed={!mic}><Icon name={mic ? "mic" : "micOff"} size={28} /></button>
             {local && local.getVideoTracks().length > 0 && (
               <>
-                <button type="button" className={`call-btn${cam ? "" : " off"}`} onClick={C.toggleCam} aria-label={cam ? "Camera off" : "Camera on"} aria-pressed={!cam}>{cam ? "📹" : "🚫"}</button>
-                <button type="button" className="call-btn" onClick={C.flip} aria-label="Switch camera">🔄</button>
+                <button type="button" className={`call-btn${cam ? "" : " off"}`} onClick={C.toggleCam} aria-label={cam ? "Camera off" : "Camera on"} aria-pressed={!cam}><Icon name={cam ? "cam" : "camOff"} size={28} /></button>
+                <button type="button" className="call-btn" onClick={C.flip} aria-label="Switch camera"><Icon name="flip" size={27} /></button>
               </>
             )}
             {call.phase === "active" && (
               <button type="button" className={`call-btn${screen || watch ? " off" : ""}`} onClick={() => (screen ? C.share() : setShareMenu(true))}
-                aria-label={screen ? "Stop sharing your screen" : "Share"} aria-pressed={!!screen}>🖥️</button>
+                aria-label={screen ? "Stop sharing your screen" : "Share"} aria-pressed={!!screen}><Icon name="screen" size={27} /></button>
             )}
             {active && (
               <button type="button" className={`call-btn call-chat-btn${chatOpen ? " off" : ""}`} onClick={() => C.setChatOpen(!chatOpen)}
                 aria-label={unread ? `Chat, ${unread} new` : "Chat"} aria-pressed={!!chatOpen}>
-                💬{unread > 0 && <span className="call-badge">{unread > 9 ? "9+" : unread}</span>}
+                <Icon name="chat" size={27} />{unread > 0 && <span className="call-badge">{unread > 9 ? "9+" : unread}</span>}
               </button>
             )}
             <button type="button" className="call-btn red" onClick={C.hangUp} aria-label={call.phase === "active" ? "Hang up" : "Cancel"}><Phone /></button>
@@ -876,9 +875,9 @@ export default function CallLayer() {
               onClick={(e) => { if (e.target === e.currentTarget) setShareMenu(false); }}>
               <div className="call-pick-card pop">
                 <div className="call-pick-head"><b>Share with the call</b>
-                  <button type="button" className="press p-white sm" onClick={() => setShareMenu(false)} aria-label="Close">✕</button></div>
+                  <button type="button" className="press p-white sm call-x" onClick={() => setShareMenu(false)} aria-label="Close"><Icon name="close" size={16} stroke={3} /></button></div>
                 <label className="call-share-opt">
-                  <span className="call-share-opt-icon">🎬</span>
+                  <span className="call-share-opt-icon c-film"><Icon name="film" size={26} /></span>
                   <span><b>{C.film ? "Play a different video" : "Watch a video together"}</b>
                     <small>Pick a video from your phone: everyone in the call sees and hears it</small></span>
                   <input type="file" accept="video/*,.mkv,.mov,.mp4,.webm" hidden aria-label="Pick a video to watch together" onChange={(e) => {
@@ -888,13 +887,13 @@ export default function CallLayer() {
                   }} />
                 </label>
                 <button type="button" className="call-share-opt" onClick={() => { setShareMenu(false); setYtOpen(true); }}>
-                  <span className="call-share-opt-icon">▶️</span>
+                  <span className="call-share-opt-icon c-yt"><Icon name="youtube" size={26} /></span>
                   <span><b>YouTube together</b>
                     <small>Find a video and everyone watches it in sync</small></span>
                 </button>
                 <button type="button" className={`call-share-opt${canShareScreen() ? "" : " cant"}`} disabled={!canShareScreen()}
                   onClick={() => { setShareMenu(false); C.share(); }}>
-                  <span className="call-share-opt-icon">🖥️</span>
+                  <span className="call-share-opt-icon c-screen"><Icon name="screen" size={26} /></span>
                   <span><b>Share your screen</b>
                     <small>{canShareScreen() ? "A tab, a window or the whole screen" : "Needs a computer: phone browsers don't let websites share the screen"}</small></span>
                 </button>
@@ -906,10 +905,10 @@ export default function CallLayer() {
             <div className="call-pick" role="dialog" aria-label="Screen sharing needs a computer"
               onClick={(e) => { if (e.target === e.currentTarget) C.setShareHelp(false); }}>
               <div className="call-pick-card pop call-help">
-                <div className="call-help-icon">🖥️</div>
+                <div className="call-help-icon"><Icon name="screen" size={44} stroke={2.2} /></div>
                 <b className="call-help-title">Screen sharing needs a computer</b>
                 <p>Phone browsers — Chrome on Android, Safari on iPhone — don't let <i>any</i> website share your screen. Only installed apps like WhatsApp or Discord can. It's the phone's rule, not PlayRoom's.</p>
-                <p className="call-help-how"><b>To share a film or a game:</b> join this call from a computer with Chrome or Edge, tap 🖥️ there, and pick a tab (tick “Share tab audio” for sound). Everyone can watch on their phones.</p>
+                <p className="call-help-how"><b>To share a film or a game:</b> join this call from a computer with Chrome or Edge, tap Share there, and pick a tab (tick “Share tab audio” for sound). Everyone can watch on their phones.</p>
                 <button type="button" className="press p-sun" onClick={() => C.setShareHelp(false)}>Got it</button>
               </div>
             </div>
@@ -920,7 +919,7 @@ export default function CallLayer() {
               <div className="call-pick-card pop">
                 <div className="call-pick-head">
                   <b>Faces in the mini screen</b>
-                  <button type="button" className="press p-white sm" onClick={() => setFacesOpen(false)} aria-label="Close">✕</button>
+                  <button type="button" className="press p-white sm" onClick={() => setFacesOpen(false)} aria-label="Close"><Icon name="close" size={16} stroke={3} /></button>
                 </div>
                 {[...others.map((m) => ({ key: String(m.id), name: m.name, avatar: avatarOf(m.id) || "🙂" })), { key: "me", name: "You", avatar: "🙂" }].map((f) => (
                   <button type="button" key={f.key} className={`call-pick-row call-face-row${seen(f.key) ? "" : " hidden"}`} onClick={() => toggleFace(f.key)}
@@ -941,7 +940,7 @@ export default function CallLayer() {
               <div className="call-pick-card pop">
                 <div className="call-pick-head">
                   <b>🎙️ Your microphone</b>
-                  <button type="button" className="press p-white sm" onClick={() => C.setMics(null)} aria-label="Close">✕</button>
+                  <button type="button" className="press p-white sm" onClick={() => C.setMics(null)} aria-label="Close"><Icon name="close" size={16} stroke={3} /></button>
                 </div>
                 {C.mics.length === 0
                   ? <div className="call-pick-none">No microphone found. Check one is plugged in and allowed for this browser.</div>
@@ -963,7 +962,7 @@ export default function CallLayer() {
               <div className="call-pick-card pop">
                 <div className="call-pick-head">
                   <b>Add to the call</b>
-                  <button type="button" className="press p-white sm" onClick={() => setPicking(false)} aria-label="Close">✕</button>
+                  <button type="button" className="press p-white sm" onClick={() => setPicking(false)} aria-label="Close"><Icon name="close" size={16} stroke={3} /></button>
                 </div>
                 {canAdd.length === 0
                   ? <div className="call-pick-none">None of your friends are online right now.</div>
@@ -972,7 +971,7 @@ export default function CallLayer() {
                       onClick={() => { C.startCall(f); setPicking(false); }} aria-label={`Add ${f.username}`}>
                       <span className="call-emoji">{f.avatar || "🙂"}</span>
                       <span className="call-pick-name">{f.username}</span>
-                      <span className="call-pick-go">📞</span>
+                      <span className="call-pick-go"><Icon name="phone" size={20} /></span>
                     </button>
                   ))}
                 <div className="call-pick-note">Up to {CALL_MAX} in a call</div>
@@ -1007,7 +1006,7 @@ export default function CallLayer() {
             <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M1 5V1h4M1 1l5 5M11 7v4H7M11 11L6 6" fill="none" stroke="#2E2140" strokeWidth="1.8" strokeLinecap="round" /></svg>
           </span>
           {unread > 0 && <span className="call-badge on-bubble">{unread > 9 ? "9+" : unread}</span>}
-          <div className="call-bubble-tag">{shown ? "🖥️ " : ""}{call.phase === "active" ? clock(now - (call.startedAt || now)) : "Calling…"}{mic ? "" : " 🔇"}</div>
+          <div className="call-bubble-tag">{shown && <Icon name="screen" size={11} stroke={3} />}{call.phase === "active" ? clock(now - (call.startedAt || now)) : "Calling…"}{!mic && <Muted />}</div>
         </div>
       )}
     </div>

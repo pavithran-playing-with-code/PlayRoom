@@ -2007,3 +2007,45 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
   .pc-friends,.pc-cats{margin-left:-14px;margin-right:-14px;padding-left:14px;padding-right:14px}
   .play-hi{margin-bottom:10px}
 }
+
+/* ── ICONS (.ico): PlayRoom's own set (components/ui/Icon.jsx), drawn in the
+   text's colour. Here: how they sit in what holds them. ── */
+.ico{display:inline-block;flex:none;vertical-align:-.2em}
+.navlink{display:inline-flex;align-items:center;gap:6px}
+.chip .ico{vertical-align:-.15em}
+.pc-cat{display:inline-flex;align-items:center;gap:5px}
+.play-nudge > span{display:inline-flex;align-items:center;gap:6px}
+.lsheet-lbl,.wr-h{display:flex;align-items:center;gap:6px}
+.lsheet-x,.qp-x,.qp-inviting button,.pc-search button,.cw-x,.cw-play,.cw-big,.call-big,.yt-back,.yt-go,.yt-clear,.call-chat-x,.call-mini{
+  display:inline-grid;place-items:center;padding:0}
+.call-pick-head .press{width:38px;height:38px;padding:0;border-radius:999px;--lift:3px}
+.qp-fcard-acts .press{display:inline-flex;align-items:center;gap:6px}
+.qp-inviting > span .ico{margin-right:4px;vertical-align:-3px}
+.opt-ico{display:grid;place-items:center}
+.pc-friends-l{gap:2px}
+.pc-dot{width:12px;height:12px;border-radius:50%;background:var(--leaf);border:2px solid var(--ink)}
+.pc-again-set{display:inline-flex;align-items:center;gap:3px}
+.pc-search > .ico{color:var(--ink-soft)}
+.howto-box summary .ico{margin-right:2px}
+.rm-h{display:flex;align-items:center;gap:8px;font-size:1.35rem;margin-bottom:4px}
+.sec-h .rm-h{font-size:2rem;margin:0}
+.tab-ic{display:grid;place-items:center;height:26px}
+.tab.on .ico{color:#2E2140}
+.press.dur .ico{display:block;margin:0 auto}
+/* the call: white strokes on the round buttons, ink on a pressed one */
+.call-btn .ico{display:block}
+.call-muted-ico{margin-left:3px;vertical-align:-1px}
+.call-tap,.call-sharing,.cw-wait,.cw-sound,.cw-tap,.call-share-tag,.call-elsewhere > span,.call-weak.hold b{display:inline-flex;align-items:center;gap:6px}
+.cw-wait{display:flex}
+.call-share-tag{display:inline-flex}
+.call-me-off{display:grid;place-items:center;color:#fff}
+.call-share-opt-icon{display:grid;place-items:center;width:46px;height:46px;border:3px solid var(--ink);border-radius:14px;color:#2E2140}
+.call-share-opt-icon.c-film{background:var(--sun)}
+.call-share-opt-icon.c-yt{background:var(--coral);color:#fff}
+.call-share-opt-icon.c-screen{background:var(--sky)}
+.call-help-icon{display:grid;place-items:center}
+.call-pick-go{color:#2E2140}
+.call-bubble-tag .ico{vertical-align:-1px;margin-right:2px}
+.cw-name .ico{vertical-align:-3px;margin-right:2px}
+.cw-card-icon{display:grid;place-items:center}
+.wr-chat .wr-h .ico,.call-chat-head b .ico{vertical-align:-3px}

@@ -269,8 +269,13 @@ export default function Lobby() {
                   <button type="button" className="qp-x" onClick={() => setPickedId(null)} aria-label="Close"><Icon name="close" size={15} stroke={3} /></button>
                 </div>
                 <div className="qp-fcard-acts">
+                  {/* A call rings a phone that's open: the server refuses an
+                      offline friend, so the button says so instead of asking
+                      for the camera first and failing after. */}
                   <button type="button" className="press p-lime sm" onClick={() => { startCall(picked); setPickedId(null); }}
-                    disabled={!!onCall && onCall.members.some((m) => Number(m.id) === Number(picked.id))}><Icon name="phone" size={16} /> Call</button>
+                    disabled={!picked.online || (!!onCall && onCall.members.some((m) => Number(m.id) === Number(picked.id)))}
+                    aria-label={picked.online ? `Video call ${picked.username}` : `${picked.username} is offline — calls need them online`}>
+                    <Icon name="phone" size={16} /> {picked.online ? "Call" : "Offline"}</button>
                   <button type="button" className="press p-sun sm" onClick={() => inviteToGame(picked)}><Icon name="mail" size={17} /> Invite to a game</button>
                   {picked.playing && (
                     <button type="button" className="press p-sky sm" onClick={() => watch(picked)} disabled={watching}>

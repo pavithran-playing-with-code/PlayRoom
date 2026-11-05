@@ -1,7 +1,7 @@
 // src/pages/Lobby.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import { shelve } from "../components/games/shelves";
+import { SHELVES } from "../components/games/shelves";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
 import { usePresence } from "../utils/PresenceContext";
@@ -27,6 +27,14 @@ const DURATIONS = [
   { s: 0, label: "♾️", name: "Unlimited" },        // the icon alone: the word didn't fit a phone's button
 ];
 const lengthText = (secs) => (secs === 0 ? "no time limit" : `${Math.round(secs / 60)} min`);
+// The chips over the games: every game, a group, the team games, or search.
+const CAT_LABEL = { quick: "⚡ Quick", puzzle: "🧩 Puzzles", action: "🏁 Racing", big: "🌋 Adventures" };
+const CATS = [{ key: "all", label: "🎲 All" },
+  ...SHELVES.map((s) => ({ key: s.key, label: CAT_LABEL[s.key] || s.title })),
+  { key: "team", label: "🤝 Team" }];
+const CAT_KEY = "pr_play_cat";
+const savedCat = () => { try { const c = localStorage.getItem(CAT_KEY); return CATS.some((x) => x.key === c) ? c : "all"; } catch { return "all"; } };
+
 const shortLen = (secs) => (secs === 0 ? "♾️" : `${Math.round(secs / 60)} min`);
 
 // The Play tab: friends online at the top (tap one to invite them into
@@ -58,7 +66,12 @@ export default function Lobby() {
     else setParams({}, { replace: true });
   };
 
-  const [onlyTogether, setOnlyTogether] = useState(false);
+  // Which chip is on, remembered on this phone. "Team" shows the games you
+  // can play as a team, and ticks Play as a team in their sheet.
+  const [cat, setCatState] = useState(savedCat);
+  const setCat = (c) => { setCatState(c); try { localStorage.setItem(CAT_KEY, c); } catch { /* private window */ } };
+  const onlyTogether = cat === "team";
+  const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   // Your last settings come back with you.
   const [maxPlayers, setMaxPlayers] = useState(last?.maxPlayers || 2);
@@ -199,14 +212,13 @@ export default function Lobby() {
   });
 
   const lastGame = last && GAME_MAP[last.slug];
-  const q = query.trim().toLowerCase();
-  const pool = GAMES.filter((g) => !onlyTogether || g.coopMax > 0);
-  // Searching shows one flat list of matches; otherwise the games sit in
-  // their groups.
-  const groups = q
-    ? [{ key: "found", title: null, games: pool.filter((g) => g.name.toLowerCase().includes(q)) }]
-    : shelve(pool);
-  const found = groups.reduce((n, r) => n + r.games.length, 0);
+  const q = searching ? query.trim().toLowerCase() : "";
+  const shelf = SHELVES.find((x) => x.key === cat);
+  // Searching looks through every game; otherwise the chip decides.
+  const shown = q ? GAMES.filter((g) => g.name.toLowerCase().includes(q))
+    : cat === "team" ? GAMES.filter((g) => g.coopMax > 0)
+    : shelf ? GAMES.filter((g) => shelf.games.includes(g.slug))
+    : GAMES;
   const online = friends.filter((f) => f.online);
   const strip = online.length ? online : friends.slice(0, 8);
   const picked = friends.find((f) => f.id === pickedId) || null;
@@ -229,18 +241,16 @@ export default function Lobby() {
         {/* Friends: online first. Tap one for their card: call them, invite
             them into a game, or watch the match they're in. */}
         {friends.length > 0 && (
-          <section className="qp-sec">
-            <h2 className="shelf-h">
-              {online.length ? <>🟢 Online now<span className="muted">{online.length}</span></> : "👥 Your friends"}
-            </h2>
-            <div className="qp-friends">
+          <section className="pc-sec">
+            <div className="pc-friends">
+              <span className="pc-friends-l">{online.length ? <>🟢<b>{online.length}</b></> : "👥"}</span>
               {strip.map((f) => {
                 const on = pickedId === f.id || invitee?.id === f.id;
                 return (
-                  <button key={f.id} type="button" className={`qp-friend${on ? " on" : ""}`} aria-pressed={on}
-                    aria-expanded={pickedId === f.id}
+                  <button key={f.id} type="button" className={`pc-friend${on ? " on" : ""}`} aria-pressed={on}
+                    aria-expanded={pickedId === f.id} aria-label={`${f.username}, ${presenceLabel(f)}`}
                     onClick={() => setPickedId((v) => (v === f.id ? null : f.id))}>
-                    <Avatar emoji={f.avatar} size={50} seed={f.id} online={f.online} className={f.online ? "" : "is-off"} />
+                    <Avatar emoji={f.avatar} size={42} seed={f.id} online={f.online} className={f.online ? "" : "is-off"} />
                     <span>{f.username}</span>
                   </button>
                 );
@@ -274,9 +284,7 @@ export default function Lobby() {
                 <span>💌 Pick a game to play with <b>{invitee.username}</b></span>
                 <button type="button" onClick={() => setInvitee(null)} aria-label="Stop inviting">✕</button>
               </div>
-            ) : (
-              <p className="muted qp-tip">{online.length ? "Tap a friend to call or invite them." : "No one's online — tap a friend to call or invite them anyway."}</p>
-            )}
+            ) : null}
           </section>
         )}
 
@@ -289,54 +297,53 @@ export default function Lobby() {
 
         {/* Your last match, one tap from playing again with the same settings. */}
         {lastGame && (
-          <section className="qp-sec">
-            <h2 className="shelf-h">⚡ Play again</h2>
-            <div className="qp-again" style={{ background: lastGame.col }}>
-              <span className="qp-again-ic"><GameIcon icon={lastGame.icon} /></span>
-              <span className="qp-again-txt">
+          <div className="pc-again" style={{ background: lastGame.col }}>
+            <button type="button" className="pc-again-info" onClick={() => openGame(lastGame.slug)}
+              aria-label={`Change settings for ${lastGame.name}`}>
+              <span className="pc-again-ic"><GameIcon icon={lastGame.icon} /></span>
+              <span className="pc-again-txt">
+                <small>Play again</small>
                 <b>{lastGame.name}</b>
-                <small>
-                  {last.maxPlayers === 1 ? "🧍 Solo" : `👥 ${last.maxPlayers}`}
-                  {!lastGame.endless && ` · ⏱️ ${shortLen(last.duration)}`}
-                  {last.mode === "coop" ? " · 🤝 Team" : last.mode === "teams" ? " · ⚔️ Teams" : ""}
-                </small>
               </span>
-              <button type="button" className="press p-coral qp-again-go" disabled={creating}
-                onClick={() => createRoom(last)}>{creating ? "…" : "▶ Play"}</button>
-            </div>
-            <button type="button" className="qp-change" onClick={() => openGame(lastGame.slug)}>Change settings</button>
-          </section>
+              <span className="pc-again-set">
+                {last.maxPlayers === 1 ? "🧍" : `👥${last.maxPlayers}`}
+                {!lastGame.endless && ` · ${shortLen(last.duration)}`}
+              </span>
+            </button>
+            <button type="button" className="press p-coral pc-again-go" disabled={creating}
+              onClick={() => createRoom(last)} aria-label={`Play ${lastGame.name} again`}>{creating ? "…" : "▶"}</button>
+          </div>
         )}
 
-        <div className="play-filter">
-          <button type="button" className={`chip lb-together${onlyTogether ? " on" : ""}`} aria-pressed={onlyTogether}
-            onClick={() => setOnlyTogether((o) => !o)}>
-            🤝 Team games only{onlyTogether ? " ✓" : ""}
-          </button>
-        </div>
-
-        <section className="qp-sec" id="qp-games">
-          <div className="qp-allh">
-            <h2 className="shelf-h">🎲 Games<span className="muted">{pool.length}</span></h2>
-            <label className="qp-search">
-              <span aria-hidden="true">🔍</span>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search games" />
-            </label>
+        <section className="pc-sec" id="qp-games">
+          <div className="pc-cats" role="tablist" aria-label="Game groups">
+            {CATS.map((c) => (
+              <button key={c.key} type="button" role="tab" aria-selected={!searching && cat === c.key}
+                className={`pc-cat${!searching && cat === c.key ? " on" : ""}`}
+                onClick={() => { setSearching(false); setQuery(""); setCat(c.key); }}>{c.label}</button>
+            ))}
+            <button type="button" className={`pc-cat${searching ? " on" : ""}`} aria-pressed={searching} aria-label="Search games"
+              onClick={() => { setSearching((x) => !x); setQuery(""); }}>🔍</button>
           </div>
-          {found === 0 && <p className="muted" style={{ padding: "16px 0" }}>No game called “{query}”.</p>}
-          {groups.filter((r) => r.games.length).map((row) => (
-            <div key={row.key} className="qp-group">
-              {row.title && <h3 className="qp-group-h">{row.title}<span className="muted">{row.games.length}</span></h3>}
-              <div className="qp-grid">
-                {row.games.map((g) => (
-                  <button key={g.slug} type="button" className="qp-tile" data-game={g.slug} onClick={() => openGame(g.slug)}>
-                    <span className="qp-tile-ic" style={{ background: g.col }}><GameIcon icon={g.icon} /></span>
-                    <span className="qp-tile-name">{g.name}</span>
-                  </button>
-                ))}
-              </div>
+          {searching && (
+            <label className="pc-search">
+              <span aria-hidden="true">🔍</span>
+              <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a game" aria-label="Find a game" />
+              {query && <button type="button" onClick={() => setQuery("")} aria-label="Clear">✕</button>}
+            </label>
+          )}
+          {shown.length === 0 ? (
+            <p className="muted" style={{ padding: "18px 4px" }}>No game called “{query}”.</p>
+          ) : (
+            <div className="pc-grid">
+              {shown.map((g) => (
+                <button key={g.slug} type="button" className="pc-tile" data-game={g.slug} onClick={() => openGame(g.slug)}>
+                  <span className="pc-tile-ic" style={{ background: g.col }}><GameIcon icon={g.icon} /></span>
+                  <span className="pc-tile-name">{g.name}</span>
+                </button>
+              ))}
             </div>
-          ))}
+          )}
         </section>
       </div>
 

@@ -1,14 +1,12 @@
 // src/pages/Lobby.jsx
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { shelve } from "../components/games/shelves";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
 import { GAME_MAP } from "../components/games/registry";
 import useGames from "../components/games/useGames";
-import { useToast, Avatar } from "../components/ui";
-import { usePresence } from "../utils/PresenceContext";
-import { presenceLabel } from "../utils/timeAgo";
-import PeekBuddy from "../components/characters/PeekBuddy";
+import { useToast } from "../components/ui";
 import GameIcon from "../components/games/GameIcon";
 import { SONGS, LEVELS } from "../components/games/pianoSongs";
 import HowTo from "../components/games/HowTo";
@@ -26,21 +24,30 @@ const DURATIONS = [
 ];
 const lengthText = (secs) => (secs === 0 ? "no time limit" : `${Math.round(secs / 60)} min`);
 
+// The Play tab. Games on shelves you swipe sideways; tap one and its settings
+// slide up from the bottom with Start pinned under your thumb — no scrolling
+// past every option to find it. Joining someone else's room is /rooms.
 export default function Lobby() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
 
-  const [rooms, setRooms] = useState([]);
-  const [loadingRooms, setLoadingRooms] = useState(true);
-
-  // The chosen game lives in the URL (?game=arrows): a game card on the home
-  // page opens the lobby with that game already picked, and a refresh keeps it.
-  // Games in the database's order (game_types.sort_order).
+  // The open game lives in the URL (?game=arrows): a game card on the home
+  // page opens its sheet straight away, a refresh keeps it, and Back closes
+  // it. Games in the database's order (game_types.sort_order).
   const GAMES = useGames();
   const [params, setParams] = useSearchParams();
-  const game = GAME_MAP[params.get("game")] ? params.get("game") : GAMES[0].slug;
-  const setGame = (slug) => setParams({ game: slug }, { replace: true });
+  const sheetOpen = !!GAME_MAP[params.get("game")];
+  const game = sheetOpen ? params.get("game") : GAMES[0].slug;
+  // Opened here: a history entry of ours, so closing is Back. Arrived with
+  // it (from Home, a refresh): closing just clears it.
+  const pushed = useRef(false);
+  const openGame = (slug) => { pushed.current = true; setParams({ game: slug }); };
+  const closeSheet = () => {
+    if (pushed.current) { pushed.current = false; navigate(-1); }
+    else setParams({}, { replace: true });
+  };
+
   const [onlyTogether, setOnlyTogether] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(2);
   const [duration, setDuration] = useState(120);
@@ -49,10 +56,7 @@ export default function Lobby() {
   const [coopMode, setCoopMode] = useState(false);
   const [song, setSong] = useState(0);             // Piano Tiles: which song
   const [creating, setCreating] = useState(false);
-
-  const [joinCode, setJoinCode] = useState("");
-  const [joining, setJoining] = useState(false);
-  const codeRef = useRef(null);
+  const [openRooms, setOpenRooms] = useState(0);
 
   const selected = GAME_MAP[game] || GAMES[0];
   // Solo = 1 seat. Nobody can join, so the room is implicitly private and the
@@ -83,41 +87,34 @@ export default function Lobby() {
     if (selected.defaultDuration != null) setDuration(selected.defaultDuration);
   }, [selected.slug, selected.defaultDuration]);
 
-  // Play as a team starts ticked only for the games made for it (coopDefault:
-  // Kitchen Rush, Station 13, Sunshard Jump); for the rest you tick it.
+  // Play as a team starts ticked for the games made for it (coopDefault:
+  // Kitchen Rush, Station 13, Sunshard Jump), and for any game picked while
+  // the shelves show team games only; for the rest you tick it.
   useEffect(() => {
-    if (selected.coopDefault) { setCoopMode(true); setTeamMode(false); } else setCoopMode(false);
-  }, [selected.slug, selected.coopDefault]);
+    if (selected.coopDefault || onlyTogether) { setCoopMode(true); setTeamMode(false); } else setCoopMode(false);
+  }, [selected.slug, selected.coopDefault, onlyTogether]);
 
-  // Arriving with a game already picked (a tile on the home page): bring its
-  // settings and the start button into view, not the top of the page. Once,
-  // on arrival — picking another game here doesn't move the page.
-  const arrivedWithGame = useRef(!!GAME_MAP[params.get("game")]);
+  // The sheet holds the page still behind it, and Escape closes it.
   useEffect(() => {
-    if (!arrivedWithGame.current) return undefined;
-    arrivedWithGame.current = false;
-    const t = setTimeout(() => {
-      const b = document.getElementById("createBtn");
-      if (!b) return;
-      const r = b.getBoundingClientRect();
-      window.scrollTo({ top: Math.max(0, window.scrollY + r.bottom - window.innerHeight + 24), behavior: "smooth" });
-    }, 250);
-    return () => clearTimeout(t);
+    if (!sheetOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => { if (e.key === "Escape") closeSheet(); };
+    document.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; document.removeEventListener("keydown", onKey); };
+    // closeSheet only reads a ref and the router
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetOpen]);
+
+  // How many open rooms there are, once, for the nudge toward the Rooms tab.
+  // (The Rooms tab keeps itself fresh; this page doesn't poll.)
+  useEffect(() => {
+    let alive = true;
+    api.get("/api/rooms").then((r) => r.json())
+      .then((d) => { if (alive && d.success) setOpenRooms(d.rooms.length); })
+      .catch(() => {});
+    return () => { alive = false; };
   }, []);
-
-  const fetchRooms = useCallback(async () => {
-    try {
-      const res = await api.get("/api/rooms");
-      const data = await res.json();
-      if (data.success) setRooms(data.rooms);
-    } catch { /* silent */ } finally { setLoadingRooms(false); }
-  }, []);
-
-  useEffect(() => {
-    fetchRooms();
-    const t = setInterval(fetchRooms, 5000);
-    return () => clearInterval(t);
-  }, [fetchRooms]);
 
   async function handleCreate() {
     setCreating(true);
@@ -135,325 +132,195 @@ export default function Lobby() {
       // game, no waiting room on the way. (If that fails, the room's own
       // Start button is still there.)
       if (isSolo) { try { await api.patch(`/api/rooms/${data.room.room_code}/start`, {}); } catch { /* the room page can start it */ } }
-      navigate(`/room/${data.room.room_code}`);
+      // In place of the open sheet: Back from the room comes to the shelves.
+      navigate(`/room/${data.room.room_code}`, { replace: true });
     } catch { toast.error("Failed to create room."); }
     finally { setCreating(false); }
   }
 
-  async function handleJoin(e) {
-    e?.preventDefault();
-    if (!joinCode.trim()) return;
-    setJoining(true);
-    try {
-      const code = joinCode.trim().toUpperCase();
-      const res = await api.post("/api/rooms/join", { room_code: code });
-      const data = await res.json();
-      if (!data.success) { toast.error(data.message || "Could not join."); return; }
-      navigate(`/room/${code}`);
-    } catch { toast.error("Failed to join room."); }
-    finally { setJoining(false); }
-  }
-
-  async function quickJoin(code) {
-    try {
-      const res = await api.post("/api/rooms/join", { room_code: code });
-      const data = await res.json();
-      if (data.success) navigate(`/room/${code}`);
-      else toast.error(data.message || "Could not join.");
-    } catch { toast.error("Could not join."); }
-  }
-
-  const label = "muted";
-  const stepLabel = { fontSize: ".78rem", letterSpacing: ".09em", textTransform: "uppercase", marginBottom: 10 };
+  const shelves = shelve(GAMES.filter((g) => !onlyTogether || g.coopMax > 0));
 
   return (
-    <div className="wrap">
+    <div className="wrap play-wrap">
       <div className="mid">
 
-        <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 26 }}>
-          <div className="row" style={{ gap: 14 }}>
-            <span className="face" style={{ width: 58, height: 58, fontSize: 29, background: "var(--sky)" }}>
-              <span style={{ lineHeight: 1 }}>{user?.avatar || "🎮"}</span>
-            </span>
-            <div>
-              <h1 style={{ fontSize: "1.9rem" }}>Hey {user?.username}! 👋</h1>
-              <p className="muted">Who are we beating today?</p>
-            </div>
+        <div className="play-hi">
+          <span className="face" style={{ width: 46, height: 46, fontSize: 23, background: "var(--sky)" }}>
+            <span style={{ lineHeight: 1 }}>{user?.avatar || "🎮"}</span>
+          </span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h1>Hey {user?.username}! 👋</h1>
+            <p className="muted">Pick a game to play.</p>
           </div>
-          <button className="press p-white sm" onClick={fetchRooms}>🔄 Refresh</button>
+          <Link to="/rooms" className="press p-mint sm play-join">🔗 Join</Link>
         </div>
 
-        <div className="grid" style={{ gridTemplateColumns: "1.55fr 1fr", alignItems: "start" }} id="lobbyGrid">
-          <div className="pop" style={{ padding: 26 }}>
-            <h2 style={{ fontSize: "1.5rem", marginBottom: 18 }}>✨ Start a match</h2>
+        {openRooms > 0 && (
+          <Link to="/rooms" className="play-nudge">
+            <span>🌐 <b>{openRooms}</b> open room{openRooms > 1 ? "s" : ""} you can hop into</span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        )}
 
-            {/* Which games can be played together is there when you ask for
-                it — a toggle that narrows the list — not a badge on every tile. */}
-            <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-              <div className={label} style={stepLabel}>1 · Game</div>
-              <button type="button" className={`chip lb-together${onlyTogether ? " on" : ""}`} aria-pressed={onlyTogether}
-                onClick={() => {
-                  const on = !onlyTogether;
-                  setOnlyTogether(on);
-                  if (on && !(selected.coopMax > 0)) setGame(GAMES.find((g) => g.coopMax > 0).slug);
-                }}>
-                🤝 Play as a team{onlyTogether ? " ✓" : ""}
-              </button>
-            </div>
-            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 12, marginBottom: 22 }}>
-              {GAMES.filter((g) => !onlyTogether || g.coopMax > 0).map((g) => (
-                <button key={g.slug} className="press pick" data-game={g.slug}
-                  aria-pressed={g.slug === game} onClick={() => setGame(g.slug)}
-                  style={{ flexDirection: "column", gap: 6, padding: "14px 8px", background: g.col, borderRadius: 20 }}>
-                  <span style={{ fontSize: "1.9rem", lineHeight: 1 }}><GameIcon icon={g.icon} /></span>
-                  <span style={{ fontSize: ".82rem", textAlign: "center", lineHeight: 1.15 }}>{g.name}</span>
+        {/* Which games can be played as a team is there when you ask for it —
+            a toggle that narrows the shelves — not a badge on every card. */}
+        <div className="play-filter">
+          <button type="button" className={`chip lb-together${onlyTogether ? " on" : ""}`} aria-pressed={onlyTogether}
+            onClick={() => setOnlyTogether((o) => !o)}>
+            🤝 Team games only{onlyTogether ? " ✓" : ""}
+          </button>
+        </div>
+
+        {shelves.map((row) => (
+          <section key={row.key} className="shelf">
+            <h2 className="shelf-h">{row.title}<span className="muted">{row.games.length}</span></h2>
+            <div className="shelf-row">
+              {row.games.map((g) => (
+                <button key={g.slug} type="button" className="press shelf-card" data-game={g.slug}
+                  style={{ background: g.col }} onClick={() => openGame(g.slug)}>
+                  <span className="shelf-ic"><GameIcon icon={g.icon} /></span>
+                  <span className="shelf-name">{g.name}</span>
                 </button>
               ))}
             </div>
-            {onlyTogether && (
-              <p className="muted" style={{ fontSize: ".82rem", margin: "-12px 0 18px" }}>Games you can play as a team.</p>
-            )}
+          </section>
+        ))}
+      </div>
 
-            {/* an endless game (Station 13, Sunshard Jump, Emberfall) has no clock to pick */}
-            {!selected.endless && (
-              <>
-                <div className={label} style={stepLabel}>2 · Clock</div>
-                <div className="durrow">
-                  {DURATIONS.map((d) => (
-                    <button key={d.s} className="press dur p-white" aria-pressed={duration === d.s}
-                      aria-label={d.name} title={d.name} onClick={() => setDuration(d.s)}>
-                      {d.label}
+      {sheetOpen && (
+        <div className="lsheet-scrim" onClick={closeSheet}>
+          <div className="lsheet" role="dialog" aria-modal="true" aria-label={`Start ${selected.name}`}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="lsheet-head" style={{ background: selected.col }}>
+              <span className="lsheet-ic"><GameIcon icon={selected.icon} /></span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <h2>{selected.name}</h2>
+                {selected.blurb && <p>{selected.blurb}</p>}
+              </div>
+              <button type="button" className="lsheet-x" onClick={closeSheet} aria-label="Close">✕</button>
+            </div>
+
+            <div className="lsheet-body">
+              {/* an endless game (Station 13, Sunshard Jump, Emberfall) has no clock to pick */}
+              {!selected.endless && (
+                <>
+                  <div className="lsheet-lbl">⏱️ Clock</div>
+                  <div className="durrow">
+                    {DURATIONS.map((d) => (
+                      <button key={d.s} className="press dur p-white" aria-pressed={duration === d.s}
+                        aria-label={d.name} title={d.name} onClick={() => setDuration(d.s)}>
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="lsheet-lbl">👥 Players</div>
+              {/* Solo and 2 are the usual picks, so they're one tap. Past that,
+                  the crew grows a face at a time up to 8. */}
+              <div className="seatpick" id="seats">
+                <button className="press seat p-white" aria-pressed={maxPlayers === 1}
+                  onClick={() => setMaxPlayers(1)}>🧍 Solo</button>
+                {/* a solo-only game (Emberfall, for now) offers just Solo */}
+                {selected.maxPlayers >= 2 && <button className="press seat p-white" aria-pressed={maxPlayers === 2}
+                  onClick={() => setMaxPlayers(2)}>👥 2</button>}
+                {selected.maxPlayers < 3 ? null : maxPlayers < 3 ? (
+                  <button className="press seat p-white" onClick={() => setMaxPlayers(3)}
+                    aria-label="More players">➕ More</button>
+                ) : (
+                  <span className="seatstep">
+                    <button className="press p-white step" aria-label="One player fewer"
+                      onClick={() => setMaxPlayers(maxPlayers - 1)}>–</button>
+                    <span className="seatcrew" aria-hidden="true">
+                      {Array.from({ length: maxPlayers }).map((_, i) => (
+                        <span key={i} className="face"
+                          style={{ background: CREW_COLS[i % CREW_COLS.length], zIndex: 9 - i }}>
+                          {CREW[i % CREW.length]}
+                        </span>
+                      ))}
+                    </span>
+                    <strong>{maxPlayers}</strong>
+                    <button className="press p-white step" aria-label="One player more"
+                      disabled={maxPlayers >= (coop ? coopMax : selected.maxPlayers)}
+                      onClick={() => setMaxPlayers(Math.min(coop ? coopMax : selected.maxPlayers, maxPlayers + 1))}>+</button>
+                  </span>
+                )}
+              </div>
+              <div className="muted seathint">
+                {isSolo
+                  ? (selected.maxPlayers === 1 ? "🧍 Solo — this game is played alone for now."
+                    : selected.endless ? "🧍 Solo — no clock, play as long as you like." : "🧍 Solo — just you and the clock.")
+                  : `👥 ${maxPlayers} players — everyone has to join before the game can start.`}
+              </div>
+
+              {/* Private and teams mean nothing for a solo run, so they're not asked. */}
+              {!isSolo && (
+                <div className="opts">
+                  <label className={`opt${isPrivate ? " on" : ""}`}>
+                    <span className="opt-ico" aria-hidden="true">🔒</span>
+                    <span className="opt-txt">Keep it private<small>Only people you invite can join</small></span>
+                    <input type="checkbox" className="switch" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
+                  </label>
+                  {/* Together: one side against the game. */}
+                  {coopMax > 0 && (
+                    <label className={`opt${coop ? " on" : ""}${canCoop ? "" : " off"}`}>
+                      <span className="opt-ico" aria-hidden="true">🤝</span>
+                      <span className="opt-txt">Play as a team
+                        <small>{canCoop ? (selected.coopLabel || "All of you on one side") : `2 to ${coopMax} players`}</small></span>
+                      <input type="checkbox" className="switch" checked={coop} disabled={!canCoop}
+                        onChange={(e) => { setCoopMode(e.target.checked); if (e.target.checked) setTeamMode(false); }} />
+                    </label>
+                  )}
+                  {/* Two sides of two: offered only once there are four seats. */}
+                  {canTeam && (
+                    <label className={`opt${teams ? " on" : ""}`}>
+                      <span className="opt-ico" aria-hidden="true">⚔️</span>
+                      <span className="opt-txt">Team match<small>Play as sides — highest total wins</small></span>
+                      <input type="checkbox" className="switch" checked={teams}
+                        onChange={(e) => { setTeamMode(e.target.checked); if (e.target.checked) setCoopMode(false); }} />
+                    </label>
+                  )}
+                </div>
+              )}
+
+              {/* Piano Tiles: pick the song — everyone in the room plays it */}
+              {game === "piano" && (
+                <div className="pt-songs" role="radiogroup" aria-label="Pick a song">
+                  {SONGS.map((sg, i) => (
+                    <button key={sg.name} type="button" role="radio" aria-checked={song === i}
+                      className={`pt-song${song === i ? " on" : ""}`} onClick={() => setSong(i)}>
+                      <span className="pt-song-ic">{sg.icon}</span>
+                      <b>{sg.name}</b>
+                      <span className={`pt-lvl lvl-${sg.level}`}>{LEVELS[sg.level].label}</span>
                     </button>
                   ))}
                 </div>
-              </>
-            )}
-
-            <div className={label} style={stepLabel}>{selected.endless ? "2" : "3"} · Seats</div>
-            {/* Solo and 2 are the usual picks, so they're one tap. Past that,
-                the crew grows a face at a time up to 8 — eight numbered
-                buttons in a row was a lot of furniture for a rare choice. */}
-            <div className="seatpick" id="seats">
-              <button className="press seat p-white" aria-pressed={maxPlayers === 1}
-                onClick={() => setMaxPlayers(1)}>🧍 Solo</button>
-              {/* a solo-only game (Emberfall, for now) offers just Solo */}
-              {selected.maxPlayers >= 2 && <button className="press seat p-white" aria-pressed={maxPlayers === 2}
-                onClick={() => setMaxPlayers(2)}>👥 2</button>}
-              {selected.maxPlayers < 3 ? null : maxPlayers < 3 ? (
-                <button className="press seat p-white" onClick={() => setMaxPlayers(3)}
-                  aria-label="More players">➕ More</button>
-              ) : (
-                <span className="seatstep">
-                  <button className="press p-white step" aria-label="One player fewer"
-                    onClick={() => setMaxPlayers(maxPlayers - 1)}>–</button>
-                  <span className="seatcrew" aria-hidden="true">
-                    {Array.from({ length: maxPlayers }).map((_, i) => (
-                      <span key={i} className="face"
-                        style={{ background: CREW_COLS[i % CREW_COLS.length], zIndex: 9 - i }}>
-                        {CREW[i % CREW.length]}
-                      </span>
-                    ))}
-                  </span>
-                  <strong>{maxPlayers}</strong>
-                  <button className="press p-white step" aria-label="One player more"
-                    disabled={maxPlayers >= (coop ? coopMax : selected.maxPlayers)}
-                    onClick={() => setMaxPlayers(Math.min(coop ? coopMax : selected.maxPlayers, maxPlayers + 1))}>+</button>
-                </span>
               )}
-            </div>
-            <div className="muted seathint">
-              {isSolo
-                ? (selected.maxPlayers === 1 ? "🧍 Solo — this game is played alone for now."
-                  : selected.endless ? "🧍 Solo — no clock, play as long as you like." : "🧍 Solo — just you and the clock.")
-                : `👥 ${maxPlayers} players — everyone has to join before the game can start.`}
+
+              {/* How to play it, before you start — folded away until asked for */}
+              <details className="howto-box">
+                <summary>📖 How to play</summary>
+                <HowTo game={selected.slug} title={false} />
+              </details>
             </div>
 
-            {/* Private — meaningless for a solo run, so we explain instead of asking. */}
-            {isSolo ? (
-              <div className="note" style={{ background: "var(--paper2)", marginBottom: 22 }}>
-                🧍 Solo run — private by default. No room code to share, no invites, no chat.
+            {/* Always in reach: what you're about to make, and the button. */}
+            <div className="lsheet-foot">
+              <div className="lobby-sum" aria-live="polite">
+                {!selected.endless && <span className="chip c-sky">{duration === 0 ? "♾️ No limit" : `⏱️ ${length}`}</span>}
+                <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} players`}</span>
+                {!isSolo && isPrivate && <span className="chip c-sun">🔒 Private</span>}
+                {teams && <span className="chip c-grape">⚔️ Teams</span>}
+                {coop && <span className="chip c-grape">🤝 Team</span>}
+                {game === "piano" && <span className="chip c-sun">{SONGS[song].icon} {SONGS[song].name}</span>}
               </div>
-            ) : (
-              <div className="opts">
-                <label className={`opt${isPrivate ? " on" : ""}`}>
-                  <span className="opt-ico" aria-hidden="true">🔒</span>
-                  <span className="opt-txt">Keep it private<small>Only people you invite can join</small></span>
-                  <input type="checkbox" className="switch" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-                </label>
-                {/* Needs four seats: two sides of two. */}
-                <label className={`opt${teams ? " on" : ""}${canTeam ? "" : " off"}`}>
-                  <span className="opt-ico" aria-hidden="true">⚔️</span>
-                  <span className="opt-txt">Team match
-                    <small>{canTeam ? "Play as sides — highest total wins" : `Needs ${MIN_TEAM_SEATS}+ seats`}</small></span>
-                  <input type="checkbox" className="switch" checked={teams} disabled={!canTeam}
-                    onChange={(e) => { setTeamMode(e.target.checked); if (e.target.checked) setCoopMode(false); }} />
-                </label>
-                {/* Together: one side against the game. */}
-                {coopMax > 0 && (
-                  <label className={`opt${coop ? " on" : ""}${canCoop ? "" : " off"}`}>
-                    <span className="opt-ico" aria-hidden="true">🤝</span>
-                    <span className="opt-txt">Play as a team
-                      <small>{canCoop ? (selected.coopLabel || "All of you on one side") : `2 to ${coopMax} players`}</small></span>
-                    <input type="checkbox" className="switch" checked={coop} disabled={!canCoop}
-                      onChange={(e) => { setCoopMode(e.target.checked); if (e.target.checked) setTeamMode(false); }} />
-                  </label>
-                )}
-              </div>
-            )}
-
-            {/* Piano Tiles: pick the song — everyone in the room plays it */}
-            {game === "piano" && (
-              <div className="pt-songs" role="radiogroup" aria-label="Pick a song">
-                {SONGS.map((sg, i) => (
-                  <button key={sg.name} type="button" role="radio" aria-checked={song === i}
-                    className={`pt-song${song === i ? " on" : ""}`} onClick={() => setSong(i)}>
-                    <span className="pt-song-ic">{sg.icon}</span>
-                    <b>{sg.name}</b>
-                    <span className={`pt-lvl lvl-${sg.level}`}>{LEVELS[sg.level].label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* How to play it, before you start — folded away until asked for */}
-            <details className="howto-box">
-              <summary>📖 How to play {selected.name}</summary>
-              <HowTo game={selected.slug} title={false} />
-            </details>
-
-            {/* What you're about to create, spelled out: game, clock, seats. */}
-            <div className="lobby-sum" aria-live="polite">
-              <span className="chip" style={{ background: selected.col }}><GameIcon icon={selected.icon} /> {selected.name}</span>
-              {!selected.endless && <span className="chip c-sky">{duration === 0 ? "♾️ No time limit" : `⏱️ ${length} match`}</span>}
-              <span className="chip c-lime">{isSolo ? "🧍 Solo" : `👥 ${maxPlayers} seats`}</span>
-              {teams && <span className="chip c-grape">⚔️ Teams</span>}
-              {coop && <span className="chip c-grape">🤝 Team</span>}
-              {game === "piano" && <span className="chip c-sun">{SONGS[song].icon} {SONGS[song].name}</span>}
-            </div>
-            <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
-              {creating ? "Creating…"
-                : isSolo ? (selected.endless ? "🎯 Start solo" : `🎯 Start solo · ${length}`)
-                : selected.endless ? "🚀 Create room" : `🚀 Create room · ${length}`}
-            </button>
-          </div>
-
-          <div className="stack">
-            <div className="pop" style={{ padding: 26 }}>
-              <h2 style={{ fontSize: "1.4rem", marginBottom: 6 }}>🔗 Got a code?</h2>
-              <p className="muted" style={{ fontSize: ".92rem", marginBottom: 16 }}>
-                Type the six letters your friend sent you.
-              </p>
-              <form onSubmit={handleJoin}>
-                {/* Six letter tiles. A transparent input sits over them so the
-                    tiles are what you see but a real field is what you type. */}
-                <div className="code" style={{ justifyContent: "center", marginBottom: 18, position: "relative", cursor: "text" }}
-                  onClick={() => codeRef.current?.focus()}>
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <span key={i} className={joinCode[i] ? undefined : "muted"}>{joinCode[i] || "·"}</span>
-                  ))}
-                  <input ref={codeRef} value={joinCode} aria-label="Room code" inputMode="latin"
-                    onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6))}
-                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0,
-                             border: 0, padding: 0, background: "transparent", cursor: "text" }} />
-                </div>
-                <button type="submit" className="press p-mint full" disabled={joining || !joinCode.trim()}>
-                  {joining ? "Joining…" : "🔗 Join room"}
-                </button>
-              </form>
-            </div>
-            <CrewCard />
-            <div className="note" style={{ background: "var(--sun)" }}>
-              💡 Rooms stay open until the host starts. No rush — grab a snack.
+              <button className="press p-coral lg full" id="createBtn" onClick={handleCreate} disabled={creating}>
+                {creating ? "Creating…" : isSolo ? "🎯 Start solo" : "🚀 Create room"}
+              </button>
             </div>
           </div>
         </div>
-
-        <section className="sec">
-          <div className="sec-h">
-            <h2>🌐 Rooms you can hop into</h2>
-            <span className="chip c-mint">{rooms.length} open</span>
-          </div>
-
-          {loadingRooms ? (
-            <div className="note" style={{ background: "var(--paper2)", textAlign: "center" }}>Looking for rooms…</div>
-          ) : rooms.length === 0 ? (
-            <div className="pop" style={{ padding: "48px 20px", textAlign: "center" }}>
-              <div style={{ fontSize: "3rem", marginBottom: 10 }}>🪑</div>
-              <p className="muted">No open rooms right now.</p>
-              <p className="muted" style={{ fontSize: ".9rem", marginTop: 4 }}>Create one above and invite a friend!</p>
-            </div>
-          ) : (
-            <div className="tiles">
-              {rooms.map((room) => {
-                const g = GAME_MAP[room.game_slug];
-                const mins = Number(room.duration_seconds) === 0 ? "∞" : `${Math.round((room.duration_seconds || 120) / 60)}m`;
-                const col = g?.col || "var(--sun)";
-                const icon = room.game_icon || g?.icon || "🎮";
-                return (
-                  <button key={room.id} className="tile" onClick={() => quickJoin(room.room_code)}>
-                    <PeekBuddy colour={col} size={54} />
-                    <span className="top" style={{ background: col, height: 96 }}>
-                      <span className="ghost"><GameIcon icon={icon} /></span>
-                      <span className="big" style={{ fontSize: "2.8rem" }}><GameIcon icon={icon} /></span>
-                    </span>
-                    <span className="bot" style={{ display: "block" }}>
-                      <h3 style={{ fontSize: "1.1rem" }}>{room.game_name}</h3>
-                      <p style={{ marginBottom: 10 }}>Hosted by {room.host_name}</p>
-                      <span className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-                        <span className="row" style={{ gap: 6 }}>
-                          <span className="chip c-lime">👥 {room.player_count}/{room.max_players}</span>
-                          <span className="chip c-sky">⏱️ {mins}</span>
-                        </span>
-                        <span className="display" style={{ letterSpacing: ".14em", fontSize: "1rem" }}>{room.room_code}</span>
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
-    </div>
-  );
-}
-
-// Your friends at a glance: faces only, a green pip means online right now.
-// Tap a face for their name and when they were last on.
-function CrewCard() {
-  const { friends } = usePresence();
-  const [pick, setPick] = useState(null);
-  const onlineCt = friends.filter((f) => f.online).length;
-  const picked = friends.find((f) => f.id === pick);
-
-  return (
-    <div className="pop" style={{ padding: 22 }}>
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 14 }}>
-        <h2 style={{ fontSize: "1.25rem" }}>👥 Your friends</h2>
-        {friends.length > 0 && <span className="chip c-lime">{onlineCt} online</span>}
-      </div>
-      {friends.length === 0 ? (
-        <p className="muted" style={{ fontSize: ".92rem" }}>
-          No friends yet. <Link to="/friends" className="linkish">Add some</Link> to see when they're on.
-        </p>
-      ) : (
-        <>
-          <div className="crewfaces">
-            {friends.map((f) => (
-              <button key={f.id} type="button" className="crewface" aria-pressed={pick === f.id}
-                onClick={() => setPick((p) => (p === f.id ? null : f.id))}
-                title={`${f.username}: ${presenceLabel(f)}`} aria-label={`${f.username}, ${presenceLabel(f)}`}>
-                <Avatar emoji={f.avatar} size={46} seed={f.id} online={f.online} className={f.online ? "" : "is-off"} />
-                <span className={`crewtag${f.online ? " on" : ""}`}>{presenceLabel(f, { short: true })}</span>
-              </button>
-            ))}
-          </div>
-          {picked && (
-            <div className="crewwho">
-              <strong>{picked.username}</strong> · <span className="muted">{presenceLabel(picked)}</span>
-            </div>
-          )}
-        </>
       )}
     </div>
   );

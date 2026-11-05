@@ -1806,3 +1806,80 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .cw-film .call-share-tag{top:10px;bottom:auto}
 #call-film-hold{position:fixed;left:0;bottom:0;width:2px;height:2px;overflow:hidden;opacity:0.01;pointer-events:none}
 #call-film-hold video{width:2px;height:2px}
+
+/* ── PLAY TAB (.play- .shelf- .lsheet-) and the phone's bottom tab bar ──
+   Games sit on shelves you swipe sideways; tapping one slides its settings
+   up from the bottom with Start pinned under the thumb. */
+.play-hi{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.play-hi h1{font-size:1.6rem;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.play-hi p{font-size:.9rem}
+.play-join{flex:none}
+.play-nudge{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;
+  padding:10px 14px;border:3px solid var(--ink);border-radius:var(--r);background:var(--mint);color:#2E2140;
+  box-shadow:0 3px 0 var(--ink);font-weight:800;font-size:.92rem}
+.play-nudge:active{transform:translateY(3px);box-shadow:0 0 0 var(--ink)}
+.play-filter{margin-bottom:4px}
+.shelf{margin-bottom:14px}
+.shelf-h{display:flex;align-items:baseline;gap:8px;font-size:1.15rem;margin-bottom:4px}
+.shelf-h .muted{font-size:.78rem;font-family:Nunito,sans-serif}
+/* the row bleeds to the screen's edges so a card peeking in says "swipe" */
+.shelf-row{display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;margin:0 -20px;padding:8px 20px 14px;
+  scroll-snap-type:x mandatory;scroll-padding:0 20px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.shelf-row::-webkit-scrollbar{display:none}
+.press.shelf-card{flex:0 0 104px;height:116px;flex-direction:column;gap:8px;padding:10px 6px;border-radius:20px;
+  white-space:normal;color:#2E2140;scroll-snap-align:start;--lift:4px}
+.shelf-ic{font-size:2.3rem;line-height:1}
+.shelf-name{font-size:.8rem;line-height:1.15;text-align:center}
+
+.lsheet-scrim{position:fixed;inset:0;z-index:220;display:flex;align-items:flex-end;justify-content:center;
+  background:rgba(20,14,30,.6);animation:lsFade .18s ease}
+.lsheet{width:100%;max-width:560px;max-height:88vh;max-height:88svh;display:flex;flex-direction:column;overflow:hidden;
+  background:var(--card);border:3px solid var(--ink);border-bottom:0;border-radius:var(--r-xl) var(--r-xl) 0 0;
+  animation:lsUp .28s cubic-bezier(.2,.9,.3,1.08)}
+@keyframes lsFade{from{opacity:0}}
+@keyframes lsUp{from{transform:translateY(100%)}}
+.lsheet-head{flex:none;display:flex;align-items:center;gap:12px;padding:14px 14px 14px 16px;
+  border-bottom:3px solid var(--ink);color:#2E2140}
+.lsheet-head h2{font-size:1.3rem;line-height:1.1}
+.lsheet-head p{margin-top:3px;font-size:.8rem;font-weight:700;line-height:1.3;opacity:.85}
+.lsheet-ic{flex:none;width:56px;height:56px;display:grid;place-items:center;font-size:2.1rem;line-height:1;
+  background:rgba(255,255,255,.55);border:3px solid var(--ink);border-radius:16px}
+.lsheet-x{flex:none;align-self:flex-start;width:38px;height:38px;border-radius:999px;border:3px solid var(--ink);
+  background:var(--card);color:var(--text);font-weight:900;font-size:1rem;box-shadow:0 3px 0 var(--ink)}
+.lsheet-x:active{transform:translateY(3px);box-shadow:none}
+.lsheet-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px 16px 4px;
+  -webkit-overflow-scrolling:touch}
+.lsheet-lbl{font-family:Fredoka,sans-serif;font-weight:700;font-size:.95rem;margin-bottom:10px}
+.lsheet .durrow{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:18px}
+.lsheet .seathint{margin:10px 0 14px}
+.lsheet .opts{margin-bottom:14px}
+.lsheet-foot{flex:none;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));
+  border-top:3px solid var(--ink);background:var(--paper2)}
+.lsheet-foot .lobby-sum{gap:6px;margin-bottom:10px}
+.lsheet-foot .chip{padding:3px 10px;font-size:.76rem}
+@media(min-width:601px){
+  .lsheet-scrim{align-items:center;padding:20px}
+  .lsheet{border-bottom:3px solid var(--ink);border-radius:var(--r-xl);box-shadow:0 8px 0 var(--ink)}
+  .lsheet-foot{padding-bottom:14px}
+}
+
+.rm-code{padding:22px;max-width:520px;margin:0 auto}
+
+.tabbar{display:none}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 0 4px;border:2.5px solid transparent;
+  border-radius:16px;font-family:Fredoka,sans-serif;font-weight:600;font-size:.74rem;color:var(--ink-soft);
+  -webkit-tap-highlight-color:transparent}
+.tab-ic{position:relative;font-size:1.3rem;line-height:1}
+.tab.on{background:var(--sun);border-color:var(--ink);color:#2E2140;box-shadow:0 3px 0 var(--ink)}
+.tab-badge{position:absolute;top:-7px;right:-14px;min-width:19px;height:19px;padding:0 4px;display:grid;place-items:center;
+  border-radius:999px;border:2px solid var(--ink);background:var(--coral);color:#fff;font-size:.62rem;font-family:Nunito,sans-serif;font-weight:900}
+@media(max-width:600px){
+  /* the bottom tabs replace the header's row of links */
+  .navlinks{display:none}
+  .tabbar{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;position:fixed;left:0;right:0;bottom:0;z-index:150;
+    padding:7px 10px calc(7px + env(safe-area-inset-bottom,0px));background:var(--card);border-top:3px solid var(--ink)}
+  .toaststack{bottom:calc(86px + env(safe-area-inset-bottom,0px))}
+  .play-wrap{padding-top:16px}
+  .play-hi h1{font-size:1.35rem}
+  .shelf-row{margin:0 -14px;padding:8px 14px 14px;scroll-padding:0 14px}
+}

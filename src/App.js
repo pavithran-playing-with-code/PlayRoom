@@ -17,6 +17,8 @@ import Lobby           from "./pages/Lobby";
 import Room            from "./pages/Room";
 import Leaderboard     from "./pages/Leaderboard";
 import Friends         from "./pages/Friends";
+import Rooms           from "./pages/Rooms";
+import TabBar          from "./components/TabBar";
 import Profile         from "./pages/Profile";
 import Manor           from "./pages/Manor";
 import { installErrorReporting } from "./utils/reportError";
@@ -88,10 +90,12 @@ function WithNav() {
         <Route path="/register"    element={<Register />} />
         <Route path="/lobby"       element={<ProtectedRoute><Lobby /></ProtectedRoute>} />
         <Route path="/leaderboard" element={<ProtectedRoute><Leaderboard /></ProtectedRoute>} />
+        <Route path="/rooms"       element={<ProtectedRoute><Rooms /></ProtectedRoute>} />
         <Route path="/friends"     element={<ProtectedRoute><Friends /></ProtectedRoute>} />
         <Route path="/profile"     element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="*"            element={<Navigate to="/" replace />} />
       </Routes>
+      <TabBar />
     </>
   );
 }

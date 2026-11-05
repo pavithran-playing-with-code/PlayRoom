@@ -55,7 +55,8 @@ export default function Navbar() {
         {isLoggedIn ? (
           <>
             <div className="navlinks">
-              {navLink("/lobby", "🕹️ Lobby")}
+              {navLink("/lobby", "🎮 Play")}
+              {navLink("/rooms", "🚪 Rooms")}
               {navLink("/leaderboard", "🏆 Board")}
               {navLink("/friends", pendingCt ? `👥 Friends (${pendingCt})` : "👥 Friends")}
             </div>
@@ -86,7 +87,8 @@ export default function Navbar() {
                     <MenuItem to="/friends" onClick={() => setOpen(false)}
                       label={`👥 Friends${pendingCt ? `  (${pendingCt})` : ""}`} />
                     <MenuItem to="/leaderboard" onClick={() => setOpen(false)} label="🏆 Leaderboard" />
-                    <MenuItem to="/lobby" onClick={() => setOpen(false)} label="🕹️ Game Lobby" />
+                    <MenuItem to="/lobby" onClick={() => setOpen(false)} label="🎮 Play" />
+                    <MenuItem to="/rooms" onClick={() => setOpen(false)} label="🚪 Rooms" />
                     <button className="menu-item" onClick={toggleTheme} aria-pressed={theme === "dark"}>
                       {theme === "dark" ? "☀️ Light theme" : "🌙 Dark theme"}
                     </button>

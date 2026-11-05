@@ -917,6 +917,8 @@ export function CallProvider({ children }) {
     const url = URL.createObjectURL(file);
     const v = document.createElement("video");
     v.src = url; v.playsInline = true; v.setAttribute("playsinline", ""); v.preload = "auto"; v.controls = true; v.className = "call-fit";
+    // no full screen of its own: that's the video alone; the call's ⛶ takes it with the faces
+    try { v.setAttribute("controlslist", "nofullscreen noremoteplayback"); } catch { /* fine */ }
     hideFilm(v);
     const ok = await new Promise((res) => { v.onloadedmetadata = () => res(true); v.onerror = () => res(false); });
     if (!ok) { v.remove(); URL.revokeObjectURL(url); say("This phone can't play that video. Try an .mp4."); return; }

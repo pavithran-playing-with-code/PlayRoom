@@ -1436,6 +1436,33 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .call-share-face .call-emoji{width:44px;height:44px;font-size:24px}
 .call-share-faces-chip{padding:6px 12px;border-radius:999px;border:3px solid #fff;background:rgba(20,16,28,.75);color:#fff;font:800 14px Nunito,system-ui,sans-serif}
 @media (max-height:420px){ .call-share-face{width:76px;height:98px} }
+/* ✕ on the faces says a tap hides them */
+.call-share-faces{align-items:flex-start}
+.call-share-faces-hide{width:26px;height:26px;margin-left:-2px;display:grid;place-items:center;border-radius:50%;border:2.5px solid #fff;
+  background:rgba(20,16,28,.75);color:#fff;font:900 12px Nunito,system-ui,sans-serif}
+/* YouTube full screen (ours): the video fills it, the list goes, the faces sit over it */
+.call-share.cw-yt.big,.call-share.cw-yt:fullscreen{padding-top:env(safe-area-inset-top,0px);display:flex;flex-direction:column}
+.cw-yt.big .cw-yt-top{position:absolute;left:0;right:0;top:0;z-index:4;padding:8px 12px;background:linear-gradient(rgba(10,8,16,.75),transparent)}
+.cw-yt.big .cw-yt-player{flex:1;min-height:0;max-height:none;aspect-ratio:auto}
+.cw-yt.big .yt-docked{display:none}
+.cw-yt.big .call-share-faces{top:calc(env(safe-area-inset-top,0px) + 56px)}
+/* my own video has its controls along the bottom: ⛶ sits just above them (top left is the call's ⌄) */
+.cw-film .call-big{z-index:2;bottom:64px}
+/* a phone held sideways (the screen really turned, or drawn turned): the
+   YouTube video takes the height; the list waits for upright */
+@media (orientation:landscape) and (max-height:560px){
+  .call-share.cw-yt{padding-top:calc(env(safe-area-inset-top,0px) + 8px)}
+  /* the call's ⌄ + 👥 sit top left: the title goes beside them */
+  .cw-yt-top{padding:4px 8px 6px calc(env(safe-area-inset-left,0px) + 176px);min-height:52px}
+  .cw-yt-player{flex:1;min-height:0;max-height:none;aspect-ratio:auto}
+  .cw-yt .yt-docked{display:none}
+  .call-screen.sharing .call-time{display:none}
+}
+.call-root.rot .call-share.cw-yt,.call-root.rot-ccw .call-share.cw-yt{padding-top:8px}
+.call-root.rot .cw-yt-top,.call-root.rot-ccw .cw-yt-top{padding:4px 8px 6px 176px;min-height:52px}
+.call-root.rot .call-screen.sharing .call-time,.call-root.rot-ccw .call-screen.sharing .call-time{display:none}
+.call-root.rot .cw-yt-player,.call-root.rot-ccw .cw-yt-player{flex:1;min-height:0;max-height:none;aspect-ratio:auto}
+.call-root.rot .cw-yt .yt-docked,.call-root.rot-ccw .cw-yt .yt-docked{display:none}
 /* 👥 whose faces you see: a row each, showing or hidden */
 .call-face-row.hidden{opacity:.55}
 .call-face-row.hidden .call-emoji{filter:grayscale(1)}

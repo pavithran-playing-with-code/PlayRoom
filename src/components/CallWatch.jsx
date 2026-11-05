@@ -39,7 +39,7 @@ const FilePlayer = forwardRef(function FilePlayer({ url, onFail }, ref) {
   return <video ref={v} className="call-fit" src={url} playsInline preload="auto" onError={() => onFail("This phone can't play that file.")} />;
 });
 
-export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onPickYt }) {
+export default function CallWatch({ C, names, myId, shareRef, pseudo, full, onBig, faces, onPickYt }) {
   const w = C.watch, f = C.watchFile, yt = w.src.kind === "yt";
   const player = useRef(null);
   const [anyway, setAnyway] = useState(false);     // a different file, watched anyway
@@ -201,9 +201,11 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
 
   if (yt) {
     return (
-      <div className={`call-share cw cw-yt${pseudo ? " pfull" : ""}`} ref={shareRef}>
+      <div className={`call-share cw cw-yt${pseudo ? " pfull" : ""}${full || pseudo ? " big" : ""}`} ref={shareRef}>
         <div className="cw-yt-top">
           <span className="cw-name">▶️ {w.src.name}{w.src.ch ? <small> · {w.src.ch}</small> : null}</span>
+          {/* our full screen, not YouTube's: theirs is the player alone, with no faces */}
+          <button type="button" className="cw-x" onClick={onBig} aria-label={full || pseudo ? "Leave full screen" : "Full screen"}>⛶</button>
           <button type="button" className="cw-x" onClick={() => C.sendWatch({ op: "close" })} aria-label="Stop the video for everyone">✕</button>
         </div>
         <div className="cw-yt-player">
@@ -216,6 +218,7 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
           {w.hold === myId && !needTap && <div className="cw-wait">⏳ The others are waiting for you</div>}
         </div>
         <YtBrowse docked playing={w.src.id} onPick={putOn} />
+        {faces}
       </div>
     );
   }
@@ -231,6 +234,7 @@ export default function CallWatch({ C, names, myId, shareRef, pseudo, onBig, onP
           {needTap && <button type="button" className="cw-tap" onClick={toggle}>🔊 Tap to watch with sound</button>}
           {waitingOn && <div className="cw-wait">⏳ Waiting for {waitingOn}… <button type="button" onClick={() => mine("play", player.current ? player.current.time() : w.pos)}>Play anyway</button></div>}
           {w.hold === myId && <div className="cw-wait">⏳ Catching up: the others are waiting for you</div>}
+          {faces}
           <div className={`cw-ui${shown || !w.playing ? "" : " gone"}`} onPointerDown={poke}>
             <div className="cw-title">
               <span className="cw-name">{yt ? "▶️" : "🎬"} {w.src.name}{yt && w.src.ch ? <small> · {w.src.ch}</small> : null}</span>

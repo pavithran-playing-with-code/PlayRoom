@@ -212,8 +212,17 @@ app.use("/api/youtube", youtubeRoutes);
 // Dev  → React runs on :3333, proxies /api/* here automatically (package.json proxy)
 // Prod → npm run build, then Express serves /build
 if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname, "build")));
-  app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "build", "index.html")));
+  // The page itself is never kept, so a deploy reaches a phone the next time
+  // it opens (an installed app held on to the old one). Its scripts and
+  // styles have the build's hash in their names, so those are kept for good.
+  const noKeep = (res) => res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  app.use(express.static(path.join(__dirname, "build"), {
+    setHeaders: (res, file) => {
+      if (/[\\/]static[\\/]/.test(file)) res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      else if (file.endsWith(".html") || file.endsWith("manifest.json")) noKeep(res);
+    },
+  }));
+  app.get("*", (_req, res) => { noKeep(res); res.sendFile(path.join(__dirname, "build", "index.html")); });
 }
 
 // ── 404 ───────────────────────────────────────────────────────────────────────

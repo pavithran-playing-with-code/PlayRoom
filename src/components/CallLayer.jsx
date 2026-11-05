@@ -145,7 +145,7 @@ function useZoom(key) {
 // My video, playing to the call: the player itself (CallContext made it and
 // streams it) is set into the stage, with its own controls; when the call
 // shrinks it goes back out of sight and keeps playing.
-function FilmStage({ film, hide }) {
+function FilmStage({ film, hide, shareRef, onBig, faces }) {
   const box = useRef(null);
   useLayoutEffect(() => {
     const el = box.current, v = film.v;
@@ -154,9 +154,11 @@ function FilmStage({ film, hide }) {
     return () => hide(v);
   }, [film, hide]);
   return (
-    <div className="call-share cw-film">
+    <div className="call-share cw-film" ref={shareRef}>
       <div className="cw-film-box" ref={box} />
       <div className="call-share-tag">🎬 {film.name}</div>
+      <button type="button" className="call-big" onClick={onBig} aria-label="Full screen">⛶</button>
+      {faces}
     </div>
   );
 }
@@ -448,27 +450,29 @@ export default function CallLayer() {
   };
   const [full, setFull] = useState(false);          // the shared screen is full screen
   const [pseudo, setPseudo] = useState(false);      // …our own full screen (an iPhone: no element full screen)
-  useEffect(() => { if (!sharer) setPseudo(false); }, [sharer]);
+  // something on the stage: a friend's screen, a video watched together, or my own film
+  const stageKey = sharer ? `s${sharer.id}` : watch ? "w" : C.film ? "f" : null;
+  useEffect(() => { if (!stageKey) setPseudo(false); }, [stageKey]);
   const [tucked, setTucked] = useState(false);      // …with the faces tucked away
   useEffect(() => {
     const on = () => {
       const f = !!document.fullscreenElement && document.fullscreenElement === shareRef.current;
       setFull(f);
       // out of full screen in the installed app: back to following the phone
-      if (!f && isInstalled() && sharerId) { try { window.screen.orientation.lock("any").catch(() => {}); } catch { /* fine */ } }
+      if (!f && isInstalled() && stageKey) { try { window.screen.orientation.lock("any").catch(() => {}); } catch { /* fine */ } }
     };
     document.addEventListener("fullscreenchange", on);
     return () => document.removeEventListener("fullscreenchange", on);
   });
   // The installed app is held upright (manifest.json: portrait), so turning
-  // the phone did nothing while you watched a film someone was sharing.
-  // While a screen is on show it follows the phone; after, upright again.
-  const sharerId = sharer ? sharer.id : null;
+  // the phone did nothing while you watched something together. While
+  // anything is on the stage (a shared screen, YouTube, a video) it follows
+  // the phone; after, upright again.
   useEffect(() => {
-    if (!sharerId || !isInstalled() || isDrawnSideways() || !window.screen?.orientation?.lock) return undefined;
+    if (!stageKey || !isInstalled() || isDrawnSideways() || !window.screen?.orientation?.lock) return undefined;
     try { window.screen.orientation.lock("any").catch(() => {}); } catch { /* not on this phone */ }
     return () => { if (!isDrawnSideways()) { try { window.screen.orientation.lock("portrait").catch(() => {}); } catch { /* fine */ } } };
-  }, [sharerId]);
+  }, [stageKey]);
   const canAdd = friends.filter((f) => f.online && !call?.members.some((m) => m.id === Number(f.id)) && !call?.invited.includes(Number(f.id)));
   const needTap = React.useCallback(() => setTapForSound(true), []);
 
@@ -615,7 +619,7 @@ export default function CallLayer() {
   }, [active, floatOut]); // eslint-disable-line react-hooks/exhaustive-deps
   const sideways = useDrawnSideways();
   // watching a shared screen with the phone held sideways: the call turns with it
-  const held = useHeldSideways(!!shown && !!call && expanded && !sideways && !full);
+  const held = useHeldSideways(!!stageKey && !!call && expanded && !sideways && !full);
   layerTurn = sideways ? 90 : held;
   useEffect(() => { if (C.setHeldTurn) C.setHeldTurn(held); }, [held]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -653,6 +657,36 @@ export default function CallLayer() {
       )}
     </div>
   );
+
+  // full screen, the picture fills the screen: the faces come with it, small,
+  // over the top corner — tap them to tuck them into a chip, tap it to bring
+  // them back. The same over a shared screen, YouTube and a video.
+  const stageFaces = (full || pseudo) ? (
+    <button type="button" className={`call-share-faces${tucked ? " tucked" : ""}`} onClick={() => setTucked((x) => !x)}
+      aria-label={tucked ? "Show the faces" : "Hide the faces"}>
+      {tucked ? <span className="call-share-faces-chip">👥 Show faces</span> : (
+        <>
+          {shownOthers.map((m) => {
+            const p = peers[m.id] || {};
+            const v = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
+            return (
+              <span className="call-share-face" key={m.id}>
+                {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
+                <span className="call-mini-name">{m.name}{p.mic === false ? " 🔇" : ""}</span>
+              </span>
+            );
+          })}
+          {showMe && (
+            <span className="call-share-face">
+              {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
+              <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
+            </span>
+          )}
+          <span className="call-share-faces-hide" aria-hidden="true">✕</span>
+        </>
+      )}
+    </button>
+  ) : null;
 
   return (
     <div className={`call-root${layerTurn === 90 ? " rot" : layerTurn === -90 ? " rot-ccw" : ""}`}>
@@ -694,12 +728,12 @@ export default function CallLayer() {
             </div>
           ) : C.film ? (
             <>
-              <FilmStage film={C.film} hide={C.hideFilm} />
+              <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={stageFaces} />
               {strip}
             </>
           ) : watch ? (
             <>
-              <CallWatch C={C} names={call.names || {}} myId={C.myId} shareRef={shareRef} pseudo={pseudo} onBig={big} onPickYt={() => setYtOpen(true)} />
+              <CallWatch C={C} names={call.names || {}} myId={C.myId} shareRef={shareRef} pseudo={pseudo} full={full} onBig={big} faces={stageFaces} onPickYt={() => setYtOpen(true)} />
               {strip}
             </>
           ) : shown ? (
@@ -715,32 +749,7 @@ export default function CallLayer() {
                 )}
                 <div className="call-share-tag">{peers[sharer.id].film ? `🎬 ${peers[sharer.id].film} · from ${sharer.name}` : `🖥️ ${sharer.name}'s screen`}</div>
                 <button type="button" className="call-big" onClick={big} aria-label="Full screen">⛶</button>
-                {/* full screen, the film fills the screen: the faces come with it, small, over the top corner — tap to tuck them away */}
-                {(full || pseudo) && (
-                  <button type="button" className={`call-share-faces${tucked ? " tucked" : ""}`} onClick={() => setTucked((x) => !x)}
-                    aria-label={tucked ? "Show the faces" : "Tuck the faces away"}>
-                    {tucked ? <span className="call-share-faces-chip">👥 {shownOthers.length + (showMe ? 1 : 0)}</span> : (
-                      <>
-                        {shownOthers.map((m) => {
-                          const p = peers[m.id] || {};
-                          const v = p.stream && p.cam !== false && !p.paused && p.stream.getVideoTracks().length > 0;
-                          return (
-                            <span className="call-share-face" key={m.id}>
-                              {v ? <Vid stream={p.stream} className="call-full" turn={p.turn} /> : <span className="call-emoji">{avatarOf(m.id) || "🙂"}</span>}
-                              <span className="call-mini-name">{m.name}{p.mic === false ? " 🔇" : ""}</span>
-                            </span>
-                          );
-                        })}
-                        {showMe && (
-                          <span className="call-share-face">
-                            {local && cam ? <Vid stream={local} mirror={facing === "user"} className="call-full" turn={C.turn} /> : <span className="call-emoji">🙂</span>}
-                            <span className="call-mini-name">You{mic ? "" : " 🔇"}</span>
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </button>
-                )}
+                {stageFaces}
               </div>
               {strip}
             </>

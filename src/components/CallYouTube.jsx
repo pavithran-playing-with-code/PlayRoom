@@ -65,8 +65,10 @@ export const YtPlayer = forwardRef(function YtPlayer({ id, onState, onFail, onRa
       p.current = new YT.Player(el, {
         videoId: id, width: "100%", height: "100%",
         // YouTube's own controls; it must know which site it's on (origin,
-        // and the page's referrer — server.js), or it refuses to play
-        playerVars: { playsinline: 1, controls: 1, rel: 0, modestbranding: 1, fs: 1, iv_load_policy: 3, autoplay: 0, cc_load_policy: 0,
+        // and the page's referrer — server.js), or it refuses to play.
+        // fs 0: no YouTube full screen — it's the player alone, without the
+        // call's faces; the call's own ⛶ takes the video and the faces.
+        playerVars: { playsinline: 1, controls: 1, rel: 0, modestbranding: 1, fs: 0, iv_load_policy: 3, autoplay: 0, cc_load_policy: 0,
           widget_referrer: window.location.href },
         events: {
           onReady: () => { ready.current = true; cb.current.onState && cb.current.onState(5); },

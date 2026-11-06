@@ -20,8 +20,18 @@ export const CRASH_COST = 25;
 export const UNITS_PER_POINT = 12;
 export const UNITS_PER_METRE = 40;
 
-// The fastest anyone can be going after running `run` units without crashing.
-export const speedAfter = (run) => Math.min(MAX_SPEED, BASE_SPEED + run * ACCEL);
+// Levels: every LEVEL_LEN units along the course is a level, and each one
+// lifts the speed you run at — so a crash late on no longer drops you back to
+// a crawl. The sky changes with them (day, sunset, night…).
+export const LEVEL_LEN = 6000;
+export const LEVEL_KICK = 45;            // units/second a level adds to the floor
+export const levelAt = (x) => Math.floor(Math.max(0, x) / LEVEL_LEN) + 1;
+
+// How fast you run after `run` units without crashing, at `x` along the course.
+export const speedAfter = (run, x = 0) => Math.min(MAX_SPEED, BASE_SPEED + (levelAt(x) - 1) * LEVEL_KICK + run * ACCEL);
+// The fastest anyone could be going at `x` (a run as long as the course so far):
+// the gap after each obstacle is sized for it, so every one can be cleared.
+const fastestAt = (x) => speedAfter(x, x);
 
 // The same endless course for everyone in a room, built on demand. The gap
 // after each obstacle is sized for the fastest anyone could possibly be going
@@ -48,7 +58,7 @@ export function makeCourse(seed) {
       }
       list.push(o);
       const loose = Math.max(0.35, 1 - d / 40000);  // obstacles bunch up the further you get
-      pos = d + o.w + speedAfter(d) * 0.62 + 170 + rand() * 460 * loose;
+      pos = d + o.w + fastestAt(d) * 0.62 + 170 + rand() * 460 * loose;
     }
   }
   return { list, extend };
@@ -113,7 +123,7 @@ export function step(s, course, dt) {
   }
   if (!s.started) return null;
 
-  const dx = speedAfter(s.run) * dt;
+  const dx = speedAfter(s.run, s.x) * dt;
   s.x += dx;
   s.run += dx;
   s.points += dx / UNITS_PER_POINT;

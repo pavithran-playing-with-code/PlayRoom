@@ -8,7 +8,7 @@
 import { createRequire } from "module";
 import { newLog, take, propose, view, differs, restart } from "../src/components/games/coopLog.js";
 import { GOAL, memoryRules, mahjongRules, wordRules, wordGoal, MEM_PAIR, MJ_MISS } from "../src/components/games/coopBoards.js";
-import { buildCards, TOTAL_PAIRS } from "../src/components/games/memoryDeck.js";
+import { buildCards, deckSeed, memLevel, TOTAL_PAIRS } from "../src/components/games/memoryDeck.js";
 import { isFree, findPair, SLOTS } from "../src/components/games/mahjongBoard.js";
 
 const require = createRequire(import.meta.url);
@@ -33,7 +33,7 @@ for (const g of Object.keys(GOAL)) check(`${g}: goal ${GOAL[g]} matches the serv
 // ── Memory ───────────────────────────────────────────────────────────────────
 {
   const R = memoryRules(SEED);
-  const deck = buildCards(SEED).map((c) => c.emoji);
+  const deck = buildCards(SEED, 1).map((c) => c.emoji);
   check("memory: deck 1 is the solo game's deck", same(R.init.deck, deck));
   const pairOf = (i) => deck.findIndex((e, j) => j !== i && e === deck[i]);
   const other = (i) => deck.findIndex((e) => e !== deck[i]);
@@ -64,7 +64,8 @@ for (const g of Object.keys(GOAL)) check(`${g}: goal ${GOAL[g]} matches the serv
   check("memory: clearing the deck deals the next and counts a board", s.b === 2 && s.boards === 1 && s.matched.length === 0 && s.done && s.done.b === 1);
   check("memory: deck 2 is different from deck 1", !same(s.deck, deck));
   check("memory: other() sanity", other(0) >= 0);
-  check("memory: 10 pairs a deck", TOTAL_PAIRS === 10);
+  check("memory: levels grow the deck: 8, 10, then 12 pairs", memLevel(1).pairs === 8 && memLevel(2).pairs === 10 && memLevel(3).pairs === 12 && TOTAL_PAIRS === 10);
+  check("memory: deck 2 is the level-2 deck, the same as solo", same(s.deck, buildCards(deckSeed(SEED, 2), 2).map((c) => c.emoji)) && s.deck.length === 20);
 }
 
 // ── Mahjong ──────────────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@
 // The score is the team's: everyone on the side carries it. `by` counts what
 // each player did, for the strip and the results. `boards` is how many have
 // been cleared — the match is a win for the team once it reaches GOAL.
-import { buildCards, deckSeed, TOTAL_PAIRS as MEM_PAIRS } from "./memoryDeck.js";
+import { buildCards, deckSeed } from "./memoryDeck.js";
 import { deal, isFree, findPair, reshuffle, TOTAL_PAIRS as MJ_PAIRS } from "./mahjongBoard.js";
 import { seededRand } from "./seededRand.js";
 
@@ -37,7 +37,7 @@ const int = (v) => (Number.isInteger(v) ? v : NaN);
 export const MEM_PAIR = 100;
 export const MEM_MISS = 5;
 export const MEM_CLEAR = 300;
-const memDeck = (seed, n) => buildCards(deckSeed(seed, n)).map((c) => c.emoji);
+const memDeck = (seed, n) => buildCards(deckSeed(seed, n), n).map((c) => c.emoji);
 
 export function memoryRules(seed) {
   const init = { ...blank(1), deck: memDeck(seed, 1), matched: [], open: {}, pairs: 0 };
@@ -57,7 +57,7 @@ export function memoryRules(seed) {
       s.score += MEM_PAIR;
       credit(s, u);
       said(s, c, { k: "pair", u, i, j, with: Number(twin) });
-      if (s.pairs >= MEM_PAIRS) {
+      if (s.pairs >= s.deck.length / 2) {
         s.score += MEM_CLEAR;
         s.boards += 1;
         s.done = { b: s.b, deck: s.deck };

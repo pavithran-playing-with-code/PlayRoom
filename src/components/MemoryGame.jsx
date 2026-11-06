@@ -21,21 +21,22 @@ import useGameEngine from "./games/useGameEngine";
 import useCoopBoard, { useShows } from "./games/useCoopBoard";
 import { memoryRules, GOAL, MEM_PAIR, MEM_MISS, MEM_CLEAR } from "./games/coopBoards";
 import { team, plural } from "./games/coopTeam";
-import { buildCards, TOTAL_PAIRS } from "./games/memoryDeck";
+import { buildCards, deckSeed, memLevel, memSays } from "./games/memoryDeck";
 
 const PAIR_POINTS = 100;   // plus the seconds left on the clock
 const MISS        = -5;
-const PEEK_MS     = 800;   // how long a wrong pair stays face-up
-const CLEARED_MS  = 1100;  // together: the cleared deck, before the next one
+const CLEARED_MS  = 1100;  // a cleared deck, before the next one
+const DECK_BONUS  = 300;   // for clearing a deck, x the level
 const RATIO       = 1.2;   // card height / width
 
 // The biggest cards that fit the board area: 4 wide x 5 tall on a phone,
 // 5 wide x 4 tall on a laptop, whichever gives larger cards.
-function layout(w, h) {
+const SHAPES = { 16: [[4, 4]], 20: [[4, 5], [5, 4]], 24: [[4, 6], [6, 4]] };
+function layout(w, h, n = 20) {
   const gap = Math.round(Math.max(6, Math.min(14, Math.min(w, h) * 0.02)));
   const room = h - 6;                       // the hard shadow under the last row
   let best = { cols: 4, cw: 0 };
-  for (const [cols, rows] of [[4, 5], [5, 4]]) {
+  for (const [cols, rows] of SHAPES[n] || SHAPES[20]) {
     const cw = Math.min((w - (cols - 1) * gap) / cols, (room - (rows - 1) * gap) / rows / RATIO);
     if (cw > best.cw) best = { cols, cw };
   }
@@ -53,7 +54,10 @@ export default function MemoryGame({
   // cards: the deck. open: indexes face-up but not matched (0, 1 or 2).
   // peek: the timer that turns a wrong pair back over.
   const live = useRef(null);
-  if (live.current === null) live.current = { cards: buildCards(seed), open: [], pairs: 0, peek: null };
+  // pairs: this deck's; total: every deck's, which is what the server sees
+  if (live.current === null) live.current = { cards: buildCards(seed, 1), open: [], pairs: 0, total: 0, deck: 1, peek: null };
+  const [deck, setDeck] = useState(1);
+  const [levelUp, setLevelUp] = useState(0);
 
   const [cards, setCards] = useState(() => live.current.cards);
   const [pairs, setPairs] = useState(0);
@@ -70,8 +74,8 @@ export default function MemoryGame({
     extraState: () => (coop
       ? { pairs_matched: agreedRef.current.boards }
       : {
-          pairs_matched: live.current.pairs,
-          game_state: JSON.stringify({ matched: live.current.cards.filter((c) => c.matched).map((c) => c.id) }),
+          pairs_matched: live.current.total,
+          game_state: JSON.stringify({ d: live.current.deck, matched: live.current.cards.filter((c) => c.matched).map((c) => c.id) }),
         }),
   });
 
@@ -89,9 +93,11 @@ export default function MemoryGame({
     if (coop || !isSpectator || !spectatorState) return;
     const matched = new Set((spectatorState.matched || []).map(Number));
     const s = live.current;
+    const d = Number(spectatorState.d) || 1;
+    if (d !== s.deck) { s.deck = d; s.cards = buildCards(deckSeed(seed, d), d); setDeck(d); }
     s.cards = s.cards.map((c) => ({ ...c, matched: matched.has(c.id), flipped: matched.has(c.id) }));
     setCards(s.cards);
-  }, [coop, isSpectator, spectatorState]);
+  }, [coop, isSpectator, spectatorState, seed]);
 
   // ── together: the little shows ────────────────────────────────────────────
   const [msg, setMsg] = useState(null);
@@ -111,21 +117,46 @@ export default function MemoryGame({
       if (mine) say(e.with && e.with !== myId ? `✓ Pair with ${T.nameOf(e.with)}'s card! +${MEM_PAIR}` : `✓ Pair! +${MEM_PAIR}`, "success");
       else say(e.with === myId ? `🎉 ${T.nameOf(e.u)} matched your card!` : `🎉 ${T.nameOf(e.u)} found a pair`, "success");
     } else if (e.k === "miss") {
-      const until = Date.now() + PEEK_MS;
+      const pk = memLevel(cb.view.b).peek;
+      const until = Date.now() + pk;
       setPeeks((p) => ({ ...p, [e.i]: until, [e.j]: until }));
       later(() => setPeeks((p) => {
         const n = { ...p };
         for (const k of [e.i, e.j]) if (n[k] <= Date.now()) delete n[k];
         return n;
-      }), PEEK_MS + 20);
+      }), pk + 20);
       if (mine) say(`✗ Not a pair (-${MEM_MISS})`, "error");
     } else if (e.k === "clear") {
       const done = cb.view.done;
       setCleared({ deck: done ? done.deck : null });
       later(() => setCleared(null), CLEARED_MS);
-      say(`🎉 Deck cleared together! +${MEM_CLEAR}`, "success");
+      say(`🎉 Level ${e.b} cleared together! +${MEM_CLEAR}`, "success");
+      showLevel(e.b + 1);
     }
   });
+
+  function showLevel(n) {
+    setLevelUp(n);
+    later(() => setLevelUp((x) => (x === n ? 0 : x)), 2200);
+  }
+
+  // A cleared deck: a bonus, a moment to enjoy it, then the next level's deck,
+  // seeded off its number so everyone who gets this far plays the same one.
+  // (Clearing used to end the match on the spot, results and all, while
+  // everyone else was still playing. The room's clock ends it.)
+  function nextDeck() {
+    const s = live.current;
+    if (eng.gameOver || isSpectator) return;
+    s.deck += 1;
+    s.cards = buildCards(deckSeed(seed, s.deck), s.deck);
+    s.open = [];
+    s.pairs = 0;
+    setCards(s.cards);
+    setPairs(0);
+    setDeck(s.deck);
+    setCleared(null);
+    showLevel(s.deck);
+  }
 
   // Turn a wrong pair back face-down.
   function hideMiss() {
@@ -148,6 +179,7 @@ export default function MemoryGame({
       return;
     }
     const s = live.current;
+    if (cleared) return;
     // Tapping on while a wrong pair is showing skips the wait instead of being ignored.
     if (s.open.length === 2) hideMiss();
 
@@ -164,11 +196,18 @@ export default function MemoryGame({
           s.open = [];
           s.pairs += 1;
           setPairs(s.pairs);
+          s.total += 1;
           eng.addScore(PAIR_POINTS + eng.timeLeft);
-          if (s.pairs === TOTAL_PAIRS) eng.finish();
+          if (s.pairs === s.cards.length / 2) {
+            const bonus = DECK_BONUS * s.deck;
+            eng.addScore(bonus);
+            say(`🎉 Level ${s.deck} cleared! +${bonus}`, "success");
+            setCleared({ deck: s.cards.map((c) => c.emoji) });
+            later(nextDeck, CLEARED_MS);
+          }
         } else {
           eng.addScore(MISS);
-          s.peek = setTimeout(() => { hideMiss(); setCards(live.current.cards); }, PEEK_MS);
+          s.peek = setTimeout(() => { hideMiss(); setCards(live.current.cards); }, memLevel(s.deck).peek);
         }
       }
     }
@@ -194,18 +233,19 @@ export default function MemoryGame({
   const stats = coop
     ? [
         { label: "Team", value: v.score.toLocaleString() },
-        { label: "Pairs", value: `${v.pairs}/${TOTAL_PAIRS}` },
-        { label: "Goal", value: v.boards >= GOAL.memory ? "✓" : `${v.boards}/${GOAL.memory}` },
+        { label: "Level", value: v.b },
+        { label: "Pairs", value: `${v.pairs}/${v.deck.length / 2}` },
       ]
     : isSpectator
     ? [
         { label: "Score", value: (spectatorWatching?.score ?? 0).toLocaleString() },
-        { label: "Pairs", value: `${spectatorWatching?.pairs_matched ?? 0}/${TOTAL_PAIRS}` },
-        { label: "Moves", value: spectatorWatching?.moves ?? 0 },
+        { label: "Level", value: deck },
+        { label: "Pairs", value: spectatorWatching?.pairs_matched ?? 0 },
       ]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
-        { label: "Pairs", value: `${pairs}/${TOTAL_PAIRS}` },
+        { label: "Level", value: deck },
+        { label: "Pairs", value: `${pairs}/${cards.length / 2}` },
         { label: "Moves", value: eng.moves },
       ];
 
@@ -223,8 +263,15 @@ export default function MemoryGame({
         onQuit={eng.endMatch}
       >
         {({ w, h }) => {
-          const L = layout(w, h);
+          const L = layout(w, h, shown.length);
           return (
+            <div style={{ position: "relative" }}>
+            {levelUp > 1 && (
+              <div className="mj-level" key={levelUp}>
+                <b>Level {levelUp}</b>
+                <span>{memSays(levelUp)}</span>
+              </div>
+            )}
             <div className={`memgrid${cleared ? " mem-cleared" : ""}`} style={{
               gridTemplateColumns: `repeat(${L.cols}, ${L.cw}px)`,
               gridAutoRows: `${L.ch}px`,
@@ -252,6 +299,7 @@ export default function MemoryGame({
                 );
               })}
             </div>
+            </div>
           );
         }}
       </GameFrame>
@@ -259,7 +307,7 @@ export default function MemoryGame({
       {eng.gameOver && !isSpectator && (coop
         ? <GameOver eng={eng} me={currentUser} extra={plural(cb.agreed.boards, "deck") + " cleared"}
             together={{ reached: cb.agreed.boards >= GOAL.memory, goal: "clear the deck", unit: "pairs", mates: T.all(cb.agreed.by) }} />
-        : <GameOver eng={eng} me={currentUser} extra={`Pairs: ${pairs}/${TOTAL_PAIRS}`} />)}
+        : <GameOver eng={eng} me={currentUser} extra={`Level ${deck} · Pairs: ${live.current.total}`} />)}
     </>
   );
 }

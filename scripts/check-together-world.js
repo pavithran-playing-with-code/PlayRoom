@@ -221,6 +221,21 @@ function room(game, mode, seats, { elapsed = 0, duration = 120 } = {}) {
     check("Moving Day can be made as a team room", world.COOP.includes("moving"));
   }
 
+  // ── every server-run game: all the ways to play ────────────────────────────
+  for (const game of ["kitchen", "moving"]) {
+    const solo = room(game, "free", [{ id: 61 }]);
+    const free = room(game, "free", [{ id: 62 }, { id: 63 }]);
+    const teams = room(game, "teams", [{ id: 64, team: 1 }, { id: 65, team: 1 }, { id: 66, team: 2 }, { id: 67, team: 2 }]);
+    const coop = room(game, "coop", [{ id: 68 }, { id: 69 }]);
+    check(`${game}: solo, against friends, teams and together all build`, solo.sides.length === 1 && free.sides.length === 2 && teams.sides.length === 2 && coop.sides.length === 1 && coop.sides[0].inst.players.size === 2);
+    world._start(coop);
+    const ph = phone(68);
+    await ph.h["tg:hello"]({ code: coop.code });
+    check(`${game}: a phone is told its world`, ph.last("tg:init")?.game === game);
+    for (const x of [solo, free, teams, coop]) clearInterval(x.timer);
+    check(`${game} can be made as a team room`, world.COOP.includes(game));
+  }
+
   console.log(fails ? `\n${fails} failed` : "\nall passed");
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

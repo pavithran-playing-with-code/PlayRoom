@@ -174,11 +174,14 @@ There is no test runner. What works:
   `src/components/together/<game>Core.mjs`, which the phones share. Phones
   send `tg:act` / `tg:me`, draw `tg:tick`, and never post a score.
   `scripts/check-together-world.js` tests the server side with a fake
-  database; `check-kitchen.mjs`, `check-moving.mjs` test the rules. A rules
+  database (and builds each one solo, against friends, in teams and
+  together); `check-kitchen.mjs`, `check-moving.mjs` test the rules. A rules
   module can say SHARED (one world for the whole room, scored per side);
   none does now. Moving Day: a house per side, big things carried by two
   (`by` per end), the van loads anything inside it, an empty house deals
-  the next.
+  the next. A new one: copy the registration in all of the "Adding a game"
+  places plus `togetherWorld.js` GAMES and COOP, `matchResult.js`
+  TOGETHER_GAMES and the `NOT IN (...)` list in `server.js`.
 - **Every game is played solo, together and against each other** — never
   only one. Emberfall is the exception for now, due an upgrade.
 - **The look kit** (`src/components/games/toyKit.js`) is how 3D games should

@@ -16,7 +16,11 @@ export const GRAVITY = 1050;       // pixels per second, per second
 export const FLAP_V = -330;        // a flap sets this upward speed
 export const SPEED = 130;          // how fast the world scrolls
 export const PIPE_W = 54;
-export const GAP = 150;            // the hole between top and bottom pipe
+export const GAP = 150;            // the hole between top and bottom pipe, at level 2
+export const PER_LEVEL = 10;       // towers in a level
+// Level 1 is roomy; each level after squeezes the gap, down to a floor.
+export const gapFor = (level) => Math.max(108, 160 - (level - 1) * 10);
+export const levelAt = (i) => Math.floor(i / PER_LEVEL) + 1;
 export const SPACING = 210;        // distance from one pipe pair to the next
 export const STUN_S = 1.1;         // how long a crash dazes you
 export const PIPE_POINTS = 10;
@@ -31,9 +35,10 @@ export function makeCourse(seed) {
   let next = 300;
   function extend(upTo) {
     while (next < upTo) {
-      const top = MARGIN + GAP / 2;
-      const bottom = VIEW_H - GROUND - MARGIN - GAP / 2;
-      list.push({ x: next, gapY: top + rand() * (bottom - top), passed: false, gone: false });
+      const level = levelAt(list.length), gap = gapFor(level);
+      const top = MARGIN + gap / 2;
+      const bottom = VIEW_H - GROUND - MARGIN - gap / 2;
+      list.push({ x: next, gapY: top + rand() * (bottom - top), gap, level, passed: false, gone: false });
       next += SPACING;
     }
   }
@@ -48,7 +53,7 @@ export function newBird() {
     started: false,
     stun: 0,
     flapAt: -9999,         // when the last flap happened (for the wing)
-    pipes: 0, run: 0, best: 0, crashes: 0,
+    pipes: 0, run: 0, best: 0, crashes: 0, level: 1,
     points: 0,
     first: 0,
   };
@@ -106,12 +111,13 @@ export function step(s, course, dt) {
     const left = p.x - s.x;
     if (left > VIEW_W) break;
     const overlapsX = left < me.r && left + PIPE_W > me.l;
-    if (overlapsX && (me.t < p.gapY - GAP / 2 || me.b > p.gapY + GAP / 2)) { crash(s, course); return "crash"; }
+    if (overlapsX && (me.t < p.gapY - p.gap / 2 || me.b > p.gapY + p.gap / 2)) { crash(s, course); return "crash"; }
     if (!p.passed && left + PIPE_W < me.l) {
       p.passed = true;
       s.pipes += 1;
       s.run += 1;
       s.points += PIPE_POINTS;
+      if (i + 1 < list.length) s.level = Math.max(s.level, list[i + 1].level);
     }
   }
   return null;

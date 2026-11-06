@@ -77,6 +77,10 @@ export default function FlappyDashInner(props) {
   const [pipes, setPipes] = useState(0);
   const [best, setBest] = useState(0);
   const [banner, setBanner] = useState("idle");     // idle | ouch | ""
+  const [level, setLevel] = useState(1);
+  const [levelUp, setLevelUp] = useState(0);        // the level just reached, shown a moment
+  const lvTimer = useRef(null);
+  useEffect(() => () => clearTimeout(lvTimer.current), []);
 
   // seats: colours and names, the same on every phone
   const seated = useMemo(() => (players || []).filter((p) => !p.is_spectator)
@@ -150,7 +154,7 @@ export default function FlappyDashInner(props) {
     if (isSpectator) return undefined;
     let raf;
     let last = performance.now();
-    let lastPush = 0, pushed = 0, sent = 0, sentKey = "", shownBanner = "idle";
+    let lastPush = 0, pushed = 0, sent = 0, sentKey = "", shownBanner = "idle", levelRef = 1;
     const frame = (now) => {
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));   // a hidden tab mustn't teleport the bird
       last = now;
@@ -159,6 +163,13 @@ export default function FlappyDashInner(props) {
         const before = s.pipes;
         step(s, course, dt);
         if (s.pipes !== before) setPipes(s.pipes);
+        if (s.level !== levelRef) {
+          levelRef = s.level;
+          setLevel(s.level);
+          setLevelUp(s.level);
+          clearTimeout(lvTimer.current);
+          lvTimer.current = setTimeout(() => setLevelUp(0), 1800);
+        }
         // setBest with the same value is no change: the loop must not restart
         // on it, or the score it has already handed over is handed over again
         setBest(s.best);
@@ -273,8 +284,8 @@ export default function FlappyDashInner(props) {
       ]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
+        { label: "Level", value: level },
         { label: "Pipes", value: pipes },
-        { label: "Best run", value: Math.max(best, sim.current.run) },
       ];
 
   const chip = (text, cls) => (
@@ -311,13 +322,14 @@ export default function FlappyDashInner(props) {
             {broken && chip("Couldn't start the 3D view on this phone.", "")}
             {!broken && banner === "idle" && chip("Tap or press Space to flap!", "fl-chip")}
             {!broken && banner === "ouch" && chip(`Ouch! ${CRASH_COST}`, "fl-chip ouch")}
+            {!broken && levelUp > 1 && banner === "" && chip(`⭐ Level ${levelUp} — tighter gaps!`, "fl-chip lvl")}
           </Stage>
         ))}
       </GameFrame>
 
       {eng.gameOver && !isSpectator && (
         <GameOver eng={eng} me={currentUser}
-          extra={`Pipes cleared: ${pipes} · Best run: ${Math.max(best, sim.current.run)}`} />
+          extra={`Level ${level} · Pipes cleared: ${pipes} · Best run: ${Math.max(best, sim.current.run)}`} />
       )}
     </>
   );

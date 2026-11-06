@@ -18,7 +18,7 @@ import useCoopBoard, { useShows } from "./games/useCoopBoard";
 import { mahjongRules, GOAL, MJ_MATCH, MJ_MISS, MJ_HINT, MJ_SHUFFLE } from "./games/coopBoards";
 import { team, plural } from "./games/coopTeam";
 import { confetti } from "./ui/FunLayer";
-import { SLOTS, DRAW_ORDER, TOTAL_PAIRS, BOARD_W, BOARD_H, deal, isFree, findPair, reshuffle } from "./games/mahjongBoard";
+import { SLOTS, DRAW_ORDER, TOTAL_PAIRS, BOARD_W, BOARD_H, deal, isFree, findPair, reshuffle, levelRules, levelSays } from "./games/mahjongBoard";
 
 // ── Tile definitions ─────────────────────────────────────────────────────────
 // PICTURE TILES, not numbers.
@@ -70,7 +70,7 @@ const MISS = -10;
 const HINT_COST = -20;
 const SHUFFLE_COST = -50;
 
-const buildTiles = (seed) => deal(seed, TILE_TYPES);
+const buildTiles = (seed, board) => deal(seed, TILE_TYPES, board);
 const matchedIndices = (tiles) => tiles.map((t, i) => (t.matched ? i : -1)).filter((i) => i >= 0);
 
 // The biggest tiles that fit: five across, six down, and each layer up sits a
@@ -97,7 +97,7 @@ export default function MahjongGame({
   if (live.current === null) {
     // `pairs` is this board; `total` is every board, and that is what the
     // server sees — clearing one board still counts as completing the objective.
-    live.current = { tiles: buildTiles(seed), selected: null, pairs: 0, total: 0, board: 1 };
+    live.current = { tiles: buildTiles(seed, 1), selected: null, pairs: 0, total: 0, board: 1 };
   }
 
   const [tiles, setTiles] = useState(() => live.current.tiles);
@@ -107,6 +107,9 @@ export default function MahjongGame({
   const boardTimer = useRef(null);
   useEffect(() => () => clearTimeout(boardTimer.current), []);
   const [hintIdx, setHintIdx] = useState([]);
+  const [levelUp, setLevelUp] = useState(0);        // the level just reached, a big card for a moment
+  const lvTimer = useRef(null);
+  useEffect(() => () => clearTimeout(lvTimer.current), []);
   const [msg, setMsg] = useState(null);
   const msgTimer = useRef(null);
 
@@ -154,14 +157,17 @@ export default function MahjongGame({
     if (eng.gameOver || isSpectator) return;
     s.board += 1;
     s.pairs = 0;
-    s.tiles = buildTiles((Number(seed) || 1) + s.board * 7919);
+    s.tiles = buildTiles((Number(seed) || 1) + s.board * 7919, s.board);
     s.selected = null;
     setTiles(s.tiles);
     setPairs(0);
     setBoard(s.board);
     setSelected(null);
     setHintIdx([]);
-    showMsg(`🀄 Board ${s.board} — go!`, "info");
+    showMsg(`⭐ Level ${s.board}! ${levelSays(s.board)}`, "info");
+    setLevelUp(s.board);
+    clearTimeout(lvTimer.current);
+    lvTimer.current = setTimeout(() => setLevelUp(0), 2200);
   }
 
   function applyShuffle(next) {
@@ -216,7 +222,10 @@ export default function MahjongGame({
       clearTimeout(boardTimer.current);
       boardTimer.current = setTimeout(() => setCleared(false), NEXT_BOARD_MS);
       confetti(undefined, undefined, { count: 60, emojis: ["🀄", "🎉", "✨"] });
-      showMsg("🎉 Stack cleared together!", "success");
+      showMsg(`🎉 Level ${e.b} cleared together! Level ${e.b + 1}: ${levelSays(e.b + 1)}`, "success");
+      setLevelUp(e.b + 1);
+      clearTimeout(lvTimer.current);
+      lvTimer.current = setTimeout(() => setLevelUp(0), 2400);
     }
   });
 
@@ -265,7 +274,7 @@ export default function MahjongGame({
         // match; clearing just earns a bonus and a fresh board.
         const bonus = CLEAR_BONUS * s.board + eng.timeLeft;
         eng.addScore(bonus);
-        showMsg(`🎉 Board ${s.board} cleared! +${bonus}`, "success");
+        showMsg(`🎉 Level ${s.board} cleared! +${bonus}`, "success");
         clearTimeout(boardTimer.current);
         boardTimer.current = setTimeout(nextBoard, NEXT_BOARD_MS);
       } else showMsg(`✓ Match! +${gain}`, "success");
@@ -326,8 +335,8 @@ export default function MahjongGame({
   const stats = coop
     ? [
         { label: "Team", value: v.score.toLocaleString() },
+        { label: "Level", value: v.b },
         { label: "Pairs", value: `${v.pairs}/${TOTAL_PAIRS}` },
-        { label: "Goal", value: v.boards >= GOAL.mahjong ? "✓" : `${v.boards}/${GOAL.mahjong}` },
       ]
     : isSpectator
     ? [
@@ -337,8 +346,8 @@ export default function MahjongGame({
       ]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
+        { label: "Level", value: board },
         { label: "Pairs", value: `${pairs}/${TOTAL_PAIRS}` },
-        ...(board > 1 ? [{ label: "Board", value: board }] : [{ label: "Moves", value: eng.moves }]),
       ];
 
   return (
@@ -362,21 +371,29 @@ export default function MahjongGame({
       >
         {({ w, h }) => {
           const L = layout(w, h);
+          const blind = levelRules(coop ? v.b : board).blind;
           const lift = Math.max(4, Math.round(L.tw * 0.12));
           return (
             <div className="mj-felt" style={{ width: w, height: h }}>
+              {levelUp > 1 && (
+                <div className="mj-level" key={levelUp}>
+                  <b>Level {levelUp}</b>
+                  <span>{levelSays(levelUp)}</span>
+                </div>
+              )}
               {DRAW_ORDER.map((idx) => {
                 const tile = drawTiles[idx];
                 if (!tile || tile.matched) return null;
                 const at = SLOTS[idx];
                 const free = isFree(drawTiles, idx);
+                const down = blind && !free;
                 const isSel = mySel === idx, isHint = hintIdx.includes(idx);
                 const mate = picks[idx] !== undefined ? T.colourOf(picks[idx]) : null;
                 const up = isSel || mate ? lift : isHint ? Math.round(lift / 2) : 0;
                 return (
                   <button key={idx} type="button" onClick={(ev) => clickTile(idx, ev)}
-                    className={`mj-tile${isSel ? " sel" : ""}${isHint ? " hint" : ""}${free ? "" : " stuck"}`}
-                    aria-label={`${tile.e}${free ? "" : " (stuck)"}`}
+                    className={`mj-tile${isSel ? " sel" : ""}${isHint ? " hint" : ""}${free ? "" : " stuck"}${down ? " down" : ""}`}
+                    aria-label={down ? "a face-down tile" : `${tile.e}${free ? "" : " (stuck)"}`}
                     style={{
                       left: L.ox + (at.x / 2) * L.tw - at.z * L.d,
                       top: L.oy + (at.y / 2) * L.th - at.z * L.d - up,
@@ -384,7 +401,7 @@ export default function MahjongGame({
                       borderRadius: Math.max(6, Math.round(L.tw * 0.14)),
                       boxShadow: `${L.d}px ${L.d}px 0 #c9b385, ${L.d}px ${L.d}px 0 2px var(--ink)${isSel ? ", 0 0 0 4px var(--sun)" : mate ? `, 0 0 0 4px ${mate}` : ""}`,
                     }}>
-                    <span>{tile.e}</span>
+                    <span>{down ? "" : tile.e}</span>
                   </button>
                 );
               })}

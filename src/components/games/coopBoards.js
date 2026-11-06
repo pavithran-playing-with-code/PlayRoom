@@ -95,7 +95,7 @@ const mjSeed = (seed, n) => (n <= 1 ? seed : (Number(seed) || 1) + n * 7919);
 const stuckRand = (seed, b, pairs) => seededRand(((Number(seed) || 1) * 977 + b * 131 + pairs * 17) % 2147483646 + 1);
 
 export function mahjongRules(seed, types) {
-  const init = { ...blank(1), tiles: deal(mjSeed(seed, 1), types), sel: {}, pairs: 0 };
+  const init = { ...blank(1), tiles: deal(mjSeed(seed, 1), types, 1), sel: {}, pairs: 0 };
   function unstick(s) {
     if (s.pairs < MJ_PAIRS && !findPair(s.tiles)) {
       s.tiles = reshuffle(s.tiles, 60, stuckRand(seed, s.b, s.pairs));
@@ -139,7 +139,7 @@ export function mahjongRules(seed, types) {
         s.done = { b: s.b };
         said(s, c, { k: "clear", u, b: s.b });
         s.b += 1;
-        s.tiles = deal(mjSeed(seed, s.b), types);
+        s.tiles = deal(mjSeed(seed, s.b), types, s.b);
         s.sel = {};
         s.pairs = 0;
       } else if (unstick(s)) said(s, c, { k: "stuck", u });

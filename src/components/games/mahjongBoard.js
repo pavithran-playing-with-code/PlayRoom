@@ -60,8 +60,25 @@ export function findPair(tiles) {
   return null;
 }
 
+// Levels: every board in a match is a level, a little harder than the one before.
+//   1  pairs dealt close together — easy to spot
+//   2  the classic deal: pairs anywhere
+//   3  pairs dealt far apart, on different layers where it can
+//   4+ as 3, and a covered tile is face down until it comes free
+export function levelRules(board) {
+  const n = Math.max(1, Number(board) || 1);
+  return { level: n, spread: n === 1 ? "near" : n === 2 ? "any" : "far", blind: n >= 4 };
+}
+const LEVEL_SAYS = { 1: "Pairs sit close together", 2: "The full stack — pairs anywhere", 3: "Pairs hide far apart", 4: "Covered tiles are face down now!" };
+export const levelSays = (board) => LEVEL_SAYS[Math.min(4, Math.max(1, board))];
+
+// How far apart two slots are, for the deal: a different layer counts extra.
+const apart = (a, b) => Math.abs(SLOTS[a].x - SLOTS[b].x) + Math.abs(SLOTS[a].y - SLOTS[b].y) + Math.abs(SLOTS[a].z - SLOTS[b].z) * 6;
+
 // A deal: `types` is the picture catalogue, at least TOTAL_PAIRS long.
-export function deal(seed, types) {
+// `board` sets the level (levelRules); left out, it's the classic deal.
+export function deal(seed, types, board = 2) {
+  const { spread } = levelRules(board);
   const rand = seededRand((Number(seed) || 1) * 31 + 17);
   for (let attempt = 0; attempt < 50; attempt++) {
     const faces = types.slice(0, TOTAL_PAIRS).map((t) => ({ ...t }));
@@ -73,7 +90,13 @@ export function deal(seed, types) {
       const free = [...left].filter((i) => freeIn(i, (j) => left.has(j)));
       if (free.length < 2) { ok = false; break; }
       const a = free.splice(Math.floor(rand() * free.length), 1)[0];
-      const b = free[Math.floor(rand() * free.length)];
+      let b;
+      if (spread === "any") b = free[Math.floor(rand() * free.length)];
+      else {
+        // the three nearest (or farthest) free tiles, one of them at random
+        const by = [...free].sort((p, q) => (spread === "near" ? apart(a, p) - apart(a, q) : apart(a, q) - apart(a, p)));
+        b = by[Math.floor(rand() * Math.min(3, by.length))];
+      }
       left.delete(a); left.delete(b);
       out[a] = { ...face, matched: false };
       out[b] = { ...face, matched: false };

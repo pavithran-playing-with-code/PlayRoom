@@ -10,7 +10,7 @@
 // VIEW_W × VIEW_H window with y down; here 40 px is a metre, x runs on with
 // the scroll, y is up from the grass.
 import * as THREE from "three";
-import { VIEW_W, VIEW_H, GROUND, BIRD_X, GAP, PIPE_W } from "./flappySim";
+import { VIEW_W, VIEW_H, GROUND, BIRD_X, PIPE_W } from "./flappySim";
 import { toon, part, at, effects, sunnyLights, nameTag, INK } from "./toyKit";
 
 export const BIRD_COLOURS = [0xffd23f, 0x4cc9f0, 0xff8fc7, 0x8fdb5c, 0xffa36c, 0x9b5de5, 0x3dd6c0, 0xff6b6b];
@@ -92,7 +92,9 @@ function poseBird(b, t, dt, { vy, started, stun, flapAgo }) {
 }
 
 // ── a tower of toy blocks, from y0 up to y1, its cap at the gap ──────────────
-function tower(n, y0, y1, capAtTop) {
+// the cap's stripe shows the level: red, orange, yellow, green, blue, purple…
+const LEVEL_STRIPES = [0xff6b6b, 0xff9f43, 0xffc53d, 0x8fdb5c, 0x4cc9f0, 0x9b5de5];
+function tower(n, y0, y1, capAtTop, level = 1) {
   const g = new THREE.Group();
   const h = y1 - y0;
   const count = Math.ceil(h / BLOCK);
@@ -106,7 +108,7 @@ function tower(n, y0, y1, capAtTop) {
   // the cap: a wider block at the gap, with studs on top of the lower tower
   const capY = capAtTop ? y1 - 0.2 : y0 + 0.2;
   g.add(at(P(bx(TW + 0.3, 0.42, TW + 0.3), 0xfff6e6, { line: 0.05 }), 0, capY, 0));
-  g.add(at(P(bx(TW + 0.32, 0.1, TW + 0.32), 0xff6b6b, { line: 0 }), 0, capY, 0));
+  g.add(at(P(bx(TW + 0.32, 0.1, TW + 0.32), LEVEL_STRIPES[(level - 1) % LEVEL_STRIPES.length], { line: 0 }), 0, capY, 0));
   if (capAtTop) for (const x of [-0.35, 0.35]) for (const z of [-0.35, 0.35]) g.add(at(P(cyl(0.13, 0.13, 0.12), 0xfff6e6, { line: 0.1 }), x, y1 + 0.06, z));
   return g;
 }
@@ -187,8 +189,8 @@ export function createFlappyScene(canvas, course) {
       if (p.x > hi) break;
       if (!towers.has(i)) {
         const g = new THREE.Group();
-        g.add(tower(i, 0, WY(p.gapY + GAP / 2), true));
-        g.add(tower(i + 999, WY(p.gapY - GAP / 2), TOP, false));
+        g.add(tower(i, 0, WY(p.gapY + p.gap / 2), true, p.level));
+        g.add(tower(i + 999, WY(p.gapY - p.gap / 2), TOP, false, p.level));
         g.position.x = WX(p.x + PIPE_W / 2);
         scene.add(g);
         towers.set(i, g);

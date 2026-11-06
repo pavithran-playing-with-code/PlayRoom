@@ -254,6 +254,7 @@ const GAME_SEED = [
   { slug: "typing",    name: "Typing Race",       description: "Type the words as fast as you can. Same words for everyone, streaks score big.", min: 1, max: 8, icon: "⌨️", active: 1 },
   { slug: "trivia",    name: "Trivia Quiz",       description: "Answer questions and outsmart your opponents.",                 min: 2, max: 4, icon: "🧠", active: 0 },
   { slug: "piano",     name: "Piano Tiles",       description: "Tap the black tiles, never the white. Every tile is the next note of the song.", min: 1, max: 8, icon: "🎹", active: 1 },
+  { slug: "moving",    name: "Moving Day",        description: "Empty the house into the van before the clock runs out: boxes, lamps, the telly — and a sofa that needs two. Watch out for Biscuit.", min: 1, max: 8, icon: "📦", active: 1 },
   { slug: "kitchen",   name: "Kitchen Rush",      description: "Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.", min: 1, max: 8, icon: "🍳", active: 1 },
   { slug: "manor",     name: "Station 13",        description: "A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.", min: 1, max: 8, icon: "🏥", active: 1 },
   { slug: "sunshard",  name: "Sunshard Jump",     description: "A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.", min: 1, max: 8, icon: "🏝️", active: 1 },

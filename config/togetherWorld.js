@@ -29,9 +29,9 @@ const { recordResults } = require("./recordResults");
 const { tellFriends, roomChannel, userChannel } = require("./socket");
 
 // slug -> the rules module
-const GAMES = { kitchen: "kitchenCore.mjs" };
+const GAMES = { kitchen: "kitchenCore.mjs", moving: "movingCore.mjs" };
 // …and the ones a co-op room can be made for
-const COOP = ["kitchen"];
+const COOP = ["kitchen", "moving"];
 const KEEP_AFTER_MS = 120000;          // a finished world lingers for late hellos
 const SAVE_MS = 1500;                  // scores reach the database at most this often
 

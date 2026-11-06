@@ -192,6 +192,35 @@ function room(game, mode, seats, { elapsed = 0, duration = 120 } = {}) {
     for (const x of new Set(ws)) clearInterval(x.timer);
   }
 
+  // ── Moving Day: the same sides, a house each or one shared ─────────────────
+  {
+    const solo = room("moving", "free", [{ id: 41 }]);
+    check("Moving Day solo: one mover, one house", solo.sides.length === 1 && solo.sides[0].inst.players.size === 1 && solo.sides[0].inst.items.length > 10);
+    const free = room("moving", "free", [{ id: 42 }, { id: 43 }]);
+    const houses = free.sides.map((x) => JSON.stringify(x.inst.items.map((i) => [i.k, i.x, i.y])));
+    check("Moving Day against friends: a house each, the same furniture", free.sides.length === 2 && houses[0] === houses[1]);
+    const teams = room("moving", "teams", [{ id: 44, team: 1 }, { id: 45, team: 1 }, { id: 46, team: 2 }, { id: 47, team: 2 }]);
+    check("Moving Day teams: a house per team", teams.sides.length === 2 && teams.sides.every((x) => x.inst.players.size === 2));
+    const coop = room("moving", "coop", [{ id: 48 }, { id: 49 }]);
+    check("Moving Day together: one house for both", coop.sides.length === 1 && coop.sides[0].inst.players.size === 2);
+    // a phone grabs, through the socket
+    world._start(coop);
+    const ph = phone(48);
+    await ph.h["tg:hello"]({ code: coop.code });
+    const init = ph.last("tg:init");
+    check("Moving Day: a phone is told the house", init && init.game === "moving" && init.view.i.length > 10 && init.view.d.length === 5);
+    const inst = coop.sides[0].inst, me = inst.players.get(48);
+    const box = inst.items.find((i) => i.k === "box");
+    me.x = box.x; me.y = box.y;
+    ph.h["tg:act"]({ code: coop.code, n: 1, a: "grab" });
+    const rep = ph.last("tg:reply");
+    check("Moving Day: Grab over the socket picks it up", rep && rep.ok && rep.what === "grab" && me.hold === box.id);
+    world.forfeit(coop.code, 48);
+    check("…leaving puts it down", me.hold === null && box.by.length === 0);
+    for (const x of [solo, free, teams, coop]) clearInterval(x.timer);
+    check("Moving Day can be made as a team room", world.COOP.includes("moving"));
+  }
+
   console.log(fails ? `\n${fails} failed` : "\nall passed");
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

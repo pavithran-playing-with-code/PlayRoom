@@ -23,6 +23,7 @@ import ManorGame from "./ManorGame";
 import TypingRace from "./TypingRace";
 import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
+import MovingDay from "./MovingDay";
 import SunshardIslands from "./SunshardIslands";
 import Emberfall from "./Emberfall";
 import HollowGame from "./HollowGame";
@@ -183,6 +184,15 @@ export const GAMES = [
     coopLabel: "one kitchen, every cook in it",
     coopNote: "One kitchen for all of you: split the work — chop, cook, plate up and serve.",
     Component: KitchenRush,
+  },
+  {
+    slug: "moving", name: "Moving Day", icon: "📦",
+    blurb: "Empty the house into the van before the clock runs out: boxes, lamps, the telly — and a sofa that needs two. Watch out for Biscuit.",
+    minPlayers: 1, maxPlayers: 8, tag: "Together", col: "var(--sun)",
+    coopMax: 4, coopDefault: true, ownsSpectating: true,
+    coopLabel: "one house — the big things need two of you",
+    coopNote: "One house for all of you: grab an end of the sofa each, throw the boxes out of the window, and mind the dog.",
+    Component: MovingDay,
   },
   {
     slug: "manor", name: "Station 13", icon: "🏥",

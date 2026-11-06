@@ -266,7 +266,7 @@ async function sweepStaleRooms() {
           SET r.status = 'finished', r.finished_at = NOW()
         WHERE r.status = 'in_progress' AND r.started_at IS NOT NULL AND r.duration_seconds = 0
           AND (r.started_at < NOW() - INTERVAL 6 HOUR
-               OR (gt.slug NOT IN ('manor', 'kitchen')
+               OR (gt.slug NOT IN ('manor', 'kitchen', 'moving')
                    AND COALESCE(r.last_activity_at, r.started_at) < NOW() - INTERVAL 20 MINUTE))`
     );
     p.affectedRows += u.affectedRows;
@@ -325,7 +325,7 @@ require("./config/calls").attach(io);
 // ── Start ─────────────────────────────────────────────────────────────────────
 // Every game the app offers needs its row in game_types, or creating a room for
 // it fails with "Game type not found". Say so loudly at startup.
-const APP_GAMES = ["mahjong", "memory", "speedmath", "reaction", "wordrush", "arrows", "dino", "numbers", "colors", "pipes", "flappy", "slide", "blocks", "racer", "storm", "maze", "typing", "runner", "speedway", "piano", "kitchen", "manor", "sunshard", "emberfall", "hollow"];
+const APP_GAMES = ["mahjong", "memory", "speedmath", "reaction", "wordrush", "arrows", "dino", "numbers", "colors", "pipes", "flappy", "slide", "blocks", "racer", "storm", "maze", "typing", "runner", "speedway", "piano", "kitchen", "moving", "manor", "sunshard", "emberfall", "hollow"];
 async function checkGameTypes() {
   try {
     const [rows] = await db.execute("SELECT slug FROM game_types WHERE is_active = 1");

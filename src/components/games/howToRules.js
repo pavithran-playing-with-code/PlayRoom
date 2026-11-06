@@ -157,6 +157,12 @@ export const HOW_TO = {
     steps: ["Take food from the crates. Chop 🥬🍅🧀 on a 🔪 board.", "Grill 🥩 on a stove — take it off before it burns.", "Put everything on a plate and hand it in at SERVE.", "Walk with the stick; tap a counter or press Use."],
     tip: "Together, split the jobs: one chops, one cooks.",
   },
+  moving: {
+    name: "Moving Day",
+    goal: "Get everything out of the house and into the van.",
+    steps: ["Walk up to something and press Grab. Walk it to the van — it's loaded the moment it's in.", "Throw boxes and teddies — out of an open window, even straight into the van.", "Lamps, plants and the telly are fragile: carry them, never throw them.", "The sofa, fridge, bed and bookcase are big: one of you can drag one alone, slowly — grab an end each and it's quick.", "Mind Biscuit the dog: walk into him and you drop what you're carrying."],
+    tip: "Empty the house for a bonus — the next one is ready at once.",
+  },
   manor: {
     name: "Station 13",
     goal: "Find 4 fuses, bring the power back, and get out through the elevator.",

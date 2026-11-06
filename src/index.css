@@ -2049,3 +2049,16 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .cw-name .ico{vertical-align:-3px;margin-right:2px}
 .cw-card-icon{display:grid;place-items:center}
 .wr-chat .wr-h .ico,.call-chat-head b .ico{vertical-align:-3px}
+
+/* ── MOVING DAY (.md-): the house in 3D fills the board; Grab big, Throw beside it ── */
+.md-pad{position:relative;display:grid;place-items:center;overflow:hidden;border-radius:18px;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;background:#bfe8ff}
+.md-canvas{display:block;border-radius:18px;touch-action:none;-webkit-tap-highlight-color:transparent}
+.md-wait{font-family:Fredoka,sans-serif;font-weight:600;color:#2E2140}
+.md-house{position:absolute;left:10px;top:8px;padding:3px 12px;border:2.5px solid #2E2140;border-radius:999px;
+  background:#fff;color:#2E2140;font:800 .8rem Nunito,sans-serif;box-shadow:0 3px 0 #2E2140;pointer-events:none}
+.md-btns{display:flex;align-items:flex-end;gap:12px;flex:none}
+.press.md-throw{min-width:84px;min-height:58px;font-size:1rem;--lift:4px;touch-action:none;border-radius:999px}
+.gameshell.land .press.md-throw{width:70px;height:70px;min-width:0;min-height:0;padding:0;border-radius:50%;font-size:.9rem}
+.press.md-grab.hot{animation:mdHot .7s ease-in-out infinite}
+@keyframes mdHot{50%{transform:translateY(-3px) scale(1.06)}}

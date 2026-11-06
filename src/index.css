@@ -1612,7 +1612,8 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .s13-gl,.s13-nz{position:absolute;inset:0;width:100%;height:100%;display:block}
 .s13-nz{pointer-events:none;opacity:.05;mix-blend-mode:overlay}
 .s13-fx{position:absolute;inset:0;pointer-events:none}
-.s13-vig{background:radial-gradient(ellipse at center,transparent 65%,rgba(0,0,0,.55) 130%);z-index:2}
+.s13-vig{background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.75) 115%);z-index:2}
+.s13-gl{filter:saturate(.7) contrast(1.1)}
 .s13-br{background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,.92));opacity:0;z-index:2}
 .s13-dg{background:radial-gradient(ellipse at center,transparent 40%,rgba(120,0,0,.8));opacity:0;z-index:2}
 .s13-slit{background:linear-gradient(#000 0,#000 42%,transparent 42%,transparent 52%,#000 52%);z-index:3}

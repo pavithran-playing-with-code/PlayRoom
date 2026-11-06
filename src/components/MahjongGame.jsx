@@ -205,7 +205,7 @@ export default function MahjongGame({
     if (e.k === "pair") {
       if (mine) {
         const r = lastTap.current;
-        confetti(r ? r.x : undefined, r ? r.y : undefined, { count: 16, emojis: [e.e, "✨"] });
+        confetti(r ? r.x : undefined, r ? r.y : undefined, { count: 6 });   // a small puff: a big one each pair was too much playing fast
         showMsg(e.with && e.with !== myId ? `✓ Match with ${T.nameOf(e.with)}'s tile! +${MJ_MATCH}` : `✓ Match! +${MJ_MATCH}`, "success");
       } else showMsg(e.with === myId ? `🎉 ${T.nameOf(e.u)} took your tile's pair!` : `🎉 ${T.nameOf(e.u)} took a pair`, "success");
       setHintIdx([]);
@@ -265,7 +265,7 @@ export default function MahjongGame({
       // Little pop of the matched picture, right where you tapped.
       const r = ev?.currentTarget?.getBoundingClientRect?.();
       confetti(r ? r.left + r.width / 2 : undefined, r ? r.top + r.height / 2 : undefined,
-        { count: 16, emojis: [tile.e, "✨"] });
+        { count: 6 });   // a small puff: a big one each pair was too much playing fast
       if (s.pairs === TOTAL_PAIRS) {
         // Clearing the board used to end the match on the spot, which dropped
         // you on a results screen declaring you the winner while everyone else

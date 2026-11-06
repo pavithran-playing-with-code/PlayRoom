@@ -31,6 +31,38 @@ const SPEC_SHARDS = 40;            // most shards a spectator frame carries
 const SPEC_AHEAD = 18;             // frames a watcher carries on past the last frame, at most
 const SPEC_SMOOTH = 0.5;           // how much of a correction a watcher takes a frame
 const SEND_MS = 100;
+const JOY_R = 32;                  // how far the knob travels from the middle, px
+const JOY_LEAD = 30;               // full stick: aim this far ahead of the runner
+
+// A thumb stick under the arena, so a thumb never covers the runner. It
+// writes the push (-1..1 each way) into `joy.current`; the loop steers by it.
+function Joystick({ joy }) {
+  const pad = useRef(null), knob = useRef(null), id = useRef(null);
+  const set = (e) => {
+    const r = pad.current.getBoundingClientRect();
+    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    const d = Math.hypot(dx, dy);
+    if (d > JOY_R) { dx *= JOY_R / d; dy *= JOY_R / d; }
+    joy.current = { x: dx / JOY_R, y: dy / JOY_R };
+    if (knob.current) knob.current.style.transform = `translate(-50%,-50%) translate(${dx}px,${dy}px)`;
+  };
+  const down = (e) => { e.preventDefault(); id.current = e.pointerId; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ } set(e); };
+  const move = (e) => { if (id.current === e.pointerId) set(e); };
+  const up = (e) => {
+    if (id.current !== e.pointerId) return;
+    id.current = null; joy.current = null;
+    if (knob.current) knob.current.style.transform = "translate(-50%,-50%)";
+  };
+  return (
+    <div className="ds-controls">
+      <div className="ds-joy" ref={pad} role="application" aria-label="Move"
+        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onContextMenu={(e) => e.preventDefault()}>
+        <div className="ds-joy-knob" ref={knob} />
+      </div>
+      <div className="ds-joy-help muted">Steer here — or touch the arena</div>
+    </div>
+  );
+}
 const r1 = (v) => Math.round(v * 10) / 10;
 const r2 = (v) => Math.round(v * 100) / 100;
 
@@ -76,6 +108,7 @@ export default function DodgeStormInner(props) {
   const size = useRef({ w: 0, h: 0, set: { w: 0, h: 0 } });
   const [broken, setBroken] = useState(false);
   const keys = useRef({});
+  const joy = useRef(null);
   // Every finished run's score, kept aside, so a hit never takes away what was won.
   const banked = useRef(0);
   const overRef = useRef(false);
@@ -224,6 +257,8 @@ export default function DodgeStormInner(props) {
         if (k.arrowup || k.w) dy -= KEY_STEP;
         if (k.arrowdown || k.s) dy += KEY_STEP;
         if (dx || dy) nudge(s, dx * dt, dy * dt);
+        const j = joy.current;
+        if (j && (j.x || j.y)) moveTo(s, s.x + j.x * JOY_LEAD, s.y + j.y * JOY_LEAD);
 
         const out = step(s, dt);
         if (out.grazes) grazed.current += out.grazes;
@@ -328,6 +363,7 @@ export default function DodgeStormInner(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
+        controls={!isSpectator ? <Joystick joy={joy} /> : null}
       >
         {({ w, h }) => (
           <Stage w={w} h={h} canvasRef={canvasRef} size={size} onPoint={isSpectator ? null : onPoint}

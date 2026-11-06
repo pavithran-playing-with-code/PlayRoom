@@ -119,10 +119,12 @@ export function trainAt(row, t) {
 }
 
 // ── you ──────────────────────────────────────────────────────────────────────
-export function newHopper(seed) {
+// Each seat starts on its own square along the start line (cols 2–6 are open).
+export const START_COLS = [4, 3, 5, 2, 6];
+export function newHopper(seed, col = 4) {
   return {
     course: newCourse(seed), t: 0,
-    row: 0, col: 4, x: 4,                // x: where you are across (a log carries you)
+    row: 0, col, x: col,                // x: where you are across (a log carries you)
     hop: null,                           // { from: [row, x], to: [row, x], t }
     best: 0, coins: 0, crashes: 0, daze: 0, cam: 0, moved: false,
     taken: new Set(),                    // coins taken, by row

@@ -186,6 +186,20 @@ function initSocket(httpServer) {
       });
     });
 
+    // Road Hopper: where my chick is on the course (everyone hops the same one),
+    // so everyone draws everyone. r: the row I'm on or hopping to, x: across,
+    // d: dazed for, l: what got me last (a number), p: my best row.
+    socket.on("hop:pos", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const n = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
+      socket.to(roomChannel(code)).volatile.emit("hop:pos", {
+        user_id: uid,
+        r: Math.floor(n(msg.r, -5, 1e5)), x: n(msg.x, -5, 20), d: n(msg.d, 0, 5), l: Math.floor(n(msg.l, 0, 9)),
+        k: Math.floor(n(msg.k, 0, 1e5)), p: Math.floor(n(msg.p, 0, 1e5)),
+      });
+    });
+
     // Sunshard Jump: where my explorer is and what they're doing — so
     // everyone draws everyone on the same islands — plus my shards (a bit
     // each: together, any of us taking one counts for all), gems, how far

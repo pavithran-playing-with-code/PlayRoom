@@ -205,6 +205,12 @@ There is no test runner. What works:
   everyone else's car is eased toward that and drawn with the same effects.
   Laps follow the room clock (`lapsFor`). The score sync still decides the
   result.
+- **Road Hopper** (slug `racer`) is drawn in 3D with the look kit
+  (`hopperScene.js`, a lazy chunk: `RoadHopper.jsx` wraps
+  `RoadHopperInner.jsx`); the rules are still `hopperSim.js`. Everyone hops
+  the same course and sees everyone's chick: each phone sends its square
+  (`hop:pos`, at once on a hop or crash, else ~10×/s) and the others play the
+  hop out locally. Each seat starts on its own square (`START_COLS`).
 - **Station 13** (slug `manor`) is a first-person hospital horror in
   three.js r128 (a lazy chunk), ported from a single-file original: the
   rules are `src/components/horror/s13Core.mjs` (the layout from the seed,

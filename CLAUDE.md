@@ -211,6 +211,12 @@ There is no test runner. What works:
   the same course and sees everyone's chick: each phone sends its square
   (`hop:pos`, at once on a hop or crash, else ~10×/s) and the others play the
   hop out locally. Each seat starts on its own square (`START_COLS`).
+  **Flappy Dash** (`flappyScene.js`, towers of toy blocks; friends' birds
+  over `fly:pos`, carried on under gravity, flying a little behind yours)
+  and **Dodge Storm** (`stormScene.js`, a floating arena in a night storm;
+  friends as ghosts over `storm:pos`; a finger is raycast onto the arena,
+  `toSim`) are built the same way: lazy `X.jsx` + `XInner.jsx`, rules
+  untouched, `nameTag` from the look kit.
 - **Station 13** (slug `manor`) is a first-person hospital horror in
   three.js r128 (a lazy chunk), ported from a single-file original: the
   rules are `src/components/horror/s13Core.mjs` (the layout from the seed,

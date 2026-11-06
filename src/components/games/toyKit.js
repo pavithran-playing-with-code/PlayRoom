@@ -205,6 +205,26 @@ export function effects(scene) {
   };
 }
 
+// A name in a rounded pill of the player's colour, always facing you.
+export function nameTag(text, colour) {
+  const c = document.createElement("canvas");
+  const x = c.getContext("2d");
+  x.font = "800 40px Fredoka, Nunito, sans-serif";
+  const w = Math.ceil(x.measureText(text).width) + 36;
+  c.width = w; c.height = 64;
+  x.font = "800 40px Fredoka, Nunito, sans-serif";
+  x.fillStyle = "#" + colour.toString(16).padStart(6, "0");
+  x.strokeStyle = "#2E2140"; x.lineWidth = 6;
+  x.beginPath(); x.roundRect ? x.roundRect(3, 3, w - 6, 58, 28) : x.rect(3, 3, w - 6, 58); x.fill(); x.stroke();
+  x.fillStyle = "#2E2140"; x.textAlign = "center"; x.textBaseline = "middle";
+  x.fillText(text, w / 2, 34);
+  const tex = new THREE.CanvasTexture(c);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+  s.renderOrder = 9;
+  s.scale.set((0.3 * w) / 64, 0.3, 1);
+  return s;
+}
+
 // A soft round shadow-ish ring under someone (the "that's you" ring).
 export function ring(color = 0xffffff, r = 0.42) {
   const m = new THREE.Mesh(new THREE.RingGeometry(r * 0.78, r, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }));

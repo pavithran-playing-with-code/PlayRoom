@@ -11,7 +11,7 @@
 // every frame, the course clock, the camera row and where each chick is.
 import * as THREE from "three";
 import { COLS, rowAt, thingsAt, trainAt } from "./hopperSim.js";
-import { toon, part, at, effects, ring, sunnyLights, INK } from "./toyKit";
+import { toon, part, at, effects, ring, sunnyLights, nameTag, INK } from "./toyKit";
 
 export const CHICK_COLOURS = [0x4cc9f0, 0xff8fc7, 0x8fdb5c, 0xffa36c, 0x9b5de5, 0x3dd6c0, 0xffc53d, 0xff6b6b];
 const CAR_COLOURS = [0xff6b6b, 0x4cc9f0, 0xffc53d, 0x9b5de5, 0x8fdb5c, 0xff9f43, 0xff8fc7, 0x3dd6c0];
@@ -355,25 +355,6 @@ function eagle() {
   g.userData.wings = wings;
   g.visible = false;
   return g;
-}
-
-function nameTag(text, colour) {
-  const c = document.createElement("canvas");
-  const x = c.getContext("2d");
-  x.font = "800 40px Fredoka, Nunito, sans-serif";
-  const w = Math.ceil(x.measureText(text).width) + 36;
-  c.width = w; c.height = 64;
-  x.font = "800 40px Fredoka, Nunito, sans-serif";
-  x.fillStyle = "#" + colour.toString(16).padStart(6, "0");
-  x.strokeStyle = "#2E2140"; x.lineWidth = 6;
-  x.beginPath(); x.roundRect ? x.roundRect(3, 3, w - 6, 58, 28) : x.rect(3, 3, w - 6, 58); x.fill(); x.stroke();
-  x.fillStyle = "#2E2140"; x.textAlign = "center"; x.textBaseline = "middle";
-  x.fillText(text, w / 2, 34);
-  const tex = new THREE.CanvasTexture(c);
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-  s.renderOrder = 9;
-  s.scale.set((0.3 * w) / 64, 0.3, 1);
-  return s;
 }
 
 // ── the scene ────────────────────────────────────────────────────────────────

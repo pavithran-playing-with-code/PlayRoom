@@ -2062,3 +2062,27 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .gameshell.land .press.md-throw{width:70px;height:70px;min-width:0;min-height:0;padding:0;border-radius:50%;font-size:.9rem}
 .press.md-grab.hot{animation:mdHot .7s ease-in-out infinite}
 @keyframes mdHot{50%{transform:translateY(-3px) scale(1.06)}}
+
+/* ── KITCHEN RUSH in 3D (.kr3-): the kitchen, and order cards beside it ── */
+.kr3-pad{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:0;overflow:hidden;
+  border-radius:18px;background:#ffe8cc;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.kr3-pad.side{flex-direction:row}
+.kr3-orders{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;width:100%;height:78px;padding:6px 8px 4px;flex:none}
+.kr3-orders.side{grid-template-columns:1fr;grid-template-rows:repeat(4,minmax(0,1fr));width:min(132px,20%);height:100%;padding:8px 4px 8px 8px}
+.kr3-card{position:relative;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto 1fr;align-items:center;column-gap:5px;
+  min-width:0;padding:4px 6px 9px;border:2.5px solid #2E2140;border-radius:14px;background:#fff;color:#2E2140;box-shadow:0 3px 0 #2E2140;overflow:hidden}
+.kr3-card.empty{border-style:dashed;border-color:rgba(46,33,64,.25);background:transparent;box-shadow:none}
+.kr3-dish{grid-row:1 / 3;position:relative;font-size:1.55rem;line-height:1}
+.kr3-dish i{position:absolute;right:-6px;bottom:-4px;font-size:.75rem;font-style:normal}
+.kr3-name{font:600 .66rem/1.1 Fredoka,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kr3-parts{display:flex;gap:1px;font-size:.78rem;line-height:1}
+.kr3-parts b{font-weight:400}
+.kr3-time{position:absolute;left:6px;right:6px;bottom:4px;height:5px;border-radius:3px;background:rgba(46,33,64,.12);overflow:hidden}
+.kr3-time span{display:block;height:100%;border-radius:3px;background:#8FDB5C;transition:width .2s linear}
+.kr3-card.hurry .kr3-time span{background:#FFC53D}
+.kr3-card.late{background:#FFE3E3;animation:kr3Shake .5s ease-in-out infinite}
+.kr3-card.late .kr3-time span{background:#FF6B6B}
+.kr3-card.new{animation:kr3Pop .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes kr3Pop{from{transform:scale(.4) translateY(-10px);opacity:0}}
+@keyframes kr3Shake{25%{transform:rotate(-2deg)}75%{transform:rotate(2deg)}}
+.kr3-watch{position:absolute;left:50%;bottom:8px;transform:translateX(-50%)}

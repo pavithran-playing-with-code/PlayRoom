@@ -214,9 +214,10 @@ export function ring(color = 0xffffff, r = 0.42) {
 }
 
 // Lights for a sunny diorama: sky and ground fill, one warm sun with soft shadows over `size`.
-export function sunnyLights(scene, { cx = 0, cz = 0, size = 12 } = {}) {
-  scene.add(new THREE.HemisphereLight(0xdcefff, 0x8f7458, 0.55));
-  const sun = new THREE.DirectionalLight(0xffe9c4, 0.95);
+export function sunnyLights(scene, { cx = 0, cz = 0, size = 12, indoor = false } = {}) {
+  // indoors: softer, whiter light — the sunny warmth turns a room yellow
+  scene.add(new THREE.HemisphereLight(0xdcefff, indoor ? 0x9a8a7a : 0x8f7458, indoor ? 0.5 : 0.55));
+  const sun = new THREE.DirectionalLight(indoor ? 0xfff7ec : 0xffe9c4, indoor ? 0.72 : 0.95);
   sun.position.set(cx - 6, 14, cz + 8);
   sun.target.position.set(cx, 0, cz);
   sun.castShadow = true;
@@ -228,3 +229,134 @@ export function sunnyLights(scene, { cx = 0, cz = 0, size = 12 } = {}) {
   scene.add(sun, sun.target);
   return sun;
 }
+
+// ── a chef: the most detailed PlayRoom character ─────────────────────────────
+// White jacket, an apron and neckerchief in the player's colour, a tall puffy
+// hat with a coloured band, trousers and shoes, real arms and legs, and a face
+// that shows how it's going: eyebrows and a mouth for happy, busy, worried.
+// Faces +z, about 1.35 tall. Animate with `chefPose`.
+const SKINS = [0xffd9b8, 0xf2c29b, 0xd9a07a, 0xb07a52, 0xffe2c8, 0x8d5a3a];
+const HAIRS = [0x3b2a20, 0x6b4226, 0x1f1a17, 0xc98f3e, 0x8a3b2a, 0x2e2140];
+export function chef(color, { seed = 1 } = {}) {
+  const skin = SKINS[seed % SKINS.length], hair = HAIRS[(seed * 7) % HAIRS.length];
+  const root = new THREE.Group();
+  const hips = new THREE.Group();            // everything above the legs bobs and leans here
+  hips.position.y = 0.36;
+  root.add(hips);
+  // legs: a pivot at the hip, trouser, shoe
+  const legs = [-1, 1].map((s) => {
+    const l = new THREE.Group();
+    l.position.set(s * 0.11, 0.36, 0);
+    l.add(at(can(0.075, 0.07, 0.26, 0x3c3550, { line: 0.1 }), 0, -0.15, 0));
+    l.add(at(ball(0.085, 0x5a3a2a, { line: 0.12 }), 0, -0.3, 0.04, 1, 0.65, 1.4));
+    root.add(l);
+    return l;
+  });
+  // the body: jacket, apron, buttons, neckerchief
+  hips.add(at(ball(0.3, 0xffffff), 0, 0.22, 0, 1, 1.05, 0.9));
+  hips.add(at(ball(0.24, color, { line: 0.05 }), 0, 0.12, 0.13, 1.05, 1.05, 0.55));
+  hips.add(at(box(0.16, 0.08, 0.04, color, { line: 0.1 }), 0, 0.02, 0.27));           // the apron's pocket
+  for (const y of [0.32, 0.42]) for (const s of [-1, 1]) hips.add(at(ball(0.022, 0xd8d2cc, { line: 0, shadow: false }), s * 0.07, y, 0.25));
+  hips.add(at(ball(0.11, color, { line: 0.1 }), 0, 0.5, 0.11, 1.6, 0.7, 0.9));         // the neckerchief
+  // arms: a pivot at the shoulder; a white sleeve, a hand
+  const arms = [-1, 1].map((s) => {
+    const a = new THREE.Group();
+    a.position.set(s * 0.3, 0.46, 0.0);
+    a.add(at(can(0.075, 0.065, 0.28, 0xffffff, { line: 0.1 }), 0, -0.14, 0));
+    a.add(at(can(0.07, 0.07, 0.04, color, { line: 0 }), 0, -0.27, 0));              // a coloured cuff
+    const hand = at(ball(0.065, skin, { line: 0.12 }), 0, -0.33, 0);
+    a.add(hand);
+    hips.add(a);
+    a.userData.hand = hand;
+    return a;
+  });
+  // the head
+  const head = new THREE.Group();
+  head.position.set(0, 0.78, 0.02);
+  hips.add(head);
+  head.add(at(ball(0.27, skin), 0, 0, 0));
+  for (const s of [-1, 1]) head.add(at(ball(0.06, skin, { line: 0.12 }), s * 0.26, -0.01, -0.02, 0.6, 1, 1));
+  for (const s of [-1, 1]) for (const k of [0, 1]) head.add(at(ball(0.07, hair, { line: 0.1 }), s * (0.2 + k * 0.04), 0.1 - k * 0.07, -0.08 - k * 0.04));
+  head.add(at(ball(0.05, 0xf3a07a, { line: 0.12, shadow: false }), 0, -0.04, 0.27));   // nose
+  for (const s of [-1, 1]) head.add(at(ball(0.045, 0xff9fb0, { line: 0, shadow: false }), s * 0.17, -0.08, 0.2, 1, 0.6, 0.4));
+  const eyes = [-1, 1].map((s) => {
+    const e = new THREE.Group();
+    e.position.set(s * 0.1, 0.04, 0.22);
+    e.add(at(ball(0.065, 0xffffff, { line: 0.12, shadow: false }), 0, 0, 0));
+    e.add(at(ball(0.04, INK, { line: 0, shadow: false }), 0, -0.006, 0.038));
+    e.add(at(ball(0.013, 0xffffff, { line: 0, shadow: false }), 0.013, 0.016, 0.068));
+    head.add(e);
+    return e;
+  });
+  const brows = [-1, 1].map((s) => {
+    const b = at(box(0.1, 0.022, 0.02, hair, { line: 0, shadow: false }), s * 0.1, 0.14, 0.24);
+    head.add(b);
+    return b;
+  });
+  // a mustache for some chefs
+  if (seed % 3 === 0) for (const s of [-1, 1]) head.add(at(ball(0.05, hair, { line: 0.1, shadow: false }), s * 0.045, -0.1, 0.25, 1.3, 0.55, 0.6));
+  // the mouth: a smile, a worried line, or an "o"
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.014, 6, 14, Math.PI), new THREE.MeshBasicMaterial({ color: INK }));
+  smile.position.set(0, -0.12, 0.245); smile.rotation.z = Math.PI;
+  const oh = at(ball(0.03, 0x7a2a3a, { line: 0.15, shadow: false }), 0, -0.13, 0.25, 1, 1.2, 0.5);
+  head.add(smile, oh);
+  // the hat: a band with a coloured stripe, a tall puffy top
+  const hat = new THREE.Group();
+  hat.position.set(0, 0.2, -0.01);
+  hat.add(at(can(0.22, 0.21, 0.16, 0xffffff, { line: 0.08 }), 0, 0.06, 0));
+  hat.add(at(can(0.222, 0.222, 0.035, color, { line: 0 }), 0, 0.03, 0));
+  for (const [x, y, z, r] of [[0, 0.3, 0, 0.21], [-0.13, 0.24, 0.02, 0.15], [0.13, 0.24, 0.02, 0.15], [0, 0.24, -0.12, 0.15], [0, 0.26, 0.12, 0.14]]) hat.add(at(ball(r, 0xffffff), x, y, z));
+  head.add(hat);
+  root.userData = { hips, legs, arms, head, eyes, brows, smile, oh, hat, seed, walk: 0, blinkAt: 0.7 + (seed % 7) * 0.41, cheer: 0 };
+  return root;
+}
+
+// Pose a chef for this frame.
+//   walk 0..1 · carry (holding something) · chop · cook (at a stove) ·
+//   mood "happy" | "worried" | null · cheer (seconds of celebrating left)
+export function chefPose(c, t, dt, { walk = 0, carry = false, chop = false, cook = false, mood = null, cheer = 0 } = {}) {
+  const u = c.userData;
+  u.walk += (walk - u.walk) * Math.min(1, dt * 10);
+  const w = u.walk, ph = t * 11 + u.seed;
+  const sw = Math.sin(ph);
+  // legs and the body's bob and lean
+  u.legs[0].rotation.x = sw * 0.7 * w;
+  u.legs[1].rotation.x = -sw * 0.7 * w;
+  const jump = cheer > 0 ? Math.max(0, Math.sin(Math.min(1, (0.6 - (cheer % 0.6)) / 0.6) * Math.PI)) * 0.3 : 0;
+  u.hips.position.y = 0.36 + Math.abs(sw) * 0.05 * w + jump + Math.sin(t * 2.2 + u.seed) * 0.008;
+  root(c).position.y = 0;
+  u.hips.rotation.x = 0.12 * w + (chop ? 0.12 : 0);
+  u.hips.rotation.z = sw * 0.05 * w + (mood === "worried" ? Math.sin(t * 30) * 0.03 : 0);
+  // arms
+  const [L, R] = u.arms;
+  if (cheer > 0) {
+    L.rotation.set(-2.7, 0, -0.35); R.rotation.set(-2.7, 0, 0.35);
+  } else if (chop) {
+    L.rotation.set(-1.2, 0, 0.25);
+    R.rotation.set(-1.5 + Math.sin(t * 22) * 0.6, 0, -0.15);
+  } else if (cook) {
+    L.rotation.set(-1.1, 0, 0.2);
+    R.rotation.set(-1.25 + Math.sin(t * 6) * 0.2, 0.2, -0.1);
+  } else if (carry) {
+    L.rotation.set(-1.35, 0, 0.32); R.rotation.set(-1.35, 0, -0.32);
+  } else {
+    L.rotation.set(-sw * 0.6 * w, 0, 0.08); R.rotation.set(sw * 0.6 * w, 0, -0.08);
+  }
+  // the face: eyebrows and mouth for the mood; a look round when idle
+  const happy = mood === "happy" || cheer > 0, worried = mood === "worried";
+  u.brows[0].rotation.z = worried ? -0.45 : happy ? 0.15 : 0;
+  u.brows[1].rotation.z = worried ? 0.45 : happy ? -0.15 : 0;
+  u.brows.forEach((b) => { b.position.y = worried ? 0.16 : happy ? 0.155 : 0.14; });
+  u.smile.visible = !worried && !(chop && Math.sin(t * 3) > 0.6);
+  u.smile.rotation.z = Math.PI;
+  u.smile.scale.set(happy ? 1.25 : 1, happy ? 1.3 : 0.8, 1);
+  u.oh.visible = worried || (chop && Math.sin(t * 3) > 0.6);
+  u.head.rotation.y = w < 0.1 && !chop && !cook ? Math.sin(t * 0.7 + u.seed) * 0.35 : 0;
+  u.head.rotation.x = chop || cook ? 0.25 : 0;
+  // blink
+  const cyc = (t + u.blinkAt) % 3.4;
+  for (const e of u.eyes) e.scale.y = cyc < 0.11 ? 0.1 : happy ? 0.75 : 1;
+  // the hat wobbles a little
+  u.hat.rotation.z = Math.sin(ph * 0.5) * 0.06 * w + (cheer > 0 ? Math.sin(t * 20) * 0.08 : 0);
+}
+const root = (c) => c;

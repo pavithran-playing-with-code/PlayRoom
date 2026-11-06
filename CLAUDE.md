@@ -168,14 +168,27 @@ There is no test runner. What works:
   `scripts/check-coop.mjs` proves crossed moves from three phones converge.
   A side wins by reaching `COOP_GOAL` in `config/matchResult.js`. Word Rush
   together uses the same log (who has which word).
-- **The together games run on the server** — Kitchen Rush:
+- **The together games run on the server** — Kitchen Rush, Moving Day:
   `config/togetherWorld.js` keeps a world per side (one each,
   per team, or one for a co-op room) on the rules in
   `src/components/together/<game>Core.mjs`, which the phones share. Phones
   send `tg:act` / `tg:me`, draw `tg:tick`, and never post a score.
   `scripts/check-together-world.js` tests the server side with a fake
-  database; `check-kitchen.mjs` tests the rules. A rules module can say
-  SHARED (one world for the whole room, scored per side); none does now.
+  database; `check-kitchen.mjs`, `check-moving.mjs` test the rules. A rules
+  module can say SHARED (one world for the whole room, scored per side);
+  none does now. Moving Day: a house per side, big things carried by two
+  (`by` per end), the van loads anything inside it, an empty house deals
+  the next.
+- **Every game is played solo, together and against each other** — never
+  only one. Emberfall is the exception for now, due an upgrade.
+- **The look kit** (`src/components/games/toyKit.js`) is how 3D games should
+  look: toon light in three steps, ink outlines (an inverted shell), soft
+  shadows, a `mover()` character that squashes, blinks and walks,
+  `effects()` for puffs, bursts and floating words. Moving Day
+  (`movingScene.js`) is drawn with it. To
+  look at a scene without a server, mount it on a temporary route that runs
+  the rules module in the page (delete it after); headless Chrome draws in
+  software at ~4 fps, so pop-in animations are caught half way.
 - **Play as a team** (rooms.mode `coop`; the lobby's checkbox, once "Play
   together") starts ticked only for games with `coopDefault` in the
   registry (Kitchen Rush, Station 13, Sunshard Jump). In a team

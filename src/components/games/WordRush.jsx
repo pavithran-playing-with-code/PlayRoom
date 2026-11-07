@@ -3,8 +3,10 @@
 // in order (or type them on a keyboard); a finished word checks itself.
 // Seeded word order + seeded scramble → fair race. Highest score wins.
 //
-// Letter tiles, not a text box: on a phone a text box brings up the keyboard,
-// which covers half the game and makes the page scroll.
+// Letter blocks, not a text box: on a phone a text box brings up the keyboard,
+// which covers half the game and makes the page scroll. Wooden alphabet
+// blocks, with a picture clue over each word: level 1 shows the picture,
+// level 2 only its shadow, level 3 nothing (every 6 words solved is a level).
 //
 // Together (a co-op room): one pile of words for the side. Each of you has
 // your own word; solve it or give it up and the next one nobody has had is
@@ -38,6 +40,17 @@ export const ALSO = {
   pearl: ["paler"], shore: ["horse"], trust: ["strut"],
 };
 export const accepts = (word, guess) => guess === word || (ALSO[word] || []).includes(guess);
+// a picture clue for every word
+const CLUE = {
+  apple: "🍎", river: "🏞️", stone: "🪨", cloud: "☁️", tiger: "🐯", plant: "🪴", music: "🎵", dance: "💃", light: "💡", ocean: "🌊",
+  happy: "😄", green: "🟩", sugar: "🍬", table: "🍽️", chair: "🪑", bread: "🍞", dream: "💭", smile: "😊", earth: "🌍", glass: "🥛",
+  honey: "🍯", jolly: "🎉", lemon: "🍋", mango: "🥭", night: "🌙", piano: "🎹", queen: "👸", robot: "🤖", snake: "🐍", train: "🚆",
+  voice: "🗣️", water: "💧", zebra: "🦓", brave: "🛡️", charm: "🍀", dwarf: "⛏️", eagle: "🦅", flame: "🔥", grape: "🍇", heart: "❤️",
+  ivory: "🐘", koala: "🐨", maple: "🍁", noble: "🏰", olive: "🫒", pearl: "🦪", quilt: "🛏️", raven: "🐦", shore: "🏖️", trust: "🤝",
+};
+const PER_LEVEL = 6;
+const BLOCKS = ["#FF6B6B", "#4CC9F0", "#FFC53D", "#8FDB5C", "#B48CFF", "#FF9F43", "#FF8FC7"];
+const blockFor = (ch) => BLOCKS[(ch.charCodeAt(0) - 97 + 70) % BLOCKS.length];
 const CORRECT = 16;
 const SKIP = -4;
 const WRONG_MS = 450;   // how long a wrong word stays up before it clears
@@ -266,11 +279,20 @@ export default function WordRush(props) {
           const n = cur.word.length;
           const W = Math.min(w, 460);
           const gap = 8;
-          const tile = Math.floor(Math.max(34, Math.min(66, (W - (n - 1) * gap) / n, (h - 70) / 3)));
+          const tile = Math.floor(Math.max(34, Math.min(66, (W - (n - 1) * gap) / n, (h - 150) / 2.6)));
+          const mine = coop ? v.solved : solved;
+          const lv = 1 + Math.floor(mine / PER_LEVEL);
+          const clue = CLUE[cur.word];
           const tall = Math.round(tile * 1.1);
           return (
             <div style={{ width: W, textAlign: "center" }}>
-              <div className="muted eyebrow" style={{ textAlign: "center" }}>{coop ? "Your word — friends have their own" : "Tap the letters in order"}</div>
+              <div className="wr-clue">
+                <span className="wr-lv">Level {lv}</span>
+                {lv >= 3 || !clue ? <span className="wr-q">?</span>
+                  : <span className={`wr-pic${lv === 2 ? " shadow" : ""}`} key={cur.word}>{clue}</span>}
+                <span className="muted wr-cluesay">{lv >= 3 ? "No clue now — just the letters!" : lv === 2 ? "Guess from its shadow" : "A picture clue"}</span>
+              </div>
+              <div className="muted eyebrow" style={{ textAlign: "center" }}>{coop ? "Your word — friends have their own" : "Tap the blocks in order"}</div>
 
               {/* the answer you're building — tap a letter to take it back */}
               <div className="wr-row" style={{ gap, marginBottom: Math.round(tile * 0.45) }}>
@@ -281,11 +303,11 @@ export default function WordRush(props) {
                   const letter = revealed ? revealed[k] : (j != null ? cur.scrambled[j] : "");
                   const filled = !!letter;
                   return (
-                    <button key={k} type="button" className={`wr-slot${filled ? " filled" : ""}`}
+                    <button key={k} type="button" className={`wr-slot${filled ? " filled wr-block" : ""}`}
                       onClick={() => unpick(k)} disabled={!filled || !canPlay || !!revealed}
                       aria-label={filled ? `Remove ${letter}` : "Empty"}
                       style={{ width: tile, height: tall, fontSize: Math.round(tile * 0.5),
-                        background: filled || flash === "good" ? slotFill : "transparent" }}>
+                        background: filled ? (revealed ? slotFill : blockFor(letter)) : flash === "good" ? slotFill : "transparent" }}>
                       {filled ? letter.toUpperCase() : ""}
                     </button>
                   );
@@ -295,9 +317,9 @@ export default function WordRush(props) {
               {/* the scrambled letters */}
               <div className="wr-row" style={{ gap }}>
                 {cur.scrambled.split("").map((ch, i) => (
-                  <button key={`${idx}-${i}`} type="button" className="press p-sun wr-tile"
+                  <button key={`${idx}-${i}`} type="button" className="press wr-tile wr-block"
                     onClick={() => pick(i)} disabled={picked.includes(i) || !canPlay}
-                    style={{ width: tile, height: tall, padding: 0, fontSize: Math.round(tile * 0.5) }}>
+                    style={{ width: tile, height: tall, padding: 0, fontSize: Math.round(tile * 0.5), background: blockFor(ch) }}>
                     {ch.toUpperCase()}
                   </button>
                 ))}

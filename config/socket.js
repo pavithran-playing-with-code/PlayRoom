@@ -238,6 +238,18 @@ function initSocket(httpServer) {
       });
     });
 
+    // Rail Runner: where my runner is on the course (everyone runs the same
+    // one), so friends run beside you as ghosts. Carried on at its speed.
+    socket.on("rr:pos", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const n = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
+      socket.to(roomChannel(code)).volatile.emit("rr:pos", {
+        user_id: uid,
+        z: n(msg.z, 0, 1e7), x: n(msg.x, -2, 2), y: n(msg.y, 0, 10), v: n(msg.v, 0, 100), sl: msg.sl ? 1 : 0, st: msg.st ? 1 : 0,
+      });
+    });
+
     // Sunshard Jump: where my explorer is and what they're doing — so
     // everyone draws everyone on the same islands — plus my shards (a bit
     // each: together, any of us taking one counts for all), gems, how far

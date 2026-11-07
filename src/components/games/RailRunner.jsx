@@ -15,6 +15,10 @@ import useGameEngine from "./useGameEngine";
 import useSpecStream from "./useSpecStream";
 import { newRun, step, steer, jump, slide, score, layCourse, GRAVITY } from "./runnerSim.js";
 import { createRailScene, themeAt, THEMES } from "./railScene";
+import { useSocket } from "../../utils/SocketContext";
+
+const FRIEND_COLOURS = [0x4cc9f0, 0xff8fc7, 0x8fdb5c, 0xffc53d, 0x9b5de5, 0x3dd6c0, 0xff6b6b, 0xffa36c];
+const SEND_MS = 110;
 
 const SWIPE_PX = 26;
 const SPEC_BACK = 16;                        // a frame names what was taken this far behind the runner
@@ -60,6 +64,38 @@ export default function RailRunner(props) {
     startedAt, serverNow, isSpectator = false, spectatorWatching = null } = props;
   const myId = Number(currentUser?.id);
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
+  const { socket } = useSocket() || {};
+  // friends on the same course, from the room: drawn as ghosts beside you
+  const seatedRef = useRef([]);
+  seatedRef.current = (players || []).filter((p) => !p.is_spectator).map((p) => ({ id: Number(p.user_id), name: p.username })).sort((a, b) => a.id - b.id);
+  const remote = useRef(new Map());
+  useEffect(() => {
+    if (!socket) return undefined;
+    const onPos = (m) => {
+      const id = Number(m.user_id);
+      if (id === myId || m.z === undefined) return;
+      const o = remote.current.get(id) || { x: m.x, zs: m.z };
+      Object.assign(o, { f: m, at: performance.now() });
+      remote.current.set(id, o);
+    };
+    socket.on("rr:pos", onPos);
+    return () => socket.off("rr:pos", onPos);
+  }, [socket, myId]);
+  const othersNow = (now, dt, skip) => {
+    const out = [];
+    for (const [id, o] of remote.current) {
+      if (id === skip || now - o.at > 8000) continue;
+      const t = Math.min(0.4, (now - o.at) / 1000);
+      const z = o.f.z + (o.f.st ? 0 : o.f.v * t);
+      o.zs = Math.abs(z - o.zs) > 30 ? z : o.zs + (z - o.zs) * Math.min(1, dt * 10);
+      o.x += (o.f.x - o.x) * Math.min(1, dt * 12);
+      const slot = Math.max(0, seatedRef.current.findIndex((p) => p.id === id));
+      out.push({ id, z: o.zs, x: o.x, y: o.f.y, sl: o.f.sl, st: o.f.st, v: o.f.v, colour: FRIEND_COLOURS[slot % FRIEND_COLOURS.length], name: seatedRef.current[slot]?.name || "Friend" });
+    }
+    return out;
+  };
+  const othersRef = useRef(othersNow);
+  othersRef.current = othersNow;
   const { addScore } = eng;
   const sim = useRef(null);
   if (sim.current === null) sim.current = newRun(seed);
@@ -213,15 +249,21 @@ export default function RailRunner(props) {
         if (now - lastHud > 1000) { lastHud = now; setHud({ dist: Math.floor(s.z), coins: s.coins, crashes: s.crashes }); }
         A.music(dt);
       }
-      scene.frame({ s, t: now / 1000, dt, crashed });
+      if (socket && roomCode && !overRef.current && now - sentAt > SEND_MS) {
+        sentAt = now;
+        socket.emit("rr:pos", { code: roomCode, z: Math.round(s.z * 10) / 10, x: Math.round(s.x * 100) / 100, y: Math.round(s.y * 100) / 100,
+          v: Math.round(s.speed * 10) / 10, sl: s.slideT > 0 ? 1 : 0, st: s.stunT > 0 ? 1 : 0 });
+      }
+      scene.frame({ s, t: now / 1000, dt, crashed, others: othersRef.current(now, dt, myId) });
     };
+    let sentAt = 0;
     raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
       try { host.removeChild(scene.canvas); } catch { /* gone */ }
       scene.dispose();
     };
-  }, [isSpectator, THREE, addScore, say]);
+  }, [isSpectator, THREE, addScore, say, socket, roomCode, myId]);
 
   // ── the watcher's loop: the same scene, driven by the watched runner's
   // frames. A frame comes ~15 times a second; between them the run carries
@@ -283,7 +325,7 @@ export default function RailRunner(props) {
         if (coinRef.current) coinRef.current.textContent = `● ${f.c}`;
         if (now - lastHud > 1000) { lastHud = now; setHud({ dist: Math.floor(zs), coins: f.c, crashes: f.k }); }
       }
-      scene.frame({ s: ws, t: now / 1000, dt, crashed });
+      scene.frame({ s: ws, t: now / 1000, dt, crashed, others: othersRef.current(now, dt, Number(watchId)) });
     };
     raf = requestAnimationFrame(frame);
     return () => {

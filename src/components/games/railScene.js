@@ -330,7 +330,48 @@ export function createRailScene(T, merge) {
   let shake = 0, prevY = 0, camX = 0;
   function resize(w, h) { renderer.setSize(Math.max(1, w), Math.max(1, h), false); cam.aspect = Math.max(1, w) / Math.max(1, h); cam.updateProjectionMatrix(); }
 
-  function frame({ s, t, dt, crashed = false }) {
+  // friends: a runner each in their colour, see-through, a name over them
+  const ghosts = new Map();
+  function nameSprite(text, colour) {
+    const c = document.createElement("canvas"), x = c.getContext("2d");
+    x.font = "800 40px Fredoka, Nunito, sans-serif";
+    const w = Math.ceil(x.measureText(text).width) + 36;
+    c.width = w; c.height = 64;
+    x.font = "800 40px Fredoka, Nunito, sans-serif";
+    x.fillStyle = "#" + new T.Color(colour).getHexString(); x.strokeStyle = "#2E2140"; x.lineWidth = 6;
+    x.beginPath(); if (x.roundRect) x.roundRect(3, 3, w - 6, 58, 28); else x.rect(3, 3, w - 6, 58); x.fill(); x.stroke();
+    x.fillStyle = "#2E2140"; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(text, w / 2, 34);
+    const tex = new T.CanvasTexture(c);
+    const sp = new T.Sprite(new T.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+    sp.scale.set((0.55 * w) / 64, 0.55, 1);
+    return sp;
+  }
+  function ghost(id, colour, name) {
+    let gh = ghosts.get(id);
+    if (gh) return gh;
+    gh = mkHero(colour);
+    gh.g.traverse((o) => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.55; } });
+    gh.tag = nameSprite(name || "Friend", colour);
+    scene.add(gh.tag);
+    ghosts.set(id, gh);
+    return gh;
+  }
+  function drawOthers(others, myZ, t, dt) {
+    const here = new Set();
+    for (const o of others || []) {
+      here.add(o.id);
+      const gh = ghost(o.id, o.colour, o.name);
+      const show = o.z > myZ - 12 && o.z < myZ + 160;
+      gh.g.visible = show; gh.sh.visible = show; gh.tag.visible = show;
+      if (!show) continue;
+      gh.g.position.z = -o.z;
+      poseHero(gh, { x: o.x * LANE, y: o.y, grounded: o.y <= 0.001, sliding: !!o.sl, stun: !!o.st, safe: false, speed: o.v || 14, dt, t });
+      gh.tag.position.set(o.x * LANE, o.y * JUMP_LOOK + 2.75, -o.z);
+    }
+    for (const [id, gh] of ghosts) if (!here.has(id)) { scene.remove(gh.g, gh.sh, gh.tag); ghosts.delete(id); }
+  }
+
+  function frame({ s, t, dt, crashed = false, others = null }) {
     const pz = -s.z, px = s.x * LANE, py = s.y, grounded = s.y <= 0.001, sliding = s.slideT > 0 && s.y < 0.3;
     const th = themeAt(s.z);
     // the path ahead, and nothing behind
@@ -367,6 +408,7 @@ export function createRailScene(T, merge) {
     if (prevY > 0.05 && grounded) burst(px, 0.1, pz, 6, 0.8, 0.8, 0.7, 2.5);
     prevY = py;
     if (crashed) { shake = 0.8; burst(px, 1, pz, 26, 1, 0.55, 0.2, 8); }
+    drawOthers(others, s.z, t, dt);
     // the world around
     updP(dt);
     shake = Math.max(0, shake - dt * 1.6);

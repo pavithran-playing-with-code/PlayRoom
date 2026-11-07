@@ -814,6 +814,15 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .press.nr-cell.done{background:var(--lime);opacity:.45;transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
 .press.nr-cell.bad{background:var(--coral);color:#fff;animation:pzShake .35s ease}
 .nr-help{margin-top:8px;font-size:.8rem}
+/* bubbles: round, glossy, bobbing gently; they pop when they're found */
+.nr-top{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px}
+.nr-top .nr-find{margin-bottom:0}
+.nr-quick{padding:3px 12px;border:3px solid var(--ink);border-radius:999px;background:var(--sun);font-weight:800;box-shadow:0 3px 0 var(--ink);animation:fl-pop .3s ease-out}
+.press.nr-bubble{border-radius:50%;background-image:radial-gradient(circle at 32% 28%,rgba(255,255,255,.95) 0 12%,rgba(255,255,255,.35) 13% 30%,rgba(255,255,255,0) 31%),
+  radial-gradient(circle at 70% 78%,rgba(46,33,64,.12),rgba(46,33,64,0) 55%);animation:nrBob 2.8s ease-in-out var(--d,0s) infinite}
+@keyframes nrBob{0%,100%{translate:0 0}50%{translate:0 -3px}}
+.press.nr-bubble.done{animation:nrPop .32s ease-out forwards;pointer-events:none}
+@keyframes nrPop{0%{transform:scale(1);opacity:1}45%{transform:scale(1.28);opacity:.9;background-color:#FFFFFF}100%{transform:scale(.55);opacity:.14}}
 
 /* ---------- Color Dash ---------- */
 /* No entry animation: aePop fades from transparent and carries translate(-50%)
@@ -877,6 +886,12 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .pp-board{display:block;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .pp-hit{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .pp-help{margin-top:8px;font-size:.8rem}
+.pp-flow{animation:ppFlow .6s linear infinite}
+@keyframes ppFlow{to{stroke-dashoffset:-22}}
+.pp-pot.bloom .pp-flower{animation:ppBloom .45s cubic-bezier(.3,1.7,.5,1)}
+@keyframes ppBloom{0%{transform:scale(.2);opacity:0}100%{transform:scale(1);opacity:1}}
+.pp-flower{transform-box:fill-box;transform-origin:50% 100%}
+.pp-frame.done{background:linear-gradient(180deg,#FFF6C9,#C9F2A8)}
 
 /* ---------- Dino Dash ---------- */
 .dino-pad{display:flex;align-items:center;justify-content:center;touch-action:none;

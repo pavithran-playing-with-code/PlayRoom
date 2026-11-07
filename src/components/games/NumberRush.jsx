@@ -1,6 +1,8 @@
 // src/components/games/NumberRush.jsx
-// Tap 1, 2, 3… in order as fast as you can. Clear a grid and the next one is
-// bigger and busier: more numbers, then coloured tiles, then tilted numbers.
+// Tap 1, 2, 3… in order as fast as you can: the numbers float in bubbles that
+// pop when you get them. Tap quickly one after another for a speedy streak
+// (a little bonus from the third). Clear a grid and the next one is bigger
+// and busier: more numbers, then coloured bubbles, then tilted numbers.
 // Every room gets the same grids in the same order; most points wins.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
@@ -10,6 +12,7 @@ import useSpectate from "./useSpectate";
 import { makeBoard, HIT, MISS, clearBonus } from "./numberBoard";
 
 const CLEARED_MS = 650;    // a cleared grid, before the next
+const QUICK_MS = 750;      // a tap this soon after the last right one keeps the speedy streak
 
 export default function NumberRush(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
@@ -23,7 +26,8 @@ export default function NumberRush(props) {
 
   // Taps act on this, not on rendered state: two fast taps in one tick must
   // each see the other.
-  const live = useRef({ level: 1, next: 1, busy: false });
+  const live = useRef({ level: 1, next: 1, busy: false, lastHit: 0, quick: 0 });
+  const [quick, setQuick] = useState(0);
 
   // Watching shows the same board the player is on: the grid comes from the
   // seed and the level, so the level and the next number is all that has to
@@ -64,7 +68,11 @@ export default function NumberRush(props) {
     if (s.busy || num < s.next) return;          // already cleared: nothing happens
     eng.addMove();
     if (num === s.next) {
-      eng.addScore(HIT);
+      const now = performance.now();
+      s.quick = now - s.lastHit < QUICK_MS ? s.quick + 1 : 1;
+      s.lastHit = now;
+      setQuick(s.quick);
+      eng.addScore(HIT + (s.quick >= 3 ? Math.min(4, s.quick - 2) : 0));
       s.next += 1;
       setNext(s.next);
       if (s.next > board.n) {
@@ -82,6 +90,8 @@ export default function NumberRush(props) {
       }
     } else {
       eng.addScore(MISS);
+      s.quick = 0;
+      setQuick(0);
       const n = ++uid.current;
       setMiss({ num, n });
       later(() => setMiss((x) => (x && x.n === n ? null : x)), 380);
@@ -118,15 +128,18 @@ export default function NumberRush(props) {
             (h - hint - 8 - gap * (rows - 1)) / rows)));
           return (
             <div style={{ textAlign: "center" }}>
-              <div className="nr-find">Find <strong>{next > board.n ? "✓" : next}</strong></div>
+              <div className="nr-top">
+                <div className="nr-find">Find <strong>{next > board.n ? "✓" : next}</strong></div>
+                {quick >= 3 && <div className="nr-quick" key={quick}>⚡ ×{quick} speedy!</div>}
+              </div>
               <div className="nr-grid" style={{ gridTemplateColumns: `repeat(${cols}, ${cell}px)`, gridAutoRows: `${cell}px`, gap }}>
-                {board.cells.map((c) => {
+                {board.cells.map((c, k) => {
                   const done = c.num < next;
                   const bad = miss && miss.num === c.num;
                   return (
                     <button key={`${level}-${c.num}`} type="button"
-                      className={`press nr-cell${done ? " done" : ""}${bad ? " bad" : ""}`}
-                      style={{ background: done || bad ? undefined : c.tint, fontSize: Math.round(cell * 0.38) }}
+                      className={`press nr-cell nr-bubble${done ? " done" : ""}${bad ? " bad" : ""}`}
+                      style={{ backgroundColor: done || bad ? undefined : c.tint === "#FFFFFF" ? "#CFEBFF" : c.tint, fontSize: Math.round(cell * 0.38), "--d": `${(k % 7) * 0.23}s` }}
                       aria-label={done ? `${c.num}, done` : `${c.num}`}
                       onClick={() => tap(c.num)}>
                       <span style={{ display: "inline-block", transform: c.tilt ? `rotate(${c.tilt}deg)` : undefined }}>{c.num}</span>
@@ -134,7 +147,7 @@ export default function NumberRush(props) {
                   );
                 })}
               </div>
-              <div className="muted nr-help">Tap 1, 2, 3… in order. Clear a grid to start the next, harder one.</div>
+              <div className="muted nr-help">Pop 1, 2, 3… in order — quick taps make a speedy streak.</div>
             </div>
           );
         }}

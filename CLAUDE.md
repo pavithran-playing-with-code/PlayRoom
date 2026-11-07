@@ -252,8 +252,8 @@ There is no test runner. What works:
   starts again (your best height stays). A fall of more than 8 m pops you
   back on your last plain stone (`fallBack`). Sunshards sit on stones off
   the spiral and sink your Gloom. The Crown: 5,000 points and a taller tree
-  (`towerCode(seed, round)`). The explorer is a tree-climber kid (beanie,
-  goggles, puffy jacket, rope); drag up (or R) to look up the tree. On a
+  (`towerCode(seed, round)`). The explorer is a rigged tree-climber kid (beanie,
+  hood, puffy jacket, rope; limbs swing from hips and shoulders in `pose`); drag up (or R) to look up the tree. On a
   phone the left half of the screen is the
   joystick, the right half the camera. Each phone relays its explorer
   (`isl:pos`: balloons as hp, best height as p, fin once crowned); stomps

@@ -263,7 +263,7 @@ export default function Lobby() {
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <b>{picked.username}</b>
                     <small className="muted">
-                      {picked.playing ? <>Playing <GameIcon icon={picked.playing.game_icon} /> {picked.playing.game_name}</> : presenceLabel(picked)}
+                      {picked.playing ? <>Playing <GameIcon icon={picked.playing.game_icon} slug={picked.playing.game_slug} /> {picked.playing.game_name}</> : presenceLabel(picked)}
                     </small>
                   </div>
                   <button type="button" className="qp-x" onClick={() => setPickedId(null)} aria-label="Close"><Icon name="close" size={15} stroke={3} /></button>
@@ -305,7 +305,7 @@ export default function Lobby() {
           <div className="pc-again" style={{ background: lastGame.col }}>
             <button type="button" className="pc-again-info" onClick={() => openGame(lastGame.slug)}
               aria-label={`Change settings for ${lastGame.name}`}>
-              <span className="pc-again-ic"><GameIcon icon={lastGame.icon} /></span>
+              <span className="pc-again-ic"><GameIcon icon={lastGame.icon} slug={lastGame.slug} /></span>
               <span className="pc-again-txt">
                 <small>Play again</small>
                 <b>{lastGame.name}</b>
@@ -343,7 +343,7 @@ export default function Lobby() {
             <div className="pc-grid">
               {shown.map((g) => (
                 <button key={g.slug} type="button" className="pc-tile" data-game={g.slug} onClick={() => openGame(g.slug)}>
-                  <span className="pc-tile-ic" style={{ background: g.col }}><GameIcon icon={g.icon} /></span>
+                  <span className="pc-tile-ic" style={{ backgroundColor: g.col }}><GameIcon icon={g.icon} slug={g.slug} /></span>
                   <span className="pc-tile-name">{g.name}</span>
                 </button>
               ))}
@@ -357,7 +357,7 @@ export default function Lobby() {
           <div className="lsheet" role="dialog" aria-modal="true" aria-label={`Start ${selected.name}`}
             onClick={(e) => e.stopPropagation()}>
             <div className="lsheet-head" style={{ background: selected.col }}>
-              <span className="lsheet-ic"><GameIcon icon={selected.icon} /></span>
+              <span className="lsheet-ic"><GameIcon icon={selected.icon} slug={selected.slug} /></span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <h2>{selected.name}</h2>
                 {selected.blurb && <p>{selected.blurb}</p>}

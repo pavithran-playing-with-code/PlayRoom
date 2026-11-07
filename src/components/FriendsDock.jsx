@@ -96,7 +96,7 @@ export default function FriendsDock({ max = 3, size = 34 }) {
               <span className="fdock-who">
                 <span className="fdock-name">{f.username}</span>
                 <span className={f.playing ? "fdock-playing" : f.online ? "fdock-on" : "muted"}>
-                  {f.playing ? <><GameIcon icon={f.playing.game_icon} /> {f.playing.game_name}</> : presenceLabel(f)}
+                  {f.playing ? <><GameIcon icon={f.playing.game_icon} slug={f.playing.game_slug} /> {f.playing.game_name}</> : presenceLabel(f)}
                 </span>
               </span>
               {f.playing && (

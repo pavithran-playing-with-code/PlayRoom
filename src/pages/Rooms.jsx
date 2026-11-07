@@ -105,8 +105,8 @@ export default function Rooms() {
                   <button key={room.id} className="tile" onClick={() => quickJoin(room.room_code)}>
                     <PeekBuddy colour={col} size={54} />
                     <span className="top" style={{ background: col, height: 96 }}>
-                      <span className="ghost"><GameIcon icon={icon} /></span>
-                      <span className="big" style={{ fontSize: "2.8rem" }}><GameIcon icon={icon} /></span>
+                      <span className="ghost"><GameIcon icon={icon} slug={room.game_slug} /></span>
+                      <span className="big" style={{ fontSize: "2.8rem" }}><GameIcon icon={icon} slug={room.game_slug} /></span>
                     </span>
                     <span className="bot" style={{ display: "block" }}>
                       <h3 style={{ fontSize: "1.1rem" }}>{room.game_name}</h3>

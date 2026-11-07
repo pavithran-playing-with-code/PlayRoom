@@ -67,14 +67,23 @@ export function createRailScene(T, merge) {
   scene.add(hemi, dir, dir.target);
   const disposables = [];
   const keep = (x) => { disposables.push(x); return x; };
-  const mk = (c, o) => keep(new T.MeshPhongMaterial(Object.assign({ color: c, flatShading: true, shininess: 10, specular: 0x111111 }, o || {})));
+  // cartoon light, in three soft steps — the PlayRoom look (toyKit's), built
+  // here on the three.js this scene is handed
+  const ramp = keep(new T.DataTexture(new Uint8Array([96, 96, 96, 170, 170, 170, 238, 238, 238]), 3, 1, T.RGBFormat));
+  ramp.minFilter = ramp.magFilter = T.NearestFilter; ramp.generateMipmaps = false; ramp.needsUpdate = true;
+  const TOON_KEYS = ["emissive", "map", "transparent", "opacity", "side"];
+  const toonOf = (c, o) => { const q = { color: c, gradientMap: ramp }; for (const k of TOON_KEYS) if (o && o[k] !== undefined) q[k] = o[k]; return keep(new T.MeshToonMaterial(q)); };
+  const mk = (c, o) => toonOf(c, o);
+  const INK = keep(new T.MeshBasicMaterial({ color: 0x2e2140, side: T.BackSide }));
+  // an ink outline: the same shape a little bigger, drawn inside out
+  const ink = (m, k = 1.07) => { const o = new T.Mesh(m.geometry, INK); o.position.copy(m.position); o.rotation.copy(m.rotation); o.scale.copy(m.scale).multiplyScalar(k); return o; };
   const cvs = (w, h, f) => { const c = document.createElement("canvas"); c.width = w; c.height = h; f(c.getContext("2d"), w, h); return keep(new T.CanvasTexture(c)); };
   const G = (g) => keep(g);
   const cur = { ...Object.fromEntries(KEYS.map((k) => [k, [...TH[0][k]]])), hi: TH[0].hi, di: TH[0].di, st: 0, sz: 1 };
 
   // ── sky, clouds, stars ──
   // the scenery: Lambert (lit per corner, not per pixel) — cheap on a phone, and flat faces keep it low-poly
-  const mkL = (c, o) => keep(new T.MeshLambertMaterial(Object.assign({ color: c }, o || {})));
+  const mkL = (c, o) => toonOf(c, o);
   const mGrass = mkL(0x58c765), mPath = mkL(0x6c675f), mRail = mkL(0xff6a4d), mSlp = mkL(0x7a5536);
   const mSteel = mk(0xd8dde6, { shininess: 90, specular: 0xffffff }), mPole = mkL(0x3a4150), mLampHd = mkL(0xfff2b0, { emissive: 0xc8a040 });
   const skyMat = keep(new T.ShaderMaterial({
@@ -132,8 +141,14 @@ export function createRailScene(T, merge) {
       g.fillStyle = "rgba(255,255,255,.18)"; g.fillRect(0, 0, w, 14);                    // the roof's edge
       g.fillStyle = "#11161f"; g.fillRect(36, 26, 184, 30);                               // the destination board
       g.fillStyle = "#ffb43a"; g.font = "800 22px Nunito, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("EXPRESS", 128, 42);
-      g.fillStyle = "#1a2433"; g.beginPath(); g.moveTo(26, 72); g.lineTo(230, 72); g.lineTo(220, 150); g.lineTo(36, 150); g.closePath(); g.fill();   // the windscreen
-      g.fillStyle = "rgba(160,200,255,.35)"; g.beginPath(); g.moveTo(40, 80); g.lineTo(100, 80); g.lineTo(70, 142); g.lineTo(46, 142); g.closePath(); g.fill();
+      g.fillStyle = "#cfefff"; g.strokeStyle = "#2e2140"; g.lineWidth = 6;                  // the windscreen, and a face in it
+      g.beginPath(); g.moveTo(26, 72); g.lineTo(230, 72); g.lineTo(220, 150); g.lineTo(36, 150); g.closePath(); g.fill(); g.stroke();
+      for (const ex of [88, 168]) {
+        g.fillStyle = "#ffffff"; g.beginPath(); g.arc(ex, 108, 26, 0, 6.3); g.fill(); g.stroke();
+        g.fillStyle = "#2e2140"; g.beginPath(); g.arc(ex + 3, 112, 13, 0, 6.3); g.fill();
+        g.fillStyle = "#ffffff"; g.beginPath(); g.arc(ex + 8, 105, 5, 0, 6.3); g.fill();
+      }
+      g.strokeStyle = "#2e2140"; g.lineWidth = 7; g.lineCap = "round"; g.beginPath(); g.arc(128, 140, 22, 0.25, Math.PI - 0.25); g.stroke();
       g.fillStyle = cssStripe; g.fillRect(0, 176, w, 26);                                 // the stripe, round the front
       g.fillStyle = "#11161f"; g.fillRect(96, 214, 64, 40);                                // the coupler
       for (const x of [52, 204]) { g.fillStyle = "#fff6c0"; g.beginPath(); g.arc(x, 232, 17, 0, 6.3); g.fill(); g.fillStyle = "#ffffff"; g.beginPath(); g.arc(x, 232, 8, 0, 6.3); g.fill(); }
@@ -194,59 +209,63 @@ export function createRailScene(T, merge) {
   const dropChunk = (c) => { scene.remove(c.g); for (const geo of c.g.userData.geos || []) geo.dispose(); };
 
   // ── the runner ──
-  // A street kid, Subway Surfers style: a backwards cap, a hoodie in your
-  // colour (hood down, a pocket in front), jeans, big sneakers, a backpack and
-  // headphones. The camera is behind, so the back — cap, hood, pack — carries
+  // PlayRoom's own runner: chubby and round, a shiny helmet in your colour with
+  // a racing stripe and goggles, a scarf that flaps out behind, big round
+  // shoes, and a little rocket on its back that puffs a flame when it jumps.
+  // The camera is behind, so the back — helmet stripe, scarf, rocket — carries
   // the look. Legs swing from the hip and arms from the shoulder (poseHero).
   function mkHero(colour) {
     const g = new T.Group(), inner = new T.Group(); g.add(inner);
-    const M = (c, o) => mk(c, Object.assign({ shininess: 30 }, o || {}));
-    const SKIN = 0xf2c39a, HAIR = 0x3a2416, JEANS = 0x2f4f8f, CAP = 0xffd23d, SHOE = 0xff3b5c, SOLE = 0xffffff, PACK = 0x37c8e6, DARK = 0x1b2233;
-    const hood = M(colour), skin = M(SKIN);
-    // the hoodie: a body a little wider at the hips, the hood rolled down at the back, a pocket in front
-    const torso = mesh(G(new T.CylinderGeometry(0.31, 0.36, 0.68, 12)), hood, 0, 1.17, 0, 1, 1, 0.78);
-    const hem = mesh(G(new T.CylinderGeometry(0.37, 0.37, 0.09, 12)), M(new T.Color(colour).multiplyScalar(0.75).getHex()), 0, 0.86, 0, 1, 1, 0.8);
-    const hoodBack = mesh(G(new T.SphereGeometry(0.24, 12, 8)), hood, 0, 1.5, 0.2, 1.25, 0.7, 0.8);
-    const pocket = mesh(G(new T.BoxGeometry(0.4, 0.17, 0.05)), M(new T.Color(colour).multiplyScalar(0.8).getHex()), 0, 1.0, -0.29);
-    const strings = [-0.07, 0.07].map((sx) => mesh(G(new T.CylinderGeometry(0.015, 0.015, 0.2, 4)), M(0xffffff), sx, 1.38, -0.28));
-    // the head: a face toward the track, hair, and the cap on backwards (its peak is what you see)
-    const head = mesh(G(new T.SphereGeometry(0.27, 16, 12)), skin, 0, 1.8, 0, 1, 1.05, 1);
-    const neck = mesh(G(new T.CylinderGeometry(0.1, 0.11, 0.14, 8)), skin, 0, 1.56, 0);
-    const hair = mesh(G(new T.SphereGeometry(0.28, 14, 10)), M(HAIR), 0, 1.79, 0.05, 1.02, 0.95, 0.98);
-    const cap = mesh(G(new T.SphereGeometry(0.285, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2)), M(CAP), 0, 1.86, 0, 1, 0.75, 1);
-    const peak = mesh(G(new T.BoxGeometry(0.34, 0.035, 0.24)), M(CAP), 0, 1.87, 0.33);
-    const button = mesh(G(new T.SphereGeometry(0.04, 6, 4)), M(SHOE), 0, 2.07, 0);
-    const eyes = [-0.09, 0.09].map((sx) => mesh(G(new T.SphereGeometry(0.035, 6, 5)), M(DARK), sx, 1.83, -0.25));
-    const smile = mesh(G(new T.TorusGeometry(0.06, 0.012, 4, 8, Math.PI)), M(0x9a3a2a), 0, 1.73, -0.255);
-    smile.rotation.z = Math.PI;
-    // headphones: a band over the cap and a cup on each ear
-    const band = mesh(G(new T.TorusGeometry(0.3, 0.025, 4, 14, Math.PI)), M(DARK), 0, 1.8, 0);
-    const cups = [-1, 1].map((sx) => mesh(G(new T.CylinderGeometry(0.09, 0.09, 0.07, 10).rotateZ(Math.PI / 2)), M(SHOE), sx * 0.28, 1.8, 0));
-    // the backpack: a pack, a flap, two straps over the shoulders
-    const pack = mesh(G(new T.BoxGeometry(0.46, 0.5, 0.22)), M(PACK), 0, 1.2, 0.36);
-    const flap = mesh(G(new T.BoxGeometry(0.47, 0.17, 0.235)), M(new T.Color(PACK).multiplyScalar(0.8).getHex()), 0, 1.4, 0.36);
-    const straps = [-0.17, 0.17].map((sx) => mesh(G(new T.BoxGeometry(0.06, 0.55, 0.05)), M(DARK), sx, 1.2, -0.27));
-    inner.add(torso, hem, hoodBack, pocket, ...strings, neck, head, hair, cap, peak, button, ...eyes, smile, band, ...cups, pack, flap, ...straps);
+    const SKIN = 0xffd9b8, SHOE = 0xff5a6a, SCARF = 0xffc53d, ROCKET = 0xffffff, DARK = 0x2e2140;
+    const col = mk(colour), suit = mk(new T.Color(colour).multiplyScalar(0.62).getHex()), light = mk(new T.Color(colour).lerp(new T.Color(0xffffff), 0.35).getHex()), skin = mk(SKIN);
+    const add = (m, line = 1.07) => { inner.add(m); if (line) inner.add(ink(m, line)); return m; };
+    const S = (r) => G(new T.SphereGeometry(r, 16, 12));
+    // the body: round, a lighter belly in front
+    add(mesh(S(0.5), suit, 0, 1.05, 0, 1, 1.08, 0.92));
+    add(mesh(S(0.34), light, 0, 0.98, -0.2, 1, 1.05, 0.6), 0);
+    // the head, the helmet over it, a stripe down the middle, goggles on a band
+    add(mesh(S(0.42), skin, 0, 1.86, 0));
+    add(mesh(G(new T.SphereGeometry(0.46, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55)), col, 0, 1.9, 0.02, 1, 0.95, 1.02));
+    const stripe = mesh(G(new T.TorusGeometry(0.45, 0.06, 6, 18, Math.PI)), mk(0xffffff), 0, 1.9, 0.02); stripe.rotation.y = Math.PI / 2; add(stripe, 0);
+    const band = mesh(G(new T.TorusGeometry(0.43, 0.045, 6, 20)), mk(DARK), 0, 1.86, 0); band.rotation.x = Math.PI / 2; add(band, 0);
+    // a gold star on the back of the helmet
+    const star = mesh(G(new T.OctahedronGeometry(0.16, 0)), mk(0xffd447), 0, 2.02, 0.4, 1, 1, 0.45); star.rotation.z = Math.PI / 4; add(star, 1.15);
+    for (const sx of [-1, 1]) { const gg = mesh(G(new T.CylinderGeometry(0.13, 0.13, 0.08, 14).rotateX(Math.PI / 2)), mk(0x9fe6ff), sx * 0.16, 1.9, -0.38); add(gg, 1.2); }
+    // a face toward the track: eyes and a smile (you see it when it turns)
+    for (const sx of [-1, 1]) add(mesh(S(0.05), mk(DARK), sx * 0.13, 1.76, -0.39), 0);
+    // the scarf: round the neck, two tails flapping out behind
+    add(mesh(G(new T.TorusGeometry(0.3, 0.09, 8, 16)), mk(SCARF), 0, 1.5, 0, 1, 1, 1), 1.1).rotation.x = Math.PI / 2;
+    const scarf = new T.Group(); scarf.position.set(0.1, 1.5, 0.28); inner.add(scarf);
+    const tail1 = mesh(G(new T.BoxGeometry(0.28, 0.09, 0.55)), mk(SCARF), 0, 0, 0.27); scarf.add(tail1, ink(tail1, 1.12));
+    const scarf2 = new T.Group(); scarf2.position.set(0, 0, 0.55); scarf.add(scarf2);
+    const tail2 = mesh(G(new T.BoxGeometry(0.28, 0.09, 0.45)), mk(0xff9f43), 0, 0, 0.22); scarf2.add(tail2, ink(tail2, 1.12));
+    // the rocket on its back: a white body, a red nose, fins, a flame below
+    add(mesh(G(new T.CylinderGeometry(0.23, 0.23, 0.8, 14)), mk(ROCKET), 0, 1.22, 0.52));
+    add(mesh(G(new T.CylinderGeometry(0.235, 0.235, 0.12, 14)), mk(SHOE), 0, 1.3, 0.52), 0);
+    add(mesh(G(new T.ConeGeometry(0.23, 0.34, 14)), mk(SHOE), 0, 1.79, 0.52));
+    for (const sx of [-1, 1]) { const fin = mesh(G(new T.BoxGeometry(0.08, 0.3, 0.26)), mk(SHOE), sx * 0.27, 0.9, 0.52); add(fin, 1.2); }
+    const flame = new T.Mesh(G(new T.ConeGeometry(0.17, 0.6, 10).rotateX(Math.PI)), keep(new T.MeshBasicMaterial({ color: 0xffb43a, transparent: true, opacity: 0.9 })));
+    flame.position.set(0, 0.5, 0.52); inner.add(flame);
     const legs = [], arms = [];
     for (const sx of [-1, 1]) {
-      // a leg from the hip: jeans, a turned-up cuff, a big sneaker with a white sole
-      const p = new T.Group(); p.position.set(sx * 0.16, 0.84, 0);
-      p.add(mesh(G(new T.CylinderGeometry(0.12, 0.11, 0.62, 8)), M(JEANS), 0, -0.3, 0),
-        mesh(G(new T.CylinderGeometry(0.125, 0.125, 0.07, 8)), M(0x4f6faf), 0, -0.58, 0),
-        mesh(G(new T.BoxGeometry(0.22, 0.15, 0.38)), M(SHOE), 0, -0.68, -0.06),
-        mesh(G(new T.BoxGeometry(0.235, 0.05, 0.4)), M(SOLE), 0, -0.77, -0.06));
+      // a leg from the hip: a short stout leg, a big round shoe
+      const p = new T.Group(); p.position.set(sx * 0.2, 0.66, 0);
+      const leg = mesh(G(new T.CylinderGeometry(0.13, 0.12, 0.42, 10)), mk(0x3c3550), 0, -0.2, 0);
+      const shoe = mesh(S(0.17), mk(SHOE), 0, -0.48, -0.06, 1, 0.7, 1.35);
+      const sole = mesh(G(new T.CylinderGeometry(0.17, 0.17, 0.05, 12)), mk(0xffffff), 0, -0.58, -0.06, 1, 1, 1.35);
+      p.add(leg, ink(leg), shoe, ink(shoe), sole);
       inner.add(p); legs.push(p);
-      // an arm from the shoulder: a sleeve, a cuff, a hand
-      const a = new T.Group(); a.position.set(sx * 0.42, 1.43, 0);
-      a.add(mesh(G(new T.CylinderGeometry(0.095, 0.085, 0.46, 8)), hood, 0, -0.22, 0),
-        mesh(G(new T.CylinderGeometry(0.09, 0.09, 0.06, 8)), M(new T.Color(colour).multiplyScalar(0.75).getHex()), 0, -0.45, 0),
-        mesh(G(new T.SphereGeometry(0.09, 8, 6)), skin, 0, -0.53, 0));
-      inner.add(a); arms.push(a);
+      // an arm from the shoulder: a sleeve in your colour, a round mitten
+      const ar = new T.Group(); ar.position.set(sx * 0.5, 1.32, 0);
+      const sleeve = mesh(G(new T.CylinderGeometry(0.11, 0.1, 0.42, 10)), col, 0, -0.2, 0);
+      const hand = mesh(S(0.12), mk(0xffffff), 0, -0.44, 0);
+      ar.add(sleeve, ink(sleeve), hand, ink(hand, 1.12));
+      inner.add(ar); arms.push(ar);
     }
     const sh = new T.Mesh(G(new T.PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2)), keep(new T.MeshBasicMaterial({ map: glow, color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false })));
     sh.position.y = 0.03;
     scene.add(g, sh);
-    return { g, inner, legs, arms, sh, phase: Math.random() * 6 };
+    return { g, inner, legs, arms, sh, phase: Math.random() * 6, scarf, scarf2, flame };
   }
   const hero = mkHero(0xff7a3d);
   // A jump is drawn higher than the rules' 1.3 m (JUMP_LOOK): next to a 2 m
@@ -269,6 +288,15 @@ export function createRailScene(T, merge) {
       const a = grounded ? Math.sin(h.phase) * 0.95 : -0.7, b = grounded ? -Math.sin(h.phase) * 0.95 : 0.3;
       h.legs[0].rotation.x = sliding ? -1 : a; h.legs[1].rotation.x = sliding ? -1 : b;
       h.arms[0].rotation.x = grounded ? -a * 0.8 : -2.4; h.arms[1].rotation.x = grounded ? -b * 0.8 : -2.4;
+    }
+    if (h.scarf) {
+      const wave = Math.sin(t * 14 + h.phase) * 0.35, lift = grounded ? 0.15 : 0.5;
+      // trailing out to one side and drooping a little, so it reads from behind
+      h.scarf.rotation.x = 0.35 - lift * 0.4 + wave * 0.35; h.scarf.rotation.y = 0.7 + Math.sin(t * 9) * 0.2;
+      h.scarf2.rotation.x = 0.25 + wave * 0.6; h.scarf2.rotation.y = 0.35 + Math.sin(t * 11 + 1) * 0.3;
+      const puff = !grounded && !stun;
+      h.flame.visible = puff;
+      if (puff) h.flame.scale.set(1, 0.7 + Math.random() * 0.6, 1);
     }
     h.g.visible = safe ? Math.sin(t * 40) > 0 : true;
   }
@@ -299,16 +327,19 @@ export function createRailScene(T, merge) {
   function itemMesh(o) {
     const m = new T.Group();
     if (o.kind === "low") {
+      m.add(ink(mesh(gLow, mBoard, 0, 0.7, 0, 1, 0.5, 0.5), 1.08));
       // a barrier: a striped board on two legs, a warning lamp at each end (as tall as before: 0.95)
       m.add(mesh(gLow, mBoard, 0, 0.7, 0, 1, 0.5, 0.5), mesh(gLegB, mDark, -1.1, 0.25, 0), mesh(gLegB, mDark, 1.1, 0.25, 0),
         mesh(gLamp, mWarn, -1.2, 1.05, 0, 0.7), mesh(gLamp, mWarn, 1.2, 1.05, 0, 0.7));
-    } else if (o.kind === "high") m.add(mesh(gPost, mDark, -1.4, 1.6, 0), mesh(gPost, mDark, 1.4, 1.6, 0), mesh(gHighBar, mStripe, 0, 1.65, 0),
+    } else if (o.kind === "high") m.add(ink(mesh(gHighBar, mStripe, 0, 1.65, 0), 1.1), mesh(gPost, mDark, -1.4, 1.6, 0), mesh(gPost, mDark, 1.4, 1.6, 0), mesh(gHighBar, mStripe, 0, 1.65, 0),
       mesh(gLamp, mRed, -1.4, 3.25, 0), mesh(gLamp, mRed, 1.4, 3.25, 0));
     else if (o.kind === "train") {
       // a train car in one of the liveries (by where it is, so it's the same on every phone)
       const len = o.len, L = liveries[Math.abs(Math.round(o.z)) % liveries.length], mid = -len / 2;
+      const body = mesh(gTrain, L.body, 0, 2.0, mid, 1, 1, len);
+      m.add(ink(body, 1.04));
       m.add(mesh(gChassis, mUnderT, 0, 0.3, mid, 1, 1, len - 0.6),
-        mesh(gTrain, L.body, 0, 2.0, mid, 1, 1, len),
+        body,
         mesh(gTrainTop, L.roof, 0, 3.6, mid, 1, 1, len - 0.3),
         mesh(gBand, L.stripe, 0, 1.4, mid, 1, 1, len - 0.1),
         mesh(gWin, mGlass, 0, 2.55, mid, 1, 1, len - 1.4));

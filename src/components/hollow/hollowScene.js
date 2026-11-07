@@ -288,6 +288,56 @@ export function createHollow(host, THREE, opts) {
   // the kid has to read against the dark wherever they are
   const keyL = new THREE.PointLight(0xffe2c0, 0.55, 4.5, 2); scene.add(keyL);
 
+  // ── the air: dust drifting in the light, fireflies in the jar ──
+  // Only for looks: none of it touches the rules.
+  const glowTex = keep((() => {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const x = c.getContext("2d"), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(0.35, "rgba(255,255,255,.5)"); g.addColorStop(1, "rgba(255,255,255,0)");
+    x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })());
+  const DUST = 150, dustPos = new Float32Array(DUST * 3), dustVel = new Float32Array(DUST * 3);
+  const dustGeo = keep(new THREE.BufferGeometry());
+  dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPos, 3));
+  const dust = new THREE.Points(dustGeo, keep(new THREE.PointsMaterial({ size: 0.075, map: glowTex, color: 0xfff0c8, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending })));
+  dust.frustumCulled = false; scene.add(dust);
+  let dustReady = false;
+  const flies = Array.from({ length: 5 }, (_, i) => {
+    const f = new THREE.Sprite(keep(new THREE.SpriteMaterial({ map: glowTex, color: 0xd8ff7a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
+    f.scale.setScalar(0.07); f.userData = { ph: i * 1.3, sp: 1.6 + i * 0.37 };
+    scene.add(f);
+    return f;
+  });
+  function air(P, dt, t) {
+    const kx = P.x, ky = P.y, kz = Z(P.z);
+    if (!dustReady) {
+      for (let i = 0; i < DUST; i++) {
+        dustPos[i * 3] = kx + (Math.random() - 0.5) * 14; dustPos[i * 3 + 1] = ky + Math.random() * 5; dustPos[i * 3 + 2] = kz + (Math.random() - 0.5) * 6;
+        dustVel[i * 3] = (Math.random() - 0.5) * 0.06; dustVel[i * 3 + 1] = (Math.random() - 0.5) * 0.04; dustVel[i * 3 + 2] = (Math.random() - 0.5) * 0.04;
+      }
+      dustReady = true;
+    }
+    for (let i = 0; i < DUST; i++) {
+      const o = i * 3;
+      dustPos[o] += (dustVel[o] + Math.sin(t * 0.4 + i) * 0.02) * dt;
+      dustPos[o + 1] += (dustVel[o + 1] + Math.cos(t * 0.3 + i * 0.7) * 0.015) * dt;
+      dustPos[o + 2] += dustVel[o + 2] * dt;
+      // keep them in a box round the kid: a mote that drifts out comes back in on the far side
+      if (dustPos[o] < kx - 7) dustPos[o] += 14; else if (dustPos[o] > kx + 7) dustPos[o] -= 14;
+      if (dustPos[o + 1] < ky - 0.2) dustPos[o + 1] += 5; else if (dustPos[o + 1] > ky + 4.8) dustPos[o + 1] -= 5;
+      if (dustPos[o + 2] < kz - 3) dustPos[o + 2] += 6; else if (dustPos[o + 2] > kz + 3) dustPos[o + 2] -= 6;
+    }
+    dustGeo.attributes.position.needsUpdate = true;
+    // fireflies circling inside the jar
+    const j = kid.jarAt();
+    flies.forEach((f) => {
+      const u = f.userData, a = t * u.sp + u.ph;
+      f.position.set(j.x + Math.cos(a) * 0.045, j.y + 0.02 + Math.sin(a * 1.7) * 0.04, j.z + 0.1 + Math.sin(a) * 0.03);
+      f.material.opacity = 0.55 + 0.45 * Math.abs(Math.sin(t * 3 + u.ph));
+    });
+  }
+
   // ── the things you can pick up ──
   const itemMeshes = [];
   function makeItem(kind) {
@@ -1014,6 +1064,7 @@ export function createHollow(host, THREE, opts) {
     });
     if (dress.near) dress.near(P, dt);
     ambient(S.T, t, dt, S.box ? S.box.wound : 0, S);
+    air(P, dt, t);
     rd.render(scene, cam);
   }
 

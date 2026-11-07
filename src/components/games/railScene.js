@@ -209,9 +209,9 @@ export function createRailScene(T, merge) {
   const dropChunk = (c) => { scene.remove(c.g); for (const geo of c.g.userData.geos || []) geo.dispose(); };
 
   // ── the runner ──
-  // A big-headed kid in a hoodie and a backwards cap in your colour, with a
-  // yellow backpack. The camera is behind, so the back — the cap's peak, the
-  // backpack — carries the look. Legs swing from the hip and arms from the
+  // A big-headed kid in a hoodie and a backwards cap in your colour. The
+  // camera is behind, so the back — the cap's peak, the hood — carries the
+  // look. Legs swing from the hip and arms from the
   // shoulder (poseHero).
   function mkHero(colour) {
     const g = new T.Group(), inner = new T.Group(); g.add(inner);
@@ -231,8 +231,6 @@ export function createRailScene(T, merge) {
     for (const sx of [-1, 1]) add(mesh(S(0.1), mk(0x3b2a20), sx * 0.36, 1.8, 0.1, 0.6, 1, 1), 0);
     eyes(1.84, -0.4, 0.15);
     add(mesh(G(new T.TorusGeometry(0.06, 0.015, 4, 8, Math.PI)), mk(0x9a3a2a), 0, 1.7, -0.41), 0).rotation.z = Math.PI;
-    add(mesh(G(new T.BoxGeometry(0.5, 0.52, 0.24)), mk(0xffc53d), 0, 1.12, 0.48));
-    add(mesh(G(new T.BoxGeometry(0.52, 0.16, 0.26)), mk(0xff9f43), 0, 1.32, 0.48), 0);
     const legs = [], arms = [];
     for (const sx of [-1, 1]) {
       const p = new T.Group(); p.position.set(sx * 0.2, 0.64, 0);

@@ -938,14 +938,17 @@ input::-ms-reveal,input::-ms-clear{display:none}
   -webkit-user-select:none;-webkit-tap-highlight-color:transparent}
 .tr-canvas,.ds-canvas{border:3px solid var(--ink);border-radius:18px;
   box-shadow:0 5px 0 var(--ink);display:block;touch-action:none}
-.ds-controls{display:flex;align-items:center;justify-content:center;gap:14px;width:100%}
-.ds-joy{position:relative;width:136px;height:136px;flex:none;border-radius:50%;border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink);
-  background:radial-gradient(circle at 50% 40%,#4b3f78,#2b2350);touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.ds-zone{position:relative;width:100%;height:150px;border-radius:22px;touch-action:none;user-select:none;-webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent;background:repeating-linear-gradient(45deg,rgba(46,33,64,.04) 0 10px,transparent 10px 20px)}
+.ds-joy{position:absolute;width:124px;height:124px;border-radius:50%;border:3px solid var(--ink);box-shadow:0 4px 0 var(--ink);
+  background:radial-gradient(circle at 50% 40%,#4b3f78,#2b2350);transform:translate(-50%,-50%);pointer-events:none}
+.ds-joy.idle{left:50%;top:50%;opacity:.35;box-shadow:none}
 .ds-joy-knob{position:absolute;left:50%;top:50%;width:50px;height:50px;border-radius:50%;background:var(--sky);border:3px solid var(--ink);
   box-shadow:inset 0 -5px 0 rgba(0,0,0,.18);transform:translate(-50%,-50%);pointer-events:none}
-.ds-joy-help{font-size:.78rem;max-width:120px}
-.ds-joy-side{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
-.press.ds-speed{white-space:nowrap}
+.ds-zone-help{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:.78rem;pointer-events:none}
+.ds-speed{position:absolute;top:8px;right:8px;z-index:3;padding:5px 11px;border-radius:999px;border:2.5px solid var(--ink);
+  background:rgba(255,255,255,.92);color:var(--ink);font-weight:800;font-size:.8rem;box-shadow:0 3px 0 var(--ink);white-space:nowrap}
+.ds-speed:active{transform:translateY(2px);box-shadow:0 1px 0 var(--ink)}
 .press.tr-btn{padding:12px 26px;font-size:1.3rem;--lift:4px}
 
 /* ── Rail Runner (.rr-) and Speedway (.sw-) ──────────────────────────────────

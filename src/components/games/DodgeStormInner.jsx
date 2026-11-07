@@ -41,33 +41,50 @@ const loadSpeed = () => { try { const k = localStorage.getItem(SPEED_KEY); const
 
 // A thumb stick under the arena, so a thumb never covers the runner. It
 // writes the push (-1..1 each way) into `joy.current`; the loop steers by it.
-function Joystick({ joy, speed, onSpeed }) {
-  const pad = useRef(null), knob = useRef(null), id = useRef(null);
+// A free thumb stick: the whole strip under the arena. Put your thumb down
+// anywhere in it and the ring appears right there; slide to steer; lift and
+// it's gone (a faint ring in the middle shows where). It writes the push
+// (-1..1 each way) into `joy.current`; the loop steers by it.
+function Joystick({ joy }) {
+  const zone = useRef(null), id = useRef(null), origin = useRef(null);
+  const [at, setAt] = useState(null);           // where the ring is, inside the strip
+  const knob = useRef(null);
   const set = (e) => {
-    const r = pad.current.getBoundingClientRect();
-    let dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    let dx = e.clientX - origin.current.x, dy = e.clientY - origin.current.y;
     const d = Math.hypot(dx, dy);
     if (d > JOY_R) { dx *= JOY_R / d; dy *= JOY_R / d; }
     joy.current = { x: dx / JOY_R, y: dy / JOY_R };
     if (knob.current) knob.current.style.transform = `translate(-50%,-50%) translate(${dx}px,${dy}px)`;
   };
-  const down = (e) => { e.preventDefault(); id.current = e.pointerId; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ } set(e); };
-  const move = (e) => { if (id.current === e.pointerId) set(e); };
+  const down = (e) => {
+    e.preventDefault();
+    if (id.current !== null) return;            // one thumb steers
+    id.current = e.pointerId;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
+    const r = zone.current.getBoundingClientRect();
+    origin.current = { x: e.clientX, y: e.clientY };
+    setAt({ x: e.clientX - r.left, y: e.clientY - r.top });
+    joy.current = { x: 0, y: 0 };
+  };
+  const move = (e) => { if (id.current === e.pointerId && origin.current) set(e); };
   const up = (e) => {
     if (id.current !== e.pointerId) return;
-    id.current = null; joy.current = null;
-    if (knob.current) knob.current.style.transform = "translate(-50%,-50%)";
+    id.current = null; joy.current = null; origin.current = null;
+    setAt(null);
   };
   return (
-    <div className="ds-controls">
-      <div className="ds-joy" ref={pad} role="application" aria-label="Move"
-        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onContextMenu={(e) => e.preventDefault()}>
-        <div className="ds-joy-knob" ref={knob} />
-      </div>
-      <div className="ds-joy-side">
-        <button type="button" className="press p-white sm ds-speed" onClick={onSpeed} aria-label="Change speed">{SPEEDS[speed].label}</button>
-        <div className="ds-joy-help muted">Steer here — or touch the arena</div>
-      </div>
+    <div className="ds-zone" ref={zone} role="application" aria-label="Steer: put your thumb anywhere here"
+      onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onContextMenu={(e) => e.preventDefault()}>
+      {at ? (
+        <div className="ds-joy live" style={{ left: at.x, top: at.y }}>
+          <div className="ds-joy-knob" ref={knob} />
+        </div>
+      ) : (
+        <>
+          <div className="ds-joy idle" aria-hidden="true"><div className="ds-joy-knob" /></div>
+          <div className="ds-zone-help muted">Thumb anywhere here to steer</div>
+        </>
+      )}
     </div>
   );
 }
@@ -379,12 +396,18 @@ export default function DodgeStormInner(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
-        controls={!isSpectator ? <Joystick joy={joy} speed={speed} onSpeed={nextSpeed} /> : null}
+        controls={!isSpectator ? <Joystick joy={joy} /> : null}
       >
         {({ w, h }) => (
           <Stage w={w} h={h} canvasRef={canvasRef} size={size} onPoint={isSpectator ? null : onPoint}
             label={isSpectator ? `Dodge Storm: watching ${spectatorWatching?.username || "a player"}` : "Dodge Storm: keep away from the shards"}>
             {broken && note("Couldn't start the 3D view on this phone.")}
+            {!isSpectator && (
+              <button type="button" className="ds-speed" onPointerDown={(e) => e.stopPropagation()} onClick={nextSpeed}
+                aria-label={`Speed: ${SPEEDS[speed].label}. Tap to change`}>
+                {SPEEDS[speed].label}
+              </button>
+            )}
             {isSpectator && !watched && !broken && note(`Connecting to ${spectatorWatching?.username ? `${spectatorWatching.username}'s` : "the"} storm…`)}
           </Stage>
         )}

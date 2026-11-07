@@ -231,7 +231,14 @@ export default function BlockDrop(props) {
     const at = e.type === "pointercancel" ? null : targetFor(d.i, e.clientX, e.clientY);
     const piece = live.current.tray[d.i];
     if (at && piece && canPlace(live.current.board, piece, at.r, at.c)) { drop(at.r, at.c); return; }
-    if (at) say("It doesn't fit there", "error");
+    // Let go below the board (back over the tray), or with the piece hanging
+    // off an edge: it just goes back, no telling-off. The piece floats above
+    // the finger, so bringing it home used to land its shadow on the bottom
+    // rows and say "It doesn't fit there".
+    const grid = gridRef.current?.getBoundingClientRect();
+    const backHome = !grid || e.clientY > grid.bottom;
+    const onBoard = at && piece && at.r >= 0 && at.c >= 0 && at.r + piece.h <= SIZE && at.c + piece.w <= SIZE;
+    if (onBoard && !backHome) say("It doesn't fit there", "error");
     live.current.pick = null;                           // back to the tray
     setPick(null);
     setHover(null);

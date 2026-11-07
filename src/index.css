@@ -649,10 +649,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
   width:min(92vw,430px,calc((100dvh - 250px) * 7 / 9 + 26px));
   touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .ae-board{display:block;width:100%;height:auto;cursor:pointer;-webkit-tap-highlight-color:transparent}
-/* the snake box: sandy, and the snakes' spots and flicking tongues */
-.ae-frame{background:radial-gradient(circle at 30% 20%,#FFF6DE,#F3E2B8)}
-.ae-tongue{animation:aeTongue 2.4s ease-in-out infinite;transform-box:fill-box}
-@keyframes aeTongue{0%,82%,100%{opacity:0}86%,96%{opacity:1}}
 .ae-toast{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:2;pointer-events:none;
   border:3px solid var(--ink);border-radius:999px;padding:6px 14px;font-family:Fredoka,sans-serif;
   font-weight:600;font-size:.95rem;white-space:nowrap;box-shadow:0 3px 0 var(--ink);

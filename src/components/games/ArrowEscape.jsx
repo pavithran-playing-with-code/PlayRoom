@@ -1,6 +1,7 @@
 // src/components/games/ArrowEscape.jsx
-// Tap an arrow and it slides off the board along its own path — but only if
-// nothing sits in front of its head. Clear a board to get the next, longer and
+// A box of snakes: tap one and it slithers off the board along its own path
+// — but only if nothing sits in front of its head (the arrows of the old look,
+// with eyes and a flicking tongue). Clear a board to get the next, longer and
 // twistier one. Boards are seeded, so everyone in a room plays the same
 // sequence; most points when the clock runs out wins.
 //
@@ -124,7 +125,7 @@ export default function ArrowEscape(props) {
     if (s.arrows.length === 0) {
       const bonus = boardBonus(s.level);
       eng.addScore(bonus);
-      say(`Board ${s.level} cleared! +${bonus}`, "success");
+      say(`🐍 All snakes out! +${bonus}`, "success");
       const next = s.level + 1;
       later(() => {
         s.level = next;
@@ -141,8 +142,8 @@ export default function ArrowEscape(props) {
     ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
-        { label: "Board", value: level },
-        { label: "Left", value: arrows.length },
+        { label: "Level", value: level },
+        { label: "Snakes", value: arrows.length },
       ];
 
   return (
@@ -159,7 +160,7 @@ export default function ArrowEscape(props) {
         {({ w, h }) => (
           <div style={{ textAlign: "center" }}>
             <div className="muted eyebrow" style={{ textAlign: "center" }}>
-              Tap an arrow · it only leaves if its path is clear
+              Tap a snake · it only slithers out if its way is clear
             </div>
             <div className="ae-frame" style={{ width: frameWidth(w, h) }}>
               {msg && (
@@ -198,37 +199,54 @@ export default function ArrowEscape(props) {
   );
 }
 
+const SNAKES = ["#8FDB5C", "#FFC53D", "#4CC9F0", "#FF8FC7", "#B48CFF", "#FF9F43", "#3DD6C0"];
+const INK = "#2E2140";
+
 function ArrowShape({ arrow, travel = 0, dur = 0, leaving = false, className = "" }) {
   const pts = arrow.cells.map((p) => [(p.c + 0.5) * CELL, (p.r + 0.5) * CELL]);
   const [hx, hy] = pts[pts.length - 1];
   const { dx, dy } = arrow.dir;
 
-  // The line runs along the arrow's cells and then straight on past its head,
+  // The body runs along the snake's cells and then straight on past its head,
   // but only a body-length dash of it is visible. Sliding that dash forward
-  // makes the whole arrow follow its own path out — bends and all.
+  // makes the whole snake follow its own path out — bends and all.
   const bodyLen = (pts.length - 1) * CELL;
   const run = (travel + 1) * CELL;
   const d = `M${pts.map(([x, y]) => `${x} ${y}`).join(" L")} L${hx + dx * run} ${hy + dy * run}`;
   const dist = travel * CELL;
+  const dash = `${bodyLen} ${bodyLen + run + 4 * CELL}`;
+  const colour = SNAKES[(arrow.id * 3 + arrow.cells.length) % SNAKES.length];
 
-  const color = arrow.tone ? "var(--coral)" : "var(--ink)";
-  const tip = 0.4 * CELL, back = 0.02 * CELL, half = 0.3 * CELL;
-  const headPts = [
-    [hx + dx * tip, hy + dy * tip],
-    [hx - dx * back - dy * half, hy - dy * back + dx * half],
-    [hx - dx * back + dy * half, hy - dy * back - dx * half],
-  ].map((p) => p.join(",")).join(" ");
+  // the head: round, two eyes looking where it's going, a forked tongue
+  const R = 0.36 * CELL, px = -dy, py = dx;           // across the head
+  const eye = (side) => [hx + dx * 0.12 * CELL + px * side * 0.17 * CELL, hy + dy * 0.12 * CELL + py * side * 0.17 * CELL];
+  const tx = hx + dx * 0.36 * CELL, ty = hy + dy * 0.36 * CELL;
+  const tongue = `M${tx} ${ty} L${tx + dx * 0.22 * CELL} ${ty + dy * 0.22 * CELL} l${(dx - px) * 0.08 * CELL} ${(dy - py) * 0.08 * CELL} M${tx + dx * 0.22 * CELL} ${ty + dy * 0.22 * CELL} l${(dx + px) * 0.08 * CELL} ${(dy + py) * 0.08 * CELL}`;
 
   const style = leaving
     ? { "--to": `${-dist}px`, "--tx": `${dx * dist}px`, "--ty": `${dy * dist}px`, "--dur": `${dur}ms` }
     : undefined;
 
   return (
-    <g className={`${className}${leaving ? " ae-leaving" : ""}`} style={style}>
-      <path className="ae-body" d={d} fill="none" stroke={color} strokeWidth={0.26 * CELL}
-        strokeLinecap="round" strokeLinejoin="round"
-        strokeDasharray={`${bodyLen} ${bodyLen + run + 4 * CELL}`} />
-      <g className="ae-head"><polygon className="ae-tri" points={headPts} fill={color} /></g>
+    <g className={`ae-snake${className ? ` ${className}` : ""}${leaving ? " ae-leaving" : ""}`} style={style}>
+      <path className="ae-body" d={d} fill="none" stroke={INK} strokeWidth={0.62 * CELL}
+        strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} />
+      <path className="ae-body ae-skin" d={d} fill="none" stroke={colour} strokeWidth={0.46 * CELL}
+        strokeLinecap="round" strokeLinejoin="round" strokeDasharray={dash} />
+      <g className="ae-head">
+        <path className="ae-tongue" d={tongue} fill="none" stroke="#FF4D6D" strokeWidth={0.07 * CELL} strokeLinecap="round" />
+        <circle cx={hx} cy={hy} r={R + 0.07 * CELL} fill={INK} />
+        <circle className="ae-tri" cx={hx} cy={hy} r={R} fill={colour} />
+        {[-1, 1].map((sd) => {
+          const [ex, ey] = eye(sd);
+          return (
+            <g key={sd}>
+              <circle cx={ex} cy={ey} r={0.12 * CELL} fill="#FFFFFF" stroke={INK} strokeWidth={0.04 * CELL} />
+              <circle cx={ex + dx * 0.04 * CELL} cy={ey + dy * 0.04 * CELL} r={0.06 * CELL} fill={INK} />
+            </g>
+          );
+        })}
+      </g>
     </g>
   );
 }

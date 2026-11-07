@@ -13,6 +13,9 @@
 // Running out of room doesn't end the match — the room's clock does — so a
 // stuck board is swept and a fresh one dealt, with the score kept.
 //
+// Clearing lines on placements one after another is a combo, worth a bonus;
+// cleared blocks burst, and a big clear gets a cheer over the board.
+//
 // The rules live in blastBoard.js. This file is the screen and the taps.
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -26,6 +29,9 @@ import {
 } from "./blastBoard";
 
 const SWEEP_MS = 1100;
+const POP_MS = 520;
+const COMBO_BONUS = 25;           // per combo step past the first
+const CHEERS = [null, null, "Great!", "Amazing!", "INCREDIBLE!", "UNBELIEVABLE!"];
 // A tray piece's cell size: as big as fits the slot, the same in both directions.
 const miniCell = (p) => Math.max(8, Math.min(16, Math.floor(54 / Math.max(p.w, p.h))));
 const DRAG_MIN = 8;            // px a finger moves before a press becomes a drag
@@ -41,7 +47,7 @@ export default function BlockDrop(props) {
 
   const live = useRef(null);
   if (live.current === null) {
-    live.current = { board: emptyBoard(), tray: dealer.current.deal(), lines: 0, sweeps: 0, pick: null };
+    live.current = { board: emptyBoard(), tray: dealer.current.deal(), lines: 0, sweeps: 0, pick: null, combo: 0 };
   }
 
   const [board, setBoard] = useState(live.current.board);
@@ -51,6 +57,8 @@ export default function BlockDrop(props) {
   const [sweeps, setSweeps] = useState(0);
   const [hover, setHover] = useState(null);        // { r, c } for the ghost
   const [msg, setMsg] = useState(null);
+  const [pops, setPops] = useState(null);          // { at: Map(cell → colour), key } — cleared blocks bursting
+  const [cheer, setCheer] = useState(null);        // { text, combo, key } — the big word over the board
   const [drag, setDrag] = useState(null);          // { i, x, y } while a piece is being dragged
   const dragRef = useRef(null);                    // { i, id, sx, sy, moved }
   const gridRef = useRef(null);
@@ -128,15 +136,28 @@ export default function BlockDrop(props) {
     eng.addMove();
     eng.addScore(piece.size * PLACE_POINTS);
 
+    const placed = s.board;
     const { board: cleared, cleared: n } = clearLines(s.board);
     if (n) {
       s.board = cleared;
       s.lines += n;
-      const gain = scoreForClear(n);
+      s.combo += 1;
+      const bonus = (s.combo - 1) * COMBO_BONUS;
+      const gain = scoreForClear(n) + bonus;
       eng.addScore(gain);
       setLines(s.lines);
-      say(n > 1 ? `${n} lines at once! +${gain}` : `Line cleared! +${gain}`, "success");
-    }
+      // the blocks that went: they burst where they were
+      const at = new Map();
+      placed.forEach((f, i) => { if (f && !cleared[i]) at.set(i, f); });
+      const key = ++uid.current;
+      setPops({ at, key });
+      later(() => setPops((x) => (x && x.key === key ? null : x)), POP_MS);
+      if (n > 1 || s.combo > 1) {
+        setCheer({ text: CHEERS[Math.min(n, CHEERS.length - 1)] || "Nice!", combo: s.combo, key });
+        later(() => setCheer((x) => (x && x.key === key ? null : x)), 1100);
+      }
+      say(`${n > 1 ? `${n} lines!` : "Line!"}${s.combo > 1 ? ` Combo ×${s.combo}` : ""} +${gain}`, "success");
+    } else s.combo = 0;
 
     refill(s);
     setPick(null);
@@ -256,6 +277,12 @@ export default function BlockDrop(props) {
           return (
             <div className="bb-wrap">
               <div className="bb-frame" style={{ width: boardPx + 14 }}>
+                {cheer && (
+                  <div className="bb-cheer" key={cheer.key}>
+                    <b>{cheer.text}</b>
+                    {cheer.combo > 1 && <span>Combo ×{cheer.combo}</span>}
+                  </div>
+                )}
                 <div className="bb-grid" ref={gridRef}
                   style={{ gridTemplateColumns: `repeat(${SIZE}, ${cell}px)`, gridAutoRows: `${cell}px`, gap }}>
                   {board.map((fill, i) => {
@@ -264,10 +291,11 @@ export default function BlockDrop(props) {
                     return (
                       <span key={i}
                         className={`bb-cell${fill ? " on" : ""}${isGhost ? (ghostOk ? " ghost" : " nope") : ""}`}
-                        style={fill ? { background: fill } : undefined}
+                        style={fill ? { backgroundColor: fill } : undefined}
                         onPointerEnter={() => pick !== null && !drag && setHover({ r, c })}
-                        onPointerDown={() => { setHover({ r, c }); drop(r, c); }}
-                      />
+                        onPointerDown={() => { setHover({ r, c }); drop(r, c); }}>
+                        {pops && pops.at.has(i) && <i key={pops.key} className="bb-burst" style={{ backgroundColor: pops.at.get(i) }} />}
+                      </span>
                     );
                   })}
                 </div>
@@ -291,7 +319,7 @@ export default function BlockDrop(props) {
                         {Array.from({ length: p.w * p.h }).map((_, k) => {
                           const rr = Math.floor(k / p.w), cc = k % p.w;
                           const on = p.cells.some(([a, b]) => a === rr && b === cc);
-                          return <span key={k} style={{ background: on ? p.colour : "transparent" }} />;
+                          return <span key={k} className={on ? "on" : ""} style={on ? { backgroundColor: p.colour } : undefined} />;
                         })}
                       </span>
                     )}
@@ -314,7 +342,7 @@ export default function BlockDrop(props) {
                   {Array.from({ length: tray[drag.i].w * tray[drag.i].h }).map((_, k) => {
                     const p = tray[drag.i], rr = Math.floor(k / p.w), cc = k % p.w;
                     const on = p.cells.some(([a, b]) => a === rr && b === cc);
-                    return <span key={k} className={on ? "on" : ""} style={on ? { background: p.colour } : undefined} />;
+                    return <span key={k} className={on ? "on" : ""} style={on ? { backgroundColor: p.colour } : undefined} />;
                   })}
                 </div>, document.body)}
             </div>

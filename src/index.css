@@ -893,7 +893,21 @@ input::-ms-reveal,input::-ms-clear{display:none}
   background:#F3ECE0;box-shadow:0 5px 0 var(--ink)}
 .bb-grid{display:grid;touch-action:manipulation}
 .bb-cell{border-radius:5px;background:#E4DACA;box-shadow:inset 0 -2px 0 rgba(46,33,64,.08)}
-.bb-cell.on{box-shadow:inset 0 -3px 0 rgba(46,33,64,.22)}
+.bb-cell{position:relative}
+/* candy blocks: a glossy top, a darker bottom edge, a little shine */
+.bb-cell.on,.bb-float span.on,.bb-mini span.on{background-image:linear-gradient(180deg,rgba(255,255,255,.45) 0%,rgba(255,255,255,.12) 42%,rgba(0,0,0,0) 55%,rgba(46,33,64,.18) 100%);
+  box-shadow:inset 0 -3px 0 rgba(46,33,64,.28),inset 0 0 0 1.5px rgba(46,33,64,.35);border-radius:6px}
+.bb-cell.on::after,.bb-float span.on::after{content:"";position:absolute;left:18%;top:14%;width:28%;height:22%;border-radius:50%;background:rgba(255,255,255,.6)}
+.bb-float span{position:relative}
+.bb-burst{position:absolute;inset:0;border-radius:6px;pointer-events:none;z-index:2;animation:bbBurst .52s ease-out forwards;
+  background-image:linear-gradient(180deg,rgba(255,255,255,.7),rgba(255,255,255,0))}
+@keyframes bbBurst{0%{transform:scale(1);opacity:1;filter:brightness(1.6)}40%{transform:scale(1.35) rotate(8deg);opacity:.9}100%{transform:scale(.2) rotate(30deg);opacity:0}}
+.bb-frame{position:relative}
+.bb-cheer{position:absolute;left:50%;top:42%;z-index:5;transform:translate(-50%,-50%);pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:4px;
+  animation:bbCheer 1.1s ease-out forwards}
+.bb-cheer b{font-family:Fredoka,Nunito,sans-serif;font-size:2.1rem;color:var(--sun);-webkit-text-stroke:2px var(--ink);text-shadow:0 4px 0 var(--ink);white-space:nowrap}
+.bb-cheer span{font-weight:800;background:var(--bubble);border:3px solid var(--ink);border-radius:999px;padding:2px 12px;box-shadow:0 3px 0 var(--ink)}
+@keyframes bbCheer{0%{transform:translate(-50%,-50%) scale(.4);opacity:0}15%{transform:translate(-50%,-50%) scale(1.15);opacity:1}25%{transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{transform:translate(-50%,-80%) scale(1);opacity:0}}
 /* where the picked piece would land: green when it fits, red when it doesn't */
 .bb-cell.ghost{background:rgba(181,230,85,.75);box-shadow:inset 0 0 0 2px rgba(46,33,64,.35)}
 .bb-cell.nope{background:rgba(255,107,107,.55);box-shadow:inset 0 0 0 2px rgba(46,33,64,.35)}
@@ -2119,3 +2133,4 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 @keyframes kr3Pop{from{transform:scale(.4) translateY(-10px);opacity:0}}
 @keyframes kr3Shake{25%{transform:rotate(-2deg)}75%{transform:rotate(2deg)}}
 .kr3-watch{position:absolute;left:50%;bottom:8px;transform:translateX(-50%)}
+.tr3-canvas{display:block;border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);touch-action:manipulation;-webkit-tap-highlight-color:transparent}

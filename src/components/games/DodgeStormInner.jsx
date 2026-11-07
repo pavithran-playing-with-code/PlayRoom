@@ -31,12 +31,17 @@ const SPEC_SHARDS = 40;            // most shards a spectator frame carries
 const SPEC_AHEAD = 18;             // frames a watcher carries on past the last frame, at most
 const SPEC_SMOOTH = 0.5;           // how much of a correction a watcher takes a frame
 const SEND_MS = 100;
-const JOY_R = 32;                  // how far the knob travels from the middle, px
-const JOY_LEAD = 30;               // full stick: aim this far ahead of the runner
+const JOY_R = 40;                  // how far the knob travels from the middle, px
+const JOY_DEAD = 0.14;             // a little dead spot in the middle
+// How far ahead of the runner a full push aims: the speed you picked. A push
+// is eased in (squared-ish), so a small one creeps and only the edge runs.
+const SPEEDS = [{ key: "slow", label: "🐢 Slow", lead: 12 }, { key: "normal", label: "🐇 Normal", lead: 19 }, { key: "fast", label: "🚀 Fast", lead: 28 }];
+const SPEED_KEY = "pr_storm_speed";
+const loadSpeed = () => { try { const k = localStorage.getItem(SPEED_KEY); const i = SPEEDS.findIndex((x) => x.key === k); return i >= 0 ? i : 1; } catch { return 1; } };
 
 // A thumb stick under the arena, so a thumb never covers the runner. It
 // writes the push (-1..1 each way) into `joy.current`; the loop steers by it.
-function Joystick({ joy }) {
+function Joystick({ joy, speed, onSpeed }) {
   const pad = useRef(null), knob = useRef(null), id = useRef(null);
   const set = (e) => {
     const r = pad.current.getBoundingClientRect();
@@ -59,7 +64,10 @@ function Joystick({ joy }) {
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onContextMenu={(e) => e.preventDefault()}>
         <div className="ds-joy-knob" ref={knob} />
       </div>
-      <div className="ds-joy-help muted">Steer here — or touch the arena</div>
+      <div className="ds-joy-side">
+        <button type="button" className="press p-white sm ds-speed" onClick={onSpeed} aria-label="Change speed">{SPEEDS[speed].label}</button>
+        <div className="ds-joy-help muted">Steer here — or touch the arena</div>
+      </div>
     </div>
   );
 }
@@ -109,6 +117,10 @@ export default function DodgeStormInner(props) {
   const [broken, setBroken] = useState(false);
   const keys = useRef({});
   const joy = useRef(null);
+  const [speed, setSpeed] = useState(loadSpeed);
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
+  const nextSpeed = () => setSpeed((v) => { const n = (v + 1) % SPEEDS.length; try { localStorage.setItem(SPEED_KEY, SPEEDS[n].key); } catch { /* fine */ } return n; });
   // Every finished run's score, kept aside, so a hit never takes away what was won.
   const banked = useRef(0);
   const overRef = useRef(false);
@@ -258,7 +270,11 @@ export default function DodgeStormInner(props) {
         if (k.arrowdown || k.s) dy += KEY_STEP;
         if (dx || dy) nudge(s, dx * dt, dy * dt);
         const j = joy.current;
-        if (j && (j.x || j.y)) moveTo(s, s.x + j.x * JOY_LEAD, s.y + j.y * JOY_LEAD);
+        const mag = j ? Math.min(1, Math.hypot(j.x, j.y)) : 0;
+        if (mag > JOY_DEAD) {
+          const k = Math.pow((mag - JOY_DEAD) / (1 - JOY_DEAD), 1.7) * SPEEDS[speedRef.current].lead;
+          moveTo(s, s.x + (j.x / mag) * k, s.y + (j.y / mag) * k);
+        }
 
         const out = step(s, dt);
         if (out.grazes) grazed.current += out.grazes;
@@ -363,7 +379,7 @@ export default function DodgeStormInner(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
-        controls={!isSpectator ? <Joystick joy={joy} /> : null}
+        controls={!isSpectator ? <Joystick joy={joy} speed={speed} onSpeed={nextSpeed} /> : null}
       >
         {({ w, h }) => (
           <Stage w={w} h={h} canvasRef={canvasRef} size={size} onPoint={isSpectator ? null : onPoint}

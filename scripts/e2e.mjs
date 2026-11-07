@@ -228,11 +228,11 @@ try {
     if (pad) {
       const mouse = (type, x, y) => raw("Input.dispatchMouseEvent", { type, x, y, button: "left", buttons: type === "mouseReleased" ? 0 : 1, clickCount: 1 }, sids[0]);
       await mouse("mousePressed", pad.x, pad.y);
-      for (let i = 0; i < 12; i++) { await mouse("mouseMoved", pad.x + 45, pad.y - 10); await sleep(150); }
+      for (let i = 0; i < 12; i++) { await mouse("mouseMoved", pad.x + 55, pad.y - 10); await sleep(150); }
       const knob = await js(sids[0], `document.querySelector(".ds-joy-knob").style.transform`);
       await shot(sids[0], "joystick-held");
-      await mouse("mouseReleased", pad.x + 45, pad.y - 10);
-      check("the knob follows the thumb", /translate\(3\d/.test(knob || ""), knob);
+      await mouse("mouseReleased", pad.x + 55, pad.y - 10);
+      check("the knob follows the thumb", /translate\(3\d|translate\(4\d/.test(knob || ""), knob);
     }
   }
 

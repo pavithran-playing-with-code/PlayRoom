@@ -127,7 +127,7 @@ export default function SunshardTower(props) {
   // ── input ──────────────────────────────────────────────────────────────────
   const keys = useRef({});
   const joy = useRef({ x: 0, y: 0 });
-  const cam = useRef({ yaw: 0, pitch: 0.42 });
+  const cam = useRef({ yaw: 0, pitch: 0.3 });
   const upright = useUprightTouch();
   const rot = useRef(upright);
   rot.current = upright;
@@ -204,8 +204,8 @@ export default function SunshardTower(props) {
     if (!d || d.id !== e.pointerId) return;
     const p = toGame(e, rot.current);
     cam.current.yaw -= (p.x - d.x) * 0.006;
-    // a tower: you can look up the trunk, and down at the Gloom
-    cam.current.pitch = clamp(cam.current.pitch + (p.y - d.y) * 0.004, -0.35, 1.3);
+    // a tower: drag up to look up the tree, down to look down at the Gloom
+    cam.current.pitch = clamp(cam.current.pitch + (p.y - d.y) * 0.004, -1, 1.3);
     d.x = p.x; d.y = p.y;
   };
   const padUp = (e) => {
@@ -326,7 +326,7 @@ export default function SunshardTower(props) {
     {
       const S = run.current, f = W.plats[W.path[1]];
       cam.current.yaw = Math.atan2(-(f.x - S.pl.x), -(f.z - S.pl.z));
-      cam.current.pitch = 0.42;
+      cam.current.pitch = 0.3;
     }
     let raf, last = performance.now(), sent = 0, lastHud = 0, beeped = -1, sizeW = 0, sizeH = 0, started = round > 0, nextAt = 0, lastBand = -1, warned = 0;
     const here = (r) => (r.rd || 0) === round;
@@ -349,6 +349,8 @@ export default function SunshardTower(props) {
       const k = keys.current, c = cam.current;
       if (k.KeyQ) c.yaw += 1.9 * dt;
       if (k.KeyE) c.yaw -= 1.9 * dt;
+      if (k.KeyR) c.pitch = Math.max(-1, c.pitch - 1.2 * dt);          // R / F: look up and down
+      if (k.KeyF) c.pitch = Math.min(1.3, c.pitch + 1.2 * dt);
       let ix = (k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0) + joy.current.x;
       let iz = (k.KeyS || k.ArrowDown ? 1 : 0) - (k.KeyW || k.ArrowUp ? 1 : 0) + joy.current.y;
       if (!go || overRef.current || C.over) { ix = 0; iz = 0; }

@@ -155,7 +155,7 @@ export function createScene(THREE, W, opts = {}) {
     const g = new THREE.Group();
     const top = new THREE.Mesh(keep(new THREE.CylinderGeometry(p.r * 0.97, p.r, 0.5, 10)), M(topC));
     top.position.y = -0.25; top.castShadow = true; top.receiveShadow = true;
-    const depth = p.r * 1.35 + 1.2;
+    const depth = W.tower ? p.r * 0.75 + 0.6 : p.r * 1.35 + 1.2;   // a tree's stones: shallow, so you can see up past them
     const base = new THREE.Mesh(keep(new THREE.ConeGeometry(p.r, depth, 10)), M(pal.side));
     base.rotation.x = Math.PI; base.position.y = -0.5 - depth / 2; base.receiveShadow = true;
     g.add(top, base);
@@ -391,44 +391,60 @@ export function createScene(THREE, W, opts = {}) {
   tint = false;
 
   // ── explorers ──────────────────────────────────────────────────────────────
-  // An explorer: a round body and a big head, a safari hat in your colour
-  // with a brim and a band, big shiny eyes, rosy cheeks, a little backpack,
-  // mitten hands, round boots, a scarf that streams out behind and a leaf
-  // glider over the head for floating. Ink outlines, like every PlayRoom
-  // character. Faces +z.
+  // A tree-climber kid: a woolly beanie in your colour with a fat pom-pom and
+  // round goggles pushed up on it, a big round face, a puffy quilted jacket in
+  // your colour, a coil of rope over one shoulder and another on the back (the
+  // camera is behind, so the back carries the look), mittens, dark trousers and
+  // chunky boots. A big leaf opens overhead to glide. Ink outlines, like every
+  // PlayRoom character. Faces +z.
   function makeHero(color, name) {
     const hero = new THREE.Group();
     const bodyG = new THREE.Group(); hero.add(bodyG);
-    const SKIN = 0xffd9b8, dark = new THREE.Color(color).multiplyScalar(0.72).getHex();
+    const SKIN = 0xffd9b8, ROPE = 0xe0a95a;
+    const dark = new THREE.Color(color).multiplyScalar(0.72).getHex(), light = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.55).getHex();
     const S = (k, r, ws = 16, hs = 12) => G(k, () => new THREE.SphereGeometry(r, ws, hs));
-    const part = (geo, mat, x, y, z, sx = 1, sy = sx, sz = sx, line = 1.08) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (line) inked(m, line); bodyG.add(m); return m; };
-    // the body: a tunic in your colour, a lighter belt
-    part(S("xbody", 0.4), M(color), 0, 0.5, 0, 1, 1.05, 0.95);
-    part(G("xbelt", () => new THREE.CylinderGeometry(0.41, 0.41, 0.09, 16)), M(0x8b5e3c), 0, 0.42, 0, 1, 1, 0.95, 0);
-    part(G("xbuckle", () => new THREE.BoxGeometry(0.12, 0.1, 0.04)), M(0xffd24a), 0, 0.42, 0.39, 1, 1, 1, 0);
-    // the head, big, the face toward +z
-    part(S("xhead", 0.42), M(SKIN), 0, 1.12, 0.02);
+    const part = (geo, mat, x, y, z, sx = 1, sy = sx, sz = sx, line = 1.08, to = bodyG) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (line) inked(m, line); to.add(m); return m; };
+    // trousers and the puffy jacket: quilted rings, a zip, a fat collar
+    part(G("kpants", () => new THREE.CylinderGeometry(0.27, 0.3, 0.26, 14)), M(0x3c4a7a), 0, 0.3, 0, 1, 1, 1, 1.06);
+    part(S("kcoat", 0.4), M(color), 0, 0.64, 0, 1, 0.98, 0.92);
+    for (const y of [0.52, 0.74]) part(G("kquilt", () => new THREE.TorusGeometry(0.385, 0.035, 6, 20)), M(dark), 0, y, 0, 1, 1, 0.92, 0).rotation.x = Math.PI / 2;
+    part(G("kzip", () => new THREE.BoxGeometry(0.05, 0.5, 0.03)), M(light), 0, 0.62, 0.37, 1, 1, 1, 0);
+    part(G("kcollar", () => new THREE.TorusGeometry(0.22, 0.08, 8, 16)), M(light), 0, 0.93, 0, 1, 1, 1, 1.1).rotation.x = Math.PI / 2;
+    // a rope over one shoulder, across the chest, and a coil on the back
+    const sash = new THREE.Group(); sash.position.set(0, 0.66, 0); sash.rotation.z = 0.62; bodyG.add(sash);
+    part(G("ksash", () => new THREE.TorusGeometry(0.42, 0.04, 6, 24)), M(ROPE), 0, 0, 0, 1, 1, 0.95, 0, sash).rotation.y = Math.PI / 2;
+    for (let i = 0; i < 3; i++) part(G("kcoil", () => new THREE.TorusGeometry(0.2, 0.045, 6, 18)), M(ROPE), 0.02 * (i - 1), 0.68 + i * 0.03, -0.4 - i * 0.03, 1, 1, 1, i === 1 ? 1.1 : 0);
+    part(G("kclip", () => new THREE.TorusGeometry(0.06, 0.018, 5, 10)), M(0xc0c8d8), 0.22, 0.48, 0.3, 1, 1.5, 1, 0);
+    // the head: big and round, a fringe peeking out, the face toward +z
+    part(S("khead", 0.4), M(SKIN), 0, 1.24, 0.02);
+    for (const x of [-0.18, -0.06, 0.07, 0.19]) part(S("kfringe", 0.09, 8, 6), M(0x6b3e26), x, 1.42, 0.3, 1, 0.8, 0.7, 0);
     const eyes = [];
-    for (const s of [-1, 1]) {
-      const e = new THREE.Mesh(S("xeye", 0.11, 12, 10), M(0xffffff)); e.position.set(s * 0.16, 1.16, 0.36); inked(e, 1.14);
-      const q = new THREE.Mesh(S("xpupil", 0.065, 10, 8), M(0x1a1a2a)); q.position.set(0, -0.01, 0.07); e.add(q);
-      const gl = new THREE.Mesh(S("xglint", 0.022, 6, 5), M(0xffffff)); gl.position.set(0.025, 0.035, 0.12); e.add(gl);
+    for (const sx of [-1, 1]) {
+      const e = new THREE.Mesh(S("xeye", 0.1, 12, 10), M(0xffffff)); e.position.set(sx * 0.15, 1.24, 0.35); inked(e, 1.14);
+      const q = new THREE.Mesh(S("xpupil", 0.06, 10, 8), M(0x1a1a2a)); q.position.set(0, -0.01, 0.065); e.add(q);
+      const gl = new THREE.Mesh(S("xglint", 0.02, 6, 5), M(0xffffff)); gl.position.set(0.022, 0.03, 0.11); e.add(gl);
       bodyG.add(e); eyes.push(e);
-      part(S("xcheek", 0.07, 8, 6), M(0xff9ab0), s * 0.27, 1.02, 0.33, 1, 0.6, 0.5, 0);
+      part(S("xcheek", 0.065, 8, 6), M(0xff9ab0), sx * 0.26, 1.1, 0.32, 1, 0.6, 0.5, 0);
     }
-    part(G("xsmile", () => new THREE.TorusGeometry(0.07, 0.018, 6, 12, Math.PI)), M(0x8a3a2a), 0, 1.0, 0.4, 1, 1, 1, 0).rotation.z = Math.PI;
-    // the hat: a dome in your colour, a wide brim, a band round it
-    part(G("xhatdome", () => new THREE.SphereGeometry(0.4, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2)), M(color), 0, 1.36, 0.02, 1, 0.75, 1);
-    part(G("xbrim", () => new THREE.CylinderGeometry(0.62, 0.62, 0.05, 20)), M(color), 0, 1.37, 0.02, 1, 1, 1, 1.05);
-    part(G("xband", () => new THREE.CylinderGeometry(0.405, 0.405, 0.08, 16)), M(dark), 0, 1.42, 0.02, 1, 1, 1, 0);
-    // a little backpack with a bedroll on top
-    part(G("xpack", () => new THREE.BoxGeometry(0.42, 0.44, 0.24)), M(0x8b5e3c), 0, 0.58, -0.38);
-    const roll = part(G("xroll", () => new THREE.CylinderGeometry(0.1, 0.1, 0.48, 10)), M(0x62d36c), 0, 0.86, -0.38, 1, 1, 1, 1.12); roll.rotation.z = Math.PI / 2;
-    const feet = [-1, 1].map((s) => part(S("xfoot", 0.15, 10, 8), M(0x5a3a2a), s * 0.18, 0.12, 0.05, 1, 0.7, 1.35, 1.12));
-    const arms = [-1, 1].map((s) => part(S("xarm", 0.12, 10, 8), M(0xffffff), s * 0.46, 0.62, 0, 1, 1, 1, 1.12));
-    const glider = new THREE.Mesh(G("glider", () => new THREE.ConeGeometry(1.1, 0.5, 7, 1, true)), M(0x62d36c, { side: THREE.DoubleSide })); glider.position.y = 2.0; glider.scale.setScalar(0.01); hero.add(glider);
+    part(G("xsmile", () => new THREE.TorusGeometry(0.065, 0.018, 6, 12, Math.PI)), M(0x8a3a2a), 0, 1.1, 0.385, 1, 1, 1, 0).rotation.z = Math.PI;
+    // the beanie: a woolly dome in your colour, a turned-up cuff, a fat pom-pom
+    part(G("kbeanie", () => new THREE.SphereGeometry(0.42, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2)), M(color), 0, 1.4, 0.0, 1, 0.95, 1);
+    part(G("kcuff", () => new THREE.CylinderGeometry(0.43, 0.43, 0.14, 18)), M(light), 0, 1.44, 0, 1, 1, 1, 1.05);
+    part(S("kpom", 0.14, 10, 8), M(0xffffff), 0, 1.86, -0.04, 1, 1, 1, 1.1);
+    // round goggles pushed up on the beanie
+    part(G("kstrap", () => new THREE.TorusGeometry(0.43, 0.025, 5, 24)), M(0x2e2140), 0, 1.58, 0, 1, 1, 1, 0).rotation.x = Math.PI / 2 - 0.25;
+    for (const sx of [-1, 1]) {
+      const g = part(G("kgog", () => new THREE.CylinderGeometry(0.1, 0.1, 0.07, 14)), M(0x9fe6ff), sx * 0.13, 1.6, 0.36, 1, 1, 1, 1.18);
+      g.rotation.x = Math.PI / 2 - 0.45;
+    }
+    const feet = [-1, 1].map((sx) => part(S("kboot", 0.16, 10, 8), M(0x6b4630), sx * 0.16, 0.12, 0.05, 1, 0.75, 1.4, 1.12));
+    const arms = [-1, 1].map((sx) => part(S("kmitt", 0.12, 10, 8), M(light), sx * 0.46, 0.62, 0, 1, 1, 1, 1.12));
+    // the glider: a big green leaf held overhead
+    const glider = new THREE.Group(); glider.position.y = 2.25; glider.scale.setScalar(0.01); hero.add(glider);
+    part(G("kleaf", () => new THREE.SphereGeometry(1, 14, 8)), M(0x5ec85a), 0, 0, 0, 1.25, 0.07, 0.62, 1.04, glider);
+    part(G("kvein", () => new THREE.BoxGeometry(2.3, 0.05, 0.05)), M(0x3f9a4a), 0, 0.06, 0, 1, 1, 1, 0, glider);
+    part(G("kstem", () => new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6)), M(0x3f9a4a), 0.25, -0.45, 0, 1, 1, 1, 0, glider);
     const scarf = [];
-    for (let i = 0; i < 5; i++) { const s = new THREE.Mesh(G("scarf" + i, () => new THREE.SphereGeometry(0.16 - i * 0.02, 6, 5)), M(i % 2 ? 0xffd24a : 0xff4b5c)); scene.add(s); scarf.push(s); }
     const blob = new THREE.Mesh(G("shadow", () => new THREE.CircleGeometry(0.55, 16)), keep(new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0.3, depthWrite: false })));
     blob.rotation.x = -Math.PI / 2; scene.add(blob);
     hero.traverse((o) => { if (o.isMesh) o.castShadow = true; });
@@ -441,7 +457,7 @@ export function createScene(THREE, W, opts = {}) {
       g.fillStyle = "#" + new THREE.Color(color).getHexString(); g.fillText(name.slice(0, 14), 128, 34);
       const tex = keep(new THREE.CanvasTexture(c));
       tag = new THREE.Sprite(keep(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false })));
-      tag.scale.set(2.6, 0.65, 1); tag.position.y = 2.15; hero.add(tag);
+      tag.scale.set(2.6, 0.65, 1); tag.position.y = 2.35; hero.add(tag);
     }
     scene.add(hero);
     return { hero, bodyG, eyes, feet, arms, glider, scarf, blob, tag, phase: 0, sq: 0, gl: 0, blink: 2, face: 0, tilt: 0 };
@@ -549,9 +565,12 @@ export function createScene(THREE, W, opts = {}) {
   function cameraFollow(P, yaw, pitch, dt, zone) {
     const inTemple = W.temple && Math.hypot(P.x - W.temple.x, P.z - W.temple.z) < 5.4 && Math.abs(P.y - W.temple.y) < 3.5;
     tmpK += ((inTemple ? 1 : 0) - tmpK) * Math.min(1, dt * 4);
-    const pe = lerp(pitch, Math.max(pitch, 0.8), tmpK), cp = Math.cos(pe), dist = lerp(8.5 * (P.gliding ? 1.15 : 1), 6.5, tmpK);
+    // looking up (pitch below 0): the camera swings further out behind you
+    // and looks up past you — up the tree, at the stones to come
+    const up = Math.max(0, -pitch);
+    const pe = lerp(Math.max(pitch, 0), Math.max(pitch, 0.8), tmpK), cp = Math.cos(pe), dist = lerp(8.5 * (P.gliding ? 1.15 : 1) * (1 + up * 0.9), 6.5, tmpK);
     const tx = P.x, ty = P.y + 1.3, tz = P.z;
-    let wx = tx + Math.sin(yaw) * cp * dist, wy = ty + Math.sin(pe) * dist + 0.3, wz = tz + Math.cos(yaw) * cp * dist;
+    let wx = tx + Math.sin(yaw) * cp * dist, wy = ty + Math.sin(pe) * dist + 0.3 + up * 1.5, wz = tz + Math.cos(yaw) * cp * dist;
     // the Sky Tree between you and the camera: the camera comes in, in front of the bark
     if (W.trunk && ty < W.trunk.y1 + 1) {
       const Tr = W.trunk, R = Tr.r + 0.9, ox = tx - Tr.x, oz = tz - Tr.z, dx = wx - tx, dz = wz - tz;
@@ -566,7 +585,7 @@ export function createScene(THREE, W, opts = {}) {
     camera.position.x += (wx - camera.position.x) * k; camera.position.y += (wy - camera.position.y) * k; camera.position.z += (wz - camera.position.z) * k;
     shake = Math.max(0, shake - dt * 1.6);
     if (shake > 0) { camera.position.x += (Math.random() - 0.5) * shake * 0.5; camera.position.y += (Math.random() - 0.5) * shake * 0.5; }
-    camera.lookAt(tx, ty, tz);
+    camera.lookAt(tx, ty + up * 14, tz);
     const fov = 55 + clamp(P.speed - 6, 0, 4) * 0.8 + (P.gliding ? 4 : 0);
     camera.fov += (fov - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();
     sun.position.set(P.x + 22, P.y + 38, P.z + 14); sun.target.position.set(P.x, P.y, P.z); sun.target.updateMatrixWorld();

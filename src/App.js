@@ -25,7 +25,6 @@ import { installErrorReporting } from "./utils/reportError";
 
 // Hollow Hours is big and only a few will open it: its own chunk
 const Hollow = lazy(() => import("./pages/Hollow"));
-const IconLab = lazy(() => import("./pages/IconLab"));
 
 installErrorReporting();
 
@@ -65,7 +64,6 @@ export default function App() {
           {/* Room page has its own full-screen game layout — no Navbar */}
           <Route path="/room/:code" element={<ProtectedRoute><RoomByCode /></ProtectedRoute>} />
           {/* No login, no lobby, no navbar — you walk in and the door shuts. */}
-          <Route path="/icons" element={<Suspense fallback={null}><IconLab /></Suspense>} />
           <Route path="/manor" element={<Manor />} />
           {/* Hollow Hours, solo, while it's being built: not in the lobby yet */}
           <Route path="/hollow" element={<Suspense fallback={<div className="hh" />}><Hollow /></Suspense>} />

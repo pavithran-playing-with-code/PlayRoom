@@ -12,27 +12,10 @@ import { GAMES } from "./registry";
 
 import { PICTURES as ICONS } from "./gamePictures";
 
-// LOOKS: the same pictures, drawn several ways, to choose from (/icons shows
-// them all side by side; the one picked is kept on this phone while we
-// decide — `pr_icon_look`).
-export const LOOKS = [
-  { key: "light", name: "Light", says: "Thin, soft outlines and brighter colour — closest to the emoji" },
-  { key: "light3d", name: "Light 3D", says: "Light, with gentle shading" },
-  { key: "flat", name: "Flat", says: "Clean drawings, thick ink outlines" },
-  { key: "soft", name: "Soft 3D", says: "Gentle shading, a soft shadow — no glow" },
-  { key: "sketch", name: "Sketch", says: "White shapes and ink lines on the tile colour" },
-  { key: "pastel", name: "Pastel", says: "Calmer, softer colours" },
-  { key: "badge", name: "Badge", says: "Each picture in a round white badge" },
-];
-const LOOK_KEY = "pr_icon_look";
-export function getIconLook() {
-  try { const k = localStorage.getItem(LOOK_KEY); if (LOOKS.some((l) => l.key === k)) return k; } catch { /* fine */ }
-  return "light";
-}
-export function setIconLook(k) {
-  try { localStorage.setItem(LOOK_KEY, k); } catch { /* fine */ }
-  window.dispatchEvent(new Event("pr:iconlook"));
-}
+// LOOKS: the same pictures can be drawn several ways. "light" (thin, soft
+// outlines, brighter colour) is the one PlayRoom uses; the others were tried
+// side by side and are kept for a page or game that wants them (`look`).
+export const LOOKS = ["light", "light3d", "flat", "soft", "sketch", "pastel", "badge"];
 
 const FILTERS = {
   // a soft top light and a small shadow underneath, nothing shiny
@@ -84,16 +67,10 @@ for (const g of GAMES) if (g.icon && !BY_EMOJI[g.icon]) BY_EMOJI[g.icon] = g.slu
 export const hasGameIcon = (slug) => !!ICONS[slug];
 
 export default function GameIcon({ icon = "🎮", slug, look }) {
-  const [chosen, setChosen] = React.useState(getIconLook);
-  React.useEffect(() => {
-    const on = () => setChosen(getIconLook());
-    window.addEventListener("pr:iconlook", on);
-    return () => window.removeEventListener("pr:iconlook", on);
-  }, []);
   const key = slug && ICONS[slug] ? slug : BY_EMOJI[icon];
   const pic = key && ICONS[key];
   if (!pic) return <>{icon || "🎮"}</>;
-  const L = look || chosen;
+  const L = look || "light";
   if (L === "badge") {
     return (
       <svg className="game-icon" viewBox="-6 -6 76 76" width="1em" height="1em" aria-hidden="true" focusable="false">

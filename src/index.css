@@ -2162,17 +2162,6 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .kr3-watch{position:absolute;left:50%;bottom:8px;transform:translateX(-50%)}
 .tr3-canvas{display:block;border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .game-icon{display:inline-block;vertical-align:-0.14em;overflow:visible}
-/* /icons — the icon look chooser */
-.il-page{max-width:560px;margin:0 auto;padding:16px 16px 60px;display:flex;flex-direction:column;gap:16px}
-.il-head{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
-.il-head h1{margin:0;font-size:1.6rem}
-.il-look{padding:12px}
-.il-look.on{outline:4px solid var(--mint);outline-offset:2px}
-.il-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
-.il-says{font-size:.8rem}
-.il-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(54px,1fr));gap:8px}
-.pc-tile-ic.il-tile{max-width:none;border-radius:16px;font-size:2.3rem;box-shadow:0 3px 0 var(--ink)}
-.il-inline{margin-top:10px;font-size:.95rem}
 /* Speed Math: a chalkboard and sticky notes */
 .sm-wrap{margin:0 auto;text-align:center}
 .sm-board{position:relative;display:grid;place-items:center;border:8px solid #A0703F;border-radius:16px;outline:3px solid var(--ink);

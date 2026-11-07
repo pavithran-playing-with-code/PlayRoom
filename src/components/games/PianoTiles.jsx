@@ -1,6 +1,6 @@
 // src/components/games/PianoTiles.jsx
-// Piano Tiles: four columns, one black tile in every row, rolling down. Tap
-// the lowest black tile, then the next; hold a long tile until it has gone
+// Piano Tiles, on PlayRoom's concert stage: four lanes, one coloured key in
+// every row, rolling down. Tap the lowest key, then the next; hold a long tile until it has gone
 // by. Every tile plays the next note of the song. Or the D F J K keys.
 //
 // Everyone in a room gets the same song and the same tiles (from the seed);
@@ -90,26 +90,58 @@ function makePiano() {
   return { note, buzz, close: () => { try { ctx && ctx.close(); } catch { /* gone */ } } };
 }
 
+// a colour, darker by k (0..1)
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v) => Math.max(0, Math.min(255, Math.round(v * k)));
+  return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`;
+}
+
 function drawScene(ctx, s, W, H, fx, now, tune) {
   const rowH = H / VISIBLE, colW = W / COLS;
 
-  // The board as the original has it: white, thin grey lines, the rows
-  // rolling down; sharp black tiles edge to edge; played ones turn pale grey;
-  // the count of tiles played big and red at the top.
-  ctx.fillStyle = "#FFFFFF";
+  // PlayRoom's concert stage: a night sky behind the lanes, two spotlights
+  // swaying, the keys glossy and rounded in a colour per lane; a played key
+  // fades and lets a note float up; the count glows at the top.
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, "#1D1838"); bg.addColorStop(1, "#3A2F66");
+  ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = "#E3E3E3";
-  ctx.lineWidth = 1;
-  for (let r = Math.floor(s.pos); r <= s.pos + VISIBLE + 1; r++) {
-    const y = Math.round(H - (r - s.pos) * rowH) + 0.5;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,.5)";
+  for (let k = 0; k < 28; k++) {
+    const sx = (k * 97.3) % W, sy = ((k * 53.7 + s.pos * rowH * 0.15) % H);
+    ctx.globalAlpha = 0.25 + 0.35 * Math.abs(Math.sin(now * 1.5 + k));
+    ctx.fillRect(sx, sy, 2, 2);
   }
-  ctx.strokeStyle = "#CFCFCF";
+  ctx.globalAlpha = 1;
+  for (const side of [0, 1]) {                       // the spotlights
+    const ox = side ? W * 0.95 : W * 0.05, sw = Math.sin(now * 0.7 + side * 2) * W * 0.18;
+    const g = ctx.createRadialGradient(ox + sw * 0.3, -20, 10, W / 2 + sw, H * 0.7, H * 0.8);
+    g.addColorStop(0, "rgba(255,236,170,.18)"); g.addColorStop(1, "rgba(255,236,170,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(ox - 10, -10); ctx.lineTo(W / 2 + sw - W * 0.32, H); ctx.lineTo(W / 2 + sw + W * 0.32, H); ctx.lineTo(ox + 10, -10); ctx.fill();
+  }
+  ctx.strokeStyle = "rgba(255,255,255,.08)";
+  ctx.lineWidth = 1;
   for (let c = 1; c < COLS; c++) {
     const x = Math.round(c * colW) + 0.5;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
   }
-  const cell = (col, top, h) => [Math.round(col * colW) + 1, Math.round(top) + 1, Math.round(colW) - 1, Math.round(h) - 1];
+  const gapPx = Math.max(2, Math.round(colW * 0.05));
+  const cell = (col, top, h) => [Math.round(col * colW) + gapPx, Math.round(top) + gapPx, Math.round(colW) - gapPx * 2, Math.round(h) - gapPx * 2];
+  const R = Math.max(6, Math.round(colW * 0.14));
+  const key = (x, y, w, hh, colour, alpha = 1) => {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, hh, R) : ctx.rect(x, y, w, hh);
+    const kg = ctx.createLinearGradient(0, y, 0, y + hh);
+    kg.addColorStop(0, colour); kg.addColorStop(1, shade(colour, 0.62));
+    ctx.fillStyle = kg; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = "#120E24"; ctx.stroke();
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x + 4, y + 4, w - 8, Math.min(hh * 0.3, 26), R * 0.7) : ctx.rect(x + 4, y + 4, w - 8, Math.min(hh * 0.3, 26));
+    ctx.fillStyle = "rgba(255,255,255,.28)"; ctx.fill();
+    ctx.restore();
+  };
 
   for (const t of visible(s)) {
     const top = H - (t.y + t.len - s.pos) * rowH, h = t.len * rowH;
@@ -118,25 +150,26 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
     if (t.missed) {
       // the one you missed, blinking red
       const on = since > 0.9 || Math.floor(since * 8) % 2 === 0;
-      ctx.fillStyle = on ? "#F2484E" : "#111111";
-      ctx.fillRect(x, y, w, hh);
+      key(x, y, w, hh, on ? "#FF5A6A" : "#2A2348");
       continue;
     }
     const holding = t.i === s.hold;
     if (t.done && !holding) {
-      // played: pale grey, and the blue of a long one held fades with it
-      const q = Math.min(1, since / 0.12);
-      const grey = Math.round(17 + (226 - 17) * q);
-      ctx.fillStyle = `rgb(${grey},${grey},${grey})`;
-      ctx.fillRect(x, y, w, hh);
-      if (t.len > 1 && t.held > 0) {
-        ctx.fillStyle = "rgba(86,178,245,.35)";
-        ctx.fillRect(x, y + hh * (1 - t.held), w, hh * t.held);
+      // played: the key fades away and a note floats up from it
+      const q = Math.min(1, since / 0.3);
+      if (q < 1) key(x, y, w, hh, NOTE_COLS[t.col % NOTE_COLS.length], 1 - q);
+      if (since < 0.8) {
+        ctx.save();
+        ctx.globalAlpha = 1 - since / 0.8;
+        ctx.fillStyle = "#FFF3B0";
+        ctx.font = `800 ${Math.round(colW * 0.4)}px Fredoka, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.fillText(t.i % 2 ? "♪" : "♫", x + w / 2 + Math.sin(since * 9) * 6, y + hh - rowH * 0.3 - since * rowH * 1.4);
+        ctx.restore();
       }
       continue;
     }
-    ctx.fillStyle = "#111111";
-    ctx.fillRect(x, y, w, hh);
+    key(x, y, w, hh, NOTE_COLS[t.col % NOTE_COLS.length]);
     if (t.len > 1) {
       // a long tile: a dot at the bottom and a line up it; held, it fills
       // with blue from the bottom and the dot rides the top of the blue
@@ -176,24 +209,25 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
     const on = Math.floor(wr.t * 8) % 2 === 0;
     if (!on) continue;
     const [x, y, w, hh] = cell(wr.col, H - (Math.floor(wr.yRow) + 1 - s.pos) * rowH, rowH);
-    ctx.fillStyle = "#F2484E";
-    ctx.fillRect(x, y, w, hh);
+    key(x, y, w, hh, "#FF5A6A");
   }
 
-  // the count of tiles played, big and red, as the original shows it
+  // the count of keys played, glowing at the top
   if (s.started) {
-    ctx.font = `600 ${Math.round(Math.min(64, W * 0.17))}px system-ui, -apple-system, sans-serif`;
+    ctx.save();
+    ctx.font = `800 ${Math.round(Math.min(64, W * 0.17))}px Fredoka, system-ui, sans-serif`;
     ctx.textAlign = "center";
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(255,255,255,.9)";
-    ctx.fillStyle = "#F2484E";
+    ctx.shadowColor = "#FFD447"; ctx.shadowBlur = 16;
+    ctx.lineWidth = 5; ctx.strokeStyle = "#120E24";
+    ctx.fillStyle = "#FFE27A";
     ctx.strokeText(String(s.hits), W / 2, H * 0.12);
     ctx.fillText(String(s.hits), W / 2, H * 0.12);
+    ctx.restore();
   }
 
   // before the start: which song it is
   if (!s.started) {
-    // on a card, so it reads over the black tiles too
+    // on a card, so it reads over the keys too
     const cw = Math.min(W - 16, 340), cx0 = (W - cw) / 2, cy0 = H * 0.2 - 28;
     ctx.fillStyle = "rgba(255,250,240,.94)"; ctx.strokeStyle = "#2E2140"; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(cx0, cy0, cw, 82, 14) : ctx.rect(cx0, cy0, cw, 82); ctx.fill(); ctx.stroke();
@@ -203,7 +237,7 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
     ctx.fillText(`♪ ${tune.name} ♪`, W / 2, H * 0.2);
     ctx.font = "600 13px Nunito, sans-serif";
     ctx.fillStyle = "rgba(46,33,64,.65)";
-    ctx.fillText("Tap the black tiles, lowest first", W / 2, H * 0.2 + 22);
+    ctx.fillText("Tap the coloured keys, lowest first", W / 2, H * 0.2 + 22);
     const lv = LEVELS[tune.level] || LEVELS.medium;
     ctx.font = "800 13px Nunito, sans-serif";
     ctx.fillStyle = tune.level === "hard" ? "#d62f3d" : tune.level === "easy" ? "#22783f" : "#2a7fb8";
@@ -555,8 +589,8 @@ export default function PianoTiles(props) {
             <div className="pt-pad" data-no-fun style={{ width: w, height: h }} onContextMenu={(e) => e.preventDefault()}>
               <canvas ref={canvasRef} className="pt-canvas" style={{ width: cw, height: ch }}
                 onPointerDown={onDown} onPointerUp={onUp} onPointerCancel={onUp}
-                role="img" aria-label={`Piano Tiles: ${tune.name}. Tap the black tiles, lowest first`} />
-              <div className="pt-help muted">Tap the black tiles · hold the long ones · keys D F J K</div>
+                role="img" aria-label={`Piano Tiles: ${tune.name}. Tap the coloured keys, lowest first`} />
+              <div className="pt-help muted">Tap the keys · hold the long ones · keys D F J K</div>
             </div>
           );
         }}

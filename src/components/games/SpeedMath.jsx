@@ -1,6 +1,12 @@
 // src/components/games/SpeedMath.jsx
-// Solve as many problems as you can before the clock runs out. Seeded so all
-// players in a room get the same problem sequence → fair head-to-head race.
+// Solve as many sums as you can before the clock runs out, on a classroom
+// chalkboard: the sum in chalk, the answers on sticky notes. Every 8 right
+// answers is a level, and the sums change with it:
+//   1 adding small numbers   2 adding and taking away   3 times tables too
+//   4 sharing (÷) and bigger numbers   5 the missing number (7 + ? = 15)
+//   6+ two steps (3 × 4 + 5)
+// Seeded per level, so everyone in a room who reaches a level gets the same
+// sums in the same order → a fair head-to-head race.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
 import GameOver from "./GameOver";
@@ -8,31 +14,57 @@ import useGameEngine from "./useGameEngine";
 import useSpectate from "./useSpectate";
 import { seededRand, randInt, shuffleInPlace } from "./seededRand";
 
-const CORRECT = 12;   // points per correct answer
+const CORRECT = 12;   // points per correct answer, plus the streak and the level
 const WRONG = -6;     // penalty (clamped at 0 total)
+const PER_LEVEL = 8;
+const MAX_LEVEL = 6;
+const levelFor = (right) => Math.min(MAX_LEVEL, 1 + Math.floor(right / PER_LEVEL));
+const SAYS = { 2: "Adding and taking away", 3: "Times tables join in", 4: "Sharing (÷) and bigger numbers", 5: "Find the missing number!", 6: "Two steps at once!" };
+const NOTES = ["#FFE27A", "#9FE6FF", "#FFB3D6", "#B9F28C"];
 
-// Deterministically build N problems from the seed.
-function buildProblems(seed, n = 300) {
-  const rand = seededRand(seed);
-  const ops = ["+", "-", "×"];
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    const op = ops[Math.floor(rand() * ops.length)];
-    let a, b, answer;
-    if (op === "+") { a = randInt(rand, 2, 49); b = randInt(rand, 2, 49); answer = a + b; }
-    else if (op === "-") { a = randInt(rand, 10, 60); b = randInt(rand, 1, a); answer = a - b; }
-    else { a = randInt(rand, 2, 12); b = randInt(rand, 2, 12); answer = a * b; }
-
-    // Three plausible distractors near the answer.
-    const opts = new Set([answer]);
-    while (opts.size < 4) {
-      const delta = randInt(rand, -6, 6) || 1;
-      const cand = answer + delta;
-      if (cand >= 0) opts.add(cand);
-    }
-    out.push({ text: `${a} ${op} ${b}`, answer, options: shuffleInPlace([...opts], rand) });
+// One sum for a level.
+function makeSum(rand, level) {
+  const pick = (a) => a[Math.floor(rand() * a.length)];
+  let text, answer;
+  if (level === 1) { const a = randInt(rand, 1, 12), b = randInt(rand, 1, 9); text = `${a} + ${b}`; answer = a + b; }
+  else if (level === 2) {
+    if (rand() < 0.5) { const a = randInt(rand, 5, 40), b = randInt(rand, 2, 30); text = `${a} + ${b}`; answer = a + b; }
+    else { const a = randInt(rand, 10, 50), b = randInt(rand, 1, a); text = `${a} − ${b}`; answer = a - b; }
+  } else if (level === 3) {
+    const op = pick(["+", "−", "×"]);
+    if (op === "+") { const a = randInt(rand, 2, 49), b = randInt(rand, 2, 49); text = `${a} + ${b}`; answer = a + b; }
+    else if (op === "−") { const a = randInt(rand, 10, 60), b = randInt(rand, 1, a); text = `${a} − ${b}`; answer = a - b; }
+    else { const a = randInt(rand, 2, 12), b = randInt(rand, 2, 12); text = `${a} × ${b}`; answer = a * b; }
+  } else if (level === 4) {
+    const op = pick(["÷", "×", "+", "−"]);
+    if (op === "÷") { const b = randInt(rand, 2, 12), q = randInt(rand, 2, 12); text = `${b * q} ÷ ${b}`; answer = q; }
+    else if (op === "×") { const a = randInt(rand, 3, 15), b = randInt(rand, 3, 12); text = `${a} × ${b}`; answer = a * b; }
+    else if (op === "+") { const a = randInt(rand, 40, 150), b = randInt(rand, 20, 99); text = `${a} + ${b}`; answer = a + b; }
+    else { const a = randInt(rand, 60, 150), b = randInt(rand, 10, a - 5); text = `${a} − ${b}`; answer = a - b; }
+  } else if (level === 5) {
+    const op = pick(["+", "−", "×"]);
+    if (op === "+") { const a = randInt(rand, 3, 40), x = randInt(rand, 2, 40); text = `${a} + ? = ${a + x}`; answer = x; }
+    else if (op === "−") { const x = randInt(rand, 10, 60), b = randInt(rand, 1, x - 1); text = `? − ${b} = ${x - b}`; answer = x; }
+    else { const a = randInt(rand, 2, 12), x = randInt(rand, 2, 12); text = `${a} × ? = ${a * x}`; answer = x; }
+  } else {
+    const a = randInt(rand, 2, 9), b = randInt(rand, 2, 9), c = randInt(rand, 1, 20);
+    if (rand() < 0.5) { text = `${a} × ${b} + ${c}`; answer = a * b + c; }
+    else { const t = a * b; const d = randInt(rand, 1, Math.min(t - 1, 20)); text = `${a} × ${b} − ${d}`; answer = t - d; }
   }
-  return out;
+  // three plausible distractors near the answer
+  const opts = new Set([answer]);
+  const spread = Math.max(3, Math.round(Math.abs(answer) * 0.15));
+  while (opts.size < 4) {
+    const cand = answer + (randInt(rand, -spread, spread) || 1);
+    if (cand >= 0) opts.add(cand);
+  }
+  return { text, answer, options: shuffleInPlace([...opts], rand) };
+}
+
+// The sums for a level, the same for everyone in the room.
+function buildLevel(seed, level, n = 160) {
+  const rand = seededRand((Number(seed) || 1) * 131 + level * 7919);
+  return Array.from({ length: n }, () => makeSum(rand, level));
 }
 
 export default function SpeedMath(props) {
@@ -40,45 +72,52 @@ export default function SpeedMath(props) {
     startedAt, serverNow, isSpectator = false, spectatorWatching = null,
     spectatorState = null } = props;
 
-  const problems = useMemo(() => buildProblems(seed), [seed]);
+  const levels = useMemo(() => Array.from({ length: MAX_LEVEL + 1 }, (_, l) => (l ? buildLevel(seed, l) : null)), [seed]);
 
-  // Which problem is up lives in a ref too: two taps in the same tick must not
-  // both be marked against one problem.
-  const live = useRef({ idx: 0, streak: 0 });
+  // Where we are lives in a ref too: two taps in the same tick must not both
+  // be marked against one sum. `at` counts sums within the level.
+  const live = useRef({ level: 1, at: 0, right: 0, streak: 0, best: 0 });
 
-  // Watching draws the same board the player is on: the questions are seeded, so which one they are on is the whole board.
+  const [level, setLevel] = useState(1);
+  const [at, setAt] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [flash, setFlash] = useState(null); // 'good' | 'bad'
+  const [levelUp, setLevelUp] = useState(0);
+  const flashTimer = useRef(null);
+  const lvTimer = useRef(null);
+  useEffect(() => () => { clearTimeout(flashTimer.current); clearTimeout(lvTimer.current); }, []);
+
+  // Watching draws the same board the player is on: the sums are seeded, so
+  // the level and how far through it they are is the whole board.
   const spectate = useSpectate({
     isSpectator, spectatorState,
-    snapshot: () => ({ idx: live.current.idx, streak: live.current.streak }),
+    snapshot: () => ({ level: live.current.level, at: live.current.at, streak: live.current.streak, right: live.current.right }),
     apply: (st) => {
-      live.current.idx = st.idx;
-      live.current.streak = st.streak;
-      setIdx(st.idx);
-      setStreak(st.streak);
+      Object.assign(live.current, { level: st.level || 1, at: st.at || 0, streak: st.streak || 0, right: st.right || 0 });
+      setLevel(st.level || 1);
+      setAt(st.at || 0);
+      setStreak(st.streak || 0);
     },
   });
 
-  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd ,
+  const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd,
     extraState: spectate.extraState });
 
-  const [idx, setIdx] = useState(0);
-  const [streak, setStreak] = useState(0);
-  const [flash, setFlash] = useState(null); // 'good' | 'bad'
-  const flashTimer = useRef(null);
-  useEffect(() => () => clearTimeout(flashTimer.current), []);
-
   const oppList = Object.values(eng.opponents);
-  const problem = problems[idx % problems.length];
+  const list = levels[level];
+  const sum = list[at % list.length];
 
-  function answer(opt, at) {
+  function answer(opt, forLevel, forAt) {
     if (eng.gameOver || isSpectator) return;
     const s = live.current;
-    if (at !== s.idx) return;                 // a tap aimed at the previous problem
-    const p = problems[s.idx % problems.length];
+    if (forLevel !== s.level || forAt !== s.at) return;     // a tap aimed at the previous sum
+    const p = levels[s.level][s.at % levels[s.level].length];
     eng.addMove();
     if (opt === p.answer) {
-      eng.addScore(CORRECT + Math.min(8, s.streak * 2)); // streak reward
+      eng.addScore(CORRECT + Math.min(8, s.streak * 2) + (s.level - 1) * 2);
       s.streak += 1;
+      s.best = Math.max(s.best, s.streak);
+      s.right += 1;
       setFlash("good");
     } else {
       eng.addScore(WRONG);
@@ -87,16 +126,26 @@ export default function SpeedMath(props) {
     }
     setStreak(s.streak);
     clearTimeout(flashTimer.current);
-    flashTimer.current = setTimeout(() => setFlash(null), 180);
-    s.idx += 1;
-    setIdx(s.idx);
+    flashTimer.current = setTimeout(() => setFlash(null), 220);
+    const lv = levelFor(s.right);
+    if (lv !== s.level) {
+      s.level = lv; s.at = 0;
+      setLevel(lv); setAt(0);
+      setLevelUp(lv);
+      clearTimeout(lvTimer.current);
+      lvTimer.current = setTimeout(() => setLevelUp(0), 2000);
+    } else {
+      s.at += 1;
+      setAt(s.at);
+    }
   }
 
   const specScore = spectatorWatching?.score ?? 0;
   const stats = isSpectator
-    ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
+    ? [{ label: "Score", value: Number(specScore).toLocaleString() }, { label: "Level", value: level }]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
+        { label: "Level", value: level },
         { label: "Streak", value: `${streak}🔥` },
       ];
 
@@ -112,39 +161,34 @@ export default function SpeedMath(props) {
         onQuit={eng.endMatch}
       >
         {({ w, h }) => {
-          // Problem panel on top, always a 2 x 2 grid of answers under it,
-          // everything scaled to the height that's left.
+          // The chalkboard on top, a 2 × 2 of sticky notes under it, scaled to the height.
           const W = Math.min(w, 480);
-          const gap = Math.round(Math.max(8, Math.min(16, h * 0.025)));
-          const eyebrow = 26;
-          const panelH = Math.round(Math.max(64, Math.min(170, h * 0.32)));
-          const btnH = Math.round(Math.max(44, Math.min(96, (h - eyebrow - panelH - gap * 2 - 12) / 2)));
-          const probFont = Math.round(Math.max(22, Math.min(56, panelH * 0.42, W / 6.5)));
-          const optFont = Math.round(Math.max(18, Math.min(30, btnH * 0.42)));
+          const gap = Math.round(Math.max(10, Math.min(18, h * 0.028)));
+          const panelH = Math.round(Math.max(78, Math.min(190, h * 0.36)));
+          const btnH = Math.round(Math.max(48, Math.min(100, (h - panelH - gap * 2 - 20) / 2)));
+          const long = sum.text.length > 9;
+          const probFont = Math.round(Math.max(22, Math.min(long ? 40 : 56, panelH * 0.38, W / (long ? 9 : 6.5))));
+          const optFont = Math.round(Math.max(20, Math.min(34, btnH * 0.42)));
           return (
-            <div style={{ width: W, textAlign: "center" }}>
-              <div className="muted eyebrow" style={{ textAlign: "center" }}>Solve it!</div>
-              <div
-                className="pop display"
-                style={{
-                  height: panelH, display: "grid", placeItems: "center", marginBottom: gap,
-                  fontSize: probFont, lineHeight: 1,
-                  // lime on a right answer, coral on a wrong one — the panel itself
-                  // is the feedback, so no extra banner is needed
-                  background: flash === "good" ? "var(--lime)" : flash === "bad" ? "var(--coral)" : "var(--sun)",
-                  transform: flash === "good" ? "scale(1.03)" : flash === "bad" ? "translateX(-5px)" : "none",
-                  transition: "transform .12s ease, background .12s ease",
-                }}
-              >
-                {problem.text}
+            <div className="sm-wrap" style={{ width: W }}>
+              <div className={`sm-board${flash ? ` ${flash}` : ""}`} style={{ height: panelH }}>
+                <span className="sm-level">Level {level}</span>
+                {streak >= 3 && <span className="sm-flame" key={streak}>{"🔥".repeat(Math.min(3, Math.floor(streak / 3)))} {streak}</span>}
+                <span className="sm-sum" style={{ fontSize: probFont }}>{sum.text.includes("?") ? sum.text : `${sum.text} = ?`}</span>
+                {flash === "good" && <span className="sm-tick">✓</span>}
+                {levelUp > 1 && (
+                  <div className="sm-lvlup" key={`l${levelUp}`}>
+                    <b>Level {levelUp}!</b>
+                    <span>{SAYS[levelUp]}</span>
+                  </div>
+                )}
               </div>
-              {/* The options show while watching too — the buttons simply
-                  refuse the tap, so a watcher sees the question being answered
-                  instead of a line of text. */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap }}>
-                {problem.options.map((opt, i) => (
-                  <button key={`${idx}-${i}`} onClick={() => answer(opt, idx)} className="press p-white"
-                    style={{ height: btnH, padding: 0, fontSize: optFont }}>
+              <div className="sm-ledge" aria-hidden="true"><i /><i /><i /></div>
+              {/* The notes show while watching too — they simply refuse the tap. */}
+              <div className="sm-notes" style={{ gap }}>
+                {sum.options.map((opt, i) => (
+                  <button key={i} onClick={() => answer(opt, level, at)} className="sm-note"
+                    style={{ height: btnH, fontSize: optFont, background: NOTES[i], "--tilt": `${[-2, 1.5, 2, -1.5][i]}deg` }}>
                     {opt}
                   </button>
                 ))}
@@ -154,7 +198,7 @@ export default function SpeedMath(props) {
         }}
       </GameFrame>
 
-      {eng.gameOver && !isSpectator && <GameOver eng={eng} me={currentUser} />}
+      {eng.gameOver && !isSpectator && <GameOver eng={eng} me={currentUser} extra={`Level ${level} · ${live.current.right} right · best streak ${live.current.best}🔥`} />}
     </>
   );
 }

@@ -861,7 +861,14 @@ input::-ms-reveal,input::-ms-clear{display:none}
   font-family:Fredoka,sans-serif;font-weight:600;-webkit-tap-highlight-color:transparent}
 .press.sp-tile.ready{--lift:6px}
 .sp-gap{display:block}
-.sp-help{margin-top:8px;font-size:.8rem}
+.press.sp-tile.sp-pic{position:relative;overflow:hidden;background:#fff;display:block}
+.press.sp-tile.sp-pic svg{display:block}
+.sp-num{position:absolute;left:5px;top:3px;font-weight:800;color:var(--ink);background:rgba(255,255,255,.8);border-radius:999px;padding:0 5px;line-height:1.4}
+.press.sp-tile.sp-pic.whole{border-radius:0;box-shadow:none;border-color:transparent;transition:border-radius .3s,box-shadow .3s}
+.sp-tile.sp-last{display:block;overflow:hidden;animation:spDrop .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes spDrop{0%{transform:translateY(-40px) scale(.6);opacity:0}100%{transform:none;opacity:1}}
+.sp-help{margin-top:8px;font-size:.8rem;display:flex;align-items:center;justify-content:center;gap:8px}
+.sp-goal{display:inline-block;width:34px;height:34px;border:2.5px solid var(--ink);border-radius:8px;overflow:hidden;box-shadow:0 2px 0 var(--ink);flex:none}
 
 /* ---------- Block Drop ---------- */
 .pp-frame{margin:0 auto;padding:10px;border:3px solid var(--ink);border-radius:20px;background:#F6F2EA;
@@ -2137,3 +2144,28 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 @keyframes kr3Shake{25%{transform:rotate(-2deg)}75%{transform:rotate(2deg)}}
 .kr3-watch{position:absolute;left:50%;bottom:8px;transform:translateX(-50%)}
 .tr3-canvas{display:block;border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+/* Speed Math: a chalkboard and sticky notes */
+.sm-wrap{margin:0 auto;text-align:center}
+.sm-board{position:relative;display:grid;place-items:center;border:8px solid #A0703F;border-radius:16px;outline:3px solid var(--ink);
+  background:radial-gradient(ellipse at 30% 20%,#3f6b55,#2c5442 70%);box-shadow:0 5px 0 var(--ink),inset 0 0 30px rgba(0,0,0,.35);
+  overflow:hidden;transition:background .15s}
+.sm-board.good{background:radial-gradient(ellipse at 30% 20%,#4f8a5e,#356b48 70%)}
+.sm-board.bad{animation:smShake .25s}
+@keyframes smShake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.sm-sum{font-family:"Fredoka","Comic Sans MS",cursive;font-weight:700;color:#F4F1E6;letter-spacing:.02em;
+  text-shadow:0 0 1px #fff,1px 1px 0 rgba(255,255,255,.25),-1px 0 2px rgba(255,255,255,.2)}
+.sm-level{position:absolute;left:10px;top:6px;color:#DCE8D8;font-weight:800;font-size:.8rem;opacity:.85}
+.sm-flame{position:absolute;right:10px;top:6px;color:#FFD447;font-weight:800;font-size:.85rem;animation:fl-pop .3s ease-out}
+.sm-tick{position:absolute;right:16px;bottom:8px;color:#B9F28C;font-size:2rem;font-weight:900;animation:fl-pop .25s ease-out}
+.sm-lvlup{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  background:rgba(44,84,66,.92);color:#FFF6E6;animation:smLvl 2s ease-out forwards}
+@keyframes smLvl{0%{opacity:0;transform:scale(.8)}12%{opacity:1;transform:scale(1.04)}20%{transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+.sm-lvlup b{font-family:"Fredoka",sans-serif;font-size:1.8rem;color:#FFD447}
+.sm-lvlup span{font-weight:700}
+.sm-ledge{height:10px;margin:0 6% 14px;background:#8A5A33;border:2.5px solid var(--ink);border-top:none;border-radius:0 0 8px 8px;display:flex;gap:10px;justify-content:center;align-items:flex-start}
+.sm-ledge i{display:block;width:18px;height:5px;background:#FFF6E6;border-radius:3px;margin-top:1px}
+.sm-ledge i:nth-child(2){background:#FFB3D6}
+.sm-notes{display:grid;grid-template-columns:1fr 1fr}
+.sm-note{padding:0;border:3px solid var(--ink);border-radius:6px 6px 18px 6px;box-shadow:0 5px 0 var(--ink);font-weight:800;color:var(--ink);
+  transform:rotate(var(--tilt,0deg));transition:transform .08s ease,box-shadow .08s ease;-webkit-tap-highlight-color:transparent;font-family:"Fredoka",sans-serif}
+.sm-note:active{transform:rotate(var(--tilt,0deg)) translateY(4px);box-shadow:0 1px 0 var(--ink)}

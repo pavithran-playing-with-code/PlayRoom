@@ -291,7 +291,7 @@ export function score(S, W, team = null) {
 //   • it never snaps. A moving ring can still carry you past the end (it
 //     isn't held: a ring must not stop under you), and then you can only
 //     come back. Fall, and the game puts you back beside the friend you're
-//     tied to (SunshardIslands), so the chain stays short.
+//     tied to (SunshardTower), so the chain stays short.
 //   • it ties itself when you're first close (the start, a late friend).
 export const LEASH = 10, AIR_SLACK = 1.5;
 export const tiedTo = (ids, me) => {

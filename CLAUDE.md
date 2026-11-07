@@ -238,37 +238,29 @@ There is no test runner. What works:
   (`FOOT` in s13Core, kept on the grid as `g.box`), not their whole tile.
   `check-manor.mjs` has a bot get out of most seeded runs;
   `check-manor-world.js` tests the server with a fake database.
-- **Sunshard Jump** (slug `sunshard`) is a 3D platformer, all jumping —
-  no coins, no attack; a slime is beaten by landing on it (three.js r128,
-  a lazy chunk): islands from `sunshardWorld.js`, rules in `sunshardSim.js`,
-  drawing in `sunshardScene.js` (a sky per zone, `THEMES`). On a phone the
-  left half of the screen is the joystick, the right half the camera.
-  Each phone relays its explorer (`isl:pos`); together,
-  the shard bits are unioned, one of you home wins for all, and you're tied
-  tail to tail in seat order (`tether`: each phone holds back only its own
-  explorer; a chain that never snaps, with a little slack in the air — fall
-  and you're back beside the friend you're tied to). Slimes wander by the
-  match clock, so they agree; a stomp or a crumbling stone goes to the room
-  (`isl:ev`, `killSlime` / `crumbleAt`). Light the temple and the side moves
-  on to the next island (`seed-1`, `seed-2`…, `rd` in `isl:pos`); islands'
-  points add up under the cap.
-  Each later island (`buildWorld(code, round)`) has its own look (`LOOKS`:
-  sky and ground tint), is a little harder up to round 4, and has a twist:
-  odd rounds wind gusts (`windAt`, by the clock), even rounds blinking stones
-  (`blinkLeft`). Round 0 is unchanged.
-  `scripts/check-sunshard.mjs` has a bot finish 24 seeded levels.
-  **Sunhaven Isle** is stage 2 of every round: lighting the temple opens a
-  3 s portal to a free-roaming island 62 m above it (`sunhavenWorld.js`,
-  `sunhavenSim.js`, drawn by `createIsle` in the scene, built only at the
-  portal): Elder Sol's 4 shrines (pulse, dash, +heart, bigger pulse), Pip's
-  slime quest, Brindle's boots, then the Shade Colossus; saved, and 6 s later
-  the next sky island. No `Math.random` in its rules (creatures wander by the
-  clock, the boss's orbs from a seeded stream). `isl:pos` carries the stage
-  (`sg`) and found flags (`fm`). Together, the portal is joint (`isl:ev` `tp`
-  with a match-clock `at`), and the lowest seated id on the isle is the host:
-  only it runs the creatures and the boss and sends them (`isl:host`, ~8/s);
-  every phone decides damage to its own explorer; kills, hearts, shrines and
-  the boss's end are shared events. Race: each player's own island.
+- **Sunshard Jump** (slug `sunshard`) is a 3D climb up the Sky Tree —
+  all jumping, no attack; a slime is beaten by landing on it (three.js r128,
+  loaded when the game opens). `towerWorld.js` builds the tree from the seed
+  (a spiral of stones round a trunk you can't pass through, five bands with
+  their own stones and sky, the Sun Crown on top; every jump checked) in the
+  same shape the old island levels had, so `sunshardSim.js` runs it and
+  `sunshardScene.js` draws it (the trunk, vine, boughs, the Crown's beacon
+  and the Gloom are drawn only for a tree). `SunshardTower.jsx` runs a
+  match. The Gloom, a sea of storm cloud, rises under you (`gloomAt`: each
+  phone's own, from when its climb began); caught, you lose a balloon and go
+  back to your flag with the Gloom pushed under you; three, and the climb
+  starts again (your best height stays). A fall of more than 8 m pops you
+  back on your last plain stone (`fallBack`). Sunshards sit on stones off
+  the spiral and sink your Gloom. The Crown: 5,000 points and a taller tree
+  (`towerCode(seed, round)`). On a phone the left half of the screen is the
+  joystick, the right half the camera. Each phone relays its explorer
+  (`isl:pos`: balloons as hp, best height as p, fin once crowned); stomps
+  and crumbling stones go to the room (`isl:ev`). Together you're tied tail
+  to tail in seat order (`tether`), caught you're hauled up beside a friend
+  with no balloon lost, and one of you on the Crown is the Crown for all.
+  `scripts/check-tower.mjs` checks the trees and has a bot climb them (a
+  few minutes; `NB=3` for a quick run); `check-sunshard.mjs` still tests
+  the physics and the tether on the island levels.
 - **Emberfall** (slug `emberfall`, solo only for now — the registry offers
   one seat until co-op is ported) is a finished single page,
   `public/emberfall/index.html` (the mobile rebuild, worked on outside this

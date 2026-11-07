@@ -247,6 +247,7 @@ function initSocket(httpServer) {
       socket.to(roomChannel(code)).volatile.emit("rr:pos", {
         user_id: uid,
         z: n(msg.z, 0, 1e7), x: n(msg.x, -2, 2), y: n(msg.y, 0, 10), v: n(msg.v, 0, 100), sl: msg.sl ? 1 : 0, st: msg.st ? 1 : 0,
+        k: Math.floor(n(msg.k, 0, 2)),
       });
     });
 

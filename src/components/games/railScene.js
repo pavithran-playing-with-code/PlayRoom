@@ -208,66 +208,109 @@ export function createRailScene(T, merge) {
   }
   const dropChunk = (c) => { scene.remove(c.g); for (const geo of c.g.userData.geos || []) geo.dispose(); };
 
-  // ── the runner ──
-  // PlayRoom's own runner: chubby and round, a shiny helmet in your colour with
-  // a racing stripe and goggles, a scarf that flaps out behind, big round
-  // shoes, and a little rocket on its back that puffs a flame when it jumps.
-  // The camera is behind, so the back — helmet stripe, scarf, rocket — carries
-  // the look. Legs swing from the hip and arms from the shoulder (poseHero).
-  function mkHero(colour) {
+  // ── the runners ──
+  // Three to pick from (RUNNERS): a fox with a bushy tail that swishes, a
+  // bunny whose long ears bounce, and a big-headed kid in a backwards cap —
+  // each with your colour on it (the fox's bandana, the bunny's overalls, the
+  // kid's hoodie and cap). The camera is behind, so the back carries the look:
+  // the tail, the ears, the cap. Legs swing from the hip and arms from the
+  // shoulder (poseHero); the tail and the ears move on their own.
+  function mkHero(colour, kind = "fox") {
     const g = new T.Group(), inner = new T.Group(); g.add(inner);
-    const SKIN = 0xffd9b8, SHOE = 0xff5a6a, SCARF = 0xffc53d, ROCKET = 0xffffff, DARK = 0x2e2140;
-    const col = mk(colour), suit = mk(new T.Color(colour).multiplyScalar(0.62).getHex()), light = mk(new T.Color(colour).lerp(new T.Color(0xffffff), 0.35).getHex()), skin = mk(SKIN);
-    const add = (m, line = 1.07) => { inner.add(m); if (line) inner.add(ink(m, line)); return m; };
+    const DARK = 0x2e2140;
+    const col = mk(colour), colDk = mk(new T.Color(colour).multiplyScalar(0.7).getHex());
     const S = (r) => G(new T.SphereGeometry(r, 16, 12));
-    // the body: round, a lighter belly in front
-    add(mesh(S(0.5), suit, 0, 1.05, 0, 1, 1.08, 0.92));
-    add(mesh(S(0.34), light, 0, 0.98, -0.2, 1, 1.05, 0.6), 0);
-    // the head, the helmet over it, a stripe down the middle, goggles on a band
-    add(mesh(S(0.42), skin, 0, 1.86, 0));
-    add(mesh(G(new T.SphereGeometry(0.46, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55)), col, 0, 1.9, 0.02, 1, 0.95, 1.02));
-    const stripe = mesh(G(new T.TorusGeometry(0.45, 0.06, 6, 18, Math.PI)), mk(0xffffff), 0, 1.9, 0.02); stripe.rotation.y = Math.PI / 2; add(stripe, 0);
-    const band = mesh(G(new T.TorusGeometry(0.43, 0.045, 6, 20)), mk(DARK), 0, 1.86, 0); band.rotation.x = Math.PI / 2; add(band, 0);
-    // a gold star on the back of the helmet
-    const star = mesh(G(new T.OctahedronGeometry(0.16, 0)), mk(0xffd447), 0, 2.02, 0.4, 1, 1, 0.45); star.rotation.z = Math.PI / 4; add(star, 1.15);
-    for (const sx of [-1, 1]) { const gg = mesh(G(new T.CylinderGeometry(0.13, 0.13, 0.08, 14).rotateX(Math.PI / 2)), mk(0x9fe6ff), sx * 0.16, 1.9, -0.38); add(gg, 1.2); }
-    // a face toward the track: eyes and a smile (you see it when it turns)
-    for (const sx of [-1, 1]) add(mesh(S(0.05), mk(DARK), sx * 0.13, 1.76, -0.39), 0);
-    // the scarf: round the neck, two tails flapping out behind
-    add(mesh(G(new T.TorusGeometry(0.3, 0.09, 8, 16)), mk(SCARF), 0, 1.5, 0, 1, 1, 1), 1.1).rotation.x = Math.PI / 2;
-    const scarf = new T.Group(); scarf.position.set(0.1, 1.5, 0.28); inner.add(scarf);
-    const tail1 = mesh(G(new T.BoxGeometry(0.28, 0.09, 0.55)), mk(SCARF), 0, 0, 0.27); scarf.add(tail1, ink(tail1, 1.12));
-    const scarf2 = new T.Group(); scarf2.position.set(0, 0, 0.55); scarf.add(scarf2);
-    const tail2 = mesh(G(new T.BoxGeometry(0.28, 0.09, 0.45)), mk(0xff9f43), 0, 0, 0.22); scarf2.add(tail2, ink(tail2, 1.12));
-    // the rocket on its back: a white body, a red nose, fins, a flame below
-    add(mesh(G(new T.CylinderGeometry(0.23, 0.23, 0.8, 14)), mk(ROCKET), 0, 1.22, 0.52));
-    add(mesh(G(new T.CylinderGeometry(0.235, 0.235, 0.12, 14)), mk(SHOE), 0, 1.3, 0.52), 0);
-    add(mesh(G(new T.ConeGeometry(0.23, 0.34, 14)), mk(SHOE), 0, 1.79, 0.52));
-    for (const sx of [-1, 1]) { const fin = mesh(G(new T.BoxGeometry(0.08, 0.3, 0.26)), mk(SHOE), sx * 0.27, 0.9, 0.52); add(fin, 1.2); }
-    const flame = new T.Mesh(G(new T.ConeGeometry(0.17, 0.6, 10).rotateX(Math.PI)), keep(new T.MeshBasicMaterial({ color: 0xffb43a, transparent: true, opacity: 0.9 })));
-    flame.position.set(0, 0.5, 0.52); inner.add(flame);
+    const add = (m, line = 1.07, to = inner) => { to.add(m); if (line) to.add(ink(m, line)); return m; };
+    const eyes = (y, z, spread = 0.14) => { for (const sx of [-1, 1]) add(mesh(S(0.055), mk(DARK), sx * spread, y, z), 0); };
+    let tail = null, ears = null;
+    let fur, belly, limb, hand, foot, legLen = 0.42;
+    if (kind === "fox") {
+      fur = mk(0xff6a1f); belly = mk(0xfff3e6); limb = mk(0x5a3a2a); hand = limb; foot = limb;
+      add(mesh(S(0.48), fur, 0, 1.0, 0, 1, 1.08, 0.95));
+      add(mesh(S(0.32), belly, 0, 0.95, -0.22, 1, 1.05, 0.55), 0);
+      add(mesh(S(0.42), fur, 0, 1.78, 0, 1.05, 0.95, 1));
+      add(mesh(S(0.24), belly, 0, 1.68, -0.24, 1.2, 0.8, 0.8), 0);
+      const snout = mesh(G(new T.ConeGeometry(0.13, 0.3, 12).rotateX(-Math.PI / 2)), belly, 0, 1.7, -0.45); add(snout);
+      add(mesh(S(0.05), mk(DARK), 0, 1.72, -0.6), 0);
+      eyes(1.86, -0.36);
+      ears = new T.Group(); inner.add(ears);
+      for (const sx of [-1, 1]) {
+        const e = mesh(G(new T.ConeGeometry(0.15, 0.36, 4)), fur, sx * 0.24, 2.18, 0.02); e.rotation.z = -sx * 0.25; add(e, 1.1, ears);
+        const tip = mesh(G(new T.ConeGeometry(0.07, 0.14, 4)), mk(DARK), sx * 0.29, 2.32, 0.02); tip.rotation.z = -sx * 0.25; ears.add(tip);
+      }
+      // the bandana, in your colour
+      const band = mesh(G(new T.TorusGeometry(0.3, 0.08, 8, 16)), col, 0, 1.42, 0); band.rotation.x = Math.PI / 2; add(band, 1.1);
+      add(mesh(G(new T.ConeGeometry(0.16, 0.26, 3)), col, 0, 1.32, -0.28), 1.1).rotation.x = Math.PI;
+      // the tail: bushy, a white tip, swishing behind
+      tail = new T.Group(); tail.position.set(0, 0.8, 0.4); inner.add(tail);
+      add(mesh(S(0.2), fur, 0, 0.05, 0.18, 1, 1, 1.3), 1.08, tail);
+      add(mesh(S(0.26), fur, 0, 0.18, 0.5, 1, 1, 1.3), 1.08, tail);
+      add(mesh(S(0.2), mk(0xffffff), 0, 0.3, 0.82, 1, 1, 1.2), 1.08, tail);
+    } else if (kind === "bunny") {
+      fur = mk(0xfff6ee); belly = mk(0xffe0ec); limb = fur; hand = fur; foot = fur;
+      // overalls in your colour over a white body
+      add(mesh(S(0.48), fur, 0, 1.02, 0, 1, 1.08, 0.95));
+      add(mesh(G(new T.CylinderGeometry(0.47, 0.5, 0.5, 16)), col, 0, 0.86, 0, 1, 1, 0.92));
+      for (const sx of [-1, 1]) add(mesh(G(new T.BoxGeometry(0.08, 0.5, 0.06)), col, sx * 0.2, 1.25, -0.4), 0);
+      for (const sx of [-1, 1]) add(mesh(G(new T.BoxGeometry(0.08, 0.5, 0.06)), col, sx * 0.2, 1.25, 0.4), 0);
+      add(mesh(S(0.42), fur, 0, 1.8, 0));
+      for (const sx of [-1, 1]) add(mesh(S(0.08), belly, sx * 0.22, 1.7, -0.32, 1, 0.6, 0.5), 0);
+      add(mesh(S(0.05), mk(0xff8fc7), 0, 1.76, -0.41), 0);
+      eyes(1.88, -0.36);
+      // long ears that bounce
+      ears = new T.Group(); ears.position.set(0, 2.1, 0); inner.add(ears);
+      for (const sx of [-1, 1]) {
+        const ear = new T.Group(); ear.position.set(sx * 0.16, 0, 0); ears.add(ear);
+        add(mesh(S(0.13), fur, 0, 0.35, 0, 0.8, 2.6, 0.6), 1.1, ear);
+        add(mesh(S(0.08), belly, 0, 0.35, -0.06, 0.7, 2.3, 0.4), 0, ear);
+        ear.rotation.z = -sx * 0.18;
+      }
+      // a pom-pom tail
+      tail = new T.Group(); tail.position.set(0, 0.85, 0.45); inner.add(tail);
+      add(mesh(S(0.17), fur), 1.1, tail);
+      legLen = 0.4;
+    } else {
+      // the kid: a hoodie and a backwards cap in your colour, a small backpack
+      fur = mk(0xffd9b8); belly = mk(new T.Color(colour).lerp(new T.Color(0xffffff), 0.35).getHex()); limb = mk(0x3c3550); hand = fur; foot = mk(0xffffff);
+      add(mesh(S(0.48), col, 0, 1.02, 0, 1, 1.08, 0.95));
+      add(mesh(G(new T.BoxGeometry(0.38, 0.18, 0.06)), colDk, 0, 0.92, -0.42), 0);
+      add(mesh(S(0.44), fur, 0, 1.82, 0));
+      add(mesh(G(new T.SphereGeometry(0.46, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.5)), col, 0, 1.86, 0, 1, 0.8, 1));
+      add(mesh(G(new T.BoxGeometry(0.4, 0.05, 0.3)), col, 0, 1.86, 0.48), 1.15);            // the peak, at the back
+      add(mesh(S(0.05), mk(0xffffff), 0, 2.23, 0), 0);
+      for (const sx of [-1, 1]) add(mesh(S(0.1), mk(0x3b2a20), sx * 0.36, 1.8, 0.1, 0.6, 1, 1), 0);
+      eyes(1.84, -0.4, 0.15);
+      add(mesh(G(new T.TorusGeometry(0.06, 0.015, 4, 8, Math.PI)), mk(0x9a3a2a), 0, 1.7, -0.41), 0).rotation.z = Math.PI;
+      add(mesh(G(new T.BoxGeometry(0.5, 0.52, 0.24)), mk(0xffc53d), 0, 1.12, 0.48));
+      add(mesh(G(new T.BoxGeometry(0.52, 0.16, 0.26)), mk(0xff9f43), 0, 1.32, 0.48), 0);
+    }
     const legs = [], arms = [];
     for (const sx of [-1, 1]) {
-      // a leg from the hip: a short stout leg, a big round shoe
-      const p = new T.Group(); p.position.set(sx * 0.2, 0.66, 0);
-      const leg = mesh(G(new T.CylinderGeometry(0.13, 0.12, 0.42, 10)), mk(0x3c3550), 0, -0.2, 0);
-      const shoe = mesh(S(0.17), mk(SHOE), 0, -0.48, -0.06, 1, 0.7, 1.35);
-      const sole = mesh(G(new T.CylinderGeometry(0.17, 0.17, 0.05, 12)), mk(0xffffff), 0, -0.58, -0.06, 1, 1, 1.35);
-      p.add(leg, ink(leg), shoe, ink(shoe), sole);
+      const p = new T.Group(); p.position.set(sx * 0.2, 0.64, 0);
+      const leg = mesh(G(new T.CylinderGeometry(0.12, 0.11, legLen, 10)), limb, 0, -legLen / 2, 0);
+      const shoe = mesh(S(0.16), foot, 0, -legLen - 0.06, -0.06, 1, 0.7, kind === "bunny" ? 1.7 : 1.35);
+      p.add(leg, ink(leg), shoe, ink(shoe));
       inner.add(p); legs.push(p);
-      // an arm from the shoulder: a sleeve in your colour, a round mitten
-      const ar = new T.Group(); ar.position.set(sx * 0.5, 1.32, 0);
-      const sleeve = mesh(G(new T.CylinderGeometry(0.11, 0.1, 0.42, 10)), col, 0, -0.2, 0);
-      const hand = mesh(S(0.12), mk(0xffffff), 0, -0.44, 0);
-      ar.add(sleeve, ink(sleeve), hand, ink(hand, 1.12));
+      const ar = new T.Group(); ar.position.set(sx * 0.5, 1.3, 0);
+      const sleeve = mesh(G(new T.CylinderGeometry(0.1, 0.09, 0.4, 10)), kind === "kid" ? col : fur, 0, -0.19, 0);
+      const paw = mesh(S(0.11), hand, 0, -0.42, 0);
+      ar.add(sleeve, ink(sleeve), paw, ink(paw, 1.12));
       inner.add(ar); arms.push(ar);
     }
     const sh = new T.Mesh(G(new T.PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2)), keep(new T.MeshBasicMaterial({ map: glow, color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false })));
     sh.position.y = 0.03;
     scene.add(g, sh);
-    return { g, inner, legs, arms, sh, phase: Math.random() * 6, scarf, scarf2, flame };
+    return { g, inner, legs, arms, sh, phase: Math.random() * 6, tail, ears, kind };
   }
-  const hero = mkHero(0xff7a3d);
+  let hero = mkHero(0xff7a3d, "fox");
+  // change your runner (the picker): the old one goes, the new one runs on where it was
+  function setRunner(kind) {
+    if (hero.kind === kind) return;
+    const z = hero.g.position.z;
+    scene.remove(hero.g, hero.sh);
+    hero = mkHero(0xff7a3d, kind);
+    hero.g.position.z = z;
+  }
   // A jump is drawn higher than the rules' 1.3 m (JUMP_LOOK): next to a 2 m
   // runner the real height looked like a small, slow hop. What you clear or
   // hit is still the rules', unchanged.
@@ -289,14 +332,14 @@ export function createRailScene(T, merge) {
       h.legs[0].rotation.x = sliding ? -1 : a; h.legs[1].rotation.x = sliding ? -1 : b;
       h.arms[0].rotation.x = grounded ? -a * 0.8 : -2.4; h.arms[1].rotation.x = grounded ? -b * 0.8 : -2.4;
     }
-    if (h.scarf) {
-      const wave = Math.sin(t * 14 + h.phase) * 0.35, lift = grounded ? 0.15 : 0.5;
-      // trailing out to one side and drooping a little, so it reads from behind
-      h.scarf.rotation.x = 0.35 - lift * 0.4 + wave * 0.35; h.scarf.rotation.y = 0.7 + Math.sin(t * 9) * 0.2;
-      h.scarf2.rotation.x = 0.25 + wave * 0.6; h.scarf2.rotation.y = 0.35 + Math.sin(t * 11 + 1) * 0.3;
-      const puff = !grounded && !stun;
-      h.flame.visible = puff;
-      if (puff) h.flame.scale.set(1, 0.7 + Math.random() * 0.6, 1);
+    // the fox's tail swishes; the bunny's ears bounce and its tail bobs
+    if (h.tail) {
+      if (h.kind === "fox") { h.tail.rotation.y = Math.sin(t * 9 + h.phase) * 0.45; h.tail.rotation.x = grounded ? -0.15 : -0.45; }
+      else h.tail.position.y = 0.85 + Math.abs(Math.sin(h.phase)) * 0.04;
+    }
+    if (h.ears && h.kind === "bunny") {
+      const flop = grounded ? Math.abs(Math.sin(h.phase)) * 0.35 : -0.25;
+      h.ears.rotation.x = 0.15 + flop;
     }
     h.g.visible = safe ? Math.sin(t * 40) > 0 : true;
   }
@@ -377,10 +420,11 @@ export function createRailScene(T, merge) {
     sp.scale.set((0.55 * w) / 64, 0.55, 1);
     return sp;
   }
-  function ghost(id, colour, name) {
+  function ghost(id, colour, name, kind) {
     let gh = ghosts.get(id);
-    if (gh) return gh;
-    gh = mkHero(colour);
+    if (gh && gh.kind === (kind || "fox")) return gh;
+    if (gh) { scene.remove(gh.g, gh.sh, gh.tag); ghosts.delete(id); }
+    gh = mkHero(colour, kind || "fox");
     gh.g.traverse((o) => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.55; } });
     gh.tag = nameSprite(name || "Friend", colour);
     scene.add(gh.tag);
@@ -391,7 +435,7 @@ export function createRailScene(T, merge) {
     const here = new Set();
     for (const o of others || []) {
       here.add(o.id);
-      const gh = ghost(o.id, o.colour, o.name);
+      const gh = ghost(o.id, o.colour, o.name, o.kind);
       const show = o.z > myZ - 12 && o.z < myZ + 160;
       gh.g.visible = show; gh.sh.visible = show; gh.tag.visible = show;
       if (!show) continue;
@@ -468,7 +512,7 @@ export function createRailScene(T, merge) {
   lastChunkZ = -300 + CL;
 
   return {
-    canvas, resize, frame,
+    canvas, resize, frame, setRunner,
     fx: { burst, shake(a) { shake = Math.max(shake, a); } },
     dispose() {
       for (const d of disposables) { try { d.dispose(); } catch { /* fine */ } }

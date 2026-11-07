@@ -19,6 +19,10 @@ import { useSocket } from "../../utils/SocketContext";
 
 const FRIEND_COLOURS = [0x4cc9f0, 0xff8fc7, 0x8fdb5c, 0xffc53d, 0x9b5de5, 0x3dd6c0, 0xff6b6b, 0xffa36c];
 const SEND_MS = 110;
+// your runner, picked with the button in the corner and kept on this phone
+const RUNNERS = [{ key: "fox", label: "🦊 Fox" }, { key: "bunny", label: "🐰 Bunny" }, { key: "kid", label: "🧒 Kid" }];
+const RUNNER_KEY = "pr_rr_runner";
+const loadRunner = () => { try { const i = RUNNERS.findIndex((r) => r.key === localStorage.getItem(RUNNER_KEY)); return i >= 0 ? i : 0; } catch { return 0; } };
 
 const SWIPE_PX = 26;
 const SPEC_BACK = 16;                        // a frame names what was taken this far behind the runner
@@ -65,6 +69,12 @@ export default function RailRunner(props) {
   const myId = Number(currentUser?.id);
   const eng = useGameEngine({ roomCode, players, currentUser, durationSeconds, startedAt, serverNow, isSpectator, onGameEnd });
   const { socket } = useSocket() || {};
+  const [runner, setRunner] = useState(loadRunner);
+  const runnerRef = useRef(runner);
+  runnerRef.current = runner;
+  const sceneRef = useRef(null);
+  const nextRunner = () => setRunner((v) => { const n = (v + 1) % RUNNERS.length; try { localStorage.setItem(RUNNER_KEY, RUNNERS[n].key); } catch { /* fine */ } return n; });
+  useEffect(() => { sceneRef.current?.setRunner(RUNNERS[runner].key); }, [runner]);
   // friends on the same course, from the room: drawn as ghosts beside you
   const seatedRef = useRef([]);
   seatedRef.current = (players || []).filter((p) => !p.is_spectator).map((p) => ({ id: Number(p.user_id), name: p.username })).sort((a, b) => a.id - b.id);
@@ -90,7 +100,8 @@ export default function RailRunner(props) {
       o.zs = Math.abs(z - o.zs) > 30 ? z : o.zs + (z - o.zs) * Math.min(1, dt * 10);
       o.x += (o.f.x - o.x) * Math.min(1, dt * 12);
       const slot = Math.max(0, seatedRef.current.findIndex((p) => p.id === id));
-      out.push({ id, z: o.zs, x: o.x, y: o.f.y, sl: o.f.sl, st: o.f.st, v: o.f.v, colour: FRIEND_COLOURS[slot % FRIEND_COLOURS.length], name: seatedRef.current[slot]?.name || "Friend" });
+      out.push({ id, z: o.zs, x: o.x, y: o.f.y, sl: o.f.sl, st: o.f.st, v: o.f.v, colour: FRIEND_COLOURS[slot % FRIEND_COLOURS.length], name: seatedRef.current[slot]?.name || "Friend",
+        kind: (RUNNERS[o.f.k] || RUNNERS[0]).key });
     }
     return out;
   };
@@ -206,6 +217,8 @@ export default function RailRunner(props) {
     if (isSpectator || !THREE || !hostRef.current) return undefined;
     let scene;
     try { scene = createRailScene(THREE.T, THREE.merge); } catch { setNoGl(true); return undefined; }
+    sceneRef.current = scene;
+    scene.setRunner(RUNNERS[runnerRef.current].key);
     const host = hostRef.current;
     scene.canvas.className = "rr-gl";
     host.insertBefore(scene.canvas, host.firstChild);
@@ -252,7 +265,7 @@ export default function RailRunner(props) {
       if (socket && roomCode && !overRef.current && now - sentAt > SEND_MS) {
         sentAt = now;
         socket.emit("rr:pos", { code: roomCode, z: Math.round(s.z * 10) / 10, x: Math.round(s.x * 100) / 100, y: Math.round(s.y * 100) / 100,
-          v: Math.round(s.speed * 10) / 10, sl: s.slideT > 0 ? 1 : 0, st: s.stunT > 0 ? 1 : 0 });
+          v: Math.round(s.speed * 10) / 10, sl: s.slideT > 0 ? 1 : 0, st: s.stunT > 0 ? 1 : 0, k: runnerRef.current });
       }
       scene.frame({ s, t: now / 1000, dt, crashed, others: othersRef.current(now, dt, myId) });
     };
@@ -374,6 +387,10 @@ export default function RailRunner(props) {
               <div className="rr-hud" aria-live="polite">
                 <div key={flash} className={`rr-flash${flash ? " on" : ""}`} />
                 <div className="rr-coins" ref={coinRef}>● {hud.coins}</div>
+                {!isSpectator && (
+                  <button type="button" className="rr-pick" onPointerDown={(e) => e.stopPropagation()} onClick={nextRunner}
+                    aria-label={`Runner: ${RUNNERS[runner].label}. Tap to change`}>{RUNNERS[runner].label}</button>
+                )}
                 <div className="rr-score"><span ref={distRef}>{hud.dist}</span><small>METERS</small></div>
                 {rank.length > 1 && (
                   <ol className="rr-rank">

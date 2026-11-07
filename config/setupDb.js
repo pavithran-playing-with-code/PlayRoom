@@ -257,7 +257,7 @@ const GAME_SEED = [
   { slug: "moving",    name: "Moving Day",        description: "Empty the house into the van before the clock runs out: boxes, lamps, the telly — and a sofa that needs two. Watch out for Biscuit.", min: 1, max: 8, icon: "📦", active: 1 },
   { slug: "kitchen",   name: "Kitchen Rush",      description: "Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.", min: 1, max: 8, icon: "🍳", active: 1 },
   { slug: "manor",     name: "Station 13",        description: "A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.", min: 1, max: 8, icon: "🏥", active: 1 },
-  { slug: "sunshard",  name: "Sunshard Jump",     description: "A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.", min: 1, max: 8, icon: "🏝️", active: 1 },
+  { slug: "sunshard",  name: "Sunshard Jump",     description: "A 3D climb up a giant Sky Tree: jump, double-jump and glide up the spiral of floating stones to the Sun Crown before the rising storm catches you.", min: 1, max: 8, icon: "🏝️", active: 1 },
   { slug: "emberfall", name: "Emberfall",         description: "A 3D island adventure, alone or with a friend: beat three guardians for their Ember Shards, then the Cinder Colossus.", min: 1, max: 2, icon: "🔥", active: 1 },
   { slug: "hollow",    name: "Hollow Hours",      description: "Two small children in a house built for giants, alone or together: past the Keeper and the Cuckoo, up the Bell Tower by midnight.", min: 1, max: 2, icon: "🕰️", active: 1 },
 ];

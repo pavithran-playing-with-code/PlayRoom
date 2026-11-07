@@ -24,7 +24,7 @@ import TypingRace from "./TypingRace";
 import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
 import MovingDay from "./MovingDay";
-import SunshardIslands from "./SunshardIslands";
+import SunshardTower from "./SunshardTower";
 import Emberfall from "./Emberfall";
 import HollowGame from "./HollowGame";
 
@@ -205,12 +205,12 @@ export const GAMES = [
   },
   {
     slug: "sunshard", name: "Sunshard Jump", icon: "🏝️",
-    blurb: "A 3D jumping game: jump, double-jump and glide across floating islands, grab 5 Sunshards and light the Sky Temple.",
+    blurb: "A 3D climb up a giant Sky Tree: jump, double-jump and glide up the spiral of floating stones to the Sun Crown before the rising storm catches you.",
     minPlayers: 1, maxPlayers: 8, tag: "Adventure", col: "var(--sky)",
     coopMax: 4, coopDefault: true, defaultDuration: 0, endless: true,
-    coopLabel: "one shard count — light the temple together",
-    coopNote: "One shard count for all of you: any of you can take a Sunshard for everyone, and when one of you lights the temple, you all go on to the next island. You're chained together — you can't get too far apart.",
-    Component: SunshardIslands,
+    coopLabel: "tied together — one of you on the Crown is the Crown for all",
+    coopNote: "You're chained together up the tree — you can't get too far apart. Caught by the Gloom, a friend hauls you back up. One of you on the Sun Crown, and you all go on to the next tree.",
+    Component: SunshardTower,
   },
   {
     slug: "emberfall", name: "Emberfall", icon: "🔥",

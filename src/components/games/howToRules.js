@@ -105,9 +105,9 @@ export const HOW_TO = {
   },
   sunshard: {
     name: "Sunshard Jump",
-    goal: "Jump across the floating islands, grab all 5 Sunshards and light the Sky Temple.",
-    steps: ["Left half of the screen: the joystick (or W A S D) — put your thumb down anywhere there. Right half: drag to turn the camera.", "JUMP — and again in the air to double-jump. Hold JUMP after the double jump to glide.", "Land on a slime to knock it out. Touching one from the side costs a heart.", "Follow the golden arrow and the light beams. Blue rings move, cracked stones crumble, red mushrooms bounce you, wind vents lift you. Every zone has its own sky.", "Falling is fine: you're back at the last flag. Together: any of you can take a shard for everyone — and you're tied tail to tail, so stick close or the rope snaps."],
-    tip: "First to light the temple wins.",
+    goal: "Climb the Sky Tree to the Sun Crown before the Gloom — a rising sea of storm cloud — catches you.",
+    steps: ["Left half of the screen: the joystick (or W A S D) — put your thumb down anywhere there. Right half: drag to turn the camera.", "JUMP — and again in the air to double-jump. Hold JUMP after the double jump to glide.", "Follow the stones spiralling up round the tree (the golden arrow points to the next one). Blue rings move, cracked stones crumble, red mushrooms bounce you, wind vents lift you.", "The Gloom rises faster and faster. Caught, you lose a 🎈 and float back to your last flag. Out of balloons, the climb starts again — your best height stays.", "Sunshards sit on the stones that stick out: each one sinks the Gloom 7 m. Land on a slime to knock it out.", "Together: you're tied tail to tail — caught, a friend hauls you up. One of you on the Crown is the Crown for all."],
+    tip: "Highest climber wins. Reach the Crown and a taller tree grows.",
   },
   emberfall: {
     name: "Emberfall",

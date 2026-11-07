@@ -1292,6 +1292,29 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .ss-tpf{position:absolute;inset:0;z-index:20;background:#fff;opacity:0;pointer-events:none}
 @keyframes ss-tpspin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.ss-tpv i{animation:none}}
+/* Sunshard Jump's Sky Tree (.st-): balloons, the height, the Gloom, the tower meter */
+.st-balloons{position:absolute;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 8px);display:flex;gap:1px;font-size:24px;line-height:1}
+.st-balloons i{font-style:normal;transition:transform .25s,opacity .25s,filter .25s}
+.st-balloons i.off{opacity:.3;transform:scale(.7) translateY(4px);filter:grayscale(1)}
+.st-team{font-size:14px;font-weight:800;padding:4px 10px;border-radius:999px;background:rgba(20,30,60,.4)}
+.st-height{display:flex;align-items:baseline;justify-content:center;gap:2px;font-weight:800;color:#fff;line-height:1}
+.st-height b{font-size:30px}
+.st-height span{font-size:15px}
+.st-height small{margin-left:8px;font-size:12px;font-weight:700;opacity:.9}
+.st-gloom{padding:2px 10px;border-radius:999px;background:rgba(60,30,90,.45);font-size:12px;font-weight:700;color:#e6d6ff;transition:background .3s}
+.st-gloom.near{background:rgba(150,60,200,.85);color:#fff;animation:st-pulse .6s ease-in-out infinite alternate}
+@keyframes st-pulse{to{transform:scale(1.08)}}
+.st-meter{position:absolute;right:calc(env(safe-area-inset-right,0px) + 14px);top:30%;bottom:180px;width:14px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.ss-stage:not(.touch) .st-meter{bottom:60px}
+.st-crown{font-style:normal;font-size:16px;line-height:1}
+.st-track{position:relative;flex:1;width:10px;border-radius:6px;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.85)}
+.st-fill{position:absolute;left:0;right:0;bottom:0;border-radius:0 0 4px 4px;background:linear-gradient(#b48cff,#3a1d5a);transition:height .3s}
+.st-track span{position:absolute;left:50%;width:10px;height:10px;margin:0 0 -5px -5px;border-radius:50%;border:2px solid #fff;transition:bottom .15s linear}
+.st-track span.me{width:14px;height:14px;margin:0 0 -7px -7px;z-index:2;box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+.st-teams{position:absolute;left:calc(env(safe-area-inset-left,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 44px);display:flex;flex-direction:column;gap:4px}
+.st-teams .teamscore{padding:2px 10px;border-radius:999px;border:2px solid var(--ink);font-size:12px;font-weight:800;color:var(--ink);text-shadow:none}
+.st-teams .teamscore.mine{box-shadow:0 0 0 2px #fff}
+.st-gloomedge{position:absolute;inset:0;pointer-events:none;z-index:1;box-shadow:inset 0 0 70px 24px rgba(120,50,190,.85);transition:opacity .3s}
 
 /* ── Calls (.call-): over every page, a game too ──────────────────────────── */
 .call-screen{position:fixed;inset:0;z-index:10000;background:#14101c;color:#fff;overflow:hidden;

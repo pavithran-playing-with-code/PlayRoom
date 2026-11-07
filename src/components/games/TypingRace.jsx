@@ -32,9 +32,10 @@ function Track({ lanes }) {
             <span className="ty-name truncate">{l.me ? "You" : l.name}</span>
             <div className="ty-road">
               <span className="ty-finish" />
-              <div className={`ty-car${l.sputter ? " sputter" : ""}${l.spin ? " spin" : ""}`}
+              <div className={`ty-car${l.sputter ? " sputter" : ""}${l.spin ? " spin" : ""}${l.nitro ? ` nitro n${l.nitro}` : ""}`}
                 style={{ left: `calc(${(k * 100).toFixed(2)}% - ${(k * 34).toFixed(1)}px)` }}>
-                <i style={{ background: l.colour }} /><b /><s className="w1" /><s className="w2" />
+                {l.nitro > 0 && <em className="ty-fire" aria-hidden="true" />}
+                <i style={{ background: l.colour }} /><u style={{ background: l.colour }} /><b /><s className="w1" /><s className="w2" /><q />
               </div>
             </div>
             <span className="ty-lap">L{lap}</span>
@@ -158,7 +159,9 @@ export default function TypingRace(props) {
     ...Object.values(eng.opponents).filter((p) => Number(p.user_id) !== myId)
       .map((p) => ({ id: p.user_id, name: p.username, pts: Number(p.score) || 0, colour: colourOf(p.user_id) })),
     { id: myId || "me", me: true, pts: isSpectator ? Number(spectatorWatching?.score) || 0 : eng.score,
-      colour: colourOf(myId), sputter: now.bad && !isSpectator, spin },
+      colour: colourOf(myId), sputter: now.bad && !isSpectator, spin,
+      // a streak of 5 lights the nitro, 10 turns it up
+      nitro: isSpectator ? 0 : live.current.streak >= 10 ? 2 : live.current.streak >= 5 ? 1 : 0 },
   ];
 
   const stats = isSpectator

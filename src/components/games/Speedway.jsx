@@ -5,7 +5,8 @@
 // charge a boost (sparks white → blue → orange → purple), let go to fire it.
 //
 // Everyone in the room races the same track: its code comes from the room's
-// seed (driftSim.js: trackCode). Laps follow the room's clock: 2 min → 3,
+// seed (driftSim.js: trackCode), and so does its world (WORLDS): a forest
+// park, a desert canyon, snowy peaks, a neon night city or candy land. Laps follow the room's clock: 2 min → 3,
 // 3–4 min → 5, 5 min → 8. A 3-2-1-GO countdown holds the cars, then it's on.
 // Each phone drives its own car and tells the room where it is (race:pos,
 // ~10 times a second): position, angle, speed, drift and boost — so a
@@ -108,35 +109,53 @@ function text(ctx, s, x, y, px, col, al, font, sh) {
   if (sh) { ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillText(s, x + px * 0.05, y + px * 0.06); }
   ctx.fillStyle = col; ctx.fillText(s, x, y);
 }
-function makeGrass(ctx) {
+// The worlds a race can be in — the colours of the ground, the trees (or
+// rocks, pines, neon towers, lollipops), the wall, the run-off, the road and
+// the curbs. The room's seed picks one, so everyone races in the same world.
+export const WORLDS = [
+  { name: "Forest Park", grass: "#1f6b4f", fleck: "rgba(255,255,255,.05)", treeA: "#14503a", treeB: "#1a5a3c", leafA: "#1f7550", leafB: "#2a8a52",
+    wall: "#ece7dc", wallDash: "#d9482b", runoff: "#2c7d5c", curb: "#f4efe6", curbDash: "#e0452c", road: "#2b313a" },
+  { name: "Desert Canyon", grass: "#d39a5c", fleck: "rgba(120,60,20,.12)", treeA: "#9c5a30", treeB: "#b0683a", leafA: "#c98552", leafB: "#d99a62",
+    wall: "#f6e3bf", wallDash: "#c4502b", runoff: "#bf8550", curb: "#fff4dc", curbDash: "#e07a2c", road: "#3b3330" },
+  { name: "Snow Peaks", grass: "#e6eff6", fleck: "rgba(120,150,190,.12)", treeA: "#2e5a4a", treeB: "#376b57", leafA: "#f5f9fc", leafB: "#e9f2f8",
+    wall: "#ffffff", wallDash: "#3a7bd5", runoff: "#c9d9e6", curb: "#ffffff", curbDash: "#3a7bd5", road: "#2f3742" },
+  { name: "Neon Night", grass: "#15122b", fleck: "rgba(176,72,255,.12)", treeA: "#2c1b52", treeB: "#3a1f5c", leafA: "#b048ff", leafB: "#4cc9f0",
+    wall: "#4cc9f0", wallDash: "#ff2fa0", runoff: "#231e45", curb: "#1b1d2a", curbDash: "#ff2fa0", road: "#1b1d2a" },
+  { name: "Candy Land", grass: "#ffd1e6", fleck: "rgba(255,255,255,.35)", treeA: "#ff8fc7", treeB: "#b48cff", leafA: "#fff0f7", leafB: "#fff6c9",
+    wall: "#fff6e6", wallDash: "#ff6b9d", runoff: "#ffbcd9", curb: "#ffffff", curbDash: "#ffc53d", road: "#5a4e8c" },
+];
+export const worldFor = (seed) => WORLDS[Math.abs(Math.floor((Number(seed) || 1) * 7 + 3)) % WORLDS.length];
+
+function makeGrass(ctx, W = WORLDS[0]) {
   const t = document.createElement("canvas");
   t.width = t.height = 160;
   const g = t.getContext("2d");
-  g.fillStyle = "#1f6b4f"; g.fillRect(0, 0, 160, 160);
+  g.fillStyle = W.grass; g.fillRect(0, 0, 160, 160);
   for (let i = 0; i < 260; i++) {
-    g.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,.05)" : "rgba(0,0,0,.08)";
+    g.fillStyle = Math.random() < 0.5 ? W.fleck : "rgba(0,0,0,.08)";
     g.fillRect(Math.random() * 160, Math.random() * 160, 2 + Math.random() * 3, 2 + Math.random() * 3);
   }
   return ctx.createPattern(t, "repeat");
 }
 
 function drawTrack(ctx, T, G, clock, vx0, vy0, vx1, vy1) {
-  ctx.fillStyle = G.grass || "#1f6b4f"; ctx.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
+  const W = G.world || WORLDS[0];
+  ctx.fillStyle = G.grass || W.grass; ctx.fillRect(vx0, vy0, vx1 - vx0, vy1 - vy0);
   for (const t of T.trees) {
     if (t.x < vx0 - 60 || t.x > vx1 + 60 || t.y < vy0 - 60 || t.y > vy1 + 60) continue;
     const r = t.r * (1 + 0.03 * Math.sin(clock * 1.4 + t.ph));
     ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(t.x + 9, t.y + 11, r, r * 0.85, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = t.k < 0.5 ? "#14503a" : "#1a5a3c"; ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, TAU); ctx.fill();
-    ctx.fillStyle = t.k < 0.5 ? "#1f7550" : "#2a8a52"; ctx.beginPath(); ctx.arc(t.x - r * 0.2, t.y - r * 0.25, r * 0.62, 0, TAU); ctx.fill();
+    ctx.fillStyle = t.k < 0.5 ? W.treeA : W.treeB; ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = t.k < 0.5 ? W.leafA : W.leafB; ctx.beginPath(); ctx.arc(t.x - r * 0.2, t.y - r * 0.25, r * 0.62, 0, TAU); ctx.fill();
   }
   ctx.lineJoin = "round"; ctx.lineCap = "butt";
   // the wall, the run-off, the curbs, the asphalt, the centre line
-  ctx.setLineDash([]); ctx.strokeStyle = "#ece7dc"; ctx.lineWidth = 2 * (WALL + 9); ctx.stroke(G.path);
-  ctx.setLineDash([34, 34]); ctx.strokeStyle = "#d9482b"; ctx.stroke(G.path); ctx.setLineDash([]);
-  ctx.strokeStyle = "#2c7d5c"; ctx.lineWidth = 2 * WALL; ctx.stroke(G.path);
-  ctx.strokeStyle = "#f4efe6"; ctx.lineWidth = 2 * (HALF + CURB); ctx.stroke(G.path);
-  ctx.setLineDash([30, 30]); ctx.strokeStyle = "#e0452c"; ctx.stroke(G.path); ctx.setLineDash([]);
-  ctx.strokeStyle = "#2b313a"; ctx.lineWidth = 2 * HALF; ctx.stroke(G.path);
+  ctx.setLineDash([]); ctx.strokeStyle = W.wall; ctx.lineWidth = 2 * (WALL + 9); ctx.stroke(G.path);
+  ctx.setLineDash([34, 34]); ctx.strokeStyle = W.wallDash; ctx.stroke(G.path); ctx.setLineDash([]);
+  ctx.strokeStyle = W.runoff; ctx.lineWidth = 2 * WALL; ctx.stroke(G.path);
+  ctx.strokeStyle = W.curb; ctx.lineWidth = 2 * (HALF + CURB); ctx.stroke(G.path);
+  ctx.setLineDash([30, 30]); ctx.strokeStyle = W.curbDash; ctx.stroke(G.path); ctx.setLineDash([]);
+  ctx.strokeStyle = W.road; ctx.lineWidth = 2 * HALF; ctx.stroke(G.path);
   ctx.setLineDash([34, 38]); ctx.strokeStyle = "rgba(244,239,230,.45)"; ctx.lineWidth = 4; ctx.stroke(G.path); ctx.setLineDash([]);
   // skid marks, kept on the road
   const sk = G.skids;
@@ -290,6 +309,7 @@ function drawHud(ctx, w, h, S) {
     ctx.save(); ctx.translate(w / 2, h / 2); ctx.scale(sc, sc); ctx.globalAlpha = t >= 3 ? clamp(1 - (t - 3) * 1.2, 0, 1) : 1;
     text(ctx, label, 0, 50 * s, 130 * s, t >= 3 ? "#3be08a" : "#ffc83d", "center", DISPLAY, true);
     ctx.restore(); ctx.globalAlpha = 1;
+    if (S.world && t < 3) text(ctx, `🏁 ${S.world}`, w / 2, cy + 58 * s, 24 * s, "#ffffff", "center", DISPLAY, true);
   }
 }
 
@@ -300,7 +320,7 @@ function paint(c, w, h, G, T, view, clock, car, all, parts, conf, S) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
   const ctx = c.getContext("2d");
-  if (!G.grass) G.grass = makeGrass(ctx);
+  if (!G.grass) G.grass = makeGrass(ctx, G.world);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = "#10151b"; ctx.fillRect(0, 0, w, h);
   const base = clamp(Math.min(w, h) / 760, 0.5, 1.3), z = base * view.z, sh = view.shake;
@@ -489,7 +509,7 @@ export default function Speedway(props) {
   useEffect(() => {
     if (isSpectator) return undefined;
     const A = audio.current;
-    const G = { path: null, grass: null, skids: [] };
+    const G = { path: null, grass: null, skids: [], world: worldFor(seed) };
     const path = new Path2D();
     T.P.forEach((p, i) => (i ? path.lineTo(p.x, p.y) : path.moveTo(p.x, p.y)));
     path.closePath();
@@ -637,7 +657,7 @@ export default function Speedway(props) {
         const { w, h } = size.current;
         const count = elapsed < START_S + 1 ? clamp(elapsed, 0, 4) : null;
         paint(c, w, h, G, T, view, clock, car, all, parts, conf,
-          { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop: touch.current.on });
+          { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop: touch.current.on, world: G.world.name });
       }
       if (now - lastHud > 250) {
         lastHud = now;
@@ -649,7 +669,7 @@ export default function Speedway(props) {
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [isSpectator, addScore, socket, roomCode, T, code, laps, pace]);
+  }, [isSpectator, addScore, socket, roomCode, T, code, laps, pace, seed]);
 
   // ── the watcher's loop: the driver's car from their frames ─────────────────
   // Nothing is stepped and nothing is sent: the watched car is eased toward
@@ -658,7 +678,7 @@ export default function Speedway(props) {
   // follows it exactly as the driver's follows theirs.
   useEffect(() => {
     if (!isSpectator || watchId === null) return undefined;
-    const G = { path: null, grass: null, skids: [] };
+    const G = { path: null, grass: null, skids: [], world: worldFor(seed) };
     const path = new Path2D();
     T.P.forEach((p, i) => (i ? path.lineTo(p.x, p.y) : path.moveTo(p.x, p.y)));
     path.closePath();
@@ -784,13 +804,13 @@ export default function Speedway(props) {
         const all = [car, ...others];
         const count = elapsed < START_S + 1 ? clamp(elapsed, 0, 4) : null;
         paint(c, w, h, G, T, view, clock, car, all, parts, conf,
-          { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop });
+          { car, cars: all, T, laps, raceT, place, placePop, clock, banner, count, best, path, finT, finPlace, mapTop, world: G.world.name });
       }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [isSpectator, watchId, T, laps, spec]);
+  }, [isSpectator, watchId, T, laps, spec, seed]);
 
   // ── thumbs: the two halves of the track ──────────────────────────────────
   // Which fingers are down where -> left / right / both, and since when (a

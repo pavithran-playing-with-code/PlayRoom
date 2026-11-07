@@ -16,7 +16,9 @@ import { PICTURES as ICONS } from "./gamePictures";
 // them all side by side; the one picked is kept on this phone while we
 // decide — `pr_icon_look`).
 export const LOOKS = [
-  { key: "flat", name: "Flat", says: "Clean drawings, flat colour" },
+  { key: "light", name: "Light", says: "Thin, soft outlines and brighter colour — closest to the emoji" },
+  { key: "light3d", name: "Light 3D", says: "Light, with gentle shading" },
+  { key: "flat", name: "Flat", says: "Clean drawings, thick ink outlines" },
   { key: "soft", name: "Soft 3D", says: "Gentle shading, a soft shadow — no glow" },
   { key: "sketch", name: "Sketch", says: "White shapes and ink lines on the tile colour" },
   { key: "pastel", name: "Pastel", says: "Calmer, softer colours" },
@@ -25,7 +27,7 @@ export const LOOKS = [
 const LOOK_KEY = "pr_icon_look";
 export function getIconLook() {
   try { const k = localStorage.getItem(LOOK_KEY); if (LOOKS.some((l) => l.key === k)) return k; } catch { /* fine */ }
-  return "flat";
+  return "light";
 }
 export function setIconLook(k) {
   try { localStorage.setItem(LOOK_KEY, k); } catch { /* fine */ }
@@ -101,11 +103,13 @@ export default function GameIcon({ icon = "🎮", slug, look }) {
       </svg>
     );
   }
-  const f = FILTERS[L];
+  const light = L === "light" || L === "light3d";
+  const f = FILTERS[L === "light3d" ? "soft" : L];
+  const fid = L === "light3d" ? "soft" : L;
   return (
-    <svg className="game-icon" viewBox={L === "soft" ? "-2 -2 68 68" : "0 0 64 64"} width="1em" height="1em" aria-hidden="true" focusable="false">
+    <svg className={`game-icon${light ? " gi-light" : ""}`} viewBox={L === "soft" || L === "light3d" ? "-2 -2 68 68" : "0 0 64 64"} width="1em" height="1em" aria-hidden="true" focusable="false">
       {f && <defs>{f}</defs>}
-      <g filter={f ? `url(#gi-${L})` : undefined}>{pic}</g>
+      <g filter={f ? `url(#gi-${fid})` : undefined}>{pic}</g>
     </svg>
   );
 }

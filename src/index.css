@@ -2183,3 +2183,7 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .sm-note{padding:0;border:3px solid var(--ink);border-radius:6px 6px 18px 6px;box-shadow:0 5px 0 var(--ink);font-weight:800;color:var(--ink);
   transform:rotate(var(--tilt,0deg));transition:transform .08s ease,box-shadow .08s ease;-webkit-tap-highlight-color:transparent;font-family:"Fredoka",sans-serif}
 .sm-note:active{transform:rotate(var(--tilt,0deg)) translateY(4px);box-shadow:0 1px 0 var(--ink)}
+/* the Light icon look: the ink outlines thin and soft, the colours a touch brighter */
+.gi-light{filter:saturate(1.08) brightness(1.04)}
+.gi-light [stroke="#2E2140"]:not([fill="none"]){stroke:#7C6FA3;stroke-opacity:.6;stroke-width:1.6px}
+.gi-light [stroke="#2E2140"][fill="none"]{stroke:#4B4068}

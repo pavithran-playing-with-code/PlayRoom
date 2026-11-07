@@ -4,6 +4,10 @@
 // earn more; a wrong tap costs 5 and breaks the streak; too slow just breaks
 // the streak. Every round reshuffles.
 //
+// Levels: every LEVEL_HITS right taps is a level. 1: the name and a swatch.
+// 2: the word alone. 3: the ink lies — the word is printed in another colour,
+// and it's the word that counts. 4 and 5: the ink lies, and less time.
+//
 // Every room plays the same sequence of rounds; the match clock is the room's.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
@@ -26,7 +30,16 @@ export const PALETTE = [
   { name: "Purple", hex: "#BC5CEE" },
   { name: "Pink",   hex: "#FF6FB5" },
 ];
-const ROUND_MS = 1500;
+const LEVEL_HITS = 8;
+const LEVELS = [
+  null,
+  { ms: 1500, swatch: true, lie: false, says: "Match the colour" },
+  { ms: 1500, swatch: false, lie: false, says: "Words only — read it!" },
+  { ms: 1500, swatch: false, lie: true, says: "The ink lies! Tap what the word says" },
+  { ms: 1250, swatch: false, lie: true, says: "Faster!" },
+  { ms: 1050, swatch: false, lie: true, says: "Fastest!" },
+];
+const levelFor = (hits) => Math.min(LEVELS.length - 1, 1 + Math.floor(hits / LEVEL_HITS));
 const WRONG = -5;
 const pointsFor = (streak) => 15 + streak;       // streak already includes this tap
 
@@ -35,7 +48,10 @@ function makeRound(seed, i) {
   const rand = seededRand((Number(seed) || 1) * 2903 + i * 7717 + 3);
   for (let k = 0; k < 4; k++) rand();
   const order = shuffleInPlace(PALETTE.map((_, idx) => idx), rand);
-  return { order, target: order[Math.floor(rand() * order.length)] };
+  const target = order[Math.floor(rand() * order.length)];
+  // the colour the word is printed in, when the ink lies: never its own
+  const ink = (target + 1 + Math.floor(rand() * (PALETTE.length - 1))) % PALETTE.length;
+  return { order, target, ink };
 }
 
 export default function ColorDash(props) {
@@ -50,13 +66,16 @@ export default function ColorDash(props) {
   const [flash, setFlash] = useState(null);      // { kind, n }
   const [msg, setMsg] = useState(null);
 
-  const live = useRef({ round: 0, streak: 0, best: 0 });
+  const [level, setLevel] = useState(1);
+  const live = useRef({ round: 0, streak: 0, best: 0, hits: 0, level: 1 });
 
   // Watching draws the same board the player is on: the swatches come from the seed and the round number, so only the round and the streak travel.
   const spectate = useSpectate({
     isSpectator, spectatorState,
-    snapshot: () => ({ round: live.current.round, streak: live.current.streak, best: live.current.best }),
+    snapshot: () => ({ round: live.current.round, streak: live.current.streak, best: live.current.best, level: live.current.level }),
     apply: (st) => {
+      live.current.level = st.level || 1;
+      setLevel(st.level || 1);
       live.current.round = st.round;
       live.current.streak = st.streak;
       live.current.best = st.best ?? 0;
@@ -104,7 +123,7 @@ export default function ColorDash(props) {
       s.streak = 0;
       say("Too slow!", "info", "slow");
       nextRound(s);
-    }, ROUND_MS);
+    }, LEVELS[live.current.level].ms);
     return () => clearTimeout(t);
   }, [round, eng.gameOver, isSpectator]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -117,9 +136,15 @@ export default function ColorDash(props) {
     if (r.order[slot] === r.target) {
       s.streak += 1;
       s.best = Math.max(s.best, s.streak);
-      const gain = pointsFor(s.streak);
+      const gain = pointsFor(s.streak) + (s.level - 1) * 3;      // a harder level pays a little more
       eng.addScore(gain);
-      say(s.streak > 1 ? `+${gain} · ${s.streak} in a row!` : `+${gain}`, "success", "good");
+      s.hits += 1;
+      const lv = levelFor(s.hits);
+      if (lv !== s.level) {
+        s.level = lv;
+        setLevel(lv);
+        say(`⭐ Level ${lv}! ${LEVELS[lv].says}`, "success", "good");
+      } else say(s.streak > 1 ? `+${gain} · ${s.streak} in a row!` : `+${gain}`, "success", "good");
     } else {
       s.streak = 0;
       eng.addScore(WRONG);
@@ -134,10 +159,12 @@ export default function ColorDash(props) {
     ? [{ label: "Score", value: Number(specScore).toLocaleString() }]
     : [
         { label: "Score", value: eng.score.toLocaleString() },
+        { label: "Level", value: level },
         { label: "Streak", value: `×${streak}` },
-        { label: "Best", value: `×${best}` },
       ];
   const target = PALETTE[current.target];
+  const L = LEVELS[level] || LEVELS[1];
+  const inkHex = L.lie ? PALETTE[current.ink].hex : "var(--ink)";
 
   return (
     <>
@@ -164,17 +191,17 @@ export default function ColorDash(props) {
                   swatch changing is the feedback; the card should sit still. */}
               <div className="pop cd-target">
                 <span>Tap:</span>
-                <strong>{target.name}</strong>
-                <span className="cd-swatch" style={{ background: target.hex }} />
+                <strong className={L.lie ? "cd-lie" : ""} style={{ color: inkHex }}>{target.name}</strong>
+                {L.swatch && <span className="cd-swatch" style={{ background: target.hex }} />}
               </div>
               <div className="cd-bar" aria-hidden="true">
-                {!eng.gameOver && <span key={`b${round}`} style={{ animationDuration: `${ROUND_MS}ms` }} />}
+                {!eng.gameOver && <span key={`b${round}`} style={{ animationDuration: `${L.ms}ms` }} />}
               </div>
               <div className={`cd-grid${flash ? ` ${flash.kind}` : ""}`}
                 style={{ gridTemplateColumns: `repeat(3, ${tile}px)`, gridAutoRows: `${tile}px`, gap }}>
                 {current.order.map((colorIdx, slot) => (
-                  <button key={`${round}-${slot}`} type="button" className="press cd-tile"
-                    style={{ background: PALETTE[colorIdx].hex }}
+                  <button key={`${round}-${slot}`} type="button" className="press cd-tile cd-blob"
+                    style={{ background: PALETTE[colorIdx].hex, "--d": `${(slot % 3) * 0.12 + Math.floor(slot / 3) * 0.08}s` }}
                     aria-label={PALETTE[colorIdx].name}
                     onClick={() => tap(slot, round)} />
                 ))}
@@ -185,7 +212,7 @@ export default function ColorDash(props) {
       </GameFrame>
 
       {eng.gameOver && !isSpectator && (
-        <GameOver eng={eng} me={currentUser} extra={`Best streak ×${best}`} />
+        <GameOver eng={eng} me={currentUser} extra={`Level ${level} · Best streak ×${best}`} />
       )}
     </>
   );

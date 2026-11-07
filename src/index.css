@@ -829,6 +829,14 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .cd-grid.bad{background:rgba(255,107,107,.45)}
 .cd-grid.slow{background:rgba(46,33,64,.12)}
 .press.cd-tile{padding:0;border-radius:18px;--lift:5px;-webkit-tap-highlight-color:transparent}
+/* paint blobs: glossy, a little lumpy, a squish when pressed */
+.press.cd-blob{position:relative;overflow:hidden;border-radius:46% 54% 50% 50% / 52% 48% 56% 44%;animation:cdWob 2.6s ease-in-out var(--d,0s) infinite}
+.press.cd-blob::after{content:"";position:absolute;left:16%;top:12%;width:34%;height:22%;border-radius:50%;background:rgba(255,255,255,.55);transform:rotate(-20deg);pointer-events:none}
+.press.cd-blob::before{content:"";position:absolute;right:14%;bottom:14%;width:12%;height:12%;border-radius:50%;background:rgba(255,255,255,.35);pointer-events:none}
+.press.cd-blob:active{transform:translateY(5px) scale(1.06,.9)}
+@keyframes cdWob{0%,100%{border-radius:46% 54% 50% 50% / 52% 48% 56% 44%}50%{border-radius:54% 46% 44% 56% / 46% 54% 48% 52%}}
+.cd-target strong{font-size:1.5rem;letter-spacing:.02em}
+.cd-target strong.cd-lie{-webkit-text-stroke:1px var(--ink);text-shadow:0 2px 0 rgba(46,33,64,.35)}
 
 /* ---------- Flappy Dash ---------- */
 .fl-pad{display:flex;align-items:center;justify-content:center;touch-action:none;
@@ -980,6 +988,7 @@ input::-ms-reveal,input::-ms-clear{display:none}
   background:#FFFBF0;box-shadow:0 5px 0 var(--ink);transition:background .2s;
   touch-action:none;user-select:none;-webkit-user-select:none}
 .mz-frame.done{background:var(--lime)}
+.mz-canvas{display:block;border:3px solid var(--ink);border-radius:18px;box-shadow:0 5px 0 var(--ink);touch-action:none}
 .mz-grid{position:relative}
 .mz-cell{position:absolute;border-style:solid;border-color:var(--ink);border-width:0;
   display:grid;place-items:center}

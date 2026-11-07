@@ -103,7 +103,15 @@ export function createScene(THREE, W, opts = {}) {
   const mats = {};
   // while the level is built, its colours take the island's look (tint); the explorers keep theirs
   let tint = LOOK.ground !== undefined;
-  const M = (c0, o) => { const c = tint ? mixHex(c0, LOOK.ground, LOOK.groundK) : c0; const k = c + (o ? JSON.stringify(o) : ""); return mats[k] || (mats[k] = keep(new THREE.MeshPhongMaterial({ color: c, flatShading: true, shininess: 0, specular: 0x000000, ...(o || {}) }))); };
+  // cartoon light in three soft steps — the PlayRoom look (toyKit's)
+  const ramp = keep(new THREE.DataTexture(new Uint8Array([100, 100, 100, 172, 172, 172, 240, 240, 240]), 3, 1, THREE.RGBFormat));
+  ramp.minFilter = ramp.magFilter = THREE.NearestFilter; ramp.generateMipmaps = false; ramp.needsUpdate = true;
+  const TOON_OK = ["side", "transparent", "opacity", "emissive", "map", "vertexColors", "depthWrite", "blending", "fog"];
+  const toonOpts = (o) => { const q = {}; for (const k of TOON_OK) if (o && o[k] !== undefined) q[k] = o[k]; return q; };
+  const M = (c0, o) => { const c = tint ? mixHex(c0, LOOK.ground, LOOK.groundK) : c0; const k = c + (o ? JSON.stringify(o) : ""); return mats[k] || (mats[k] = keep(new THREE.MeshToonMaterial({ color: c, gradientMap: ramp, ...toonOpts(o) }))); };
+  // an ink outline: the same shape a little bigger, drawn inside out
+  const INKM = keep(new THREE.MeshBasicMaterial({ color: 0x2e2140, side: THREE.BackSide }));
+  const inked = (m, k = 1.08) => { const o = new THREE.Mesh(m.geometry, INKM); o.scale.setScalar(k); m.add(o); return m; };
   const ADD = { transparent: true, blending: THREE.AdditiveBlending, depthWrite: false };
   const BM = (c, o) => keep(new THREE.MeshBasicMaterial({ color: c, ...(o || {}) }));
   const geos = {};
@@ -281,24 +289,41 @@ export function createScene(THREE, W, opts = {}) {
   tint = false;
 
   // ── explorers ──────────────────────────────────────────────────────────────
+  // An explorer: a round body and a big head, a safari hat in your colour
+  // with a brim and a band, big shiny eyes, rosy cheeks, a little backpack,
+  // mitten hands, round boots, a scarf that streams out behind and a leaf
+  // glider over the head for floating. Ink outlines, like every PlayRoom
+  // character. Faces +z.
   function makeHero(color, name) {
     const hero = new THREE.Group();
     const bodyG = new THREE.Group(); hero.add(bodyG);
-    const body = new THREE.Mesh(G("body", () => new THREE.SphereGeometry(0.5, 14, 10)), M(color)); body.position.y = 0.56; body.scale.set(1, 1.04, 0.95); bodyG.add(body);
-    const belly = new THREE.Mesh(G("belly", () => new THREE.SphereGeometry(0.34, 10, 8)), M(0xffe6c8)); belly.position.set(0, 0.5, 0.28); belly.scale.set(1, 1.1, 0.6); bodyG.add(belly);
+    const SKIN = 0xffd9b8, dark = new THREE.Color(color).multiplyScalar(0.72).getHex();
+    const S = (k, r, ws = 16, hs = 12) => G(k, () => new THREE.SphereGeometry(r, ws, hs));
+    const part = (geo, mat, x, y, z, sx = 1, sy = sx, sz = sx, line = 1.08) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (line) inked(m, line); bodyG.add(m); return m; };
+    // the body: a tunic in your colour, a lighter belt
+    part(S("xbody", 0.4), M(color), 0, 0.5, 0, 1, 1.05, 0.95);
+    part(G("xbelt", () => new THREE.CylinderGeometry(0.41, 0.41, 0.09, 16)), M(0x8b5e3c), 0, 0.42, 0, 1, 1, 0.95, 0);
+    part(G("xbuckle", () => new THREE.BoxGeometry(0.12, 0.1, 0.04)), M(0xffd24a), 0, 0.42, 0.39, 1, 1, 1, 0);
+    // the head, big, the face toward +z
+    part(S("xhead", 0.42), M(SKIN), 0, 1.12, 0.02);
     const eyes = [];
     for (const s of [-1, 1]) {
-      const e = new THREE.Mesh(G("eye", () => new THREE.SphereGeometry(0.12, 8, 6)), M(0xffffff)); e.position.set(s * 0.2, 0.8, 0.4);
-      const q = new THREE.Mesh(G("pupil", () => new THREE.SphereGeometry(0.065, 6, 5)), M(0x1a1a2a)); q.position.set(0, 0, 0.1); e.add(q);
+      const e = new THREE.Mesh(S("xeye", 0.11, 12, 10), M(0xffffff)); e.position.set(s * 0.16, 1.16, 0.36); inked(e, 1.14);
+      const q = new THREE.Mesh(S("xpupil", 0.065, 10, 8), M(0x1a1a2a)); q.position.set(0, -0.01, 0.07); e.add(q);
+      const gl = new THREE.Mesh(S("xglint", 0.022, 6, 5), M(0xffffff)); gl.position.set(0.025, 0.035, 0.12); e.add(gl);
       bodyG.add(e); eyes.push(e);
-      const ch = new THREE.Mesh(G("cheek", () => new THREE.SphereGeometry(0.07, 6, 5)), M(0xff9ab0)); ch.position.set(s * 0.3, 0.66, 0.4); ch.scale.z = 0.5; bodyG.add(ch);
+      part(S("xcheek", 0.07, 8, 6), M(0xff9ab0), s * 0.27, 1.02, 0.33, 1, 0.6, 0.5, 0);
     }
-    const hat = new THREE.Mesh(G("hat", () => new THREE.ConeGeometry(0.3, 0.5, 8)), M(0xffd24a)); hat.position.set(0, 1.18, 0); hat.rotation.z = 0.15; bodyG.add(hat);
-    const pom = new THREE.Mesh(G("pom", () => new THREE.SphereGeometry(0.1, 6, 5)), M(0xffffff)); pom.position.set(0.06, 1.46, 0); bodyG.add(pom);
-    const pack = new THREE.Mesh(G("pack", () => new THREE.BoxGeometry(0.5, 0.55, 0.3)), M(0x8b5e3c)); pack.position.set(0, 0.55, -0.45); bodyG.add(pack);
-    const dark = new THREE.Color(color).multiplyScalar(0.78).getHex();
-    const feet = [-1, 1].map((s) => { const f = new THREE.Mesh(G("foot", () => new THREE.SphereGeometry(0.17, 8, 6)), M(dark)); f.position.set(s * 0.2, 0.12, 0.05); f.scale.set(1, 0.7, 1.3); bodyG.add(f); return f; });
-    const arms = [-1, 1].map((s) => { const a = new THREE.Mesh(G("arm", () => new THREE.SphereGeometry(0.13, 8, 6)), M(color)); a.position.set(s * 0.52, 0.55, 0); bodyG.add(a); return a; });
+    part(G("xsmile", () => new THREE.TorusGeometry(0.07, 0.018, 6, 12, Math.PI)), M(0x8a3a2a), 0, 1.0, 0.4, 1, 1, 1, 0).rotation.z = Math.PI;
+    // the hat: a dome in your colour, a wide brim, a band round it
+    part(G("xhatdome", () => new THREE.SphereGeometry(0.4, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2)), M(color), 0, 1.36, 0.02, 1, 0.75, 1);
+    part(G("xbrim", () => new THREE.CylinderGeometry(0.62, 0.62, 0.05, 20)), M(color), 0, 1.37, 0.02, 1, 1, 1, 1.05);
+    part(G("xband", () => new THREE.CylinderGeometry(0.405, 0.405, 0.08, 16)), M(dark), 0, 1.42, 0.02, 1, 1, 1, 0);
+    // a little backpack with a bedroll on top
+    part(G("xpack", () => new THREE.BoxGeometry(0.42, 0.44, 0.24)), M(0x8b5e3c), 0, 0.58, -0.38);
+    const roll = part(G("xroll", () => new THREE.CylinderGeometry(0.1, 0.1, 0.48, 10)), M(0x62d36c), 0, 0.86, -0.38, 1, 1, 1, 1.12); roll.rotation.z = Math.PI / 2;
+    const feet = [-1, 1].map((s) => part(S("xfoot", 0.15, 10, 8), M(0x5a3a2a), s * 0.18, 0.12, 0.05, 1, 0.7, 1.35, 1.12));
+    const arms = [-1, 1].map((s) => part(S("xarm", 0.12, 10, 8), M(0xffffff), s * 0.46, 0.62, 0, 1, 1, 1, 1.12));
     const glider = new THREE.Mesh(G("glider", () => new THREE.ConeGeometry(1.1, 0.5, 7, 1, true)), M(0x62d36c, { side: THREE.DoubleSide })); glider.position.y = 2.0; glider.scale.setScalar(0.01); hero.add(glider);
     const scarf = [];
     for (let i = 0; i < 5; i++) { const s = new THREE.Mesh(G("scarf" + i, () => new THREE.SphereGeometry(0.16 - i * 0.02, 6, 5)), M(i % 2 ? 0xffd24a : 0xff4b5c)); scene.add(s); scarf.push(s); }
@@ -347,8 +372,8 @@ export function createScene(THREE, W, opts = {}) {
     const air = !st.onG;
     for (let i = 0; i < 2; i++) {
       const s = i ? 1 : -1;
-      h.arms[i].position.y = 0.55 + (air ? 0.25 : Math.sin(h.phase + (i ? Math.PI : 0)) * 0.05 * run);
-      h.arms[i].position.x = s * (0.52 + (air ? 0.12 : 0));
+      h.arms[i].position.y = 0.62 + (air ? 0.25 : Math.sin(h.phase + (i ? Math.PI : 0)) * 0.05 * run);
+      h.arms[i].position.x = s * (0.46 + (air ? 0.12 : 0));
       h.arms[i].position.z = air ? 0 : Math.sin(h.phase + (i ? 0 : Math.PI)) * 0.2 * run;
     }
     h.blink -= dt; if (h.blink < -0.12) h.blink = 2 + Math.random() * 3;
@@ -357,7 +382,7 @@ export function createScene(THREE, W, opts = {}) {
     h.glider.scale.setScalar(Math.max(0.01, h.gl)); h.glider.rotation.y += dt * 2;
     h.bodyG.visible = !(st.inv && Math.floor(T * 18) % 2 === 0);
     // the scarf trails behind
-    const f = st.face, ax = st.x - Math.sin(f) * 0.12, ay = st.y + 0.85, az = st.z - Math.cos(f) * 0.12;
+    const f = st.face, ax = st.x - Math.sin(f) * 0.12, ay = st.y + 0.84, az = st.z - Math.cos(f) * 0.12;
     let px = ax, py = ay, pz = az;
     for (let i = 0; i < h.scarf.length; i++) {
       const s = h.scarf[i];
@@ -555,13 +580,13 @@ export function createScene(THREE, W, opts = {}) {
         col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
       }
       g.setAttribute("color", new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
-      const t = new THREE.Mesh(g, keep(new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 0, specular: 0x000000 })));
+      const t = new THREE.Mesh(g, keep(new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: ramp })));
       t.receiveShadow = true; G0.add(t);
       const lk = new THREE.Mesh(keep(new THREE.CircleGeometry(23, 36)), keep(new THREE.MeshPhongMaterial({ color: 0x4fb8e8, transparent: true, opacity: 0.82, shininess: 40, flatShading: true })));
       lk.rotation.x = -Math.PI / 2; A(lk, K.LAKE.x, -0.25, K.LAKE.z);
     }
     const inst = (geo, list, f, shadow) => {
-      const im = keep(new THREE.InstancedMesh(geo, keep(new THREE.MeshPhongMaterial({ color: 0xffffff, flatShading: true, shininess: 0, specular: 0x000000 })), Math.max(1, list.length)));
+      const im = keep(new THREE.InstancedMesh(geo, keep(new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: ramp })), Math.max(1, list.length)));
       const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
       list.forEach((o, i) => { const r = f(o); e.set(0, r.rot || 0, 0); q.setFromEuler(e); s.set(r.sx, r.sy, r.sz); p.set(r.x, r.y, r.z); m.compose(p, q, s); im.setMatrixAt(i, m); c.setHex(r.c); im.setColorAt(i, c); });
       if (!list.length) im.count = 0;

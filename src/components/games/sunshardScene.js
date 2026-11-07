@@ -391,54 +391,73 @@ export function createScene(THREE, W, opts = {}) {
   tint = false;
 
   // ── explorers ──────────────────────────────────────────────────────────────
-  // A tree-climber kid: a woolly beanie in your colour with a fat pom-pom and
-  // round goggles pushed up on it, a big round face, a puffy quilted jacket in
-  // your colour, a coil of rope over one shoulder and another on the back (the
-  // camera is behind, so the back carries the look), mittens, dark trousers and
-  // chunky boots. A big leaf opens overhead to glide. Ink outlines, like every
-  // PlayRoom character. Faces +z.
+  // A tree-climber kid, rigged like a little doll: legs that swing from the
+  // hips (trousers, chunky laced boots), a shaped puffy jacket in your colour
+  // with a hood and a rope coil on the back (the camera is behind, so the back
+  // carries the look), arms that swing from the shoulders (sleeves, mittens),
+  // a big round head with hair under a woolly beanie and its pom-pom, and a
+  // simple face: dark oval eyes with a glint, brows, a button nose, a smile.
+  // A big leaf opens overhead to glide. Ink outlines, like every PlayRoom
+  // character. Faces +z; feet on y = 0.
   function makeHero(color, name) {
     const hero = new THREE.Group();
     const bodyG = new THREE.Group(); hero.add(bodyG);
-    const SKIN = 0xffd9b8, ROPE = 0xe0a95a;
-    const dark = new THREE.Color(color).multiplyScalar(0.72).getHex(), light = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.55).getHex();
+    const SKIN = 0xffdcc0, HAIR = 0x5a3522, PANTS = 0x34406e, BOOT = 0x6b4630, ROPE = 0xe0a95a, MITT = 0xfff1d6;
+    const dark = new THREE.Color(color).multiplyScalar(0.7).getHex(), light = new THREE.Color(color).lerp(new THREE.Color(0xffffff), 0.45).getHex();
     const S = (k, r, ws = 16, hs = 12) => G(k, () => new THREE.SphereGeometry(r, ws, hs));
-    const part = (geo, mat, x, y, z, sx = 1, sy = sx, sz = sx, line = 1.08, to = bodyG) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (line) inked(m, line); to.add(m); return m; };
-    // trousers and the puffy jacket: quilted rings, a zip, a fat collar
-    part(G("kpants", () => new THREE.CylinderGeometry(0.27, 0.3, 0.26, 14)), M(0x3c4a7a), 0, 0.3, 0, 1, 1, 1, 1.06);
-    part(S("kcoat", 0.4), M(color), 0, 0.64, 0, 1, 0.98, 0.92);
-    for (const y of [0.52, 0.74]) part(G("kquilt", () => new THREE.TorusGeometry(0.385, 0.035, 6, 20)), M(dark), 0, y, 0, 1, 1, 0.92, 0).rotation.x = Math.PI / 2;
-    part(G("kzip", () => new THREE.BoxGeometry(0.05, 0.5, 0.03)), M(light), 0, 0.62, 0.37, 1, 1, 1, 0);
-    part(G("kcollar", () => new THREE.TorusGeometry(0.22, 0.08, 8, 16)), M(light), 0, 0.93, 0, 1, 1, 1, 1.1).rotation.x = Math.PI / 2;
-    // a rope over one shoulder, across the chest, and a coil on the back
-    const sash = new THREE.Group(); sash.position.set(0, 0.66, 0); sash.rotation.z = 0.62; bodyG.add(sash);
-    part(G("ksash", () => new THREE.TorusGeometry(0.42, 0.04, 6, 24)), M(ROPE), 0, 0, 0, 1, 1, 0.95, 0, sash).rotation.y = Math.PI / 2;
-    for (let i = 0; i < 3; i++) part(G("kcoil", () => new THREE.TorusGeometry(0.2, 0.045, 6, 18)), M(ROPE), 0.02 * (i - 1), 0.68 + i * 0.03, -0.4 - i * 0.03, 1, 1, 1, i === 1 ? 1.1 : 0);
-    part(G("kclip", () => new THREE.TorusGeometry(0.06, 0.018, 5, 10)), M(0xc0c8d8), 0.22, 0.48, 0.3, 1, 1.5, 1, 0);
-    // the head: big and round, a fringe peeking out, the face toward +z
-    part(S("khead", 0.4), M(SKIN), 0, 1.24, 0.02);
-    for (const x of [-0.18, -0.06, 0.07, 0.19]) part(S("kfringe", 0.09, 8, 6), M(0x6b3e26), x, 1.42, 0.3, 1, 0.8, 0.7, 0);
+    const part = (geo, mat, x, y, z, sx = 1, sy = sx, sz = sx, line = 1.06, to = bodyG) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); if (line) inked(m, line); to.add(m); return m; };
+    // legs, from the hips
+    part(G("kseat", () => new THREE.CylinderGeometry(0.27, 0.27, 0.14, 16)), M(PANTS), 0, 0.52, 0, 1, 1, 0.9);
+    const feet = [-1, 1].map((sx) => {
+      const L = new THREE.Group(); L.position.set(sx * 0.13, 0.52, 0); bodyG.add(L);
+      part(G("kleg", () => new THREE.CylinderGeometry(0.1, 0.11, 0.36, 10)), M(PANTS), 0, -0.18, 0, 1, 1, 1, 1.08, L);
+      part(S("kboot", 0.14, 12, 10), M(BOOT), 0, -0.41, 0.05, 1, 0.78, 1.4, 1.1, L);
+      part(G("ksole", () => new THREE.CylinderGeometry(0.145, 0.145, 0.05, 12)), M(0x3a2618), 0, -0.495, 0.05, 1, 1, 1.4, 0, L);
+      part(G("klace", () => new THREE.BoxGeometry(0.12, 0.03, 0.03)), M(0xfff1d6), 0, -0.33, 0.15, 1, 1, 1, 0, L);
+      return L;
+    });
+    // the jacket: a puffy shape, wider at the waist, a hem, a zip, a collar, the hood behind
+    part(G("kjacket", () => new THREE.LatheGeometry([[0, 0.46], [0.3, 0.47], [0.37, 0.55], [0.395, 0.7], [0.37, 0.86], [0.29, 0.98], [0.15, 1.05], [0, 1.06]].map(([r, y]) => new THREE.Vector2(r, y)), 20)), M(color), 0, 0, 0, 1, 1, 0.92);
+    part(G("khem", () => new THREE.TorusGeometry(0.31, 0.05, 6, 20)), M(dark), 0, 0.49, 0, 1, 1, 0.92, 0).rotation.x = Math.PI / 2;
+    part(G("kquilt", () => new THREE.TorusGeometry(0.39, 0.025, 6, 22)), M(dark), 0, 0.72, 0, 1, 1, 0.92, 0).rotation.x = Math.PI / 2;
+    part(G("kzip", () => new THREE.BoxGeometry(0.04, 0.5, 0.03)), M(light), 0, 0.74, 0.36, 1, 1, 1, 0).rotation.x = -0.12;
+    part(G("kcollar", () => new THREE.TorusGeometry(0.16, 0.06, 8, 16)), M(light), 0, 1.04, 0, 1, 1, 1, 1.1).rotation.x = Math.PI / 2;
+    part(S("khood", 0.24, 12, 10), M(dark), 0, 1.0, -0.24, 1.15, 0.75, 0.6);
+    // a coil of rope on the back
+    part(G("kcoil", () => new THREE.TorusGeometry(0.19, 0.05, 6, 18)), M(ROPE), 0, 0.72, -0.37, 1, 1, 1, 1.1);
+    part(G("kcoil2", () => new THREE.TorusGeometry(0.15, 0.045, 6, 16)), M(ROPE), 0.02, 0.74, -0.4, 1, 1, 1, 0);
+    // arms, from the shoulders
+    const arms = [-1, 1].map((sx) => {
+      const A = new THREE.Group(); A.position.set(sx * 0.34, 0.95, 0); A.rotation.z = sx * 0.18; bodyG.add(A);
+      part(S("kshoulder", 0.11, 10, 8), M(color), 0, 0, 0, 1, 1, 1, 1.08, A);
+      part(G("ksleeve", () => new THREE.CylinderGeometry(0.085, 0.1, 0.34, 10)), M(color), 0, -0.17, 0, 1, 1, 1, 1.08, A);
+      part(G("kcuffs", () => new THREE.TorusGeometry(0.09, 0.03, 6, 12)), M(light), 0, -0.34, 0, 1, 1, 1, 0, A).rotation.x = Math.PI / 2;
+      part(S("kmitt", 0.1, 10, 8), M(MITT), 0, -0.42, 0.01, 1, 1.05, 0.9, 1.1, A);
+      return A;
+    });
+    // the head: a neck, a big round face, ears, hair at the back and sides
+    part(G("kneck", () => new THREE.CylinderGeometry(0.1, 0.1, 0.1, 10)), M(SKIN), 0, 1.08, 0, 1, 1, 1, 0);
+    part(S("khead", 0.36, 18, 14), M(SKIN), 0, 1.4, 0.02);
+    for (const sx of [-1, 1]) part(S("kear", 0.07, 8, 6), M(SKIN), sx * 0.35, 1.38, 0, 0.6, 1, 0.8, 1.12);
+    part(G("khair", () => new THREE.SphereGeometry(0.375, 16, 12, Math.PI, Math.PI)), M(HAIR), 0, 1.42, 0.0, 1, 1, 1.02, 1.04);
+    for (const sx of [-1, 1]) part(S("ktuft", 0.09, 8, 6), M(HAIR), sx * 0.27, 1.56, 0.2, 1.2, 0.8, 0.9, 0);
+    // the face
     const eyes = [];
     for (const sx of [-1, 1]) {
-      const e = new THREE.Mesh(S("xeye", 0.1, 12, 10), M(0xffffff)); e.position.set(sx * 0.15, 1.24, 0.35); inked(e, 1.14);
-      const q = new THREE.Mesh(S("xpupil", 0.06, 10, 8), M(0x1a1a2a)); q.position.set(0, -0.01, 0.065); e.add(q);
-      const gl = new THREE.Mesh(S("xglint", 0.02, 6, 5), M(0xffffff)); gl.position.set(0.022, 0.03, 0.11); e.add(gl);
-      bodyG.add(e); eyes.push(e);
-      part(S("xcheek", 0.065, 8, 6), M(0xff9ab0), sx * 0.26, 1.1, 0.32, 1, 0.6, 0.5, 0);
+      const e = new THREE.Group(); e.position.set(sx * 0.13, 1.42, 0.335); bodyG.add(e);
+      const ov = new THREE.Mesh(S("keye", 0.052, 12, 10), M(0x2a1e30)); ov.scale.set(1, 1.45, 0.55); e.add(ov);
+      const gl = new THREE.Mesh(S("kglint", 0.018, 6, 5), M(0xffffff)); gl.position.set(sx * -0.012 + 0.012, 0.03, 0.03); e.add(gl);
+      eyes.push(e);
+      part(G("kbrow", () => new THREE.BoxGeometry(0.09, 0.022, 0.02)), M(HAIR), sx * 0.13, 1.53, 0.33, 1, 1, 1, 0).rotation.z = sx * -0.15;
+      part(S("xcheek", 0.06, 8, 6), M(0xff9ab0), sx * 0.22, 1.32, 0.3, 1, 0.55, 0.45, 0);
     }
-    part(G("xsmile", () => new THREE.TorusGeometry(0.065, 0.018, 6, 12, Math.PI)), M(0x8a3a2a), 0, 1.1, 0.385, 1, 1, 1, 0).rotation.z = Math.PI;
-    // the beanie: a woolly dome in your colour, a turned-up cuff, a fat pom-pom
-    part(G("kbeanie", () => new THREE.SphereGeometry(0.42, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2)), M(color), 0, 1.4, 0.0, 1, 0.95, 1);
-    part(G("kcuff", () => new THREE.CylinderGeometry(0.43, 0.43, 0.14, 18)), M(light), 0, 1.44, 0, 1, 1, 1, 1.05);
-    part(S("kpom", 0.14, 10, 8), M(0xffffff), 0, 1.86, -0.04, 1, 1, 1, 1.1);
-    // round goggles pushed up on the beanie
-    part(G("kstrap", () => new THREE.TorusGeometry(0.43, 0.025, 5, 24)), M(0x2e2140), 0, 1.58, 0, 1, 1, 1, 0).rotation.x = Math.PI / 2 - 0.25;
-    for (const sx of [-1, 1]) {
-      const g = part(G("kgog", () => new THREE.CylinderGeometry(0.1, 0.1, 0.07, 14)), M(0x9fe6ff), sx * 0.13, 1.6, 0.36, 1, 1, 1, 1.18);
-      g.rotation.x = Math.PI / 2 - 0.45;
-    }
-    const feet = [-1, 1].map((sx) => part(S("kboot", 0.16, 10, 8), M(0x6b4630), sx * 0.16, 0.12, 0.05, 1, 0.75, 1.4, 1.12));
-    const arms = [-1, 1].map((sx) => part(S("kmitt", 0.12, 10, 8), M(light), sx * 0.46, 0.62, 0, 1, 1, 1, 1.12));
+    part(S("knose", 0.035, 8, 6), M(0xf2b49a), 0, 1.36, 0.37, 1, 0.8, 0.8, 0);
+    part(G("ksmile", () => new THREE.TorusGeometry(0.055, 0.015, 6, 12, Math.PI)), M(0x8a3a2a), 0, 1.29, 0.35, 1, 1, 1, 0).rotation.z = Math.PI;
+    // the beanie: a woolly dome in your colour, tipped back a little, a folded cuff, a pom-pom
+    const hat = new THREE.Group(); hat.position.set(0, 1.5, -0.02); hat.rotation.x = -0.18; bodyG.add(hat);
+    part(G("kbeanie", () => new THREE.SphereGeometry(0.385, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2)), M(color), 0, 0.04, 0, 1, 0.95, 1, 1.05, hat);
+    part(G("kcuff", () => new THREE.CylinderGeometry(0.395, 0.39, 0.12, 20)), M(dark), 0, 0.03, 0, 1, 1, 1, 1.04, hat);
+    part(S("kpom", 0.12, 10, 8), M(0xffffff), 0, 0.42, 0, 1, 1, 1, 1.1, hat);
     // the glider: a big green leaf held overhead
     const glider = new THREE.Group(); glider.position.y = 2.25; glider.scale.setScalar(0.01); hero.add(glider);
     part(G("kleaf", () => new THREE.SphereGeometry(1, 14, 8)), M(0x5ec85a), 0, 0, 0, 1.25, 0.07, 0.62, 1.04, glider);
@@ -485,14 +504,16 @@ export function createScene(THREE, W, opts = {}) {
     h.bodyG.position.y = Math.abs(Math.sin(h.phase)) * 0.1 * run;
     h.bodyG.rotation.x = lerp(h.bodyG.rotation.x, st.onG ? 0.12 * run + (st.speed > 1 ? 0.05 : 0) : st.vy > 0 ? -0.1 : 0.12, Math.min(1, dt * 10));
     h.bodyG.scale.set(1 + h.sq * 0.25, 1 - h.sq * 0.32, 1 + h.sq * 0.25);
-    h.feet[0].position.z = 0.05 + Math.sin(h.phase) * 0.28 * run; h.feet[1].position.z = 0.05 - Math.sin(h.phase) * 0.28 * run;
-    h.feet[0].position.y = 0.12 + Math.max(0, Math.cos(h.phase)) * 0.12 * run; h.feet[1].position.y = 0.12 + Math.max(0, -Math.cos(h.phase)) * 0.12 * run;
     const air = !st.onG;
+    // legs swing from the hips, arms from the shoulders (opposite): in the
+    // air one knee comes up and the arms go out; gliding, both arms reach up
+    const sw = Math.sin(h.phase) * 0.85 * run, ek = Math.min(1, dt * 14);
+    const legT = [air ? -0.7 : sw, air ? 0.3 : -sw];
     for (let i = 0; i < 2; i++) {
-      const s = i ? 1 : -1;
-      h.arms[i].position.y = 0.62 + (air ? 0.25 : Math.sin(h.phase + (i ? Math.PI : 0)) * 0.05 * run);
-      h.arms[i].position.x = s * (0.46 + (air ? 0.12 : 0));
-      h.arms[i].position.z = air ? 0 : Math.sin(h.phase + (i ? 0 : Math.PI)) * 0.2 * run;
+      const s = i ? 1 : -1, L = h.feet[i], A = h.arms[i];
+      L.rotation.x += (legT[i] - L.rotation.x) * ek;
+      const ax = h.gl > 0.3 ? -0.2 : air ? -0.4 : -legT[i] * 0.9, az = h.gl > 0.3 ? s * 2.7 : air ? s * 1.5 : s * 0.18;
+      A.rotation.x += (ax - A.rotation.x) * ek; A.rotation.z += (az - A.rotation.z) * ek;
     }
     h.blink -= dt; if (h.blink < -0.12) h.blink = 2 + Math.random() * 3;
     const bl = h.blink < 0 ? 0.1 : 1; h.eyes.forEach((e) => { e.scale.y = bl; });

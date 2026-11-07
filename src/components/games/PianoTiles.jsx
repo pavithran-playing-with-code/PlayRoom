@@ -171,21 +171,58 @@ function drawScene(ctx, s, W, H, fx, now, tune) {
     }
     key(x, y, w, hh, NOTE_COLS[t.col % NOTE_COLS.length]);
     if (t.len > 1) {
-      // a long tile: a dot at the bottom and a line up it; held, it fills
-      // with blue from the bottom and the dot rides the top of the blue
-      const cx = x + w / 2, fh = holding ? hh * t.held : 0;
-      ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 3; ctx.lineCap = "round";
-      ctx.beginPath(); ctx.moveTo(cx, y + hh - rowH * 0.5); ctx.lineTo(cx, y + rowH * 0.25); ctx.stroke();
-      if (holding) {
-        const fg = ctx.createLinearGradient(0, y + hh, 0, y + hh - fh);
-        fg.addColorStop(0, "#1E88E5"); fg.addColorStop(1, "#7FD3FF");
-        ctx.fillStyle = fg;
-        ctx.fillRect(x, y + hh - fh, w, fh);
-      }
+      // a long tile: little chevrons up it saying "hold"; held, it fills from
+      // the bottom with a glowing, shimmering bar in its lane's colour, an orb
+      // of light riding the top with sparks flying off it
+      const cx = x + w / 2, fh = holding ? hh * t.held : 0, col = NOTE_COLS[t.col % NOTE_COLS.length];
+      const topOfFill = y + hh - fh;
       ctx.save();
-      if (holding) { ctx.shadowColor = "#7FD3FF"; ctx.shadowBlur = 18; }
-      ctx.fillStyle = holding ? "#FFFFFF" : "rgba(255,255,255,.75)";
-      ctx.beginPath(); ctx.arc(cx, holding ? y + hh - fh : y + hh - rowH * 0.5, holding ? 9 : 7, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.lineJoin = "round";
+      const step = Math.max(18, rowH * 0.42), cw = Math.min(10, w * 0.14);
+      for (let cy = y + hh - rowH * 0.55; cy > y + rowH * 0.3; cy -= step) {
+        if (holding && cy > topOfFill - 4) continue;
+        const bob = Math.sin(now * 6 - cy * 0.05) * 2;
+        ctx.globalAlpha = 0.35 + 0.35 * Math.abs(Math.sin(now * 3 - cy * 0.04));
+        ctx.beginPath(); ctx.moveTo(cx - cw, cy + cw * 0.6 + bob); ctx.lineTo(cx, cy + bob); ctx.lineTo(cx + cw, cy + cw * 0.6 + bob); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      if (holding && fh > 0) {
+        // the fill, clipped to the key's rounded shape
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x + 3, y + 3, w - 6, hh - 6, R * 0.8) : ctx.rect(x + 3, y + 3, w - 6, hh - 6); ctx.clip();
+        const fg = ctx.createLinearGradient(0, y + hh, 0, topOfFill);
+        fg.addColorStop(0, col); fg.addColorStop(0.7, "#FFFFFF"); fg.addColorStop(1, "#FFF6C9");
+        ctx.shadowColor = col; ctx.shadowBlur = 22;
+        ctx.fillStyle = fg;
+        ctx.fillRect(x, topOfFill, w, fh);
+        ctx.shadowBlur = 0;
+        // shimmer: bright stripes running up through the fill (and only the fill)
+        ctx.beginPath(); ctx.rect(x, topOfFill, w, fh); ctx.clip();
+        ctx.fillStyle = "rgba(255,255,255,.35)";
+        const off = (now * 140) % 26;
+        for (let sy = y + hh + off; sy > topOfFill - 26; sy -= 26) {
+          ctx.beginPath(); ctx.moveTo(x, sy); ctx.lineTo(x + w, sy - 14); ctx.lineTo(x + w, sy - 22); ctx.lineTo(x, sy - 8); ctx.fill();
+        }
+      }
+      ctx.restore();
+      ctx.save();
+      if (holding) {
+        // the orb riding the top, and sparks off it
+        ctx.shadowColor = "#FFF3B0"; ctx.shadowBlur = 24;
+        ctx.fillStyle = "#FFFFFF";
+        ctx.beginPath(); ctx.arc(cx, topOfFill, 10 + Math.sin(now * 20) * 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        for (let k = 0; k < 6; k++) {
+          const a = now * 7 + k * 1.05, r = 14 + ((now * 60 + k * 13) % 16);
+          ctx.globalAlpha = 1 - ((now * 60 + k * 13) % 16) / 16;
+          ctx.fillStyle = k % 2 ? "#FFD447" : "#FFFFFF";
+          ctx.fillRect(cx + Math.cos(a) * r - 1.5, topOfFill + Math.sin(a) * r * 0.6 - 1.5, 3, 3);
+        }
+        ctx.globalAlpha = 1;
+      } else {
+        // not held yet: a soft dot where your finger goes
+        ctx.fillStyle = "rgba(255,255,255,.85)";
+        ctx.beginPath(); ctx.arc(cx, y + hh - rowH * 0.5, 8 + Math.sin(now * 5) * 1.2, 0, Math.PI * 2); ctx.fill();
+      }
       ctx.restore();
     }
     if (t.twin || (s.tiles[t.i + 1] && s.tiles[t.i + 1].twin && s.tiles[t.i + 1].y === t.y)) {

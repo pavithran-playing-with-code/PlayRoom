@@ -149,7 +149,12 @@ export function step(s, dt) {
       if (Math.abs(o.lane - s.x) > (o.kind === "coin" ? 0.6 : 0.55)) continue;
       if (o.kind === "coin") {
         const ahead = o.z - s.z;
-        if (!o.got && ahead > -0.8 && ahead < COIN_REACH && Math.abs(o.y - (s.y + 0.6)) < 1.0) {
+        // In the air, every coin you pass in your lane is yours, however high:
+        // at speed a jump flies long and high, and the last coins of an arc
+        // used to slip by under you. On the ground you still have to jump
+        // for the ones up in the air.
+        const reach = s.y > 0.05 ? 3.2 : 1.0;
+        if (!o.got && ahead > -0.8 && ahead < COIN_REACH && Math.abs(o.y - (s.y + 0.6)) < reach) {
           o.got = true; s.coins++; out.coins++;
           out.got.push({ lane: o.lane, y: o.y, z: o.z });
         }

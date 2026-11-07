@@ -144,6 +144,28 @@ const runTo = (s, z, act) => { let crashed = false; while (s.z < z) { if (act) a
   check("40 three-minute runs: a careful runner almost never crashes", worst <= 3, `worst ${worst}, average ${(total / 40).toFixed(2)}`);
 }
 
+// ── coins arcing over a barrier: a jump takes them all, at any speed ─────────
+// At speed a jump flies long and high, and the last coin or two of an arc used
+// to slip by under you (taken only within a metre of your height).
+{
+  let total = 0, got = 0;
+  for (const speed of [m.BASE_SPEED, 22, m.MAX_SPEED]) for (const early of [0.3, 0.5, 0.8]) {
+    const s = m.newRun(1);
+    s.rows = []; s.nextZ = 1e9;
+    const bz = 60;
+    s.rows.push({ z: bz, items: [{ kind: m.LOW, lane: 0, z: bz, len: 0.5, hit: false },
+      ...Array.from({ length: 5 }, (_, k) => ({ kind: "coin", lane: 0, z: bz - 3 + k * 1.5, y: 0.6 + Math.sin((k / 4) * Math.PI) * 1.1, got: false }))] });
+    s.speed = speed;
+    let jumped = false;
+    for (let i = 0; i < 600 && s.z < bz + 10; i++) {
+      if (!jumped && bz - s.z < speed * (2 * m.JUMP_V / m.GRAVITY) * early) { m.jump(s); jumped = true; }
+      m.step(s, 1 / 60); s.speed = speed;
+    }
+    total += 5; got += s.coins;
+  }
+  check("a jump over a barrier takes every coin of its arc, slow or flat out", got === total, `${got}/${total}`);
+}
+
 fs.rmSync(dir, { recursive: true, force: true });
 console.log(fails ? `\n${fails} FAILED` : "\nall passed");
 process.exit(fails ? 1 : 0);

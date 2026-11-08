@@ -194,7 +194,55 @@ function useLevels({ getVol, setVol, off = false }) {
 // streams it) is set into the stage, with its own controls; when the call
 // shrinks it goes back out of sight and keeps playing. Swipe for brightness
 // and volume (useLevels); while its decoded sound catches up, it says so.
-function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting }) {
+// The film's subtitle line, over the picture here (the call gets it drawn in)
+function SubLine({ v, cues }) {
+  const [text, setText] = useState("");
+  useEffect(() => {
+    if (!v || !cues) { setText(""); return undefined; }
+    const at = () => {
+      const t = v.currentTime;
+      setText(cues.filter((c) => c.a <= t && t < c.b).map((c) => c.text).join("\n"));
+    };
+    const id = setInterval(at, 150);
+    at();
+    return () => clearInterval(id);
+  }, [v, cues]);
+  return text ? <div className="cw-subline">{text}</div> : null;
+}
+
+// Audio & subtitles, as in VLC: the film's sound tracks (languages,
+// commentary…) and its subtitles, read from the file
+function TrackMenu({ film, tracks, onAudio, onSubs, onClose }) {
+  const [info, setInfo] = useState(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => { let on = true; tracks().then((x) => on && setInfo(x)).catch(() => on && setErr(true)); return () => { on = false; }; }, [tracks]);
+  const stop = (e) => e.stopPropagation();
+  return (
+    <div className="cw-tracks" onPointerDown={stop} onPointerUp={stop} onClick={onClose}>
+      <div className="cw-tracks-card pop" onClick={stop}>
+        <button type="button" className="cw-tracks-x" onClick={onClose} aria-label="Close"><Icon name="close" size={14} stroke={3} /></button>
+        {!info && !err && <div className="cw-tracks-note">Reading the film's tracks…<small>The first time loads the decoder (about 30 MB)</small></div>}
+        {err && <div className="cw-tracks-note">Couldn't read this file's tracks.<small>Check the connection and try again.</small></div>}
+        {info && (
+          <>
+            <b>🔊 Audio</b>
+            {info.audio.length ? info.audio.map((a) => (
+              <button type="button" key={a.n} className={`cw-track${film.audioN === a.n ? " on" : ""}`} onClick={() => { onAudio(a.n); onClose(); }}>{a.label}</button>
+            )) : <div className="cw-tracks-note">No sound in this file</div>}
+            <b>💬 Subtitles</b>
+            <button type="button" className={`cw-track${film.subN == null ? " on" : ""}`} onClick={() => { onSubs(null); onClose(); }}>Off</button>
+            {info.subs.length ? info.subs.map((x) => (
+              <button type="button" key={x.n} disabled={!x.text} className={`cw-track${film.subN === x.n ? " on" : ""}`} onClick={() => { onSubs(x.n); onClose(); }}>{x.label}</button>
+            )) : <div className="cw-tracks-note">No subtitles in this file</div>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks, onAudio, onSubs }) {
+  const [menu, setMenu] = useState(false);
   const box = useRef(null);
   useLayoutEffect(() => {
     const el = box.current, v = film.v;
@@ -207,7 +255,12 @@ function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting }) {
     <div className="call-share cw-film" ref={shareRef} {...lv.handlers}>
       <div className="cw-film-box" ref={box} style={lv.filter ? { filter: lv.filter } : undefined} />
       {lv.level}
+      <SubLine v={film.v} cues={film.cues} />
       {waiting && <div className="cw-film-wait">🔊 Getting the sound ready…</div>}
+      <button type="button" className="cw-tracks-btn" onPointerDown={(e) => e.stopPropagation()} onClick={() => setMenu(true)} aria-label="Audio and subtitles">
+        <Icon name="film" size={14} /> Audio &amp; subtitles
+      </button>
+      {menu && <TrackMenu film={film} tracks={tracks} onAudio={onAudio} onSubs={onSubs} onClose={() => setMenu(false)} />}
       <div className="call-share-tag"><Icon name="film" size={14} /> {film.name}</div>
       <button type="button" className="call-big" onClick={onBig} aria-label="Full screen"><Icon name="expand" size={22} stroke={2.8} /></button>
       {faces}
@@ -781,7 +834,7 @@ export default function CallLayer() {
             </div>
           ) : C.film ? (
             <>
-              <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={stageFaces} volume={C.filmVolume} waiting={C.filmWait} />
+              <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={stageFaces} volume={C.filmVolume} waiting={C.filmWait} tracks={C.filmTracks} onAudio={C.filmAudio} onSubs={C.filmSubs} />
               {strip}
             </>
           ) : watch ? (

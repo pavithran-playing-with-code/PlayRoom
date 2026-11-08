@@ -1,49 +1,54 @@
 // src/utils/filmSound.js
-// A film's sound when the browser can't play it — the way VLC does: Dolby
-// (AC-3, E-AC-3), DTS, TrueHD… are common in downloaded films and no phone
-// browser decodes them, so the picture plays in silence. Here ffmpeg, built
-// for the browser (WebAssembly, loaded only when it's needed), decodes the
-// sound a piece at a time just ahead of where the film is, and Web Audio
-// plays the pieces in step with the <video>: it follows play, pause, seeking
-// and speed, and if a piece isn't ready yet the film waits a moment for it.
+// A film's sound and subtitles, the way VLC does them. Downloaded films carry
+// Dolby (AC-3, E-AC-3), DTS or TrueHD sound, which no phone browser plays —
+// worse, Chrome on Android takes the track, says it's playing it and puts
+// out nothing. So the file itself is read: ffmpeg, built for the browser
+// (WebAssembly, loaded only when it's needed), lists its sound and subtitle
+// tracks, decodes the chosen sound a piece at a time just ahead of where the
+// film is, and Web Audio plays the pieces in step with the <video>: play,
+// pause, seeking and speed, and if a piece isn't ready the film waits a
+// moment for it. Subtitles in text (SRT, ASS, mov_text…) are read out whole.
 //
 // The file is never copied into memory: ffmpeg reads it straight from the
-// phone (WORKERFS), only the bit each piece needs.
+// phone (WORKERFS), only the bits it needs.
 //
-//   const s = await filmSound(file, video, { onWait })
-//     null        the file has no sound at all (or ffmpeg couldn't load)
-//     s.track     the sound, as a MediaStreamTrack (to send to the call)
-//     s.setVolume(0..1)  how loud it is here (the call's copy is unchanged)
-//     s.stop()
+//   dolbyLike(file)            true when the sound is a kind browsers can't play
+//   soundMissing(video)        true when the browser decoded no sound at all
+//   const F = await openFilm(file)
+//     F.audio  [{ n, label }]  F.subs [{ n, label, text }]  (text: false = picture subtitles)
+//     const s = await F.sound(n, video, { onWait })
+//       s.track (a MediaStreamTrack for the call), s.setVolume(0..1), s.volume(), s.stop()
+//     await F.subtitles(n)  -> [{ a, b, text }] (seconds), or null
+//     F.close()
 
 const CORE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
 const SEG = 20;                  // seconds of sound per piece
 const RATE = 48000;
 const LEAD = 0.06;               // seconds: a piece starts this far ahead, so it's never late
 
-let ffLoad = null;
-// one ffmpeg for the page, loaded once (~30 MB, from the CDN, the first time it's needed)
-function getFF() {
-  if (!ffLoad) {
-    ffLoad = (async () => {
-      const { FFmpeg } = await import("../vendor/ffmpeg/classes.js");
-      // fetched as blobs: a worker may only load code from its own site
-      const toBlobURL = async (url, type) => URL.createObjectURL(new Blob([await (await fetch(url)).arrayBuffer()], { type }));
-      const ff = new FFmpeg();
-      await ff.load({
-        coreURL: await toBlobURL(`${CORE}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${CORE}/ffmpeg-core.wasm`, "application/wasm"),
-      });
-      return ff;
-    })().catch((e) => { ffLoad = null; throw e; });
+// ffmpeg's ~30 MB, fetched once as blobs (a worker may only load code from its own site)
+let coreURLs = null;
+const getCore = () => {
+  if (!coreURLs) {
+    const blob = async (url, type) => URL.createObjectURL(new Blob([await (await fetch(url)).arrayBuffer()], { type }));
+    coreURLs = Promise.all([blob(`${CORE}/ffmpeg-core.js`, "text/javascript"), blob(`${CORE}/ffmpeg-core.wasm`, "application/wasm")])
+      .then(([coreURL, wasmURL]) => ({ coreURL, wasmURL }))
+      .catch((e) => { coreURLs = null; throw e; });
   }
-  return ffLoad;
+  return coreURLs;
+};
+async function newFF() {
+  const { FFmpeg } = await import("../vendor/ffmpeg/classes.js");
+  const ff = new FFmpeg();
+  await ff.load(await getCore());
+  return ff;
 }
-
-// ffmpeg does one thing at a time
+// one ffmpeg for the sound, kept
+let ffLoad = null;
+const getFF = () => { if (!ffLoad) ffLoad = newFF().catch((e) => { ffLoad = null; throw e; }); return ffLoad; };
+// it does one thing at a time
 let chain = Promise.resolve();
 const queued = (fn) => { const p = chain.then(fn, fn); chain = p.catch(() => {}); return p; };
-
 let mountN = 0;
 
 // Does the browser actually play this video's sound? Asked once it has
@@ -65,43 +70,139 @@ export function soundMissing(v) {
   });
 }
 
-export async function filmSound(file, v, { onWait } = {}) {
-  let ff;
-  try { ff = await getFF(); } catch { return null; }
+// Is the sound Dolby, DTS or TrueHD? A quick look at the file's headers —
+// the start (MKV, and MP4 with its index first) and the end (MP4 with its
+// index last) — for the codec names the containers use. No ffmpeg needed.
+const MARKS = ["A_EAC3", "A_AC3", "A_DTS", "A_TRUEHD", "A_MLP", "ec-3", "ac-3", "dtsc", "dtsh", "dtsl", "dtse", "mlpa"];
+export async function dolbyLike(file) {
+  const look = async (from, to) => {
+    const b = new Uint8Array(await file.slice(from, to).arrayBuffer());
+    let s = "";
+    for (let i = 0; i < b.length; i += 65536) s += String.fromCharCode.apply(null, b.subarray(i, i + 65536));
+    return MARKS.some((m) => s.includes(m));
+  };
+  const N = 4 * 1024 * 1024;
+  try { return (await look(0, Math.min(file.size, N))) || (file.size > N && (await look(Math.max(N, file.size - N), file.size))); }
+  catch { return false; }
+}
+
+const LANG = { eng: "English", hin: "Hindi", tam: "Tamil", tel: "Telugu", mal: "Malayalam", kan: "Kannada", ben: "Bengali", mar: "Marathi", guj: "Gujarati", pan: "Punjabi", urd: "Urdu",
+  jpn: "Japanese", kor: "Korean", chi: "Chinese", zho: "Chinese", spa: "Spanish", fre: "French", fra: "French", ger: "German", deu: "German", ita: "Italian", por: "Portuguese",
+  rus: "Russian", ara: "Arabic", tur: "Turkish", ind: "Indonesian", tha: "Thai", vie: "Vietnamese" };
+const CODEC = { eac3: "Dolby Digital Plus", ac3: "Dolby Digital", dts: "DTS", truehd: "Dolby TrueHD", aac: "AAC", opus: "Opus", mp3: "MP3", vorbis: "Vorbis", flac: "FLAC" };
+const TEXT_SUBS = /^(subrip|srt|ass|ssa|mov_text|webvtt|text|microdvd|subviewer)/;
+
+// "Stream #0:1(eng): Audio: eac3, 48000 Hz, 5.1(side), fltp, 640 kb/s (default)" and the title under it
+function parseStreams(lines) {
+  const audio = [], subs = [];
+  let cur = null;
+  for (const l of lines) {
+    const m = /Stream #\d+:\d+(?:\[[^\]]*\])?(?:\((\w+)\))?: (Audio|Subtitle|Video|Data|Attachment): (.*)/.exec(l);
+    if (m) {
+      cur = null;
+      const lang = LANG[m[1]] || (m[1] && m[1] !== "und" ? m[1] : "");
+      if (m[2] === "Audio") {
+        const codec = m[3].split(/[ ,(]/)[0];
+        const ch = /\b(\d\.\d(?:\(\w+\))?|stereo|mono)\b/.exec(m[3]);
+        cur = { n: audio.length, lang, codec, ch: ch ? ch[1].replace(/\(.*\)/, "") : "", def: /\(default\)/.test(m[3]), title: "" };
+        audio.push(cur);
+      } else if (m[2] === "Subtitle") {
+        const codec = m[3].split(/[ ,(]/)[0];
+        cur = { n: subs.length, lang, codec, text: TEXT_SUBS.test(codec), def: /\(default\)/.test(m[3]), forced: /\(forced\)/.test(m[3]), title: "" };
+        subs.push(cur);
+      }
+      continue;
+    }
+    const t = /^\s+title\s*:\s*(.+)$/.exec(l);
+    if (t && cur && !cur.title) cur.title = t[1].trim();
+  }
+  for (const a of audio) a.label = [a.title || a.lang || `Track ${a.n + 1}`, a.title && a.lang && !a.title.includes(a.lang) ? a.lang : "", `${CODEC[a.codec] || a.codec}${a.ch ? " " + a.ch : ""}`].filter(Boolean).join(" · ");
+  for (const s of subs) s.label = [s.title || s.lang || `Subtitles ${s.n + 1}`, s.title && s.lang && !s.title.includes(s.lang) ? s.lang : "", s.forced ? "forced" : "", s.text ? "" : "picture — can't be shown"].filter(Boolean).join(" · ");
+  return { audio, subs };
+}
+
+// "00:01:02.345 --> 00:01:04.000" blocks, the text without its tags
+function parseVTT(txt) {
+  const sec = (s) => { const p = s.trim().split(":").map(Number); return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p[0] * 60 + p[1]; };
+  const cues = [];
+  for (const block of txt.replace(/\r/g, "").split(/\n\n+/)) {
+    const lines = block.split("\n"), i = lines.findIndex((l) => l.includes("-->"));
+    if (i < 0) continue;
+    const [a, b] = lines[i].split("-->").map((x) => sec(x.trim().split(" ")[0]));
+    const text = lines.slice(i + 1).join("\n").replace(/<[^>]+>/g, "").replace(/\{\\[^}]*\}/g, "").trim();
+    if (text && Number.isFinite(a) && Number.isFinite(b)) cues.push({ a, b, text });
+  }
+  return cues.sort((x, y) => x.a - y.a);
+}
+
+export async function openFilm(file) {
+  const ff = await getFF();
   const dir = `/film${++mountN}`, path = `${dir}/${file.name}`;
   await queued(async () => { await ff.createDir(dir); await ff.mount("WORKERFS", { files: [file] }, dir); });
-  // the streams in the file: is there sound at all?
   const log = [];
   const onLog = ({ message }) => log.push(message);
   ff.on("log", onLog);
   await queued(() => ff.exec(["-hide_banner", "-i", path]).catch(() => {}));
   ff.off("log", onLog);
-  if (!log.some((l) => /Stream #\d+:\d+.*Audio:/.test(l))) {
-    await queued(async () => { try { await ff.unmount(dir); await ff.deleteDir(dir); } catch { /* fine */ } });
-    return null;
-  }
+  const info = parseStreams(log);
+  const F = {
+    ...info,
+    // the sound of audio track n, in step with the video
+    sound: (n, v, opts) => playSound(ff, path, n, v, opts),
+    // text subtitles n, read out whole — by a second ffmpeg, so the sound
+    // never waits behind it (it has to read through the whole file)
+    async subtitles(n) {
+      const s = info.subs[n];
+      if (!s || !s.text) return null;
+      let f2;
+      try {
+        f2 = await newFF();
+        await f2.createDir("/f"); await f2.mount("WORKERFS", { files: [file] }, "/f");
+        await f2.exec(["-hide_banner", "-loglevel", "error", "-i", `/f/${file.name}`, "-map", `0:s:${n}`, "-vn", "-an", "-c:s", "webvtt", "/s.vtt"]);
+        const out = await f2.readFile("/s.vtt", "utf8");
+        return parseVTT(typeof out === "string" ? out : new TextDecoder().decode(out));
+      } catch { return null; }
+      finally { try { f2 && f2.terminate(); } catch { /* gone */ } }
+    },
+    close() { queued(async () => { try { await ff.unmount(dir); await ff.deleteDir(dir); } catch { /* fine */ } }); },
+  };
+  return F;
+}
 
+// One-call form, kept for the old use: the first sound of a file, or null.
+export async function filmSound(file, v, opts) {
+  let F;
+  try { F = await openFilm(file); } catch { return null; }
+  if (!F.audio.length) { F.close(); return null; }
+  const s = await F.sound(0, v, opts);
+  const stop = s.stop;
+  s.stop = () => { stop(); F.close(); };
+  return s;
+}
+
+async function playSound(ff, path, n, v, { onWait } = {}) {
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC({ sampleRate: RATE });
   const master = ac.createGain(), local = ac.createGain(), out = ac.createMediaStreamDestination();
   master.connect(local); local.connect(ac.destination); master.connect(out);
   const cache = new Map();          // piece -> AudioBuffer, or a Promise of one
+  const tag = `${++mountN}`;
   let alive = true, playing = null, waiting = false, pausedByUs = false;
   const dur = () => (Number.isFinite(v.duration) ? v.duration : Infinity);
 
   // decode one piece: from i*SEG, SEG seconds, stereo, 48 kHz, as floats
   const decode = (i) => queued(async () => {
     if (!alive) return null;
-    const o = `/s${mountN}_${i}.raw`;
+    const o = `/s${tag}_${i}.raw`;
     await ff.exec(["-hide_banner", "-loglevel", "error", "-ss", String(i * SEG), "-i", path, "-t", String(SEG),
-      "-map", "0:a:0", "-vn", "-sn", "-dn", "-ac", "2", "-ar", String(RATE), "-f", "f32le", o]);
+      "-map", `0:a:${n}`, "-vn", "-sn", "-dn", "-ac", "2", "-ar", String(RATE), "-f", "f32le", o]);
     let data;
     try { data = await ff.readFile(o); await ff.deleteFile(o); } catch { return null; }
     const f = new Float32Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 4));
-    const n = Math.floor(f.length / 2);
-    if (!n || !alive) return null;
-    const buf = ac.createBuffer(2, n, RATE), L = buf.getChannelData(0), R = buf.getChannelData(1);
-    for (let k = 0; k < n; k++) { L[k] = f[2 * k]; R[k] = f[2 * k + 1]; }
+    const len = Math.floor(f.length / 2);
+    if (!len || !alive) return null;
+    const buf = ac.createBuffer(2, len, RATE), L = buf.getChannelData(0), R = buf.getChannelData(1);
+    for (let k = 0; k < len; k++) { L[k] = f[2 * k]; R[k] = f[2 * k + 1]; }
     return buf;
   });
   const want = (i) => {
@@ -115,7 +216,7 @@ export async function filmSound(file, v, { onWait } = {}) {
     for (const s of playing.srcs) { try { s.stop(); } catch { /* done */ } }
     playing = null;
   };
-  // start piece i at the film's time t, and line up the next one after it
+  // piece i from `from` seconds into it, at the context's time `at`
   const schedule = (i, at, from) => {
     const b = ready(i);
     if (!b) return false;
@@ -136,6 +237,7 @@ export async function filmSound(file, v, { onWait } = {}) {
     schedule(i, at, t + LEAD * rate - i * SEG);
     return true;
   };
+  const hold = () => { waiting = true; if (onWait) onWait(true); if (!v.paused) { pausedByUs = true; v.pause(); } };
 
   const tick = () => {
     if (!alive) return;
@@ -153,29 +255,27 @@ export async function filmSound(file, v, { onWait } = {}) {
     }
     if (v.paused) { stopAll(); return; }
     if (ac.state === "suspended") ac.resume().catch(() => {});
-    if (!playing) {
-      if (!begin()) {
-        // not decoded yet: hold the film until it is
-        waiting = true; if (onWait) onWait(true);
-        pausedByUs = true; v.pause();
-      }
-      return;
-    }
+    if (!playing) { if (!begin()) { stopAll(); hold(); } return; }
     // drifted (a stall, a seek, a new speed): start again from where the film is
     const expect = playing.t0 + (ac.currentTime - playing.c0) * playing.rate;
     if (Math.abs(expect - t) > 0.25 || playing.rate !== (v.playbackRate || 1)) { stopAll(); begin(); return; }
     // the next piece, right after this one
-    if (playing.endAt - ac.currentTime < 2.5) {
-      if (!schedule(playing.last + 1, playing.endAt, 0) && playing.endAt - ac.currentTime < 0.3 && (playing.last + 1) * SEG < dur()) {
-        stopAll(); waiting = true; if (onWait) onWait(true); pausedByUs = true; v.pause();
-      }
-    }
+    if (playing.endAt - ac.currentTime < 2.5 && !schedule(playing.last + 1, playing.endAt, 0)
+      && playing.endAt - ac.currentTime < 0.3 && (playing.last + 1) * SEG < dur()) { stopAll(); hold(); }
   };
   const evs = ["play", "pause", "seeking", "seeked", "ratechange", "ended"];
-  const onEv = (e) => { if (e.type === "pause" && pausedByUs) return; if (e.type === "play" && waiting) { pausedByUs = false; } tick(); };
-  evs.forEach((n) => v.addEventListener(n, onEv));
+  const onEv = (e) => {
+    if (e.type === "pause" && pausedByUs) return;
+    if (e.type === "play" && waiting) pausedByUs = false;
+    if (e.type === "play" && ac.state === "suspended") ac.resume().catch(() => {});
+    tick();
+  };
+  evs.forEach((x) => v.addEventListener(x, onEv));
+  // a phone's sound only starts from a tap: any tap wakes it
+  const wake = () => { if (ac.state === "suspended") ac.resume().catch(() => {}); };
+  document.addEventListener("pointerdown", wake, true);
   const every = setInterval(tick, 200);
-  v.muted = true;                   // its own (silent) sound is out of the way
+  v.muted = true;                   // its own sound (silent, or wrong) is out of the way
   tick();
 
   return {
@@ -185,10 +285,11 @@ export async function filmSound(file, v, { onWait } = {}) {
     stop() {
       alive = false;
       clearInterval(every);
-      evs.forEach((n) => v.removeEventListener(n, onEv));
+      evs.forEach((x) => v.removeEventListener(x, onEv));
+      document.removeEventListener("pointerdown", wake, true);
       stopAll(); cache.clear();
+      if (waiting && onWait) onWait(false);
       ac.close().catch(() => {});
-      queued(async () => { try { await ff.unmount(dir); await ff.deleteDir(dir); } catch { /* fine */ } });
     },
   };
 }

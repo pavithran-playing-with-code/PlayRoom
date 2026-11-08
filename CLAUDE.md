@@ -335,12 +335,17 @@ There is no test runner. What works:
   `call:media` carries its name (`film`); its picture slot
   prefers H.264 (`preferH264`: a phone's chip, so 1080p stays 1080p). A film whose sound the
   browser can't play (Dolby AC-3 / E-AC-3, DTS — most downloaded films) plays
-  silent; `soundMissing` notices and `src/utils/filmSound.js` decodes it like
-  VLC: ffmpeg.wasm (the JS front vendored in `src/vendor/ffmpeg`, the ~30 MB
+  silent — Chrome on Android even claims to play it — so `dolbyLike` looks in
+  the file's headers first (`soundMissing` is the backup) and
+  `src/utils/filmSound.js` decodes it like VLC: ffmpeg.wasm (the JS front vendored in `src/vendor/ffmpeg`, the ~30 MB
   core from jsDelivr only when needed) reads the file in place (WORKERFS),
   20 s at a time ahead of the picture, Web Audio plays it in step and its
   track replaces the silent one going to the call. Swipe up/down on a shared
-  video: left half brightness, right half volume (`useLevels`). (It first required everyone to
+  video: left half brightness, right half volume (`useLevels`). Audio & subtitles
+  (`TrackMenu`) lists the file's tracks (`openFilm`): any sound track is
+  decoded; text subtitles are read out whole by a second ffmpeg, shown here
+  (`SubLine`) and drawn into a canvas picture that replaces the one sent,
+  so friends see them. (It first required everyone to
   pick the same file and only synced play/pause — nobody expected that, so
   it was dropped; that sync engine, `config/callWatch.js` `call:watch`,
   `watchSync.js`, now serves YouTube.) Or **YouTube together**:

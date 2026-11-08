@@ -24,7 +24,7 @@ import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
 import { reportError } from "./reportError";
 import { useDrawnSideways } from "../components/horror/LandscapeGate";
-import { filmSound, soundMissing } from "./filmSound";
+import { openFilm, soundMissing, dolbyLike } from "./filmSound";
 
 const CallContext = createContext(null);
 
@@ -196,6 +196,28 @@ function preferH264(tx) {
     h.sort((a, b) => rank(a) - rank(b));
     tx.setCodecPreferences([...h, ...all.filter((c) => !/h264/i.test(c.mimeType))]);
   } catch { /* the default, then */ }
+}
+
+// A subtitle line drawn over a film's picture: white, an outline, the bottom
+function drawSub(g, text, w, h) {
+  if (!text) return;
+  const size = Math.max(14, Math.round(h * 0.055)), lines = text.split("\n").slice(-3);
+  g.font = `700 ${size}px system-ui, -apple-system, Roboto, sans-serif`;
+  g.textAlign = "center"; g.textBaseline = "bottom"; g.lineJoin = "round";
+  g.lineWidth = Math.max(3, size / 5); g.strokeStyle = "rgba(0,0,0,.9)"; g.fillStyle = "#fff";
+  lines.forEach((l, i) => {
+    const y = h - size * 0.7 - (lines.length - 1 - i) * size * 1.2;
+    g.strokeText(l, w / 2, y, w * 0.94); g.fillText(l, w / 2, y, w * 0.94);
+  });
+}
+// the cue at time t (cues sorted by start)
+function cueAt(cues, t) {
+  if (!cues) return "";
+  let lo = 0, hi = cues.length - 1, at = -1;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (cues[m].a <= t) { at = m; lo = m + 1; } else hi = m - 1; }
+  const out = [];
+  for (let i = at; i >= 0 && i > at - 4; i--) if (cues[i].a <= t && t < cues[i].b) out.unshift(cues[i].text);
+  return out.join("\n");
 }
 
 function shareInto(P, scr) {
@@ -558,6 +580,9 @@ export function CallProvider({ children }) {
     if (!f) return;
     filmRef.current = null; setFilm(null); setFilmWait(false);
     try { f.v.pause(); } catch { /* gone */ }
+    if (f.sound) f.sound.stop();
+    if (f.burn) { cancelAnimationFrame(f.burn.raf); try { f.burn.track.stop(); } catch { /* gone */ } }
+    if (f.open) f.open.then((F) => F.close()).catch(() => {});
     f.stop();
     f.v.removeAttribute("src"); f.v.remove();
     URL.revokeObjectURL(f.url);
@@ -921,6 +946,89 @@ export function CallProvider({ children }) {
   // and its picture and sound go to everyone as my shared screen. Chrome
   // and Android capture the player itself; an iPhone (no captureStream on a
   // <video>) draws it onto a canvas and takes its sound through Web Audio.
+  // ── a film's tracks: sound and subtitles, as VLC offers them ───────────────
+  // its tracks, read by ffmpeg once (filmSound.openFilm)
+  const filmTracksOf = useCallback((v) => {
+    const f = filmRef.current;
+    if (!f || f.v !== v) return Promise.reject(new Error("gone"));
+    if (!f.open) f.open = openFilm(f.file).catch((e) => { if (filmRef.current === f) f.open = null; throw e; });
+    return f.open;
+  }, []);
+  // the film's sound, from now on: audio track n, decoded here
+  const pickAudio = useCallback(async (v, n, auto = false) => {
+    const f = filmRef.current;
+    if (!f || f.v !== v) return;
+    const F = await filmTracksOf(v);
+    const snd = await F.sound(n, v, { onWait: (w) => setFilmWait(w) });
+    if (filmRef.current !== f) { snd.stop(); return; }
+    if (f.sound) f.sound.stop();
+    f.sound = snd; f.audioN = n;
+    try { snd.track.contentHint = "music"; } catch { /* fine */ }
+    // into the slot the old sound was going out in (no new offer), or a new one
+    const stream = f.stream, old = stream.getAudioTracks();
+    old.forEach((t) => stream.removeTrack(t));
+    stream.addTrack(snd.track);
+    if (screenRef.current === stream) {
+      for (const P of pcs.current.values()) {
+        const tx = (P.screenTx || []).find((x) => x.sender.track && old.includes(x.sender.track));
+        if (tx) tx.sender.replaceTrack(snd.track).catch(() => shareInto(P, stream));
+        else shareInto(P, stream);
+      }
+      tellMedia(micRef.current, camRef.current);
+    }
+    setFilm((x) => (x && x.v === v ? { ...x, audioN: n } : x));
+    const a = F.audio[n];
+    say(auto ? "🔊 Sound fixed — everyone can hear it" : `🔊 ${a ? a.label : "Sound"}`);
+  }, [filmTracksOf, tellMedia, say]);
+  // subtitles: track n, or null for none. Shown here over the film, and drawn
+  // into the picture that goes to the call so friends see them too.
+  const pickSubs = useCallback(async (v, n) => {
+    const f = filmRef.current;
+    if (!f || f.v !== v) return;
+    const swapVideo = (from, to) => {
+      const stream = f.stream;
+      stream.removeTrack(from); stream.addTrack(to);
+      for (const P of pcs.current.values()) {
+        const tx = (P.screenTx || []).find((x) => x.sender.track === from);
+        if (tx) tx.sender.replaceTrack(to).catch(() => {});
+      }
+    };
+    const off = () => {
+      if (f.burn) { const b = f.burn; f.burn = null; cancelAnimationFrame(b.raf); if (f.stream.getVideoTracks().includes(b.track)) swapVideo(b.track, b.orig); b.track.stop(); }
+      f.cues = null; f.subN = null;
+      setFilm((x) => (x && x.v === v ? { ...x, subN: null, cues: null } : x));
+    };
+    if (n === null) { off(); return; }
+    const F = await filmTracksOf(v);
+    say("💬 Loading subtitles — a long film takes a little while…");
+    const cues = await F.subtitles(n);
+    if (filmRef.current !== f) return;
+    if (!cues || !cues.length) { say("Couldn't read those subtitles"); return; }
+    off();
+    f.cues = cues; f.subN = n;
+    setFilm((x) => (x && x.v === v ? { ...x, subN: n, cues } : x));
+    // friends: draw the picture and the line into a canvas and send that instead
+    if (!f.drawn) {
+      const orig = f.stream.getVideoTracks()[0];
+      const c = document.createElement("canvas");
+      const k = Math.min(1, 1280 / (v.videoWidth || 1280));
+      c.width = Math.round((v.videoWidth || 1280) * k); c.height = Math.round((v.videoHeight || 720) * k);
+      const g = c.getContext("2d");
+      const burn = { raf: 0, orig, track: null };
+      const draw = () => {
+        try { g.drawImage(v, 0, 0, c.width, c.height); } catch { /* not yet */ }
+        drawSub(g, cueAt(f.cues, v.currentTime), c.width, c.height);
+        burn.raf = requestAnimationFrame(draw);
+      };
+      draw();
+      burn.track = c.captureStream(30).getVideoTracks()[0];
+      try { burn.track.contentHint = "motion"; } catch { /* fine */ }
+      f.burn = burn;
+      if (orig) swapVideo(orig, burn.track);
+    }
+    say(`💬 ${F.subs[n] ? F.subs[n].label : "Subtitles"} — everyone sees them`);
+  }, [filmTracksOf, say]);
+
   const playFilm = useCallback(async (file) => {
     if (!file) return;
     if (screenRef.current) stopShare();
@@ -933,18 +1041,24 @@ export function CallProvider({ children }) {
     const ok = await new Promise((res) => { v.onloadedmetadata = () => res(true); v.onerror = () => res(false); });
     if (!ok) { v.remove(); URL.revokeObjectURL(url); say("This phone can't play that video. Try an .mp4."); return; }
     try { await v.play(); } catch { /* the controls' ▶ starts it */ }
-    let stream = null, stop = () => {};
+    let stream = null, stop = () => {}, drawn = false;     // drawn: the picture goes out through a canvas (an iPhone), which draws subtitles itself
     const cap = v.captureStream || v.mozCaptureStream;
     if (cap) {
       try { stream = cap.call(v); } catch { stream = null; }
     }
     if (!stream) {
+      drawn = true;
       const c = document.createElement("canvas");
       const k = Math.min(1, 1280 / (v.videoWidth || 1280));
       c.width = Math.round((v.videoWidth || 1280) * k); c.height = Math.round((v.videoHeight || 720) * k);
       const g = c.getContext("2d");
       let raf = 0;
-      const draw = () => { try { g.drawImage(v, 0, 0, c.width, c.height); } catch { /* not yet */ } raf = requestAnimationFrame(draw); };
+      const draw = () => {
+        try { g.drawImage(v, 0, 0, c.width, c.height); } catch { /* not yet */ }
+        const f = filmRef.current;
+        if (f && f.v === v && f.cues) drawSub(g, cueAt(f.cues, v.currentTime), c.width, c.height);
+        raf = requestAnimationFrame(draw);
+      };
       draw();
       stream = c.captureStream(30);
       let ac = null;
@@ -956,8 +1070,9 @@ export function CallProvider({ children }) {
       } catch { /* picture only */ }
       stop = () => { cancelAnimationFrame(raf); if (ac) ac.close().catch(() => {}); };
     }
-    filmRef.current = { v, url, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), stop };
-    setFilm({ name: filmRef.current.name, v });
+
+    filmRef.current = { v, url, file, stream, drawn, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), stop };
+    setFilm({ name: filmRef.current.name, v, audioN: null, subN: null, cues: null });
     const go = () => {
       if (!filmRef.current || filmRef.current.v !== v) return;
       const vt = stream.getVideoTracks()[0];
@@ -970,34 +1085,26 @@ export function CallProvider({ children }) {
       say("🎬 Everyone in the call can see and hear it. 🎧 headphones keep your mic from picking it up.");
     };
     go();
-    // Sound the browser can't play (Dolby AC-3 / E-AC-3, DTS… — common in
-    // downloaded films): decode it ourselves, like VLC, and send that instead
-    soundMissing(v).then(async (missing) => {
-      if (!missing || !filmRef.current || filmRef.current.v !== v) return;
-      say("🔊 This video's sound needs decoding — fixing it (the first time takes a moment)…");
-      const snd = await filmSound(file, v, { onWait: (w) => setFilmWait(w) });
+    // Sound the browser can't play (Dolby AC-3 / E-AC-3, DTS… — most
+    // downloaded films): decode it ourselves, like VLC. Chrome on Android
+    // even says it's playing such sound and puts out nothing, so the file is
+    // looked at first; the browser's own word is the second check.
+    (async () => {
+      const dolby = await dolbyLike(file);
+      const missing = dolby || (await soundMissing(v));
       const f = filmRef.current;
-      if (!f || f.v !== v) { if (snd) snd.stop(); return; }
-      if (!snd) { say("This video has no sound we can play"); return; }
-      const before = f.stop;
-      f.stop = () => { snd.stop(); before(); };
-      f.sound = snd;
-      try { snd.track.contentHint = "music"; } catch { /* fine */ }
-      const old = stream.getAudioTracks();
-      old.forEach((t) => stream.removeTrack(t));
-      stream.addTrack(snd.track);
-      if (screenRef.current === stream) {
-        // into the slot the silent sound was going out in (no new offer), or a new one
-        for (const P of pcs.current.values()) {
-          const tx = (P.screenTx || []).find((x) => x.sender.track && old.includes(x.sender.track));
-          if (tx) tx.sender.replaceTrack(snd.track).catch(() => shareInto(P, stream));
-          else shareInto(P, stream);
-        }
-        tellMedia(micRef.current, camRef.current);
-      }
-      say("🔊 Sound fixed — everyone can hear it");
-    });
-  }, [stopShare, tellMedia, say, hideFilm]);
+      if (!missing || !f || f.v !== v || f.sound) return;
+      say(dolby ? "🔊 Dolby sound — decoding it so everyone can hear (the first time takes a moment)…" : "🔊 This video's sound needs decoding — fixing it (the first time takes a moment)…");
+      let F;
+      try { F = await filmTracksOf(v); } catch { say("Couldn't load the sound decoder — check the connection and play it again"); return; }
+      if (!F.audio.length) { say("This video has no sound"); return; }
+      await pickAudio(v, (F.audio.find((x) => x.def) || F.audio[0]).n, true);
+    })();
+  }, [stopShare, tellMedia, say, hideFilm, filmTracksOf, pickAudio]);
+  // for the menu: the tracks, and picking one
+  const filmTracks = useCallback(() => { const f = filmRef.current; return f ? filmTracksOf(f.v) : Promise.reject(new Error("no film")); }, [filmTracksOf]);
+  const filmAudio = useCallback((n) => { const f = filmRef.current; if (f) pickAudio(f.v, n).catch(() => say("Couldn't play that sound track")); }, [pickAudio, say]);
+  const filmSubs = useCallback((n) => { const f = filmRef.current; if (f) pickSubs(f.v, n).catch(() => say("Couldn't read those subtitles")); }, [pickSubs, say]);
   const share = useCallback(async () => {
     if (screenRef.current) return stopShare();
     if (!canShareScreen()) {
@@ -1149,9 +1256,9 @@ export function CallProvider({ children }) {
   const value = useMemo(() => ({
     call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn, mics, setMics, listMics, chooseMic,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
-    watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume,
+    watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs,
   }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere, mics, listMics, chooseMic,
-    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume]);
+    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

@@ -24,6 +24,7 @@ import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
 import { reportError } from "./reportError";
 import { useDrawnSideways } from "../components/horror/LandscapeGate";
+import { filmSound, soundMissing } from "./filmSound";
 
 const CallContext = createContext(null);
 
@@ -238,7 +239,16 @@ export function CallProvider({ children }) {
   // A video of mine playing to the call: it plays here and goes to everyone
   // as my shared screen (picture and sound), so they need nothing.
   const [film, setFilm] = useState(null);          // { name, v } | null
-  const filmRef = useRef(null);                    // { v, url, name, stop }
+  const filmRef = useRef(null);                    // { v, url, name, stop, sound? }
+  const [filmWait, setFilmWait] = useState(false); // the film held a moment for its decoded sound
+  // how loud my film is here (its decoded sound, or the player's own)
+  const filmVolume = useCallback((x) => {
+    const f = filmRef.current;
+    if (!f) return 1;
+    if (x === undefined) return f.sound ? f.sound.volume() : f.v.volume;
+    if (f.sound) f.sound.setVolume(x); else f.v.volume = Math.max(0, Math.min(1, x));
+    return x;
+  }, []);
   const [onHold, setOnHold] = useState(false);     // my side's on hold (a phone call)
   const holdRef = useRef(false);
   // My account in a call on another device of mine: { callId, sid, with: [names] }.
@@ -546,7 +556,7 @@ export function CallProvider({ children }) {
   const endFilm = useCallback(() => {
     const f = filmRef.current;
     if (!f) return;
-    filmRef.current = null; setFilm(null);
+    filmRef.current = null; setFilm(null); setFilmWait(false);
     try { f.v.pause(); } catch { /* gone */ }
     f.stop();
     f.v.removeAttribute("src"); f.v.remove();
@@ -960,6 +970,33 @@ export function CallProvider({ children }) {
       say("🎬 Everyone in the call can see and hear it. 🎧 headphones keep your mic from picking it up.");
     };
     go();
+    // Sound the browser can't play (Dolby AC-3 / E-AC-3, DTS… — common in
+    // downloaded films): decode it ourselves, like VLC, and send that instead
+    soundMissing(v).then(async (missing) => {
+      if (!missing || !filmRef.current || filmRef.current.v !== v) return;
+      say("🔊 This video's sound needs decoding — fixing it (the first time takes a moment)…");
+      const snd = await filmSound(file, v, { onWait: (w) => setFilmWait(w) });
+      const f = filmRef.current;
+      if (!f || f.v !== v) { if (snd) snd.stop(); return; }
+      if (!snd) { say("This video has no sound we can play"); return; }
+      const before = f.stop;
+      f.stop = () => { snd.stop(); before(); };
+      f.sound = snd;
+      try { snd.track.contentHint = "music"; } catch { /* fine */ }
+      const old = stream.getAudioTracks();
+      old.forEach((t) => stream.removeTrack(t));
+      stream.addTrack(snd.track);
+      if (screenRef.current === stream) {
+        // into the slot the silent sound was going out in (no new offer), or a new one
+        for (const P of pcs.current.values()) {
+          const tx = (P.screenTx || []).find((x) => x.sender.track && old.includes(x.sender.track));
+          if (tx) tx.sender.replaceTrack(snd.track).catch(() => shareInto(P, stream));
+          else shareInto(P, stream);
+        }
+        tellMedia(micRef.current, camRef.current);
+      }
+      say("🔊 Sound fixed — everyone can hear it");
+    });
   }, [stopShare, tellMedia, say, hideFilm]);
   const share = useCallback(async () => {
     if (screenRef.current) return stopShare();
@@ -1112,9 +1149,9 @@ export function CallProvider({ children }) {
   const value = useMemo(() => ({
     call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn, mics, setMics, listMics, chooseMic,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
-    watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm,
+    watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume,
   }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere, mics, listMics, chooseMic,
-    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm]);
+    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

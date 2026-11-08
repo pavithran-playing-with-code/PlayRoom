@@ -143,10 +143,58 @@ function useZoom(key) {
   return { box, handlers, style, zoomed: z.s > 1, scale: z.s, reset: () => put({ s: 1, x: 0, y: 0 }) };
 }
 
+// Swipes on a video, as in VLC: up and down on the left half is the
+// brightness (the picture's, here — a web page can't touch the screen's),
+// on the right half the volume. A level shows while you swipe. Only a
+// clearly vertical swipe of one finger counts; taps, the player's own
+// controls and two-finger zoom are left alone.
+function useLevels({ getVol, setVol, off = false }) {
+  const [bright, setBright] = useState(1);
+  const [shown, setShown] = useState(null);          // { kind: "b" | "v", v }
+  const g = useRef(null), fingers = useRef(0), hideT = useRef(0);
+  useEffect(() => () => clearTimeout(hideT.current), []);
+  const show = (kind, v) => { clearTimeout(hideT.current); setShown({ kind, v }); };
+  const handlers = {
+    onPointerDown: (e) => {
+      fingers.current++;
+      if (off || fingers.current > 1 || (e.pointerType === "mouse" && e.button !== 0)) { g.current = null; return; }
+      const r = layerRect(e.currentTarget), p = at(e);
+      g.current = { id: e.pointerId, x0: p.x, y0: p.y, side: p.x - r.left < r.width / 2 ? "b" : "v", h: r.height, on: false, from: 0 };
+    },
+    onPointerMove: (e) => {
+      const s = g.current;
+      if (!s || s.id !== e.pointerId) return;
+      const p = at(e), dy = s.y0 - p.y, dx = p.x - s.x0;
+      if (!s.on) {
+        if (Math.abs(dy) < 16 || Math.abs(dy) < Math.abs(dx) * 1.6) return;
+        s.on = true; s.y0 = p.y; s.from = s.side === "b" ? bright : getVol();
+        return;
+      }
+      const k = (s.y0 - p.y) / Math.max(160, s.h * 0.75);
+      if (s.side === "b") { const v = Math.max(0.15, Math.min(1.6, s.from + k * 1.45)); setBright(v); show("b", v); }
+      else { const v = Math.max(0, Math.min(1, s.from + k)); setVol(v); show("v", v); }
+    },
+  };
+  handlers.onPointerUp = (e) => {
+    fingers.current = Math.max(0, fingers.current - 1);
+    if (g.current && g.current.id === e.pointerId) { if (g.current.on) hideT.current = setTimeout(() => setShown(null), 700); g.current = null; }
+  };
+  handlers.onPointerCancel = handlers.onPointerUp;
+  const level = shown && (
+    <div className={`cw-level ${shown.kind === "b" ? "left" : "right"}`} aria-live="polite">
+      <span>{shown.kind === "b" ? "☀️" : shown.v === 0 ? "🔇" : "🔊"}</span>
+      <i><b style={{ height: `${Math.round((shown.kind === "b" ? (shown.v - 0.15) / 1.45 : shown.v) * 100)}%` }} /></i>
+      <em>{Math.round(shown.v * 100)}%</em>
+    </div>
+  );
+  return { handlers, level, filter: bright === 1 ? undefined : `brightness(${bright})` };
+}
+
 // My video, playing to the call: the player itself (CallContext made it and
 // streams it) is set into the stage, with its own controls; when the call
-// shrinks it goes back out of sight and keeps playing.
-function FilmStage({ film, hide, shareRef, onBig, faces }) {
+// shrinks it goes back out of sight and keeps playing. Swipe for brightness
+// and volume (useLevels); while its decoded sound catches up, it says so.
+function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting }) {
   const box = useRef(null);
   useLayoutEffect(() => {
     const el = box.current, v = film.v;
@@ -154,9 +202,12 @@ function FilmStage({ film, hide, shareRef, onBig, faces }) {
     el.appendChild(v);
     return () => hide(v);
   }, [film, hide]);
+  const lv = useLevels({ getVol: () => volume(), setVol: (x) => volume(x) });
   return (
-    <div className="call-share cw-film" ref={shareRef}>
-      <div className="cw-film-box" ref={box} />
+    <div className="call-share cw-film" ref={shareRef} {...lv.handlers}>
+      <div className="cw-film-box" ref={box} style={lv.filter ? { filter: lv.filter } : undefined} />
+      {lv.level}
+      {waiting && <div className="cw-film-wait">🔊 Getting the sound ready…</div>}
       <div className="call-share-tag"><Icon name="film" size={14} /> {film.name}</div>
       <button type="button" className="call-big" onClick={onBig} aria-label="Full screen"><Icon name="expand" size={22} stroke={2.8} /></button>
       {faces}
@@ -197,7 +248,7 @@ function Vid({ stream, mirror = false, className = "", turn = 0 }) {
 // again when its tracks change — some phones only play what a stream had
 // when it was handed over — and if a phone won't start it without a tap,
 // the next tap anywhere starts it.
-function Sound({ stream, onNeedTap }) {
+function Sound({ stream, onNeedTap, volume = 1 }) {
   const ref = useRef(null);
   const tracks = stream ? stream.getAudioTracks().map((t) => t.id).join() : "";
   useEffect(() => {
@@ -211,6 +262,7 @@ function Sound({ stream, onNeedTap }) {
     document.addEventListener("pointerdown", kick, true);
     return () => document.removeEventListener("pointerdown", kick, true);
   }, []);
+  useEffect(() => { const a = ref.current; if (a) { try { a.volume = volume; } catch { /* an iPhone's is its own */ } } }, [volume]);
   return <audio ref={ref} className="call-sound" autoPlay />;
 }
 
@@ -430,6 +482,8 @@ export default function CallLayer() {
   const sharer = others.find((m) => peers[m.id]?.screen);
   const shown = sharer ? peers[sharer.id].screen : null;
   const zoom = useZoom(shown ? shown.id : "");
+  const [screenVol, setScreenVol] = useState(1);        // a friend's shared video: how loud, here
+  const screenLv = useLevels({ getVol: () => screenVol, setVol: setScreenVol, off: zoom.zoomed });
   const big = async () => {
     const el = shareRef.current;
     if (!el) return;
@@ -699,7 +753,7 @@ export default function CallLayer() {
       )}
       {call && others.map((m) => peers[m.id]?.stream && <Sound key={m.id} stream={peers[m.id].stream} onNeedTap={needTap} />)}
       {call && others.map((m) => peers[m.id]?.screen && peers[m.id].screen.getAudioTracks().length > 0
-        && <Sound key={"s" + m.id} stream={peers[m.id].screen} onNeedTap={needTap} />)}
+        && <Sound key={"s" + m.id} stream={peers[m.id].screen} onNeedTap={needTap} volume={screenVol} />)}
 
       {ringing && (
         <div className="call-ring" role="dialog" aria-label={`${ring.from.name} is calling`}>
@@ -727,7 +781,7 @@ export default function CallLayer() {
             </div>
           ) : C.film ? (
             <>
-              <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={stageFaces} />
+              <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={stageFaces} volume={C.filmVolume} waiting={C.filmWait} />
               {strip}
             </>
           ) : watch ? (
@@ -737,10 +791,11 @@ export default function CallLayer() {
             </>
           ) : shown ? (
             <>
-              <div className={`call-share${pseudo ? " pfull" : ""}`} ref={shareRef}>
+              <div className={`call-share${pseudo ? " pfull" : ""}`} ref={shareRef} {...screenLv.handlers}>
                 <div className="call-zoom" ref={zoom.box} {...zoom.handlers}>
-                  <div className="call-zoom-in" style={zoom.style}><Vid stream={shown} className="call-fit" /></div>
+                  <div className="call-zoom-in" style={screenLv.filter ? { ...(zoom.style || {}), filter: screenLv.filter } : zoom.style}><Vid stream={shown} className="call-fit" /></div>
                 </div>
+                {screenLv.level}
                 {zoom.zoomed && (
                   <button type="button" className="call-unzoom" onClick={zoom.reset} aria-label="Back to the whole screen">
                     {zoom.scale.toFixed(1)}× · 1×

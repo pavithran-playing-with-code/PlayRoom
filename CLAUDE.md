@@ -333,7 +333,14 @@ There is no test runner. What works:
   goes to everyone as your shared screen, so they need nothing: the
   player's `captureStream()`, or on an iPhone a canvas plus Web Audio;
   `call:media` carries its name (`film`); its picture slot
-  prefers H.264 (`preferH264`: a phone's chip, so 1080p stays 1080p). (It first required everyone to
+  prefers H.264 (`preferH264`: a phone's chip, so 1080p stays 1080p). A film whose sound the
+  browser can't play (Dolby AC-3 / E-AC-3, DTS — most downloaded films) plays
+  silent; `soundMissing` notices and `src/utils/filmSound.js` decodes it like
+  VLC: ffmpeg.wasm (the JS front vendored in `src/vendor/ffmpeg`, the ~30 MB
+  core from jsDelivr only when needed) reads the file in place (WORKERFS),
+  20 s at a time ahead of the picture, Web Audio plays it in step and its
+  track replaces the silent one going to the call. Swipe up/down on a shared
+  video: left half brightness, right half volume (`useLevels`). (It first required everyone to
   pick the same file and only synced play/pause — nobody expected that, so
   it was dropped; that sync engine, `config/callWatch.js` `call:watch`,
   `watchSync.js`, now serves YouTube.) Or **YouTube together**:

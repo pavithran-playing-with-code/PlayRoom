@@ -2197,3 +2197,13 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .gi-light{filter:saturate(1.08) brightness(1.04)}
 .gi-light [stroke="#2E2140"]:not([fill="none"]){stroke:#7C6FA3;stroke-opacity:.6;stroke-width:1.6px}
 .gi-light [stroke="#2E2140"][fill="none"]{stroke:#4B4068}
+/* swipes on a shared video (useLevels): the level, left for brightness, right for volume */
+.cw-level{position:absolute;top:50%;transform:translateY(-50%);z-index:6;display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 8px;border-radius:16px;background:rgba(20,16,30,.62);color:#fff;font-weight:800;font-size:13px;pointer-events:none}
+.cw-level.left{left:calc(env(safe-area-inset-left,0px) + 18px)}
+.cw-level.right{right:calc(env(safe-area-inset-right,0px) + 18px)}
+.cw-level span{font-size:20px;line-height:1}
+.cw-level i{position:relative;width:8px;height:110px;border-radius:5px;background:rgba(255,255,255,.25);overflow:hidden}
+.cw-level b{position:absolute;left:0;right:0;bottom:0;background:var(--sun);border-radius:5px}
+.cw-level em{font-style:normal}
+.cw-film-wait{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:6;padding:6px 14px;border-radius:999px;background:rgba(20,16,30,.7);color:#fff;font-weight:800;font-size:13px;white-space:nowrap;pointer-events:none}
+.call-share{touch-action:none}

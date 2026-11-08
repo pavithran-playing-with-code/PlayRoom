@@ -212,9 +212,28 @@ function SubLine({ v, cues }) {
 
 // Audio & subtitles, as in VLC: the film's sound tracks (languages,
 // commentary…) and its subtitles, read from the file
-function TrackMenu({ film, tracks, onAudio, onSubs, onClose }) {
+function SoundCheck({ diag }) {
+  const [d, setD] = useState(() => diag());
+  useEffect(() => { const id = setInterval(() => setD(diag()), 700); return () => clearInterval(id); }, [diag]);
+  if (!d) return null;
+  const s = d.sound;
+  return (
+    <div className="cw-diag">
+      {d.lines.map((l, i) => <div key={i}>{l}</div>)}
+      <div>video: {d.video.t}s {d.video.paused ? "paused" : "playing"} · muted {String(d.video.muted)} · browser decoded {String(d.video.decoded)}</div>
+      <div>sending to call: {d.sending}</div>
+      {s ? (
+        <div>decoder: {s.pieces} pieces ok, {s.failed} failed, last {s.ms} ms · loudest {s.peak.toFixed(2)} · audio engine {s.ctx} · {s.waiting ? "waiting" : s.playing ? "playing" : "idle"} · volume {s.vol.toFixed(2)}</div>
+      ) : <div>decoder: not playing</div>}
+      {s && s.errs.map((e, i) => <div key={"e" + i} className="bad">{e}</div>)}
+    </div>
+  );
+}
+
+function TrackMenu({ film, tracks, onAudio, onSubs, onClose, diag }) {
   const [info, setInfo] = useState(null);
   const [err, setErr] = useState(false);
+  const [check, setCheck] = useState(false);
   useEffect(() => { let on = true; tracks().then((x) => on && setInfo(x)).catch(() => on && setErr(true)); return () => { on = false; }; }, [tracks]);
   const stop = (e) => e.stopPropagation();
   return (
@@ -236,12 +255,14 @@ function TrackMenu({ film, tracks, onAudio, onSubs, onClose }) {
             )) : <div className="cw-tracks-note">No subtitles in this file</div>}
           </>
         )}
+        <button type="button" className="cw-track cw-diag-btn" onClick={() => setCheck((x) => !x)}>🩺 Sound check {check ? "▴" : "▾"}</button>
+        {check && <SoundCheck diag={diag} />}
       </div>
     </div>
   );
 }
 
-function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks, onAudio, onSubs }) {
+function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks, onAudio, onSubs, diag }) {
   const [menu, setMenu] = useState(false);
   const box = useRef(null);
   useLayoutEffect(() => {
@@ -260,7 +281,7 @@ function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks
       <button type="button" className="cw-tracks-btn" onPointerDown={(e) => e.stopPropagation()} onClick={() => setMenu(true)} aria-label="Audio and subtitles">
         <Icon name="film" size={14} /> Audio &amp; subtitles
       </button>
-      {menu && <TrackMenu film={film} tracks={tracks} onAudio={onAudio} onSubs={onSubs} onClose={() => setMenu(false)} />}
+      {menu && <TrackMenu film={film} tracks={tracks} onAudio={onAudio} onSubs={onSubs} diag={diag} onClose={() => setMenu(false)} />}
       <div className="call-share-tag"><Icon name="film" size={14} /> {film.name}</div>
       <button type="button" className="call-big" onClick={onBig} aria-label="Full screen"><Icon name="expand" size={22} stroke={2.8} /></button>
       {faces}
@@ -834,7 +855,7 @@ export default function CallLayer() {
             </div>
           ) : C.film ? (
             <>
-              <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={stageFaces} volume={C.filmVolume} waiting={C.filmWait} tracks={C.filmTracks} onAudio={C.filmAudio} onSubs={C.filmSubs} />
+              <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={stageFaces} volume={C.filmVolume} waiting={C.filmWait} tracks={C.filmTracks} onAudio={C.filmAudio} onSubs={C.filmSubs} diag={C.filmDiag} />
               {strip}
             </>
           ) : watch ? (

@@ -947,11 +947,38 @@ export function CallProvider({ children }) {
   // and Android capture the player itself; an iPhone (no captureStream on a
   // <video>) draws it onto a canvas and takes its sound through Web Audio.
   // ── a film's tracks: sound and subtitles, as VLC offers them ───────────────
+  // every step, for the Sound check in the menu (a screenshot of it says where it stopped)
+  const note = (f, line) => { if (!f) return; (f.diag || (f.diag = [])).push(`${((performance.now() - (f.t0 || 0)) / 1000).toFixed(1)}s ${line}`); if (f.diag.length > 40) f.diag.shift(); };
+  const filmDiag = useCallback(() => {
+    const f = filmRef.current;
+    if (!f) return null;
+    const v = f.v;
+    return {
+      lines: (f.diag || []).slice(),
+      sound: f.sound ? f.sound.stats() : null,
+      video: { t: v.currentTime.toFixed(1), paused: v.paused, muted: v.muted, vol: v.volume, decoded: "webkitAudioDecodedByteCount" in v ? v.webkitAudioDecodedByteCount : "?" },
+      sending: f.stream ? f.stream.getAudioTracks().map((t) => `${t.label || "track"} ${t.readyState}${t.enabled ? "" : " (off)"}`).join(", ") || "no sound track" : "—",
+    };
+  }, []);
   // its tracks, read by ffmpeg once (filmSound.openFilm)
   const filmTracksOf = useCallback((v) => {
     const f = filmRef.current;
     if (!f || f.v !== v) return Promise.reject(new Error("gone"));
-    if (!f.open) f.open = openFilm(f.file).catch((e) => { if (filmRef.current === f) f.open = null; throw e; });
+    if (!f.open) {
+      const t0 = performance.now();
+      note(f, "decoder: loading…");
+      f.open = openFilm(f.file).then((F) => {
+        note(f, `decoder: ready in ${((performance.now() - t0) / 1000).toFixed(1)} s · ${F.audio.length} sound, ${F.subs.length} subtitle tracks`);
+        F.audio.forEach((a) => note(f, `  sound ${a.n + 1}: ${a.label} [${a.codec}]`));
+        if (!F.audio.length) F.probe.forEach((l) => note(f, "  " + l));
+        return F;
+      }).catch((e) => {
+        note(f, `decoder: FAILED — ${e && e.message ? e.message : e}`);
+        reportError("film", `decoder failed: ${e && e.message ? e.message : e}`);
+        if (filmRef.current === f) f.open = null;
+        throw e;
+      });
+    }
     return f.open;
   }, []);
   // the film's sound, from now on: audio track n, decoded here
@@ -959,8 +986,10 @@ export function CallProvider({ children }) {
     const f = filmRef.current;
     if (!f || f.v !== v) return;
     const F = await filmTracksOf(v);
+    note(f, `sound: starting track ${n + 1}${auto ? " (automatic)" : ""}`);
     const snd = await F.sound(n, v, { onWait: (w) => setFilmWait(w) });
     if (filmRef.current !== f) { snd.stop(); return; }
+    note(f, "sound: decoder playing — the call now gets the decoded sound");
     if (f.sound) f.sound.stop();
     f.sound = snd; f.audioN = n;
     try { snd.track.contentHint = "music"; } catch { /* fine */ }
@@ -1071,7 +1100,7 @@ export function CallProvider({ children }) {
       stop = () => { cancelAnimationFrame(raf); if (ac) ac.close().catch(() => {}); };
     }
 
-    filmRef.current = { v, url, file, stream, drawn, name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), stop };
+    filmRef.current = { v, url, file, stream, drawn, t0: performance.now(), name: file.name.replace(/\.[^.]+$/, "").slice(0, 100), stop };
     setFilm({ name: filmRef.current.name, v, audioN: null, subN: null, cues: null });
     const go = () => {
       if (!filmRef.current || filmRef.current.v !== v) return;
@@ -1090,15 +1119,21 @@ export function CallProvider({ children }) {
     // even says it's playing such sound and puts out nothing, so the file is
     // looked at first; the browser's own word is the second check.
     (async () => {
+      const f0 = filmRef.current;
+      note(f0, `file: ${file.name.slice(0, 50)} · ${(file.size / 1048576).toFixed(0)} MB · ${file.type || "no type"}`);
+      note(f0, `this phone: ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, "").slice(0, 110)}`);
       const dolby = await dolbyLike(file);
+      note(f0, `Dolby/DTS in the file's headers: ${dolby ? "yes" : "no"}`);
       const missing = dolby || (await soundMissing(v));
+      if (!dolby) note(f0, `browser's own sound: ${missing ? "none decoded" : "playing"} (decoded bytes ${"webkitAudioDecodedByteCount" in v ? v.webkitAudioDecodedByteCount : "?"})`);
       const f = filmRef.current;
       if (!missing || !f || f.v !== v || f.sound) return;
       say(dolby ? "🔊 Dolby sound — decoding it so everyone can hear (the first time takes a moment)…" : "🔊 This video's sound needs decoding — fixing it (the first time takes a moment)…");
       let F;
-      try { F = await filmTracksOf(v); } catch { say("Couldn't load the sound decoder — check the connection and play it again"); return; }
+      try { F = await filmTracksOf(v); } catch { say("Couldn't load the sound decoder — open Audio & subtitles › Sound check and send me a screenshot"); return; }
       if (!F.audio.length) { say("This video has no sound"); return; }
-      await pickAudio(v, (F.audio.find((x) => x.def) || F.audio[0]).n, true);
+      try { await pickAudio(v, (F.audio.find((x) => x.def) || F.audio[0]).n, true); }
+      catch (e) { note(filmRef.current, `sound: FAILED — ${e && e.message ? e.message : e}`); say("The sound didn't start — open Audio & subtitles › Sound check"); }
     })();
   }, [stopShare, tellMedia, say, hideFilm, filmTracksOf, pickAudio]);
   // for the menu: the tracks, and picking one
@@ -1256,9 +1291,9 @@ export function CallProvider({ children }) {
   const value = useMemo(() => ({
     call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn, mics, setMics, listMics, chooseMic,
     startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
-    watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs,
+    watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs, filmDiag,
   }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere, mics, listMics, chooseMic,
-    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs]);
+    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs, filmDiag]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

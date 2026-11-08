@@ -43,9 +43,19 @@ async function newFF() {
   await ff.load(await getCore());
   return ff;
 }
+// ffmpeg's last complaints, for the Sound check
+const ffErrs = [];
 // one ffmpeg for the sound, kept
 let ffLoad = null;
-const getFF = () => { if (!ffLoad) ffLoad = newFF().catch((e) => { ffLoad = null; throw e; }); return ffLoad; };
+const getFF = () => {
+  if (!ffLoad) {
+    ffLoad = newFF().then((ff) => {
+      ff.on("log", ({ message }) => { if (/error|invalid|failed|cannot|could not|not found|unsupported/i.test(message)) { ffErrs.push(message.slice(0, 140)); if (ffErrs.length > 4) ffErrs.shift(); } });
+      return ff;
+    }).catch((e) => { ffLoad = null; throw e; });
+  }
+  return ffLoad;
+};
 // it does one thing at a time
 let chain = Promise.resolve();
 const queued = (fn) => { const p = chain.then(fn, fn); chain = p.catch(() => {}); return p; };
@@ -147,6 +157,7 @@ export async function openFilm(file) {
   const info = parseStreams(log);
   const F = {
     ...info,
+    probe: log.filter((l) => /Input #|Duration|Stream #/.test(l)).map((l) => l.trim().slice(0, 140)).slice(0, 12),
     // the sound of audio track n, in step with the video
     sound: (n, v, opts) => playSound(ff, path, n, v, opts),
     // text subtitles n, read out whole — by a second ffmpeg, so the sound
@@ -188,21 +199,25 @@ async function playSound(ff, path, n, v, { onWait } = {}) {
   const cache = new Map();          // piece -> AudioBuffer, or a Promise of one
   const tag = `${++mountN}`;
   let alive = true, playing = null, waiting = false, pausedByUs = false;
+  const st = { pieces: 0, failed: 0, ms: 0, peak: 0 };
   const dur = () => (Number.isFinite(v.duration) ? v.duration : Infinity);
 
   // decode one piece: from i*SEG, SEG seconds, stereo, 48 kHz, as floats
   const decode = (i) => queued(async () => {
     if (!alive) return null;
-    const o = `/s${tag}_${i}.raw`;
+    const o = `/s${tag}_${i}.raw`, t0 = performance.now();
     await ff.exec(["-hide_banner", "-loglevel", "error", "-ss", String(i * SEG), "-i", path, "-t", String(SEG),
       "-map", `0:a:${n}`, "-vn", "-sn", "-dn", "-ac", "2", "-ar", String(RATE), "-f", "f32le", o]);
     let data;
-    try { data = await ff.readFile(o); await ff.deleteFile(o); } catch { return null; }
+    try { data = await ff.readFile(o); await ff.deleteFile(o); } catch { st.failed++; return null; }
+    st.ms = Math.round(performance.now() - t0);
     const f = new Float32Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 4));
     const len = Math.floor(f.length / 2);
     if (!len || !alive) return null;
     const buf = ac.createBuffer(2, len, RATE), L = buf.getChannelData(0), R = buf.getChannelData(1);
-    for (let k = 0; k < len; k++) { L[k] = f[2 * k]; R[k] = f[2 * k + 1]; }
+    let pk = 0;
+    for (let k = 0; k < len; k++) { L[k] = f[2 * k]; R[k] = f[2 * k + 1]; const a = Math.abs(L[k]); if (a > pk) pk = a; }
+    st.pieces++; st.peak = Math.max(st.peak, pk);
     return buf;
   });
   const want = (i) => {
@@ -280,6 +295,8 @@ async function playSound(ff, path, n, v, { onWait } = {}) {
 
   return {
     track: out.stream.getAudioTracks()[0],
+    // for the Sound check
+    stats: () => ({ ...st, ctx: ac.state, playing: !!playing, waiting, muted: v.muted, vol: local.gain.value, errs: ffErrs.slice() }),
     setVolume(x) { local.gain.value = Math.max(0, Math.min(1, x)); },
     volume() { return local.gain.value; },
     stop() {

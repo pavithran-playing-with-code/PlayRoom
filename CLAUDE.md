@@ -339,7 +339,9 @@ There is no test runner. What works:
   the file's headers first (`soundMissing` is the backup) and
   `src/utils/filmSound.js` decodes it like VLC: ffmpeg.wasm (the JS front vendored in `src/vendor/ffmpeg`, the ~30 MB
   core from jsDelivr only when needed) reads the file in place (WORKERFS),
-  20 s at a time ahead of the picture, Web Audio plays it in step and its
+  10 s at a time, 50 s ahead of the picture; Web Audio plays it in step —
+  heard through an <audio> player of a stream (on Android in a call, Web
+  Audio's own output played a second and went quiet) — and its
   track replaces the silent one going to the call. Swipe up/down on a shared
   video: left half brightness, right half volume (`useLevels`). Audio & subtitles
   (`TrackMenu`) lists the file's tracks (`openFilm`): any sound track is

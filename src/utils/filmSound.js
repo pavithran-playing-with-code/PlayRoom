@@ -22,7 +22,8 @@
 //     F.close()
 
 const CORE = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
-const SEG = 20;                  // seconds of sound per piece
+const SEG = 10;                  // seconds of sound per piece (short: the first sound and a jump come quickly)
+const AHEAD = 5;                 // pieces decoded ahead of the film (50 s)
 const RATE = 48000;
 const LEAD = 0.06;               // seconds: a piece starts this far ahead, so it's never late
 
@@ -194,29 +195,51 @@ export async function filmSound(file, v, opts) {
 async function playSound(ff, path, n, v, { onWait } = {}) {
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC({ sampleRate: RATE });
-  const master = ac.createGain(), local = ac.createGain(), out = ac.createMediaStreamDestination();
-  master.connect(local); local.connect(ac.destination); master.connect(out);
+  const master = ac.createGain(), local = ac.createGain(), out = ac.createMediaStreamDestination(), here = ac.createMediaStreamDestination();
+  master.connect(out); master.connect(local); local.connect(here);
+  // Heard here through an <audio> player, like the call's voices — not
+  // straight from Web Audio: on Android, once a call has the microphone the
+  // phone is in call-audio mode, and Web Audio's own output played for a
+  // moment and then went quiet. A player of a stream keeps sounding.
+  const sink = document.createElement("audio");
+  sink.autoplay = true; sink.setAttribute("playsinline", ""); sink.style.display = "none";
+  sink.srcObject = here.stream;
+  document.body.appendChild(sink);
+  const kick = () => { if (sink.paused) sink.play().catch(() => {}); };
+  kick();
   const cache = new Map();          // piece -> AudioBuffer, or a Promise of one
   const tag = `${++mountN}`;
   let alive = true, playing = null, waiting = false, pausedByUs = false;
-  const st = { pieces: 0, failed: 0, ms: 0, peak: 0 };
+  const st = { pieces: 0, failed: 0, ms: 0, peak: 0, restarts: 0 };
+  const tries = new Map();          // piece -> times it came out bad
   const dur = () => (Number.isFinite(v.duration) ? v.duration : Infinity);
 
   // decode one piece: from i*SEG, SEG seconds, stereo, 48 kHz, as floats
   const decode = (i) => queued(async () => {
     if (!alive) return null;
     const o = `/s${tag}_${i}.raw`, t0 = performance.now();
-    await ff.exec(["-hide_banner", "-loglevel", "error", "-ss", String(i * SEG), "-i", path, "-t", String(SEG),
-      "-map", `0:a:${n}`, "-vn", "-sn", "-dn", "-ac", "2", "-ar", String(RATE), "-f", "f32le", o]);
+    // a short look at the file only (a big film's headers are read once per piece)
+    await ff.exec(["-hide_banner", "-loglevel", "error", "-probesize", "2000000", "-analyzeduration", "1000000",
+      "-ss", String(i * SEG), "-i", path, "-t", String(SEG),
+      "-map", `0:a:${n}`, "-vn", "-sn", "-dn", "-ac", "2", "-ar", String(RATE), "-f", "s16le", o]);
     let data;
-    try { data = await ff.readFile(o); await ff.deleteFile(o); } catch { st.failed++; return null; }
+    try { data = await ff.readFile(o); await ff.deleteFile(o); } catch { data = null; }
     st.ms = Math.round(performance.now() - t0);
-    const f = new Float32Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 4));
+    const f = data ? new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2)) : new Int16Array(0);
     const len = Math.floor(f.length / 2);
-    if (!len || !alive) return null;
-    const buf = ac.createBuffer(2, len, RATE), L = buf.getChannelData(0), R = buf.getChannelData(1);
+    if (!alive) return null;
+    // came out short (a read that failed part way): try again — twice, then
+    // let it be silence rather than hold the film for ever
+    const full = Math.min(SEG, dur() - i * SEG) - 0.3;
+    if (len / RATE < full) {
+      const k = (tries.get(i) || 0) + 1;
+      tries.set(i, k); st.failed++;
+      if (k < 3) return null;
+      if (!len) return ac.createBuffer(2, Math.max(1, Math.round(Math.max(0.5, full) * RATE)), RATE);
+    }
+    const buf = ac.createBuffer(2, Math.max(1, len), RATE), L = buf.getChannelData(0), R = buf.getChannelData(1);
     let pk = 0;
-    for (let k = 0; k < len; k++) { L[k] = f[2 * k]; R[k] = f[2 * k + 1]; const a = Math.abs(L[k]); if (a > pk) pk = a; }
+    for (let k = 0; k < len; k++) { L[k] = f[2 * k] / 32768; R[k] = f[2 * k + 1] / 32768; const a = Math.abs(L[k]); if (a > pk) pk = a; }
     st.pieces++; st.peak = Math.max(st.peak, pk);
     return buf;
   });
@@ -246,10 +269,14 @@ async function playSound(ff, path, n, v, { onWait } = {}) {
   };
   const begin = () => {
     const t = v.currentTime, i = Math.floor(t / SEG), rate = v.playbackRate || 1;
-    if (!ready(i)) return false;
+    const b = ready(i), from = t + LEAD * rate - i * SEG;
+    if (!b) return false;
+    // a piece that ends before where the film is: no good, decode it again
+    if (from >= b.duration - 0.05) { cache.delete(i); return false; }
     const at = ac.currentTime + LEAD;
     playing = { srcs: [], t0: t + LEAD * rate, c0: at, rate };
-    schedule(i, at, t + LEAD * rate - i * SEG);
+    schedule(i, at, from);
+    st.restarts++;
     return true;
   };
   const hold = () => { waiting = true; if (onWait) onWait(true); if (!v.paused) { pausedByUs = true; v.pause(); } };
@@ -257,8 +284,9 @@ async function playSound(ff, path, n, v, { onWait } = {}) {
   const tick = () => {
     if (!alive) return;
     const t = v.currentTime, i = Math.floor(t / SEG);
-    for (let k = i; k <= i + 2; k++) want(k);
-    for (const k of cache.keys()) if (k < i - 1 || k > i + 3) cache.delete(k);
+    for (let k = i; k <= i + AHEAD; k++) want(k);
+    for (const k of cache.keys()) if (k < i - 1 || k > i + AHEAD + 1) cache.delete(k);
+    kick();
     if (v.seeking || v.ended) { stopAll(); return; }
     if (waiting) {
       // the film is held for its sound: go on once the piece is here
@@ -273,7 +301,7 @@ async function playSound(ff, path, n, v, { onWait } = {}) {
     if (!playing) { if (!begin()) { stopAll(); hold(); } return; }
     // drifted (a stall, a seek, a new speed): start again from where the film is
     const expect = playing.t0 + (ac.currentTime - playing.c0) * playing.rate;
-    if (Math.abs(expect - t) > 0.25 || playing.rate !== (v.playbackRate || 1)) { stopAll(); begin(); return; }
+    if (Math.abs(expect - t) > 0.3 || playing.rate !== (v.playbackRate || 1)) { stopAll(); begin(); return; }
     // the next piece, right after this one
     if (playing.endAt - ac.currentTime < 2.5 && !schedule(playing.last + 1, playing.endAt, 0)
       && playing.endAt - ac.currentTime < 0.3 && (playing.last + 1) * SEG < dur()) { stopAll(); hold(); }
@@ -287,7 +315,7 @@ async function playSound(ff, path, n, v, { onWait } = {}) {
   };
   evs.forEach((x) => v.addEventListener(x, onEv));
   // a phone's sound only starts from a tap: any tap wakes it
-  const wake = () => { if (ac.state === "suspended") ac.resume().catch(() => {}); };
+  const wake = () => { if (ac.state === "suspended") ac.resume().catch(() => {}); kick(); };
   document.addEventListener("pointerdown", wake, true);
   const every = setInterval(tick, 200);
   v.muted = true;                   // its own sound (silent, or wrong) is out of the way
@@ -296,7 +324,7 @@ async function playSound(ff, path, n, v, { onWait } = {}) {
   return {
     track: out.stream.getAudioTracks()[0],
     // for the Sound check
-    stats: () => ({ ...st, ctx: ac.state, playing: !!playing, waiting, muted: v.muted, vol: local.gain.value, errs: ffErrs.slice() }),
+    stats: () => ({ ...st, ctx: ac.state, playing: !!playing, waiting, muted: v.muted, vol: local.gain.value, player: sink.paused ? "paused" : "playing", errs: ffErrs.slice() }),
     setVolume(x) { local.gain.value = Math.max(0, Math.min(1, x)); },
     volume() { return local.gain.value; },
     stop() {
@@ -306,6 +334,7 @@ async function playSound(ff, path, n, v, { onWait } = {}) {
       document.removeEventListener("pointerdown", wake, true);
       stopAll(); cache.clear();
       if (waiting && onWait) onWait(false);
+      try { sink.pause(); sink.srcObject = null; sink.remove(); } catch { /* gone */ }
       ac.close().catch(() => {});
     },
   };

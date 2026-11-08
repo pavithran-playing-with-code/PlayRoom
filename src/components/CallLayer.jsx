@@ -223,7 +223,7 @@ function SoundCheck({ diag }) {
       <div>video: {d.video.t}s {d.video.paused ? "paused" : "playing"} · muted {String(d.video.muted)} · browser decoded {String(d.video.decoded)}</div>
       <div>sending to call: {d.sending}</div>
       {s ? (
-        <div>decoder: {s.pieces} pieces ok, {s.failed} failed, last {s.ms} ms · loudest {s.peak.toFixed(2)} · audio engine {s.ctx} · {s.waiting ? "waiting" : s.playing ? "playing" : "idle"} · volume {s.vol.toFixed(2)}</div>
+        <div>decoder: {s.pieces} pieces ok, {s.failed} failed, last {s.ms} ms · loudest {s.peak.toFixed(2)} · audio engine {s.ctx} · player {s.player} · restarts {s.restarts} · {s.waiting ? "waiting" : s.playing ? "playing" : "idle"} · volume {s.vol.toFixed(2)}</div>
       ) : <div>decoder: not playing</div>}
       {s && s.errs.map((e, i) => <div key={"e" + i} className="bad">{e}</div>)}
     </div>

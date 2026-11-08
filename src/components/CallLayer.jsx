@@ -223,7 +223,7 @@ function SoundCheck({ diag }) {
       <div>video: {d.video.t}s {d.video.paused ? "paused" : "playing"} · muted {String(d.video.muted)} · browser decoded {String(d.video.decoded)}</div>
       <div>sending to call: {d.sending}</div>
       {s ? (
-        <div>decoder: {s.pieces} pieces ok, {s.failed} failed, last {s.ms} ms · loudest {s.peak.toFixed(2)} · audio engine {s.ctx} · player {s.player} · restarts {s.restarts} · {s.waiting ? "waiting" : s.playing ? "playing" : "idle"} · volume {s.vol.toFixed(2)}</div>
+        <div>decoder: {s.pieces} pieces ok, {s.failed} failed, last {s.ms} ms · loudest {s.peak.toFixed(2)} · audio engine {s.ctx} · player {s.player} · restarts {s.restarts} · decoders {s.workers} · ready ahead {s.ahead} · queued {s.queued} · {s.waiting ? "waiting" : s.playing ? "playing" : "idle"} · volume {s.vol.toFixed(2)}</div>
       ) : <div>decoder: not playing</div>}
       {s && s.errs.map((e, i) => <div key={"e" + i} className="bad">{e}</div>)}
     </div>
@@ -277,7 +277,7 @@ function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks
       <div className="cw-film-box" ref={box} style={lv.filter ? { filter: lv.filter } : undefined} />
       {lv.level}
       <SubLine v={film.v} cues={film.cues} />
-      {waiting && <div className="cw-film-wait">🔊 Getting the sound ready…</div>}
+      {waiting && <div className="cw-film-wait">🔊 Sound catching up…</div>}
       <button type="button" className="cw-tracks-btn" onPointerDown={(e) => e.stopPropagation()} onClick={() => setMenu(true)} aria-label="Audio and subtitles">
         <Icon name="film" size={14} /> Audio &amp; subtitles
       </button>

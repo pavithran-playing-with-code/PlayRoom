@@ -420,7 +420,13 @@ There is no test runner. What works:
   `room:play` in `config/socket.js` holds it, the other is told "elsewhere"
   and can watch or, once `room:play-free`, play. Leaving a room from the
   other device (tab closed) keeps the seat (`heldElsewhere`, the leave
-  sends its socket id). `check-calls.js` covers the call rules.
+  sends its socket id). Devices, not sockets, are told apart: each
+  sends `deviceId()` (`src/utils/deviceId.js`, localStorage) with the socket;
+  a phone whose connection blipped comes back on a new socket while the
+  server still thinks the old one is alive (~20 s), and was told its own
+  match was "on your other device". `check-calls.js` covers the call rules,
+  `check-devices.js` (the real socket server, real connections) the match
+  hold and leaving.
 - **Spectating** — a puzzle or board game sends its board with every move
   (`useSpectate`, `room:live`). A real-time game (Speedway, Piano Tiles,
   Dino Dash, Flappy Dash, Rail Runner, Road Hopper, Dodge Storm, Sunshard

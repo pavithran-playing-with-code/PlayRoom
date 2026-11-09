@@ -94,6 +94,9 @@ function view(c) {
   };
 }
 
+// which device a socket is (src/utils/deviceId.js); an old app without one: the socket itself
+const deviceOf = (socket) => { const d = socket.handshake && socket.handshake.auth && socket.handshake.auth.device; return typeof d === "string" && d ? d.slice(0, 64) : socket.id; };
+
 function attach(io) {
   const toMembers = (c, event, payload, exceptUid = null) => {
     for (const [id, m] of c.members) if (id !== exceptUid && m.sid) io.to(m.sid).emit(event, payload);
@@ -105,7 +108,7 @@ function attach(io) {
     const c = calls.get(inCall.get(uid));
     const m = c && c.members.get(uid);
     io.to(userChannel(uid)).emit("call:mine", m
-      ? { callId: c.id, sid: m.sid, with: [...c.members].filter(([id]) => id !== uid).map(([, x]) => x.name) }
+      ? { callId: c.id, sid: m.sid, device: m.device, with: [...c.members].filter(([id]) => id !== uid).map(([, x]) => x.name) }
       : { callId: null });
   };
   const tellState = (c) => {
@@ -147,6 +150,7 @@ function attach(io) {
   io.on("connection", (socket) => {
     const uid = Number(socket.user.id);
     const name = socket.user.username || "Friend";
+    const device = deviceOf(socket);
 
     // Ring a friend. Starts a call, or (in one already) adds them to it.
     socket.on("call:start", async (msg, ack) => {
@@ -164,15 +168,18 @@ function attach(io) {
       // call over). From a connection that dropped (this phone before it
       // reconnected): that one's over, this is a new call.
       if (c && c.members.get(uid).sid !== socket.id) {
-        if (c.members.get(uid).sid) return reply({ ok: false, why: "elsewhere" });
-        leave(c, uid, "switched"); c = null;
+        const m = c.members.get(uid);
+        if (m.sid && m.device !== device) return reply({ ok: false, why: "elsewhere" });
+        // this same device on a new socket (its connection blipped): still me in the call
+        if (m.sid) { clearTimeout(m.gone); m.gone = null; m.sid = socket.id; }
+        else { leave(c, uid, "switched"); c = null; }
       }
       if (inCall.has(to) && (!c || inCall.get(to) !== c.id)) return reply({ ok: false, why: "busy" });
       if (c && (c.members.has(to) || c.invited.has(to))) return reply({ ok: true, callId: c.id, iceServers: await iceServers() });
       if (c && c.members.size + c.invited.size >= MAX) return reply({ ok: false, why: "full" });
       if (!c) {
         c = { id: `c${Date.now().toString(36)}${(++seq).toString(36)}`, members: new Map(), invited: new Map() };
-        c.members.set(uid, { sid: socket.id, name, gone: null });
+        c.members.set(uid, { sid: socket.id, device, name, gone: null });
         calls.set(c.id, c);
         inCall.set(uid, c.id);
       }
@@ -197,7 +204,7 @@ function attach(io) {
       const old = calls.get(inCall.get(uid));
       if (old && old !== c) leave(old, uid, "switched");
       stopRinging(c, uid);
-      c.members.set(uid, { sid: socket.id, name, gone: null });
+      c.members.set(uid, { sid: socket.id, device, name, gone: null });
       inCall.set(uid, c.id);
       const ice = await iceServers();
       reply({ ok: true, iceServers: ice, ...view(c) });
@@ -227,7 +234,7 @@ function attach(io) {
       const m = c && c.members.get(uid);
       if (!m || !msg || msg.callId !== c.id) return reply({ ok: false, why: "gone" });
       const old = m.sid;
-      clearTimeout(m.gone); m.gone = null; m.sid = socket.id;
+      clearTimeout(m.gone); m.gone = null; m.sid = socket.id; m.device = device;
       if (old && old !== socket.id) {
         io.to(old).emit("call:moved", { callId: c.id });
         toMembers(c, "call:left", { callId: c.id, id: uid, reason: "moved" }, uid);
@@ -242,7 +249,7 @@ function attach(io) {
       const c = calls.get(msg && msg.callId);
       const m = c && c.members.get(uid);
       if (!m) return reply({ ok: false });
-      clearTimeout(m.gone); m.gone = null; m.sid = socket.id;
+      clearTimeout(m.gone); m.gone = null; m.sid = socket.id; m.device = device;
       reply({ ok: true, iceServers: await iceServers(), ...view(c) });
       tellState(c);
     });

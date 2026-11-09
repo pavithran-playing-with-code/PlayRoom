@@ -23,6 +23,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
 import { reportError } from "./reportError";
+import { deviceId } from "./deviceId";
 import { useDrawnSideways } from "../components/horror/LandscapeGate";
 import { openFilm, soundMissing, dolbyLike } from "./filmSound";
 
@@ -1209,7 +1210,9 @@ export function CallProvider({ children }) {
       // "moved": they took the call to their other device — reconnecting, not leaving
       if (c && c.id === callId) { closePeer(id); if (c.members.length > 2 && reason !== "moved") say(`${c.names[id] || "Someone"} left the call`); }
     };
-    const onMine = (m) => setElsewhere(m && m.callId && m.sid !== socket.id ? m : null);
+    // "on your other device" only when it is one: this device on a new socket
+    // (a blip, the old one not yet noticed gone) is still this device
+    const onMine = (m) => setElsewhere(m && m.callId && m.sid !== socket.id && m.device !== deviceId() ? m : null);
     const onMoved = ({ callId }) => {
       if (!callRef.current || callRef.current.id !== callId) return;
       finish(null);

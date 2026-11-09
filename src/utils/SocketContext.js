@@ -9,6 +9,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { useAuth } from "./AuthContext";
+import { deviceId } from "./deviceId";
 
 const SocketContext = createContext(null);
 
@@ -38,7 +39,7 @@ export function SocketProvider({ children }) {
     }
 
     const s = io(SOCKET_URL, {
-      auth: { token },
+      auth: { token, device: deviceId() },     // which device this is (deviceId.js)
       autoConnect: true,
       transports: ["websocket", "polling"],
     });

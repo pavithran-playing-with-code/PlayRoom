@@ -26,7 +26,9 @@ const { online } = presence;
 // reload would flash them offline and back, and fire an "is online" pop-up.
 const OFFLINE_GRACE_MS = 6000;
 const offlineTimers = new Map(); // userId -> Timeout
-const playing = new Map();       // "userId:CODE" -> the socket (device) playing that match
+const playing = new Map();       // "userId:CODE" -> { sid, device }: the socket and the device playing that match
+// which device a socket is (src/utils/deviceId.js); an old app without one: the socket itself
+const deviceOf = (socket) => { const d = socket.handshake && socket.handshake.auth && socket.handshake.auth.device; return typeof d === "string" && d ? d.slice(0, 64) : socket.id; };
 const playKey = (userId, code) => `${Number(userId)}:${code}`;
 
 function roomChannel(code) {
@@ -103,13 +105,17 @@ function initSocket(httpServer) {
     socket.on("room:play", (code, ack) => {
       const reply = typeof ack === "function" ? ack : () => {};
       if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return reply({ ok: true });
-      const held = playing.get(playKey(uid, code));
-      if (held && held !== socket.id && io.sockets.sockets.has(held)) return reply({ ok: false });
-      playing.set(playKey(uid, code), socket.id);
+      const held = playing.get(playKey(uid, code)), device = deviceOf(socket);
+      // held by another device that's still connected: that one plays. The
+      // same device on a new socket (its connection blipped, the old one not
+      // yet noticed gone) just takes it back.
+      if (held && held.sid !== socket.id && held.device !== device && io.sockets.sockets.has(held.sid)) return reply({ ok: false });
+      playing.set(playKey(uid, code), { sid: socket.id, device });
       reply({ ok: true });
     });
     socket.on("room:unplay", (code) => {
-      if (typeof code !== "string" || playing.get(playKey(uid, code)) !== socket.id) return;
+      const held = typeof code === "string" && playing.get(playKey(uid, code));
+      if (!held || held.sid !== socket.id) return;
       playing.delete(playKey(uid, code));
       io.to(userChannel(uid)).emit("room:play-free", { code });
     });
@@ -340,8 +346,8 @@ function initSocket(httpServer) {
     });
 
     socket.on("disconnect", () => {
-      for (const [k, sid] of playing) {
-        if (sid !== socket.id) continue;
+      for (const [k, held] of playing) {
+        if (held.sid !== socket.id) continue;
         playing.delete(k);
         io.to(userChannel(uid)).emit("room:play-free", { code: k.slice(k.indexOf(":") + 1) });
       }
@@ -380,11 +386,17 @@ function initSocket(httpServer) {
 function heldElsewhere(io, userId, code, sid) {
   if (!io || !sid) return false;
   const held = playing.get(playKey(userId, code));
-  if (held) return held !== sid && io.sockets.sockets.has(held);
+  // the device that's leaving (an old socket of it may linger: still this device)
+  const leaving = io.sockets.sockets.get(sid), myDevice = leaving ? deviceOf(leaving) : sid;
+  if (held) return held.sid !== sid && held.device !== myDevice && io.sockets.sockets.has(held.sid);
   const mine = io.sockets.adapter.rooms.get(userChannel(userId));
   const here = io.sockets.adapter.rooms.get(roomChannel(code));
   if (!mine || !here) return false;
-  for (const id of mine) if (id !== sid && here.has(id)) return true;
+  for (const id of mine) {
+    if (id === sid || !here.has(id)) continue;
+    const other = io.sockets.sockets.get(id);
+    if (!other || deviceOf(other) !== myDevice) return true;
+  }
   return false;
 }
 

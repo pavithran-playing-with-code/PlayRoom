@@ -22,8 +22,8 @@ global.fetch = async (url, opts) => {
 const path = require("path");
 
 // who is friends with whom, and who is online
-const FRIENDS = { 1: [2, 3, 4, 5, 6], 2: [1, 3], 3: [1, 2], 4: [1], 5: [1], 6: [1], 7: [8, 10], 8: [7], 9: [], 10: [7] };
-const ONLINE = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+const FRIENDS = { 11: [12, 13], 12: [11], 13: [11], 1: [2, 3, 4, 5, 6], 2: [1, 3], 3: [1, 2], 4: [1], 5: [1], 6: [1], 7: [8, 10], 8: [7], 9: [], 10: [7] };
+const ONLINE = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
 const presencePath = require.resolve(path.join(__dirname, "..", "config", "presence"));
 require.cache[presencePath] = {
   id: presencePath, filename: presencePath, loaded: true,
@@ -42,10 +42,10 @@ const io = {
 };
 calls.attach(io);
 let n = 0;
-function connect(uid) {
+function connect(uid, device) {
   const h = {};
   const s = {
-    id: `s${++n}`, user: { id: uid, username: `u${uid}` }, inbox: [],
+    id: `s${++n}`, handshake: device ? { auth: { device } } : {}, user: { id: uid, username: `u${uid}` }, inbox: [],
     on(ev, fn) { h[ev] = fn; },
     send(ev, msg) {
       return new Promise((res) => { h[ev](msg, res); setTimeout(() => res(undefined), 30); });
@@ -178,6 +178,24 @@ const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? 
     check("an empty one is dropped", Q.got("call:chat").length === 2);
     for (let i = 0; i < 12; i++) await P.send("call:chat", { callId: rc.callId, text: "m" + i });
     check("a flood is held back (8 in 5 s)", Q.got("call:chat").length === 8, String(Q.got("call:chat").length));
+  }
+
+  // ── the same phone, its connection blipped: a new socket while the old one
+  // isn't noticed gone yet — still this device, never "your other device" ──
+  {
+    const old = connect(11, "phone-11"), K = connect(12), L = connect(13);
+    const rc = await old.send("call:start", { to: 12 });
+    await K.send("call:accept", { callId: rc.callId });
+    const fresh = connect(11, "phone-11");                 // the old socket is still "connected"
+    const mine = fresh.got("call:mine").pop();
+    check("reconnected: told the call is on this same device (not another)", mine && mine.callId === rc.callId && mine.device === "phone-11", JSON.stringify(mine));
+    K.clear();
+    const more = await fresh.send("call:start", { to: 13 });
+    check("...and can carry on in it (add a friend), not 'elsewhere'", more && more.ok && more.callId === rc.callId && L.got("call:ring").length === 1 && K.got("call:ended").length === 0, JSON.stringify(more));
+    const other = connect(11, "laptop-11");
+    check("a really different device is still told 'elsewhere'", (await other.send("call:start", { to: 12 })).why === "elsewhere");
+    await fresh.send("call:leave", { callId: rc.callId }); await K.send("call:leave", { callId: rc.callId });
+    [old, fresh, other, K, L].forEach((x) => x.drop());
   }
 
   // ── one account, two devices: the call stays on one, the other can take it ──

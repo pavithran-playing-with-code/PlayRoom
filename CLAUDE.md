@@ -400,10 +400,14 @@ There is no test runner. What works:
   decoded frames) and shows their face, not black. Sound goes first:
   audio senders have high priority, every Opus slot gets stereo + in-band
   FEC, and the mic asks for one channel (not voice isolation: it could
-  silence some laptops). On a computer the mic goes through `cleanMic`
-  first (a 6.5 kHz low-pass and an 8 kHz notch): a laptop's webcam whined
-  into its own mic at 8 kHz the moment it came on — the "insect" friends
-  heard — measured in the mic's own track, so not the network. A mic that sends digital silence (a laptop's
+  silence some laptops). On a computer the mic goes through `cleanMic` (`src/utils/cleanMic.js`):
+  a 75 Hz low cut, a 6.5 kHz low-pass, an 8 kHz notch (a laptop's webcam
+  whined into its own mic at 8 kHz the moment it came on — the "insect"),
+  and a tone finder: every 3 s the mic's spectrum is measured and any narrow
+  peak 12 dB over its neighbours twice running gets a narrow notch (up to 8)
+  — the same laptop beeped at 4 kHz all the time, camera or not. Measure a
+  laptop's mic with headless Chrome (`--use-fake-ui-for-media-stream`, real
+  devices) and an AnalyserNode: nothing recorded, only the peaks. A mic that sends digital silence (a laptop's
   "Default" being an empty socket or Stereo Mix — friends hear nothing,
   you hear them) is caught by measuring it (`peakOf`): the other mics are
   tried, "communications" first, the first that hears anything swapped in

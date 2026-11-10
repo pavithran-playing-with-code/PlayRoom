@@ -24,6 +24,7 @@ import { useAuth } from "./AuthContext";
 import { useSocket } from "./SocketContext";
 import { reportError } from "./reportError";
 import { deviceId } from "./deviceId";
+import { cleanMic } from "./cleanMic";
 import { useDrawnSideways } from "../components/horror/LandscapeGate";
 import { openFilm, soundMissing, dolbyLike } from "./filmSound";
 
@@ -70,43 +71,7 @@ async function peakOf(track, ms) {
     return peak;
   } catch { return null; } finally { if (ac) ac.close().catch(() => {}); }
 }
-// A computer's webcam can whine into its own microphone: on one laptop, the
-// moment the camera came on the mic picked up a steady 8 kHz tone (and 16 kHz),
-// 22 dB over the room — the "insect" friends heard, there in the mic's sound
-// before anything was sent. So on a computer the mic is cut above a voice's
-// range first (a steep low-pass, and a notch on the whine).
-// Phones don't get it (no such whine, and a phone's audio is touchier). If
-// sound can't run yet, the mic goes as it is.
-const DESKTOP = typeof navigator !== "undefined" && !/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) && !(navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
-async function cleanMic(raw) {
-  if (!raw || !DESKTOP || raw.__raw) return raw;
-  let ac;
-  try {
-    ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
-    if (ac.state !== "running") await Promise.race([ac.resume(), new Promise((r) => setTimeout(r, 500))]).catch(() => {});
-    if (ac.state !== "running") { ac.close().catch(() => {}); return raw; }
-    let node = ac.createMediaStreamSource(new MediaStream([raw]));
-    // a voice up to 6.5 kHz (clearer than a phone call), everything above
-    // cut steeply, and a deep notch on the whine itself (it wanders ±500 Hz)
-    for (const [type, hz, q] of [["lowpass", 6500, 0.54], ["lowpass", 6500, 1.31], ["notch", 8000, 4]]) {
-      const f = ac.createBiquadFilter();
-      f.type = type; f.frequency.value = hz; f.Q.value = q;
-      node.connect(f); node = f;
-    }
-    const dest = ac.createMediaStreamDestination();
-    dest.channelCount = 1;
-    node.connect(dest);
-    const out = dest.stream.getAudioTracks()[0];
-    try { out.contentHint = "speech"; } catch { /* fine */ }
-    out.__raw = raw;
-    const end = out.stop.bind(out);
-    out.stop = () => { end(); raw.stop(); ac.close().catch(() => {}); };
-    return out;
-  } catch {
-    if (ac) ac.close().catch(() => {});
-    return raw;
-  }
-}
+// a computer's mic, cleaned of the steady tones laptops put into it (cleanMic.js)
 const micId = (t) => { const r = (t && t.__raw) || t; return r && r.getSettings ? r.getSettings().deviceId : null; };
 
 const video = (facing) => ({ facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } });

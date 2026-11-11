@@ -789,6 +789,12 @@ function Room() {
           )}
 
           <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+            {/* While waiting: watch something. Going to the player keeps the seat; its Back comes here. */}
+            {status === "waiting" && me && (
+              <button className="press p-white" style={{ flex: 1, minWidth: 180 }} onClick={() => navigate("/watch")}>
+                🎬 Video player
+              </button>
+            )}
             {/* Invite friends — never in a solo run, there's no seat to fill. */}
             {status === "waiting" && me && !isSolo && (
               <span ref={inviteRef} style={{ position: "relative", flex: 1, minWidth: 180 }}>

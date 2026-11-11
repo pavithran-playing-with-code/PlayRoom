@@ -89,6 +89,7 @@ export default function Navbar() {
                     <MenuItem to="/leaderboard" onClick={() => setOpen(false)} label="🏆 Leaderboard" />
                     <MenuItem to="/lobby" onClick={() => setOpen(false)} label="🎮 Play" />
                     <MenuItem to="/rooms" onClick={() => setOpen(false)} label="🚪 Rooms" />
+                    <MenuItem to="/watch" onClick={() => setOpen(false)} label="🎬 Video player" />
                     <button className="menu-item" onClick={toggleTheme} aria-pressed={theme === "dark"}>
                       {theme === "dark" ? "☀️ Light theme" : "🌙 Dark theme"}
                     </button>

@@ -14,7 +14,7 @@
 // or tap a counter you're next to.
 import React, { useEffect, useRef, useState } from "react";
 import GameFrame from "./GameFrame";
-import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
+import { useUprightTouch, toGame, gameRect } from "../LandscapeGate";
 import FloatStick from "../together/FloatStick";
 import TogetherResults from "../together/TogetherResults";
 import useTogether, { secondsLeft, smoothRows, rivals, myScore } from "../together/useTogether";

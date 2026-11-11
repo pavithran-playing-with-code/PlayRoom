@@ -11,7 +11,7 @@ import Logo from "../Logo";
 import FriendsDock from "../FriendsDock";
 import { ProgressRing, Avatar } from "../ui";
 import useMedia from "../../utils/useMedia";
-import { useSideways } from "../horror/LandscapeGate";
+import { useSideways } from "../LandscapeGate";
 import HowTo from "./HowTo";
 import { howToFor } from "./howToRules";
 

@@ -154,7 +154,7 @@ There is no test runner. What works:
   `flappySim.js`…) and `config/matchResult.js` are plain JS with no React or
   database, so they can be exercised from a Node script directly
   (`scripts/check-runner.mjs`, `scripts/check-speedway.mjs`, `scripts/check-piano.mjs`,
-  `scripts/check-mahjong.mjs`, `scripts/check-maze.mjs`, `check-manor*`).
+  `scripts/check-mahjong.mjs`, `scripts/check-maze.mjs`).
 - **Played alone or against each other only** (no "Play together"): Dino
   Dash, Flappy Dash, Rail Runner, Maze Runner, Number Rush and Pipes, like
   the other score-attack games. Their co-op modes were removed (2026-11):
@@ -194,9 +194,9 @@ There is no test runner. What works:
   software at ~4 fps, so pop-in animations are caught half way.
 - **Play as a team** (rooms.mode `coop`; the lobby's checkbox, once "Play
   together") starts ticked only for games with `coopDefault` in the
-  registry (Kitchen Rush, Station 13, Sunshard Jump). In a team
+  registry (Kitchen Rush, Sunshard Jump). In a team
   game the top shows the team's points only, never each player's.
-- **Endless games** (`endless` in the registry: Station 13, Sunshard Jump,
+- **Endless games** (`endless` in the registry: Sunshard Jump,
   Emberfall) have no clock: always unlimited, no length picker in the lobby
   or the waiting room, and no ∞ drawn in the game.
 - **Speedway is live-shared**: a top-down drift racer (`driftSim.js`, the
@@ -217,27 +217,6 @@ There is no test runner. What works:
   friends as ghosts over `storm:pos`; a finger is raycast onto the arena,
   `toSim`) are built the same way: lazy `X.jsx` + `XInner.jsx`, rules
   untouched, `nameTag` from the look kit.
-- **Station 13** (slug `manor`) is a first-person hospital horror in
-  three.js r128 (a lazy chunk), ported from a single-file original: the
-  rules are `src/components/horror/s13Core.mjs` (the layout from the seed,
-  `genStation`; the monster, `stepMonster`: asleep, patrol, investigate,
-  notice — a stare you can break — chase, rear and lunge), shared by the
-  solo run (`s13Sim.js`, `pages/Manor.jsx`), the room's phones
-  (`s13Client.js`) and the server; `s13Scene.js` draws, `s13Audio.js`
-  sounds. Online the server runs the monsters (`config/manorWorld.js`,
-  `monstersFor`: 1–3 for 8 players); each phone moves itself and reports
-  (`manor:me`), lockers are asked for (`manor:use`). Friends are drawn as
-  survivors (`friendFig`) with their name and distance in metres over them
-  (through walls), and the HUD lists how far each one is. Each side hunts its
-  own 4 fuses in its colour (together: one set), every fuse lights two
-  zones for everyone, the first side into the elevator wins. Caught online,
-  you're back in the Main Hall in a moment with the monsters sent off.
-  In a locker with your torch off it gives up on you and goes back on its
-  rounds; torch on, it can still find you if it lingers. Floor props (the
-  dead, a tipped bin) don't block; standing ones block only their drawn box
-  (`FOOT` in s13Core, kept on the grid as `g.box`), not their whole tile.
-  `check-manor.mjs` has a bot get out of most seeded runs;
-  `check-manor-world.js` tests the server with a fake database.
 - **Sunshard Jump** (slug `sunshard`) is a 3D climb up the Sky Tree —
   all jumping, no attack; a slime is beaten by landing on it (three.js r128,
   loaded when the game opens). `towerWorld.js` builds the tree from the seed
@@ -251,7 +230,8 @@ There is no test runner. What works:
   back to your flag with the Gloom pushed under you; three, and the climb
   starts again (your best height stays). A fall of more than 8 m pops you
   back on your last plain stone (`fallBack`). Sunshards sit on stones off
-  the spiral and sink your Gloom. The Crown: 5,000 points and a taller tree
+  the spiral and sink your Gloom (together: one taken is gone for the
+  team and sinks everyone's, `isl:ev` `shard`; its points are the taker's). The Crown: 5,000 points and a taller tree
   (`towerCode(seed, round)`). The explorer is a rigged tree-climber kid (beanie,
   hood, puffy jacket, rope; limbs swing from hips and shoulders in `pose`); drag up (or R) to look up the tree. On a
   phone the left half of the screen is the
@@ -462,7 +442,7 @@ There is no test runner. What works:
   volatile by `config/socket.js`), and the watcher draws the game's own scene
   from it, eased between frames, input refused and silent. Emberfall's page
   has a watch mode (`?embed=1&watch=1`: no input, no saving, no sound).
-  Kitchen Rush and Station 13 run on the server and draw their own watchers.
+  Kitchen Rush runs on the server and draws its own watchers.
 - **One game on its own** — build with a temporary route that mounts it with a
   fixed seed, serve the build, and drive it over the Chrome DevTools Protocol.
   Sample the DOM to assert behaviour, and screenshot at 390px. Delete the route

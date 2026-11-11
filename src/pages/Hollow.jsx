@@ -21,7 +21,7 @@ import { newRun, step, hint, covered, ROOM_NAMES } from "../components/hollow/ho
 import { cuckooAt } from "../components/hollow/hollowChapter.mjs";
 import { createHollow } from "../components/hollow/hollowScene";
 import { createHollowAudio } from "../components/hollow/hollowAudio";
-import { useSideways, goLandscape, toGame } from "../components/horror/LandscapeGate";
+import { useSideways, goLandscape, toGame } from "../components/LandscapeGate";
 import { kidMsg, onKid, roomMsg, onRoom, dropKid, pickHost, watchMsg, onWatch } from "../components/hollow/hollowNet.mjs";
 import useSpecStream from "../components/games/useSpecStream";
 import { useSocket } from "../utils/SocketContext";

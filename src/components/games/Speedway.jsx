@@ -35,7 +35,7 @@ import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpecStream from "./useSpecStream";
 import { useSocket } from "../../utils/SocketContext";
-import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
+import { useUprightTouch, toGame, gameRect } from "../LandscapeGate";
 import {
   buildTrack, trackCode, lapsFor, makeCar, stepCar, carFx, trackUpdate, wallHit, bump, aiInput, checkStuck,
   raceScore, placeOf, padHit, chargeLevel, clamp, ad, HALF, CURB, WALL, START_S, KMH, COLORS,

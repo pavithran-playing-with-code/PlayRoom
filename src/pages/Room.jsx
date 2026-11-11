@@ -666,7 +666,7 @@ function Room() {
             and whether it's played together. Everyone sees the chips above change. */}
         {isHost && status === "waiting" && !isSolo && (!gm?.endless || canTogether) && (
           <div className="pop room-settings">
-            {/* an endless game (Station 13, Sunshard Jump, Emberfall) has no length to change */}
+            {/* an endless game (Sunshard Jump, Emberfall) has no length to change */}
             {!gm?.endless && <div className="rs-row">
               <span className="rs-label">⏱️ Match length</span>
               <span className="rs-opts">

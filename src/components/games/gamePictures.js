@@ -249,18 +249,6 @@ export const PICTURES = {
       <path d="M40 40l8-3v6l-8 3z" fill="#FFFFFF" {...T} strokeWidth="2" />
     </>
   ),
-  // a dark doorway and red eyes in it
-  manor: (
-    <>
-      <rect x="10" y="6" width="44" height="52" rx="6" fill="#4F7166" {...K} />
-      <path d="M20 58V22a12 12 0 0 1 24 0v36z" fill="#0E0C12" {...K} />
-      <ellipse cx="27" cy="32" rx="3" ry="2" fill="#FF2A2A" />
-      <ellipse cx="37" cy="32" rx="3" ry="2" fill="#FF2A2A" />
-      <path d="M26 12h12M32 6v12" stroke="#FFFFFF" strokeWidth="0" />
-      <rect x="28" y="9" width="8" height="2.5" fill="#FF6B6B" />
-      <rect x="30.75" y="6.25" width="2.5" height="8" fill="#FF6B6B" />
-    </>
-  ),
   // a floating island with a glowing sun shard above it
   sunshard: (
     <>

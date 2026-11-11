@@ -8,7 +8,7 @@
 //   again       { members: [{ id, name, ready }] }
 // When everyone still in the room is ready, the next match starts for all of
 // them at once and the room page goes there. The results cards (GameOver,
-// TogetherResults, Station 13's) show it through AgainPanel.
+// TogetherResults) show it through AgainPanel.
 import { createContext, useContext } from "react";
 
 export const PlayAgainContext = createContext(null);

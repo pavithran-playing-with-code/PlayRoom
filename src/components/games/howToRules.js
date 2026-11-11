@@ -163,12 +163,6 @@ export const HOW_TO = {
     steps: ["Walk up to something and press Grab. Walk it to the van — it's loaded the moment it's in.", "Throw boxes and teddies — out of an open window, even straight into the van.", "Lamps, plants and the telly are fragile: carry them, never throw them.", "The sofa, fridge, bed and bookcase are big: one of you can drag one alone, slowly — grab an end each and it's quick.", "Mind Biscuit the dog: walk into him and you drop what you're carrying."],
     tip: "Empty the house for a bonus — the next one is ready at once.",
   },
-  manor: {
-    name: "Station 13",
-    goal: "Find 4 fuses, bring the power back, and get out through the elevator.",
-    steps: ["Follow the green signs. Every fuse you take brings the lights back to another part of the building.", "It hunts by sound and sight: running is loud, the flashlight shows you, the dark hides you. Lit areas are safe to read, not safe to stand in.", "When it notices you, break its line of sight — round a corner, through a door.", "USE hides you in a locker. It can still find you if it saw you go in.", "Your flashlight drains, faster when it's close. Batteries lie about. With 4 fuses, run for the elevator."],
-    tip: "Walk when you can. A running step carries three times as far.",
-  },
 };
 
 const byName = new Map(Object.values(HOW_TO).map((h) => [h.name.toLowerCase(), h]));

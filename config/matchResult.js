@@ -49,37 +49,6 @@ function decideResult({ seated, myUserId, myScore, gameSlug }) {
   return (Number(me?.pairs_matched) || 0) >= needed ? "win" : "loss";
 }
 
-// ── Station 13 (slug "manor") ────────────────────────────────────────────────
-// The server keeps this game's scores itself (config/manorWorld.js). Getting
-// out through the elevator scores ESCAPE_POINTS and ends the match; every
-// fuse is 100. A side's fuses (4, so 400 — under MAX_RELIC_POINTS) never
-// reach ESCAPE_POINTS, so a score of ESCAPE_POINTS or more means the side
-// got out.
-//
-// The highest score wins, a tie at the top is a draw — but nobody wins
-// without getting out: a match where nobody escaped has no winner, however
-// many fuses were found. Sides are compared on their own
-// score, not a sum over members: every member of a side carries the side's
-// score, so summing would hand the win to the bigger team.
-const ESCAPE_POINTS = 1000;
-const MAX_RELIC_POINTS = 900;
-
-function manorResults(room, seated) {
-  const out = new Map();
-  const sideOf = (p) => (room.mode === "coop" ? "all"
-    : room.mode === "teams" && p.team != null ? `t${p.team}` : `p${p.user_id}`);
-  const side = new Map();
-  for (const p of seated) side.set(sideOf(p), Math.max(side.get(sideOf(p)) || 0, cap(p.score)));
-  const escaped = [...side.values()].filter((v) => v >= ESCAPE_POINTS);
-  const best = escaped.length ? Math.max(...escaped) : null;
-  const tied = best === null ? 0 : escaped.filter((v) => v === best).length;
-  for (const p of seated) {
-    const mine = side.get(sideOf(p));
-    out.set(Number(p.user_id), best === null || mine !== best ? "loss" : tied > 1 ? "draw" : "win");
-  }
-  return out;
-}
-
 // ── The games you play together ──────────────────────────────────────────────
 // Kitchen Rush (config/togetherWorld.js) keeps
 // their own scores, one per side, carried by every member of the side; and
@@ -122,7 +91,6 @@ function togetherResults(room, seated) {
 // Anyone who somehow reached the start without a side is scored as their own
 // one-person team rather than being dropped from the reckoning.
 function resultsFor(room, seated) {
-  if (room.game_slug === "manor") return manorResults(room, seated);
   if (TOGETHER_GAMES.has(room.game_slug)) return togetherResults(room, seated);
   const out = new Map();
 
@@ -162,4 +130,4 @@ function resultsFor(room, seated) {
   return out;
 }
 
-module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, COOP_GOAL, wordGoal, ESCAPE_POINTS, MAX_RELIC_POINTS, cap, decideResult, resultsFor, manorResults, togetherResults, TOGETHER_GAMES };
+module.exports = { MAX_SCORE_PER_GAME, OBJECTIVE_PAIRS, COOP_GOAL, wordGoal, cap, decideResult, resultsFor, togetherResults, TOGETHER_GAMES };

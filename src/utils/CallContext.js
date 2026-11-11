@@ -26,7 +26,7 @@ import { reportError } from "./reportError";
 import { deviceId } from "./deviceId";
 import { cleanMic } from "./cleanMic";
 import { howlGuard } from "./howlGuard";
-import { useDrawnSideways } from "../components/horror/LandscapeGate";
+import { useDrawnSideways } from "../components/LandscapeGate";
 import { openFilm, soundMissing, dolbyLike, warmDecoder } from "./filmSound";
 
 const CallContext = createContext(null);

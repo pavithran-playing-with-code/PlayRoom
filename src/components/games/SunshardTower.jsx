@@ -41,7 +41,7 @@ import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpecStream from "./useSpecStream";
 import { useSocket } from "../../utils/SocketContext";
-import { useUprightTouch, toGame } from "../horror/LandscapeGate";
+import { useUprightTouch, toGame } from "../LandscapeGate";
 import { team as teamOf, plural } from "./coopTeam";
 import { clamp, TAU, LOOKS, TWISTS } from "./sunshardWorld.js";
 import { buildTower, towerCode, gloomAt, bandAt, BANDS, SHARD_SINK, BALLOONS, PTS, climbPoints, startClimb, fallBack } from "./towerWorld.js";
@@ -91,6 +91,15 @@ export default function SunshardTower(props) {
   const bestY = useRef(0);                    // this tree: the best height
   const crowns = useRef(0);
   const remotes = useRef(new Map());          // id -> { latest report, eased pose }
+  // Together: the Sunshards my friends took on this tree. Gone for me too
+  // (and my Gloom sank with theirs); the points are theirs alone, so the
+  // team's total counts each shard once.
+  const teamShards = useRef({ rd: -1, set: new Set() });
+  const teamNow = () => {
+    if (!coop) return null;
+    if (teamShards.current.rd !== roundRef.current) teamShards.current = { rd: roundRef.current, set: new Set() };
+    return teamShards.current.set;
+  };
   const fresh = (r, now) => now - r.at < FRESH_MS;
   const livePts = () => climbPoints(climb.current.maxY, run.current.shards.size);
   const curScore = () => Math.min(MAX_PTS, bank.current + Math.max(best.current, climb.current.crowned ? 0 : livePts()));
@@ -238,11 +247,19 @@ export default function SunshardTower(props) {
       if (Number(m.user_id) === myId || (m.rd || 0) !== roundRef.current) return;
       if (m.k === "stomp") { if (killSlime(run.current, m.i)) momentsRef.current.push(m); }
       else if (m.k === "crumble") crumbleAt(run.current, W, m.i);
+      else if (m.k === "shard" && coop) {
+        const team = teamNow();
+        if (team.has(m.i) || (run.current && run.current.shards.has(m.i))) return;
+        team.add(m.i);
+        if (climb.current) climb.current.sink += SHARD_SINK;
+        const r = remotes.current.get(Number(m.user_id));
+        toastRef.current(`◆ ${(r && r.name) || "Your friend"} got a Sunshard — the Gloom sinks ${SHARD_SINK} m`, 2600);
+      }
     };
     socket.on("isl:pos", onPos);
     socket.on("isl:ev", onEv);
     return () => { socket.off("isl:pos", onPos); socket.off("isl:ev", onEv); };
-  }, [socket, myId, seated, coop, W]);
+  }, [socket, myId, seated, coop, W]); // eslint-disable-line react-hooks/exhaustive-deps -- teamNow only reads refs and coop
 
   // ── the HUD, and the moments ───────────────────────────────────────────────
   const [hud, setHud] = useState({ y: 0, best: 0, gloomBy: 99, balloons: BALLOONS, shards: 0, band: 0, compass: "", rank: [], count: START_S, meter: [], gloomK: 0, over: false, again: 0, crowned: false, next: 0, danger: 0 });
@@ -367,7 +384,7 @@ export default function SunshardTower(props) {
       for (let i = 0; i < 2; i++) {
         S.T = el - dt + (dt / 2) * i;
         const bx = P.x, bz = P.z;
-        evs.push(...step(S, W, inp, dt / 2, null));
+        evs.push(...step(S, W, inp, dt / 2, teamNow()));
         if (anchors.length && go && !C.over) evs.push(...tether(S, W, anchors, bx, bz, dt / 2));
       }
       if (go && !C.over && fallBack(S, W)) { fx.burst(P.x, P.y + 0.5, P.z, 24, 0xffffff, 5, 3); A.sfx.pop(); say("Whoops! Back on your stone", 1400); }
@@ -382,7 +399,8 @@ export default function SunshardTower(props) {
         else if (e.k === "shard") {
           A.sfx.shard(); fx.ring(e.x, e.y, e.z, e.col, 7); fx.burst(e.x, e.y, e.z, 50, e.col, 9, 5); fx.shake(0.3);
           C.sink += SHARD_SINK;
-          shout(`Sunshard! +${PTS.shard}`, `The Gloom sinks ${SHARD_SINK} m`);
+          if (coop) tell("shard", e.i);             // together: it's gone for everyone, and their Gloom sinks too
+          shout(`Sunshard! +${PTS.shard}`, coop ? `The Gloom sinks ${SHARD_SINK} m for all of you` : `The Gloom sinks ${SHARD_SINK} m`);
           sent = 0;
         }
         else if (e.k === "hurt") {
@@ -507,7 +525,7 @@ export default function SunshardTower(props) {
             ca: a === myId ? myHue : remotes.current.get(a).col, cb: b === myId ? myHue : remotes.current.get(b).col });
         }
       }
-      scene.frame({ S, team: null, remotes: rs, ropes, yaw: c.yaw, pitch: c.pitch, dt, T: el, gloom: gy });
+      scene.frame({ S, team: teamNow(), remotes: rs, ropes, yaw: c.yaw, pitch: c.pitch, dt, T: el, gloom: gy });
       // the compass: the next stone up the spiral (from the one you last stood on)
       const at = Math.max(0, P.gp !== null ? W.path.indexOf(P.gp) : S._at || 0);
       if (P.gp !== null && at >= 0) S._at = at;

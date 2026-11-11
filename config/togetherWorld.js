@@ -2,8 +2,7 @@
 //
 // Kitchen Rush is played in worlds the server keeps: a
 // kitchen two friends cook in, an arena everyone is in at once. A world shared by several phones
-// can't live on any one of them, so — like Station 13
-// (config/manorWorld.js) — the server keeps it in memory and runs it.
+// can't live on any one of them, so the server keeps it in memory and runs it.
 //
 // Sides (rooms.mode):
 //   free   everyone for themselves: a world each, all from the same seed

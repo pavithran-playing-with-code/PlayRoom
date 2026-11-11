@@ -85,7 +85,7 @@ const TABLES = {
       duration_seconds INT      NOT NULL DEFAULT 120,
       -- 'free': every player for themselves, ranked by their own score.
       -- 'teams': players pick a side and the sides are ranked by total.
-      -- 'coop': everyone on one side against the game (Station 13 and the together games).
+      -- 'coop': everyone on one side against the game (the together games, the shared boards).
       mode         ENUM('free','teams','coop') NOT NULL DEFAULT 'free',
       status       ENUM('waiting','in_progress','finished','abandoned')
                                 NOT NULL DEFAULT 'waiting',
@@ -256,7 +256,6 @@ const GAME_SEED = [
   { slug: "piano",     name: "Piano Tiles",       description: "Tap the black tiles, never the white. Every tile is the next note of the song.", min: 1, max: 8, icon: "🎹", active: 1 },
   { slug: "moving",    name: "Moving Day",        description: "Empty the house into the van before the clock runs out: boxes, lamps, the telly — and a sofa that needs two. Watch out for Biscuit.", min: 1, max: 8, icon: "📦", active: 1 },
   { slug: "kitchen",   name: "Kitchen Rush",      description: "Chop, cook, plate up and serve before the orders run out. Best with friends in one kitchen.", min: 1, max: 8, icon: "🍳", active: 1 },
-  { slug: "manor",     name: "Station 13",        description: "A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.", min: 1, max: 8, icon: "🏥", active: 1 },
   { slug: "sunshard",  name: "Sunshard Jump",     description: "A 3D climb up a giant Sky Tree: jump, double-jump and glide up the spiral of floating stones to the Sun Crown before the rising storm catches you.", min: 1, max: 8, icon: "🏝️", active: 1 },
   { slug: "emberfall", name: "Emberfall",         description: "A 3D island adventure, alone or with a friend: beat three guardians for their Ember Shards, then the Cinder Colossus.", min: 1, max: 2, icon: "🔥", active: 1 },
   { slug: "hollow",    name: "Hollow Hours",      description: "Two small children in a house built for giants, alone or together: past the Keeper and the Cuckoo, up the Bell Tower by midnight.", min: 1, max: 2, icon: "🕰️", active: 1 },

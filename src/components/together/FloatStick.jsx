@@ -1,5 +1,5 @@
 // src/components/together/FloatStick.jsx
-// A thumb stick that sits wherever your left thumb lands — like Station 13.
+// A thumb stick that sits wherever your left thumb lands.
 // It's a wide patch over the bottom left of a landscape game: touch anywhere
 // in it and the ring appears under your thumb; slide to steer; let go and
 // it's gone (a faint ring shows where to put your thumb).
@@ -10,7 +10,7 @@
 // Drawn sideways (GameFrame landscape on an upright phone), positions are
 // turned back first.
 import React, { useRef, useState } from "react";
-import { useUprightTouch, toGame, gameRect } from "../horror/LandscapeGate";
+import { useUprightTouch, toGame, gameRect } from "../LandscapeGate";
 
 export default function FloatStick({ stick, knobRef, label = "Move" }) {
   const rotated = useUprightTouch();

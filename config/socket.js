@@ -277,8 +277,9 @@ function initSocket(httpServer) {
     });
 
     // Sunshard Jump: a moment on my tree everyone shares, by its index in the
-    // level — a slime I stomped, a crumbling stone I stepped on.
-    const ISL_EV = new Set(["stomp", "crumble"]);
+    // level — a slime I stomped, a crumbling stone I stepped on, a Sunshard
+    // I took (together: it's gone for the whole team).
+    const ISL_EV = new Set(["stomp", "crumble", "shard"]);
     socket.on("isl:ev", (msg) => {
       const code = msg && msg.code;
       if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;

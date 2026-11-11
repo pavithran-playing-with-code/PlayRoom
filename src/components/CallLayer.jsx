@@ -15,7 +15,7 @@ import { usePresence } from "../utils/PresenceContext";
 import Icon from "./ui/Icon";
 import { canDocPip, openPip, updatePip, closePip, pipOpen } from "../utils/callPip";
 import { canFloatBoth, createFloat } from "../utils/callFloat";
-import { useDrawnSideways, isDrawnSideways, toGame, gameRect, isInstalled } from "./horror/LandscapeGate";
+import { useDrawnSideways, isDrawnSideways, toGame, gameRect, isInstalled } from "./LandscapeGate";
 
 // Where the floating call window (callPip.js) can be used, a video's own
 // picture-in-picture is turned off: it can only show one face.

@@ -1067,41 +1067,6 @@ input::-ms-reveal,input::-ms-clear{display:none}
 .mz-down{grid-area:down}
 .mz-right{grid-area:right}
 
-/* ── STATION 13 in a room: the scoreboard pieces (.hmx-, from the game it
-   replaced): the clock, your side's fuses, who's inside, the watching bar
-   and the results. The game itself is .s13, further down. */
-.hmx-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.hmx-clock{font-size:17px;letter-spacing:.04em;color:#ffdca0}
-.hmx-mine{display:inline-flex;align-items:center;gap:4px}
-.hmx-mine i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--c);display:inline-block}
-.hmx-mine i.got{background:var(--c);box-shadow:0 0 6px var(--c)}
-.hmx-mine b{font-weight:400;margin-left:4px;color:var(--c)}
-.hmx-who{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:9px;font-size:12px;color:#cfc6d8}
-.hmx-p{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
-.hmx-p i{width:8px;height:8px;border-radius:50%;background:var(--c);display:inline-block}
-.hmx-p.dead{opacity:.45;text-decoration:line-through}
-.hmx-p.out{color:#8fe3a8}
-.hmx-spec{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:4;
-  display:flex;flex-direction:column;align-items:center;gap:10px;padding:0 16px}
-.hmx-banner{background:rgba(5,5,6,.78);border:1px solid #5b1524;border-radius:8px;padding:10px 16px;
-  text-align:center;font-style:italic;color:#ffdca0;font-size:16px}
-.hmx-banner span{color:#a39a88;font-size:14px}
-.hmx-specbar{display:flex;align-items:center;gap:10px;background:rgba(5,5,6,.78);border-radius:999px;padding:6px}
-.hmx-watching{min-width:150px;text-align:center;font-size:15px}
-.hmx-watching b{font-weight:400;color:var(--c)}
-.hmx-results{overflow-y:auto}
-.hmx-rematch{color:#ffdca0;font-style:italic;margin:12px 0 0}
-.hmx-standings{width:100%;max-width:380px;display:flex;flex-direction:column;gap:8px;margin:6px 0 4px}
-.hmx-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:8px;text-align:left;
-  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-left:4px solid var(--c)}
-.hmx-row.mine{background:rgba(255,220,160,.1);border-color:rgba(255,220,160,.35);border-left-color:var(--c)}
-.hmx-place{width:34px;text-align:center;font-size:20px}
-.hmx-name{flex:1;min-width:0;display:flex;flex-direction:column}
-.hmx-name b{font-weight:400;color:#e9e3d3;font-size:16px}
-.hmx-name small{color:#a39a88;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hmx-got{color:var(--c);font-size:14px}
-@keyframes hmHint{0%,70%{opacity:1}100%{opacity:0}}
-
 /* ---------- Typing Race (.ty-) ---------- */
 /* the race: a lane each on a stretch of asphalt with dashed lines, a chequered
    finish, chunky little cars with a driver in a helmet and headlights; a
@@ -1678,80 +1643,6 @@ button.call-me .call-emoji{width:52px;height:52px;font-size:28px}
 .call-elsewhere span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .call-elsewhere button{flex:0 0 auto;border:2px solid var(--ink);border-radius:999px;background:var(--lime);color:var(--ink);
   font-weight:800;font-size:13px;padding:5px 12px;cursor:pointer}
-/* ── STATION 13 (.s13-): the horror game — full screen, sideways on a phone ── */
-.s13{position:fixed;inset:0;z-index:50;background:#000;color:#cfd6cf;font-family:'Segoe UI',Helvetica,Arial,sans-serif;overflow:hidden;
-  touch-action:none;user-select:none;-webkit-user-select:none}
-.s13.s13-rot{inset:auto;top:0;left:100vw;width:100vh;width:100dvh;height:100vw;transform:rotate(90deg);transform-origin:0 0}
-.s13-host{position:absolute;inset:0;touch-action:none}
-.s13-gl,.s13-nz{position:absolute;inset:0;width:100%;height:100%;display:block}
-.s13-nz{pointer-events:none;opacity:.05;mix-blend-mode:overlay}
-.s13-fx{position:absolute;inset:0;pointer-events:none}
-.s13-vig{background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.75) 115%);z-index:2}
-.s13-gl{filter:saturate(.7) contrast(1.1)}
-.s13-br{background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,.92));opacity:0;z-index:2}
-.s13-dg{background:radial-gradient(ellipse at center,transparent 40%,rgba(120,0,0,.8));opacity:0;z-index:2}
-.s13-slit{background:linear-gradient(#000 0,#000 42%,transparent 42%,transparent 52%,#000 52%);z-index:3}
-.s13-flash{background:#fff;opacity:0;z-index:7}
-.s13-aw{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);transform:translateX(-50%);font-size:18px;color:#c33;opacity:0;z-index:4;
-  text-shadow:0 0 8px #000;pointer-events:none}
-.s13-rip{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0;z-index:4;pointer-events:none}
-.s13-rip i{position:absolute;left:-32px;top:calc(-1 * min(34vh,34vw));width:64px;height:14px;border-top:3px solid rgba(255,90,90,.85);border-radius:50% 50% 0 0}
-.s13-hud{position:absolute;left:calc(env(safe-area-inset-left,0px) + 22px);bottom:calc(env(safe-area-inset-bottom,0px) + 22px);z-index:4;width:54px;opacity:.9;pointer-events:none}
-.s13-bt{position:relative;width:46px;height:20px;border:2px solid #e8e6e0;border-radius:3px;padding:2px}
-.s13-bt:after{content:'';position:absolute;right:-6px;top:4px;width:4px;height:8px;background:#e8e6e0;border-radius:0 2px 2px 0}
-.s13-bt i{display:block;height:100%;width:100%;background:#e8e6e0;transition:background .3s}
-.s13-bt i.low{animation:s13low .5s steps(2) infinite}
-@keyframes s13low{0%{background:#d33}100%{background:#611}}
-.s13-st{height:3px;margin-top:8px;background:rgba(255,255,255,.15);transition:opacity .6s}
-.s13-st i{display:block;height:100%;width:100%;background:#cfcfc8}
-.s13-obj{position:absolute;left:calc(env(safe-area-inset-left,0px) + 22px);top:calc(env(safe-area-inset-top,0px) + 20px);z-index:4;font-size:14px;
-  letter-spacing:.04em;line-height:1.5;opacity:.85;text-shadow:0 1px 5px #000;pointer-events:none}
-.s13-obj span{opacity:.6}
-.s13-sub{position:absolute;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14vh);transform:translateX(-50%);z-index:4;max-width:80%;text-align:center;
-  font-size:17px;letter-spacing:.02em;line-height:1.4;padding:6px 16px;background:rgba(0,0,0,.4);border-radius:4px;opacity:0;transition:opacity .6s;
-  text-shadow:0 1px 4px #000;pointer-events:none}
-.s13-pr{position:absolute;left:50%;top:60%;transform:translateX(-50%);z-index:4;font-size:13px;letter-spacing:.2em;opacity:.9;pointer-events:none}
-/* RUN and LIGHT side by side; USE above them, between the two; pause below
-   LIGHT (solo). Three fixed rows, so RUN and LIGHT sit in the same place
-   whether or not there's a pause button. */
-.s13-tb{position:absolute;right:calc(env(safe-area-inset-right,0px) + 18px);bottom:calc(env(safe-area-inset-bottom,0px) + 22px);z-index:5;
-  display:grid;grid-template-columns:repeat(2,58px);grid-template-rows:repeat(3,58px);gap:14px;
-  grid-template-areas:"use use" "run light" ". pause"}
-.s13 .s13-tb .s13-use{grid-area:use;justify-self:center}
-.s13 .s13-tb .s13-run{grid-area:run}
-.s13 .s13-tb .s13-light{grid-area:light}
-.s13 .s13-tb .s13-pause{grid-area:pause}
-.s13 .s13-tb button{width:58px;height:58px;border-radius:50%;padding:0;font-size:11px;letter-spacing:.08em;background:rgba(20,22,20,.6);touch-action:none}
-.s13 .s13-tb button.on{background:rgba(207,214,207,.85);color:#101410;border-color:#cfd6cf}
-.s13-stick{position:absolute;z-index:4;width:100px;height:100px;border-radius:50%;border:2px solid rgba(255,255,255,.25);pointer-events:none;
-  display:grid;place-items:center}
-.s13-stick i{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.3)}
-.s13 button{font:inherit;color:#cfd6cf;background:#101410;border:1px solid #556055;padding:11px 26px;cursor:pointer;letter-spacing:.2em;text-transform:uppercase}
-.s13 button:hover{background:#2a352a;border-color:#9a2a2a}
-.s13 button:disabled{opacity:.5;cursor:default}
-.s13-ov{position:absolute;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:30px;
-  background:rgba(0,0,0,.8);overflow:auto}
-.s13-ov h1{font-family:Georgia,'Times New Roman',serif;font-size:clamp(36px,9vw,88px);margin:0;font-weight:400;letter-spacing:.25em;color:#d4cfc4;
-  text-shadow:0 2px 30px rgba(0,0,0,.9),0 0 50px rgba(120,0,0,.35)}
-.s13-ov h1.s13-h2{font-size:clamp(30px,7vw,48px)}
-.s13-ov p{max-width:500px;font-size:13px;line-height:1.8;margin:0;opacity:.7;letter-spacing:.06em}
-.s13-ov p.s13-small{font-size:11px;opacity:.5}
-.s13-ov.s13-dead{background:rgba(40,0,0,.85)}
-.s13-ov.s13-dead h1{color:#9a1a1a}
-.s13-row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
-.s13 .s13-leave{position:absolute;left:calc(env(safe-area-inset-left,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 14px);padding:8px 14px;font-size:12px}
-/* short and sideways: everything a little smaller */
-@media (max-height:520px){ .s13-ov{gap:10px;padding:14px 20px} .s13-ov p{font-size:12px;line-height:1.6} .s13 button{padding:9px 18px} }
-.s13.s13-rot .s13-ov{gap:10px;padding:14px 20px}
-.s13.s13-rot .s13-ov p{font-size:12px;line-height:1.6}
-.s13.s13-rot .s13-ov h1{font-size:44px}
-
-/* Station 13 in a room: the clock, the side's fuses and who's inside sit in .s13-obj (which lets touches through to the look area) */
-.s13x .s13x-top .hmx-who{margin-top:4px}
-.s13 .s13x-leave{pointer-events:auto;margin-top:8px;padding:5px 12px;font-size:10px;background:rgba(16,20,16,.6)}
-.s13x .hmx-spec{position:absolute}
-.s13x .hmx-specbar button{width:48px;height:48px;border-radius:50%;padding:0;font-size:18px;letter-spacing:0}
-
 /* ── Play again, together (AgainPanel): who's ready, and the button ── */
 .again{margin-bottom:12px}
 .again-list{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}

@@ -5,7 +5,6 @@ const { settleIfExpired } = require("../config/matchClock");
 const { recordResults } = require("../config/recordResults");
 const { verifyToken } = require("../middleware/auth");
 const { emitRoom, emitUser, tellFriends, isOnline, heldElsewhere } = require("../config/socket");
-const manor = require("../config/manorWorld");
 const together = require("../config/togetherWorld");
 const coopBoard = require("../config/coopBoard");
 
@@ -84,12 +83,12 @@ const MIN_PER_TEAM = 2;
 const MIN_TEAM_PLAYERS = MIN_PER_TEAM * 2;
 
 // Co-op: everyone on one side against the game itself. Only the games with a
-// side to be on — Station 13 and the together games (config/togetherWorld.js)
-// — and a world for more than four gets crowded.
+// side to be on — the together games (config/togetherWorld.js) — and a world
+// for more than four gets crowded.
 // And the shared boards (config/coopBoard.js): Memory, Mahjong, Word Rush.
-const COOP_GAMES = new Set([manor.GAME, ...together.COOP, ...coopBoard.GAMES, "sunshard", "emberfall", "hollow"]);
+const COOP_GAMES = new Set([...together.COOP, ...coopBoard.GAMES, "sunshard", "emberfall", "hollow"]);
 // Games whose scores the server keeps itself, from what happened in its world.
-const serverScored = (slug) => slug === manor.GAME || together.isTogether(slug);
+const serverScored = (slug) => together.isTogether(slug);
 const COOP_MAX = 4;
 const PIANO_SONGS = 7;           // = SONGS.length in src/components/games/pianoSongs.js (check-piano proves it)
 
@@ -354,7 +353,6 @@ async function againGo(req, code, st) {
   agains.set(code, a);
   if (startNow) {
     await announcePlaying(req, ins.insertId, next, true);
-    manor.worldFor(next).catch((e) => console.error("manor start:", e.message));
     together.worldFor(next).catch((e) => console.error("together start:", e.message));
   }
   push(req, code, "room:again-go", { code, next, started: startNow });
@@ -602,9 +600,8 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
     );
     push(req, req.params.code, "room:started", { code: req.params.code });
     await announcePlaying(req, room.id, req.params.code, true);
-    // Station 13's hospital is run by the server: build it now, so its clock
-    // and its monsters start with the match rather than with the first phone.
-    manor.worldFor(req.params.code).catch((e) => console.error("manor start:", e.message));
+    // a together game's world is run by the server: build it now, so its clock
+    // starts with the match rather than with the first phone
     together.worldFor(req.params.code).catch((e) => console.error("together start:", e.message));
     res.json({ success: true, message: "Game started!" });
   } catch (err) { next(err); }
@@ -688,8 +685,8 @@ router.patch("/:code/score", verifyToken, async (req, res, next) => {
     );
     if (!rooms.length) return res.status(404).json({ success: false, message: "Room not found." });
     const roomId = rooms[0].id;
-    // Station 13's scores are kept by the server, from what happened in the
-    // building. A phone posting one would be a phone deciding its own result.
+    // A together game's scores are kept by the server, from what happened in
+    // its world. A phone posting one would be a phone deciding its own result.
     if (serverScored(rooms[0].game_slug))
       return res.status(409).json({ success: false, message: "This game's scores are kept by the server." });
 
@@ -937,14 +934,12 @@ router.post("/:code/leave", verifyToken, async (req, res, next) => {
     const sid = req.body && typeof req.body.sid === "string" ? req.body.sid : null;
     if (heldElsewhere(req.app.get("io"), req.user.id, req.params.code, sid)) return res.json({ success: true, kept: true });
 
-    // Walking out of Station 13 mid-match. The building is the server's, not
-    // the host's, so nobody else's match ends with you. Your seat stays, so
-    // the result is still written down: your side's score so far (in co-op,
-    // your friends play on, and what you found together counts). The same
-    // for the together games: your side cooks / defuses / defends on without you.
+    // Walking out of a together game mid-match. The world is the server's,
+    // not the host's, so nobody else's match ends with you. Your seat stays,
+    // so the result is still written down: your side's score so far (your
+    // side cooks / carries on without you).
     if (serverScored(room.game_slug) && room.status === "in_progress" && !mine[0].is_spectator) {
-      if (room.game_slug === manor.GAME) manor.forfeit(req.params.code, req.user.id);
-      else together.forfeit(req.params.code, req.user.id);
+      together.forfeit(req.params.code, req.user.id);
       push(req, req.params.code, "room:players", { code: req.params.code, left: req.user.id });
       return res.json({ success: true, forfeited: true });
     }

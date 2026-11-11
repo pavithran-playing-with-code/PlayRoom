@@ -19,7 +19,6 @@ import RailRunner from "./RailRunner";
 import Speedway from "./Speedway";
 import DodgeStorm from "./DodgeStorm";
 import MazeRunner from "./MazeRunner";
-import ManorGame from "./ManorGame";
 import TypingRace from "./TypingRace";
 import PianoTiles from "./PianoTiles";
 import KitchenRush from "./KitchenRush";
@@ -193,15 +192,6 @@ export const GAMES = [
     coopLabel: "one house — the big things need two of you",
     coopNote: "One house for all of you: grab an end of the sofa each, throw the boxes out of the window, and mind the dog.",
     Component: MovingDay,
-  },
-  {
-    slug: "manor", name: "Station 13", icon: "🏥",
-    blurb: "A dark hospital and something that hunts by sound. Find 4 fuses, bring the power back, reach the elevator.",
-    minPlayers: 1, maxPlayers: 8, tag: "Horror", col: "var(--grape)",
-    coopMax: 4, coopDefault: true, defaultDuration: 0, endless: true, ownsSpectating: true,
-    coopLabel: "one fuse count — out through the elevator together",
-    coopNote: "You're all on one side: any of you can take a fuse for everyone. Split up, keep to the light, hide in lockers — a caught friend wakes back in the Main Hall.",
-    Component: ManorGame,
   },
   {
     slug: "sunshard", name: "Sunshard Jump", icon: "🏝️",

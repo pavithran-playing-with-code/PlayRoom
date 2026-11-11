@@ -6,7 +6,7 @@ export const SHELVES = [
   { key: "quick",   title: "⚡ Quick & brainy",     games: ["speedmath", "reaction", "wordrush", "typing", "colors", "numbers"] },
   { key: "puzzle",  title: "🧩 Puzzles & classics", games: ["mahjong", "memory", "arrows", "pipes", "slide", "blocks", "maze"] },
   { key: "action",  title: "🏁 Racing & action",    games: ["speedway", "dino", "flappy", "racer", "runner", "storm", "piano"] },
-  { key: "big",     title: "🌋 Big adventures",     games: ["moving", "kitchen", "manor", "sunshard", "emberfall", "hollow"] },
+  { key: "big",     title: "🌋 Big adventures",     games: ["moving", "kitchen", "sunshard", "emberfall", "hollow"] },
 ];
 
 // [{ key, title, games: [registry entries] }], empty rows dropped.

@@ -123,7 +123,7 @@ export default function Lobby() {
   }, [selected.slug, selected.defaultDuration]);
 
   // Play as a team starts ticked for the games made for it (coopDefault:
-  // Kitchen Rush, Station 13, Sunshard Jump), and for any game picked while
+  // Kitchen Rush, Sunshard Jump), and for any game picked while
   // showing team games only; for the rest you tick it.
   useEffect(() => {
     if (selected.coopDefault || onlyTogether) { setCoopMode(true); setTeamMode(false); } else setCoopMode(false);
@@ -373,7 +373,7 @@ export default function Lobby() {
                 </div>
               )}
 
-              {/* an endless game (Station 13, Sunshard Jump, Emberfall) has no clock to pick */}
+              {/* an endless game (Sunshard Jump, Emberfall) has no clock to pick */}
               {!selected.endless && (
                 <>
                   <div className="lsheet-lbl"><Icon name="clock" size={17} stroke={2.6} /> Clock</div>

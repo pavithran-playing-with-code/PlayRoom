@@ -31,7 +31,19 @@ const LEAD = 0.06;               // seconds: a piece starts this far ahead, so i
 let coreURLs = null;
 const getCore = () => {
   if (!coreURLs) {
-    const blob = async (url, type) => URL.createObjectURL(new Blob([await (await fetch(url)).arrayBuffer()], { type }));
+    // kept on the phone after the first time (Cache Storage, which the
+    // browser doesn't clear like its ordinary cache): the next film's sound
+    // starts at once instead of after a 30 MB download
+    const blob = async (url, type) => {
+      let res = null, box = null;
+      try { box = await caches.open("pr-ffmpeg-0.12.6"); res = await box.match(url); } catch { box = null; }
+      if (!res) {
+        res = await fetch(url);
+        if (!res.ok) throw new Error(`decoder download: ${res.status}`);
+        if (box) { try { await box.put(url, res.clone()); } catch { /* full: fine */ } }
+      }
+      return URL.createObjectURL(new Blob([await res.arrayBuffer()], { type }));
+    };
     coreURLs = Promise.all([blob(`${CORE}/ffmpeg-core.js`, "text/javascript"), blob(`${CORE}/ffmpeg-core.wasm`, "application/wasm")])
       .then(([coreURL, wasmURL]) => ({ coreURL, wasmURL }))
       .catch((e) => { coreURLs = null; throw e; });
@@ -46,6 +58,9 @@ async function newFF() {
 }
 // ffmpeg's last complaints, for the Sound check
 const ffErrs = [];
+// Start loading the decoder now (a film's been picked and its sound will
+// need it): nothing to wait for later. Safe to call any number of times.
+export function warmDecoder() { getFF().catch(() => {}); }
 // one ffmpeg for the sound, kept
 let ffLoad = null;
 const getFF = () => {

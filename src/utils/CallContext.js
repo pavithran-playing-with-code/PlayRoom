@@ -25,8 +25,9 @@ import { useSocket } from "./SocketContext";
 import { reportError } from "./reportError";
 import { deviceId } from "./deviceId";
 import { cleanMic } from "./cleanMic";
+import { howlGuard } from "./howlGuard";
 import { useDrawnSideways } from "../components/horror/LandscapeGate";
-import { openFilm, soundMissing, dolbyLike } from "./filmSound";
+import { openFilm, soundMissing, dolbyLike, warmDecoder } from "./filmSound";
 
 const CallContext = createContext(null);
 
@@ -309,12 +310,41 @@ export function CallProvider({ children }) {
     }
     const raw = s.getAudioTracks()[0], clean = await cleanMic(raw);
     if (clean !== raw) { s.removeTrack(raw); s.addTrack(clean); }
+    guard(s.getAudioTracks()[0]);
     localRef.current = s;
     setLocal(s); setMic(true); setCam(s.getVideoTracks().length > 0); setFacing("user");
     return s;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- guard is stable (and defined below)
+  // Two devices near each other in one call feed back into a whistle: the
+  // guard pauses my mic the moment it builds (howlGuard.js). Three in a
+  // minute and the mic stays off, with a word on why.
+  const guardRef = useRef(null);
+  const sayRef = useRef(null); sayRef.current = say;
+  const tellMediaRef = useRef(null);       // set once tellMedia exists, below
+  const howls = useRef([]);
+  const guard = useCallback((t) => {
+    if (guardRef.current) guardRef.current();
+    guardRef.current = t ? howlGuard(t, {
+      isOn: () => micRef.current,
+      onHowl: () => {
+        const now = Date.now();
+        howls.current = [...howls.current.filter((x) => now - x < 60000), now];
+        if (howls.current.length >= 3) {
+          howls.current = [];
+          const s = localRef.current;
+          if (s) s.getAudioTracks().forEach((x) => { x.enabled = false; });
+          setMic(false); micRef.current = false;
+          tellMediaRef.current && tellMediaRef.current(false, camRef.current);
+          sayRef.current && sayRef.current("🔇 Your mic is off: two devices close together keep whistling. Use headphones, or keep one muted — tap 🎙️ to turn it back on.");
+        } else {
+          sayRef.current && sayRef.current("🔇 Whistling between two devices near each other — your mic paused a moment. Headphones, or move apart, stop it.");
+        }
+      },
+    }) : null;
   }, []);
   const stopMedia = useCallback(() => {
     const s = localRef.current;
+    if (guardRef.current) { guardRef.current(); guardRef.current = null; }
     if (s) s.getTracks().forEach((t) => t.stop());
     localRef.current = null; setLocal(null);
   }, []);
@@ -347,12 +377,12 @@ export function CallProvider({ children }) {
           const weak = P && P.weak;
           const tall = (s.track.getSettings && s.track.getSettings().height) || 1080;
           const fit = Math.max(1, tall / 1080);
-          p.encodings[0].maxBitrate = weak ? 1500000 : n === 1 ? 6000000 : n === 2 ? 4500000 : 3000000;
+          p.encodings[0].maxBitrate = weak ? 1800000 : n === 1 ? 8000000 : n === 2 ? 5500000 : 3500000;
           p.encodings[0].scaleResolutionDownBy = fit * (weak ? 1.5 : n === 1 ? 1 : n === 2 ? 1.2 : 1.5);
           p.encodings[0].maxFramerate = 30;
           // squeezed, give up a little of each — not all the sharpness
           p.degradationPreference = "balanced";
-        } else if (isScreen) p.encodings[0].maxBitrate = 160000;
+        } else if (isScreen) p.encodings[0].maxBitrate = 192000;      // a film's sound: stereo, full
         else if (s.track.kind === "video") {
           // A phone encodes my camera once for every friend, so with more of
           // us each copy is smaller: 720p for two, 480p for three, 360p for
@@ -660,6 +690,7 @@ export function CallProvider({ children }) {
     if (socket && c && c.id) socket.emit("call:media", { callId: c.id, mic: m, cam: k, screen: screenRef.current ? screenRef.current.id : null, hold: holdRef.current, turn: turnRef.current,
       film: filmRef.current ? filmRef.current.name : null });
   }, [socket]);
+  tellMediaRef.current = tellMedia;
   useEffect(() => {
     if (turnRef.current === turn) return;
     turnRef.current = turn;
@@ -737,10 +768,11 @@ export function CallProvider({ children }) {
     const old = s.getAudioTracks()[0];
     if (old) { s.removeTrack(old); old.stop(); }
     s.addTrack(t);
+    guard(t);
     for (const P of pcs.current.values()) if (P.audio) await P.audio.replaceTrack(t).catch(() => {});
     const copy = new MediaStream(s.getTracks());
     localRef.current = copy; setLocal(copy);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- guard is stable
   const listMics = useCallback(async () => {
     try {
       const all = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
@@ -1089,6 +1121,7 @@ export function CallProvider({ children }) {
       note(f0, `file: ${file.name.slice(0, 50)} · ${(file.size / 1048576).toFixed(0)} MB · ${file.type || "no type"}`);
       note(f0, `this phone: ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, "").slice(0, 110)}`);
       const dolby = await dolbyLike(file);
+      if (dolby) warmDecoder();
       note(f0, `Dolby/DTS in the file's headers: ${dolby ? "yes" : "no"}`);
       const missing = dolby || (await soundMissing(v));
       if (!dolby) note(f0, `browser's own sound: ${missing ? "none decoded" : "playing"} (decoded bytes ${"webkitAudioDecodedByteCount" in v ? v.webkitAudioDecodedByteCount : "?"})`);

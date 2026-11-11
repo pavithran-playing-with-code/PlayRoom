@@ -407,7 +407,12 @@ There is no test runner. What works:
   peak 12 dB over its neighbours twice running gets a narrow notch (up to 8)
   — the same laptop beeped at 4 kHz all the time, camera or not. Measure a
   laptop's mic with headless Chrome (`--use-fake-ui-for-media-stream`, real
-  devices) and an AnalyserNode: nothing recorded, only the peaks. A mic that sends digital silence (a laptop's
+  devices) and an AnalyserNode: nothing recorded, only the peaks. Two devices
+  near each other in one call feed back into a whistle (echo cancelling only
+  removes a device's own speaker): `howlGuard.js` watches the mic (every
+  device, phones too — it only listens) for one loud pure tone held ~0.5 s and
+  pauses the mic 3 s, which breaks the loop; three in a minute, the mic stays
+  off with a word on why. A mic that sends digital silence (a laptop's
   "Default" being an empty socket or Stereo Mix — friends hear nothing,
   you hear them) is caught by measuring it (`peakOf`): the other mics are
   tried, "communications" first, the first that hears anything swapped in
@@ -418,6 +423,16 @@ There is no test runner. What works:
   the phone taking the mic does. A game drawn sideways on an upright
   screen (`useDrawnSideways` in LandscapeGate) turns the call with it,
   and `call:media` carries `turn`, so the others turn that camera back.
+- **PlayRoom Player** (`/watch`, `pages/Player.jsx`, no login, no call): a
+  video from the phone with the call's film machinery — Dolby / DTS decoded
+  (`filmSound.js`, started the moment the file is picked; the ~30 MB decoder
+  kept in Cache Storage, `pr-ffmpeg-0.12.6`), Audio & subs, swipes for
+  brightness / volume / scrubbing, double-tap ±10 s, speed, full screen
+  sideways, the screen kept awake, and where you were remembered
+  (`pr_resume:<name>:<size>`). Test it by picking a file with CDP
+  `DOM.setFileInputFiles` (make one with ffmpeg.wasm: E-AC-3 + AAC + SRT) and
+  listening to the page's <audio> sink with an AnalyserNode; `window.__pl`
+  gives the decoder's numbers and the tap timings.
 - **One account, two devices** — a call is on one device: the others hear
   `call:mine`, show "In a call on your other device", can't start a second
   call, and can take it over (`call:move`). A match is played on one device:

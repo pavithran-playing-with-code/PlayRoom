@@ -52,11 +52,13 @@ export default function Home() {
                 <>
                   <Link to="/lobby" className="press p-white lg">🎮 Play now</Link>
                   <Link to="/leaderboard" className="press p-grape lg">🏆 Leaderboard</Link>
+                  <Link to="/watch" className="press p-sun lg">🎬 Video player</Link>
                 </>
               ) : (
                 <>
                   <Link to="/register" className="press p-white lg">🎮 Play free</Link>
                   <Link to="/login" className="press p-grape lg">Log in</Link>
+                  <Link to="/watch" className="press p-sun lg">🎬 Video player</Link>
                 </>
               )}
             </div>

@@ -25,6 +25,7 @@ import { installErrorReporting } from "./utils/reportError";
 
 // Hollow Hours is big and only a few will open it: its own chunk
 const Hollow = lazy(() => import("./pages/Hollow"));
+const Player = lazy(() => import("./pages/Player"));
 
 installErrorReporting();
 
@@ -67,6 +68,8 @@ export default function App() {
           <Route path="/manor" element={<Manor />} />
           {/* Hollow Hours, solo, while it's being built: not in the lobby yet */}
           <Route path="/hollow" element={<Suspense fallback={<div className="hh" />}><Hollow /></Suspense>} />
+          {/* PlayRoom Player: a video from the phone, no call needed — its own full screen */}
+          <Route path="/watch" element={<Suspense fallback={<div className="pl-home" />}><Player /></Suspense>} />
 
           {/* All other pages share the Navbar */}
           <Route path="/*" element={<WithNav />} />

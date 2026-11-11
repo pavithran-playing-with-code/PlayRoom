@@ -8,7 +8,13 @@
 //   • pass the phones' connection details to each other (call:signal) until
 //     they're talking directly
 //
-// Only accepted friends can be called. The sender of everything is their
+// A Movie Night room (slug "movie") has a call of its own, `r-<code>`:
+// anyone seated in the room joins it (call:room) without ringing and
+// without being friends; it stays open with one person in it, and ends when
+// the last one leaves. While it has anyone, the room is kept fresh, so it
+// stays on the open-rooms list and the sweep leaves it alone through a film.
+//
+// Otherwise only accepted friends can be called. The sender of everything is their
 // verified token, never the payload. Calls live in memory: a restart ends
 // them, and the phones see the socket drop and hang up.
 //
@@ -16,6 +22,7 @@
 // the call itself carries on phone to phone. They have GRACE_MS to come back
 // (call:rejoin) before the others are told they left.
 const presence = require("./presence");
+const db = require("./db");
 const { step: watchStep } = require("./callWatch");
 
 const MAX = 4;
@@ -88,6 +95,7 @@ async function iceServers() {
 function view(c) {
   return {
     callId: c.id,
+    room: c.room || null,                                          // a Movie Night room's call
     members: [...c.members].map(([id, m]) => ({ id, name: m.name, away: !!m.gone })),
     invited: [...c.invited.keys()],
     watch: c.watch ? { ...c.watch, now: Date.now() } : null,     // a video being watched together (callWatch.js)
@@ -133,7 +141,7 @@ function attach(io) {
   // nobody left to talk to: end it
   function settle(c, reason) {
     if (!calls.has(c.id)) return;
-    if (c.members.size === 0 || (c.members.size === 1 && c.invited.size === 0)) end(c, reason);
+    if (c.members.size === 0 || (!c.room && c.members.size === 1 && c.invited.size === 0)) end(c, reason);
     else tellState(c);
   }
   function leave(c, uid, reason) {
@@ -146,6 +154,15 @@ function attach(io) {
     tellMine(uid);
     settle(c, reason);
   }
+
+  // a room with a call going stays fresh (listed, not swept) for as long as it has one
+  const keepFresh = setInterval(() => {
+    const codes = [...calls.values()].filter((c) => c.room && c.members.size).map((c) => c.room);
+    if (!codes.length) return;
+    db.execute(`UPDATE rooms SET last_activity_at = NOW() WHERE status = 'waiting' AND room_code IN (${codes.map(() => "?").join(",")})`, codes)
+      .catch(() => {});
+  }, 4 * 60 * 1000);
+  if (keepFresh.unref) keepFresh.unref();
 
   io.on("connection", (socket) => {
     const uid = Number(socket.user.id);
@@ -192,6 +209,33 @@ function attach(io) {
       c.invited.set(to, { by: uid, timer });
       io.to(userChannel(to)).emit("call:ring", { callId: c.id, from: { id: uid, name }, members: view(c).members });
       reply({ ok: true, callId: c.id, iceServers: await iceServers() });
+      tellState(c);
+    });
+
+    // Join my Movie Night room's call (making it, if I'm first). Only
+    // someone seated in that room, and it's still open.
+    socket.on("call:room", async (msg, ack) => {
+      const reply = typeof ack === "function" ? ack : () => {};
+      const code = typeof (msg && msg.code) === "string" ? msg.code.toUpperCase().slice(0, 8) : "";
+      if (!/^[A-Z0-9]{4,8}$/.test(code)) return reply({ ok: false, why: "bad" });
+      let seated;
+      try { seated = await module.exports._seatedIn(code, uid); } catch { return reply({ ok: false, why: "error" }); }
+      if (!seated) return reply({ ok: false, why: "not-in-room" });
+      const id = `r-${code}`;
+      let c = calls.get(id);
+      const old = calls.get(inCall.get(uid));
+      if (old && old !== c) leave(old, uid, "switched");
+      if (c && !c.members.has(uid) && c.members.size >= MAX) return reply({ ok: false, why: "full" });
+      if (!c) {
+        c = { id, room: code, members: new Map(), invited: new Map() };
+        calls.set(id, c);
+      }
+      const m = c.members.get(uid);
+      if (m && m.sid && m.sid !== socket.id && m.device !== device) return reply({ ok: false, why: "elsewhere" });
+      if (m) { clearTimeout(m.gone); m.gone = null; m.sid = socket.id; m.device = device; }
+      else c.members.set(uid, { sid: socket.id, device, name, gone: null });
+      inCall.set(uid, c.id);
+      reply({ ok: true, room: code, iceServers: await iceServers(), ...view(c) });
       tellState(c);
     });
 
@@ -329,4 +373,14 @@ function attach(io) {
   });
 }
 
-module.exports = { attach, MAX, _calls: calls };
+// seated (not watching) in an open Movie Night room; replaceable in tests
+async function seatedIn(code, uid) {
+  const [rows] = await db.execute(
+    `SELECT 1 FROM room_players rp
+       JOIN rooms r ON r.id = rp.room_id
+       JOIN game_types gt ON gt.id = r.game_type_id
+      WHERE r.room_code = ? AND rp.user_id = ? AND gt.slug = 'movie' AND r.status = 'waiting' LIMIT 1`, [code, uid]);
+  return rows.length > 0;
+}
+
+module.exports = { attach, MAX, _calls: calls, _seatedIn: seatedIn };

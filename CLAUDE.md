@@ -433,6 +433,13 @@ There is no test runner. What works:
   `DOM.setFileInputFiles` (make one with ffmpeg.wasm: E-AC-3 + AAC + SRT) and
   listening to the page's <audio> sink with an AnalyserNode; `window.__pl`
   gives the decoder's numbers and the tap timings.
+- **Movie Night** (slug `movie`, `pages/MovieRoom.jsx`) is a room, not a game:
+  never started (the start route refuses it), it stays `waiting` so people
+  can drop in from the Rooms list mid-film. Everyone seated joins the room's
+  call (`call:room` in `config/calls.js`, id `r-<code>`: no ringing, no
+  friendship needed, 4 at most, open with one in it, kept fresh in the
+  database while anyone is in it) and a movie is played to it with the
+  call's `playFilm`. `check-calls.js` tests the room call.
 - **One account, two devices** — a call is on one device: the others hear
   `call:mine`, show "In a call on your other device", can't start a second
   call, and can take it over (`call:move`). A match is played on one device:

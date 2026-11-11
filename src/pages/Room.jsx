@@ -1,6 +1,7 @@
 // src/pages/Room.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams, Link } from "react-router-dom";
+import MovieRoom from "./MovieRoom";
 import { api } from "../utils/api";
 import { useAuth } from "../utils/AuthContext";
 import { useSocket } from "../utils/SocketContext";
@@ -628,6 +629,11 @@ function Room() {
         </div>
       </div>
     );
+  }
+
+  // ── Movie Night: no match, just the room's call and a film ────────────────
+  if (room.game_slug === "movie") {
+    return <MovieRoom code={code} room={room} players={seatedPlayers} user={user} onLeave={exitToLobby} />;
   }
 
   // ── Waiting lobby ─────────────────────────────────────────────────────────

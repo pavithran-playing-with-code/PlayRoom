@@ -2275,3 +2275,15 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .pl-tracks button:disabled{opacity:.45}
 .pl-tracks p{margin:4px 0;font-weight:700;font-size:13px}
 .pl-tracks small{display:block;font-weight:600;opacity:.7}
+/* ── Movie Night room (.mn-) ── */
+.mn-hero{padding:24px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;background:var(--coral);color:#fff}
+.mn-hero h2{margin:0;font-size:28px}
+.mn-hero p{margin:0 0 6px;font-weight:700;max-width:420px}
+.mn-icon{font-size:56px;line-height:1}
+.mn-btns{display:flex;flex-direction:column;gap:10px;width:100%}
+.mn-who{display:flex;flex-wrap:wrap;gap:12px}
+.mn-seat{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:90px;text-align:center}
+.mn-seat b{font-size:.92rem}
+.mn-seat small{font-size:.75rem;font-weight:700;opacity:.7}
+.mn-code{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:2px dashed var(--line, rgba(0,0,0,.15))}
+.mn-code b{letter-spacing:.12em}

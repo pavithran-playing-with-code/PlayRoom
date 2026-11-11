@@ -29,7 +29,12 @@ require.cache[presencePath] = {
   id: presencePath, filename: presencePath, loaded: true,
   exports: { friendIdsOf: async (u) => FRIENDS[u] || [], isOnline: (u) => ONLINE.has(Number(u)) },
 };
+const dbPath = require.resolve(path.join(__dirname, "..", "config", "db"));
+require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { execute: async () => [[]] } };
 const calls = require(path.join(__dirname, "..", "config", "calls"));
+// who is seated in which Movie Night room
+const SEATED = { ABCD: [21, 22, 23, 24, 25] };
+calls._seatedIn = async (code, uid) => (SEATED[code] || []).includes(Number(uid));
 
 // a socket.io stand-in: rooms are a socket's id and "user:<id>"
 const sockets = new Map();
@@ -224,6 +229,27 @@ const check = (name, ok, extra = "") => { if (!ok) fails++; console.log(`${ok ? 
     check("...and the phone can't hang up or change it any more", G.got("call:left").length === 0 && G.got("call:media").length === 0 && G.got("call:ended").length === 0);
     await laptop.send("call:leave", { callId: rc.callId });
     check("hanging up: every device hears I'm in no call", phone.got("call:mine").pop().callId === null);
+  }
+  // ── a Movie Night room's call: no friends needed, no ringing ──
+  {
+    const P = connect(21, "p1"), Q = connect(22, "q1"), R = connect(23), S = connect(24), T = connect(25), Out = connect(26);
+    const a = await P.send("call:room", { code: "abcd" });
+    check("room call: the first one in makes it, and it stays open alone", a.ok && a.callId === "r-ABCD" && a.room === "ABCD" && a.members.length === 1 && P.got("call:ended").length === 0);
+    check("...someone not in the room can't join", (await Out.send("call:room", { code: "ABCD" })).why === "not-in-room");
+    check("...nor a made-up code", (await Out.send("call:room", { code: "x!" })).why === "bad");
+    const b = await Q.send("call:room", { code: "ABCD" });
+    check("...a stranger in the room joins without ringing", b.ok && b.members.length === 2 && Q.got("call:ring").length === 0 && P.got("call:state").some((st) => st.members.length === 2));
+    await R.send("call:room", { code: "ABCD" }); await S.send("call:room", { code: "ABCD" });
+    check("...four at most", (await T.send("call:room", { code: "ABCD" })).why === "full");
+    await Q.send("call:signal", { callId: "r-ABCD", to: 21, data: { sdp: "x" } });
+    check("...connection details pass between strangers in it", P.got("call:signal").some((m) => m.from === 22));
+    const Q2 = connect(22, "q1");
+    const again = await Q2.send("call:room", { code: "ABCD" });
+    check("...the same phone back on a new connection stays in", again.ok && again.members.length === 4);
+    await R.send("call:leave", { callId: "r-ABCD" }); await S.send("call:leave", { callId: "r-ABCD" }); await Q2.send("call:leave", { callId: "r-ABCD" });
+    check("...down to one, it carries on", P.got("call:ended").length === 0 && calls._calls.has("r-ABCD"));
+    await P.send("call:leave", { callId: "r-ABCD" });
+    check("...the last one out ends it", !calls._calls.has("r-ABCD"));
   }
   console.log(fails ? `\n${fails} FAILED` : "\nall passed");
   process.exit(fails ? 1 : 0);

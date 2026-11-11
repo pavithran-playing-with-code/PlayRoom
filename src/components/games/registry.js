@@ -228,6 +228,15 @@ export const GAMES = [
     coopNote: "You go on to each room only when both of you are through. Crouch to give your friend a boost; at the top of the tower, pull the two levers together. If it catches either of you, you both start that room again.",
     Component: HollowGame,
   },
+  {
+    // Not a game: a room to watch a movie together (src/pages/MovieRoom.jsx).
+    // It is never started; the room's call plays the film (config/calls.js).
+    slug: "movie", name: "Movie Night", icon: "🎬",
+    blurb: "Watch a movie together: pick one from your phone and everyone in the room sees and hears it, Dolby sound and subtitles included. Talk over it like you're on the same sofa.",
+    minPlayers: 2, maxPlayers: 4, tag: "Watch", col: "var(--coral)",
+    defaultDuration: 0, endless: true, watch: true,
+    Component: () => null,
+  },
 ];
 
 export const GAME_MAP = Object.fromEntries(GAMES.map((g) => [g.slug, g]));

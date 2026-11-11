@@ -553,6 +553,9 @@ router.patch("/:code/start", verifyToken, async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Only the host can start." });
     if (room.status !== "waiting")
       return res.status(409).json({ success: false, message: "Game already started." });
+    // Movie Night has no match: the room stays open for people to drop in
+    if (room.game_slug === "movie")
+      return res.status(400).json({ success: false, message: "A movie room has nothing to start." });
 
     // A match with other people needs at least one other person. Empty seats
     // are fine: nobody should have to abandon a 5-seat room and make a new one

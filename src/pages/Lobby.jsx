@@ -102,10 +102,10 @@ export default function Lobby() {
   const canCoop = coopMax > 0 && maxPlayers >= 2 && maxPlayers <= coopMax;
   const coop = coopMode && canCoop && !teams;
 
-  // Keep maxPlayers valid when switching games.
+  // Keep maxPlayers valid when switching games. Movie Night is never one seat.
   useEffect(() => {
-    setMaxPlayers((mp) => Math.min(mp, selected.maxPlayers));
-  }, [selected.maxPlayers]);
+    setMaxPlayers((mp) => Math.max(Math.min(mp, selected.maxPlayers), selected.watch ? selected.maxPlayers : 1));
+  }, [selected.maxPlayers, selected.watch]);
 
   // Inviting someone: a solo room has no seat for them.
   useEffect(() => {
@@ -392,8 +392,8 @@ export default function Lobby() {
               {/* Solo and 2 are the usual picks, so they're one tap. Past that,
                   the crew grows a face at a time up to 8. */}
               <div className="seatpick" id="seats">
-                <button className="press seat p-white" aria-pressed={maxPlayers === 1}
-                  onClick={() => setMaxPlayers(1)}><Icon name="user" size={18} stroke={2.6} /> Solo</button>
+                {!selected.watch && <button className="press seat p-white" aria-pressed={maxPlayers === 1}
+                  onClick={() => setMaxPlayers(1)}><Icon name="user" size={18} stroke={2.6} /> Solo</button>}
                 {/* a solo-only game (Emberfall, for now) offers just Solo */}
                 {selected.maxPlayers >= 2 && <button className="press seat p-white" aria-pressed={maxPlayers === 2}
                   onClick={() => setMaxPlayers(2)}><Icon name="people" size={18} stroke={2.6} /> 2</button>}
@@ -423,6 +423,7 @@ export default function Lobby() {
                 {isSolo
                   ? (selected.maxPlayers === 1 ? "Solo — this game is played alone for now."
                     : selected.endless ? "Solo — no clock, play as long as you like." : "Solo — just you and the clock.")
+                  : selected.watch ? `Up to ${maxPlayers} watching — people can join any time, even mid-movie.`
                   : `${maxPlayers} players — everyone has to join before the game can start.`}
               </div>
 
@@ -445,7 +446,7 @@ export default function Lobby() {
                     </label>
                   )}
                   {/* Two sides of two: offered only once there are four seats. */}
-                  {canTeam && (
+                  {canTeam && !selected.watch && (
                     <label className={`opt${teams ? " on" : ""}`}>
                       <span className="opt-ico" aria-hidden="true"><Icon name="versus" size={22} /></span>
                       <span className="opt-txt">Team match<small>Play as sides — highest total wins</small></span>

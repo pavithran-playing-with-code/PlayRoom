@@ -607,7 +607,7 @@ export function CallProvider({ children }) {
     for (const id of [...pcs.current.keys()]) if (!others.some((m) => m.id === id)) closePeer(id);
     const names = { ...c.names };
     for (const m of st.members) names[m.id] = m.name;
-    const active = others.length > 0;
+    const active = others.length > 0 || !!c.room;
     if (active && c.phase !== "active") tones.current.stop();
     setCall({ ...c, phase: active ? "active" : "outgoing", members: st.members, invited: st.invited, names,
       startedAt: active ? c.startedAt || Date.now() : null });
@@ -683,6 +683,28 @@ export function CallProvider({ children }) {
     if (socket && c && c.id) socket.emit("call:leave", { callId: c.id });
     finish(c && c.phase === "active" ? "left" : null);
   }, [socket, finish]);
+
+  // A Movie Night room's call (config/calls.js, call:room): everyone seated
+  // in the room is in it, no ringing, no friends needed. Mic on, camera off —
+  // it's a film night; the camera button turns it on.
+  const joinRoom = useCallback(async (code) => {
+    if (!socket) return say("Not connected — try again in a moment.");
+    const c = callRef.current;
+    if (c && c.room === code) { setExpanded(true); return; }
+    if (c) hangUp();
+    let s;
+    try { s = await getMedia(); } catch (e) { return say(e.message); }
+    s.getVideoTracks().forEach((t) => { t.enabled = false; });
+    camRef.current = false; setCam(false);
+    socket.emit("call:room", { code }, (r) => {
+      if (!r || !r.ok) { stopMedia(); return say(r && r.why === "not-in-room" ? "Join the room first." : WHY[r && r.why] || WHY.error); }
+      ice.current = r.iceServers || [];
+      const draft = { id: r.callId, room: r.room, phase: "active", members: [], invited: [], names: {}, startedAt: Date.now(), first: null };
+      callRef.current = draft; setCall(draft); setExpanded(true);
+      apply(r);
+      socket.emit("call:media", { callId: r.callId, mic: true, cam: false, screen: null, hold: false, turn: 0, film: null });
+    });
+  }, [socket, getMedia, stopMedia, say, apply, hangUp]);
 
   // ── mic, camera, which camera ──────────────────────────────────────────────
   const tellMedia = useCallback((m, k) => {
@@ -1291,10 +1313,10 @@ export function CallProvider({ children }) {
 
   const value = useMemo(() => ({
     call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn, mics, setMics, listMics, chooseMic,
-    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
+    startCall, joinRoom, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
     watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs, filmDiag,
   }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere, mics, listMics, chooseMic,
-    startCall, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs, filmDiag]);
+    startCall, joinRoom, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs, filmDiag]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

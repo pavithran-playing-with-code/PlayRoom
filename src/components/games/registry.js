@@ -26,6 +26,7 @@ import MovingDay from "./MovingDay";
 import SunshardTower from "./SunshardTower";
 import Emberfall from "./Emberfall";
 import HollowGame from "./HollowGame";
+import ShadowSneak from "./ShadowSneak";
 
 // `col` is the game's colour across the whole product — Home tile header,
 // Lobby picker, open-room card, peeking buddy. One game, one colour, everywhere.
@@ -217,6 +218,15 @@ export const GAMES = [
     coopLabel: "one chapter — through every room together",
     coopNote: "You go on to each room only when both of you are through. Crouch to give your friend a boost; at the top of the tower, pull the two levers together. If it catches either of you, you both start that room again.",
     Component: HollowGame,
+  },
+  {
+    slug: "sneak", name: "Shadow Sneak", icon: "🔦",
+    blurb: "A lighthouse sweeps its beam over the dark, and walls cast real shadows. Sneak from shadow to shadow, reach the lighthouse and switch it off.",
+    minPlayers: 1, maxPlayers: 8, tag: "Stealth", col: "var(--slate)",
+    coopMax: 4,
+    coopLabel: "one lighthouse — it goes out when you're all at its door",
+    coopNote: "You all sneak the same ground. Stand on a 🔔 bell and the lamp stares at you while your friends run. It only goes out when everyone is at the door — and anyone spotted makes it turn faster.",
+    Component: ShadowSneak,
   },
   {
     // Not a game: a room to watch a movie together (src/pages/MovieRoom.jsx).

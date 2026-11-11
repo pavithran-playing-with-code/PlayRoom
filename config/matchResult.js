@@ -17,7 +17,8 @@ const OBJECTIVE_PAIRS = { mahjong: 24, memory: 10, emberfall: 1, hollow: 1 };
 // GOAL in src/components/games/coopBoards.js (scripts/check-coop.mjs proves it).
 // Sunshard Jump: pairs_matched is 1 once the side has lit the temple;
 // Emberfall: 1 once the Cinder Colossus is down (alone, that is the win too).
-const COOP_GOAL = { memory: 1, mahjong: 1, sunshard: 1, emberfall: 1, hollow: 1 };
+// Shadow Sneak: 1 once the side has put out its lamps (lampGoal in ShadowSneakInner.jsx).
+const COOP_GOAL = { memory: 1, mahjong: 1, sunshard: 1, emberfall: 1, hollow: 1, sneak: 1 };
 // Word Rush together: words solved as a side, more for a longer clock and a
 // bigger side. = wordGoal in coopBoards.js.
 const wordGoal = (secs, n) => Math.max(4, Math.round((3 * (Number(secs) || 120) * Math.max(1, n)) / 60));

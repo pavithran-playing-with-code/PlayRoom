@@ -5,7 +5,7 @@
 export const SHELVES = [
   { key: "quick",   title: "⚡ Quick & brainy",     games: ["speedmath", "reaction", "wordrush", "typing", "colors", "numbers"] },
   { key: "puzzle",  title: "🧩 Puzzles & classics", games: ["mahjong", "memory", "arrows", "pipes", "slide", "blocks", "maze"] },
-  { key: "action",  title: "🏁 Racing & action",    games: ["speedway", "dino", "flappy", "racer", "runner", "storm", "piano"] },
+  { key: "action",  title: "🏁 Racing & action",    games: ["speedway", "dino", "flappy", "racer", "runner", "storm", "sneak", "piano"] },
   { key: "big",     title: "🌋 Big adventures",     games: ["moving", "kitchen", "sunshard", "emberfall", "hollow"] },
 ];
 

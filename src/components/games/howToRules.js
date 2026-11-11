@@ -133,6 +133,12 @@ export const HOW_TO = {
     steps: ["Drag anywhere (or hold the arrow keys) to move.", "Don't touch the shards — skimming past them earns a bonus.", "A hit costs a few points, then you carry on."],
     tip: "Keep to open space, not the corners.",
   },
+  sneak: {
+    name: "Shadow Sneak",
+    goal: "Reach the lighthouse without being caught in its beam, and switch it off.",
+    steps: ["Move with your thumb. The beam only sees you if no wall is between you and the lamp — stay in the shadows.", "The ring under you turns red while you're in the light: get out fast, or you're sent back to your flag. Walk over a flag to make it yours.", "Low walls hide you only while you hold Duck.", "Together: the lamp goes out when everyone is at its door. Stand on a 🔔 bell and it stares at you while your friends run."],
+    tip: "Wait in a shadow for the beam to pass, then run for the next one.",
+  },
   maze: {
     name: "Maze Runner",
     goal: "Find the way out of each maze.",

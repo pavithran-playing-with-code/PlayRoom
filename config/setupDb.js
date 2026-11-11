@@ -259,6 +259,7 @@ const GAME_SEED = [
   { slug: "sunshard",  name: "Sunshard Jump",     description: "A 3D climb up a giant Sky Tree: jump, double-jump and glide up the spiral of floating stones to the Sun Crown before the rising storm catches you.", min: 1, max: 8, icon: "🏝️", active: 1 },
   { slug: "emberfall", name: "Emberfall",         description: "A 3D island adventure, alone or with a friend: beat three guardians for their Ember Shards, then the Cinder Colossus.", min: 1, max: 2, icon: "🔥", active: 1 },
   { slug: "hollow",    name: "Hollow Hours",      description: "Two small children in a house built for giants, alone or together: past the Keeper and the Cuckoo, up the Bell Tower by midnight.", min: 1, max: 2, icon: "🕰️", active: 1 },
+  { slug: "sneak",     name: "Shadow Sneak",      description: "A lighthouse sweeps its beam over the dark and walls cast real shadows: sneak from shadow to shadow and switch it off.", min: 1, max: 8, icon: "🔦", active: 1 },
   { slug: "movie",     name: "Movie Night",       description: "Not a game: a room to watch a movie together, from someone's phone, with everyone's voices.", min: 2, max: 4, icon: "🎬", active: 1 },
 ];
 

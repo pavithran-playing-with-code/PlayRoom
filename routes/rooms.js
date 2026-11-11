@@ -86,7 +86,7 @@ const MIN_TEAM_PLAYERS = MIN_PER_TEAM * 2;
 // side to be on — the together games (config/togetherWorld.js) — and a world
 // for more than four gets crowded.
 // And the shared boards (config/coopBoard.js): Memory, Mahjong, Word Rush.
-const COOP_GAMES = new Set([...together.COOP, ...coopBoard.GAMES, "sunshard", "emberfall", "hollow"]);
+const COOP_GAMES = new Set([...together.COOP, ...coopBoard.GAMES, "sunshard", "emberfall", "hollow", "sneak"]);
 // Games whose scores the server keeps itself, from what happened in its world.
 const serverScored = (slug) => together.isTogether(slug);
 const COOP_MAX = 4;

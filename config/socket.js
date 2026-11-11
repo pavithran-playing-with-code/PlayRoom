@@ -231,6 +231,27 @@ function initSocket(httpServer) {
       });
     });
 
+    // Shadow Sneak: where my sneaker is on the ground (everyone sees everyone
+    // creeping; together, who is at the door and who is on a bell), and the
+    // moment I was spotted (together: the lamp turns faster for all of us).
+    socket.on("sn:pos", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
+      const n = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.max(lo, Math.min(hi, x)) : 0; };
+      socket.to(roomChannel(code)).volatile.emit("sn:pos", {
+        user_id: uid,
+        x: n(msg.x, 0, 40), z: n(msg.z, 0, 40), f: n(msg.f, -7, 7), dk: msg.dk ? 1 : 0, dn: msg.dn ? 1 : 0, in: msg.in ? 1 : 0,
+        lv: Math.floor(n(msg.lv, 0, 999)), bl: Math.floor(n(msg.bl, -1, 9)),
+      });
+    });
+    socket.on("sn:ev", (msg) => {
+      const code = msg && msg.code;
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code) || msg.k !== "spot") return;
+      const lv = Number(msg.lv), t = Number(msg.t);
+      if (!Number.isInteger(lv) || lv < 0 || lv > 999 || !Number.isFinite(t) || t < 0 || t > 1e6) return;
+      socket.to(roomChannel(code)).emit("sn:ev", { user_id: uid, k: "spot", lv, t });
+    });
+
     // Dino Dash: my dino on the course (everyone runs the same one), carried
     // on at its speed between messages.
     socket.on("dino:pos", (msg) => {

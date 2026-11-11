@@ -198,6 +198,19 @@ export const PICTURES = {
       <path d="M18 36l2 6-2 8" stroke="#FFD1EA" strokeWidth="2" fill="none" strokeLinecap="round" />
     </>
   ),
+  // a lighthouse at night, its beam cut by a wall's shadow
+  sneak: (
+    <>
+      <rect x="4" y="4" width="56" height="56" rx="14" fill="#232C5C" {...K} />
+      <path d="M30 20L58 10v22z" fill="#FFE27A" />
+      <path d="M17 54l3-30h10l3 30z" fill="#FFFFFF" {...T} />
+      <path d="M19 34h12M18 44h14" stroke="#FF6B6B" strokeWidth="5" />
+      <path d="M17 54l3-30h10l3 30z" fill="none" {...T} />
+      <rect x="19" y="15" width="12" height="9" rx="2" fill="#FFE27A" {...T} />
+      <path d="M17 15l8-7 8 7z" fill="#FF6B6B" {...T} />
+      <rect x="42" y="42" width="13" height="12" rx="2" fill="#6F7FC4" {...T} />
+    </>
+  ),
   // a little maze, its way out marked, and you
   maze: (
     <>

@@ -7,9 +7,9 @@
 // over squares and time — walking upright, ducking while it waits — with a
 // wider beam than the real one),
 // then walks that route through the real rules and expects to arrive unseen.
-// Also: the same seed gives the same maze; corners, flags and bells are in
+// Also: the same seed gives the same maze; corners and bells are in
 // shadow; a bell holds the lamp and it goes back to its round; being spotted
-// sends you back to your flag.
+// sends you back to your corner.
 import { buildLevel, newRun, step, sees, roundAngle, sizeFor, OPEN, HALF, RUN, TOUCH, GRACE_S, DOWN_S, HEAT_S } from "../src/components/games/sneakSim.js";
 
 const NS = Number(process.env.NS || 12);
@@ -127,25 +127,24 @@ for (const l of Object.keys(times)) { const a = times[l].sort((x, y) => x - y); 
 // ── the maze itself ──
 {
   const A = buildLevel(4242, 3), B = buildLevel(4242, 3), C = buildLevel(4243, 3);
-  check("the same seed builds the same maze", A.cells.join() === B.cells.join() && A.phase === B.phase && JSON.stringify(A.checks) === JSON.stringify(B.checks));
+  check("the same seed builds the same maze", A.cells.join() === B.cells.join() && A.phase === B.phase && JSON.stringify(A.starts) === JSON.stringify(B.starts));
   check("another seed builds another", A.cells.join() !== C.cells.join());
-  let ok = true, flags = 0, bells = 0, lows = 0;
+  let ok = true, bells = 0, lows = 0;
   for (let s = 0; s < NS; s++) for (const level of [0, 2, 4, 7]) {
     const W = buildLevel(77 + s * 131, level, { coop: true });
     for (const p of W.starts) if (sees(W, p.x, p.z, false) || p.d < 4) ok = false;
-    for (const p of [...W.checks, ...W.bells]) if (sees(W, p.x, p.z, false)) ok = false;
-    for (const b of W.bells) if (W.checks.some((k) => k.x === b.x && k.z === b.z)) ok = false;
-    flags += W.checks.length; bells += W.bells.length;
+    for (const p of W.bells) if (sees(W, p.x, p.z, false)) ok = false;
+    bells += W.bells.length;
     if (level >= 2) lows += W.cells.filter((c) => c === 1).length;
     if (W.dist.some((d, i) => W.cells[i] === OPEN && d < 0)) ok = false;       // every open square reaches the lamp
   }
-  check("corners, flags and bells are all in shadow; every square reaches the lamp", ok);
-  check("every maze has flags, and (together) bells", flags >= NS * 4 * 3 && bells >= NS * 4 * 2, `${flags} flags, ${bells} bells`);
+  check("corners and bells are all in shadow; every square reaches the lamp", ok);
+  check("together: every maze has bells", bells >= NS * 4 * 2, `${bells} bells`);
   check("low walls come in from the third maze", lows > 0 && buildLevel(5, 0).cells.every((c) => c !== 1));
   check("alone or against each other: no bells", buildLevel(5, 2).bells.length === 0);
 }
 
-// ── spotted: back to your flag; a low wall hides you only ducked ──
+// ── spotted: back to your corner; a low wall hides you only ducked ──
 {
   const W = buildLevel(99, 0), S = newRun(W, 0, 0);
   // stand in the open by the lamp, with the beam on us
@@ -157,7 +156,7 @@ for (const l of Object.keys(times)) { const a = times[l].sort((x, y) => x - y); 
   for (let i = 0; i < 30 && !S.down; i++) ev = ev.concat(step(S, W, { mx: 0, mz: 0 }, 1 / 60, T));
   check("in the beam with nothing between: spotted in about a third of a second", S.down > 0 && S.spots === 1 && ev.some((e) => e.k === "spotted"));
   for (let i = 0; i < 80; i++) ev = ev.concat(step(S, W, { mx: 0, mz: 0 }, 1 / 60, T));
-  check("...then back at your flag, safe for a moment", S.x === W.starts[0].x && S.z === W.starts[0].z && S.grace > 0 && ev.some((e) => e.k === "back"));
+  check("...then back in your corner, safe for a moment", S.x === W.starts[0].x && S.z === W.starts[0].z && S.grace > 0 && ev.some((e) => e.k === "back"));
   check("the wait is short", DOWN_S <= 1 && GRACE_S >= 1.5);
   // a low wall: build one between the lamp and a spot
   const L = buildLevel(99, 0);

@@ -136,7 +136,7 @@ export const HOW_TO = {
   sneak: {
     name: "Shadow Sneak",
     goal: "Reach the lighthouse without being caught in its beam, and switch it off.",
-    steps: ["Move with your thumb. The beam only sees you if no wall is between you and the lamp — stay in the shadows.", "The ring under you turns red while you're in the light: get out fast, or you're sent back to your flag. Walk over a flag to make it yours.", "Low walls hide you only while you hold Duck.", "Together: the lamp goes out when everyone is at its door. Stand on a 🔔 bell and it stares at you while your friends run."],
+    steps: ["Move with your left thumb. The lamp only sees you if no wall is between you and it — dark ground is safe ground.", "The ring under you turns red while the beam is on you: get out fast, or you're sent back to your corner.", "Low walls hide you only while you hold Duck.", "Together: the lamp goes out when everyone is at its door. Stand on a 🔔 bell and it stares at you while your friends run."],
     tip: "Wait in a shadow for the beam to pass, then run for the next one.",
   },
   maze: {

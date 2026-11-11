@@ -8,7 +8,7 @@ const Inner = lazy(() => import("./ShadowSneakInner"));
 
 export default function ShadowSneak(props) {
   return (
-    <Suspense fallback={<div className="ds-pad"><div className="muted">The lamp is warming up…</div></div>}>
+    <Suspense fallback={<div className="sn-pad"><div className="muted">The lamp is warming up…</div></div>}>
       <Inner {...props} />
     </Suspense>
   );

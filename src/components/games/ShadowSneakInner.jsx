@@ -1,13 +1,14 @@
 // src/components/games/ShadowSneakInner.jsx
-// SHADOW SNEAK. A lighthouse in the middle of the ground sweeps its beam
+// SHADOW SNEAK. A lighthouse in the middle of a dark maze sweeps its beam
 // round; walls throw real shadows. Creep from your corner to the lighthouse,
-// shadow to shadow, and switch it off — then a bigger ground with a faster
-// lamp, low walls you must duck behind, a second beam, a third.
+// shadow to shadow, and switch it off — then a bigger maze with two beams,
+// low walls you must duck behind, a third beam. A landscape game (GameFrame
+// turns it on a phone held upright): the stick under your left thumb, Duck
+// under your right.
 //
-// Caught in the light for a third of a second and you're spotted: back at
-// your last flag (walk over a flag to make it yours). The room's clock ends
-// the match, not a lamp going out: every lamp is points, and the next ground
-// is ready at once.
+// Caught in the light for a third of a second and you're spotted: back in
+// your corner. The room's clock ends the match, not a lamp going out: every
+// lamp is points, and the next maze is ready at once.
 //
 //   alone / against each other   everyone sneaks the same grounds from their
 //       own corner, on their own (you see each other creeping); most points wins
@@ -29,68 +30,18 @@ import GameOver from "./GameOver";
 import useGameEngine from "./useGameEngine";
 import useSpecStream from "./useSpecStream";
 import { useSocket } from "../../utils/SocketContext";
+import FloatStick from "../together/FloatStick";
 import { buildLevel, newRun, step, beamAngles, heated, progressPoints, offPoints, PTS } from "./sneakSim";
 import { createSneakScene } from "./sneakScene";
 
 const SEND_MS = 100;
 const NEXT_MS = 1700;              // the lamp is out: this long to enjoy it, then the next ground
 const FRESH_MS = 4000;             // a friend not heard from for this long isn't waited for
-const JOY_R = 40, JOY_DEAD = 0.14;
+const STICK_R = 44;
 const r2 = (v) => Math.round(v * 100) / 100;
 // together: lamps to put out for the win — more with a longer clock
 export const lampGoal = (secs) => (secs === 0 ? 3 : secs <= 150 ? 2 : 4);
-const TWIST = { 1: "Two beams now!", 2: "Low walls: hold Duck to hide behind them", 3: "The biggest ground", 6: "Three beams!" };
-
-// A free thumb stick (the strip under the game) and a Duck button to hold.
-function Pad({ joy, duck }) {
-  const zone = useRef(null), id = useRef(null), origin = useRef(null), knob = useRef(null);
-  const [at, setAt] = useState(null);
-  const [held, setHeld] = useState(false);
-  const set = (e) => {
-    let dx = e.clientX - origin.current.x, dy = e.clientY - origin.current.y;
-    const d = Math.hypot(dx, dy);
-    if (d > JOY_R) { dx *= JOY_R / d; dy *= JOY_R / d; }
-    joy.current = { x: dx / JOY_R, y: dy / JOY_R };
-    if (knob.current) knob.current.style.transform = `translate(-50%,-50%) translate(${dx}px,${dy}px)`;
-  };
-  const down = (e) => {
-    e.preventDefault();
-    if (id.current !== null) return;
-    id.current = e.pointerId;
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* fine */ }
-    const r = zone.current.getBoundingClientRect();
-    origin.current = { x: e.clientX, y: e.clientY };
-    setAt({ x: e.clientX - r.left, y: e.clientY - r.top });
-    joy.current = { x: 0, y: 0 };
-  };
-  const move = (e) => { if (id.current === e.pointerId && origin.current) set(e); };
-  const up = (e) => {
-    if (id.current !== e.pointerId) return;
-    id.current = null; joy.current = null; origin.current = null;
-    setAt(null);
-  };
-  const press = (on) => (e) => { e.preventDefault(); duck.current = on; setHeld(on); };
-  return (
-    <div className="sn-pad">
-      <div className="ds-zone" ref={zone} role="application" aria-label="Move: put your thumb anywhere here"
-        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onContextMenu={(e) => e.preventDefault()}>
-        {at ? (
-          <div className="ds-joy live" style={{ left: at.x, top: at.y }}><div className="ds-joy-knob" ref={knob} /></div>
-        ) : (
-          <>
-            <div className="ds-joy idle" aria-hidden="true"><div className="ds-joy-knob" /></div>
-            <div className="ds-zone-help muted">Thumb anywhere here to move</div>
-          </>
-        )}
-      </div>
-      <button type="button" className={`sn-duck${held ? " on" : ""}`} aria-pressed={held} aria-label="Duck (hold)"
-        onPointerDown={press(true)} onPointerUp={press(false)} onPointerCancel={press(false)} onPointerLeave={press(false)}
-        onContextMenu={(e) => e.preventDefault()}>
-        <span aria-hidden="true">🙇</span>Duck
-      </button>
-    </div>
-  );
-}
+const TWIST = { 1: "Two beams now!", 2: "Low walls: hold Duck to hide behind them", 3: "The biggest maze", 6: "Three beams!" };
 
 export default function ShadowSneakInner(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
@@ -133,7 +84,9 @@ export default function ShadowSneakInner(props) {
   const live = useRef(null);                      // { level, W, S, bank, nextAt, spots }
   // for tests: each sneaker's run, by player id
   useEffect(() => { const all = (window.__sn = window.__sn || {}); all[myId] = live; return () => { delete all[myId]; }; }, [myId]);
-  const joy = useRef(null), duck = useRef(false), keys = useRef({});
+  const stick = useRef(null), knobRef = useRef(null), duck = useRef(false), keys = useRef({});
+  const [ducking, setDucking] = useState(false);
+  const press = (on) => (e) => { e.preventDefault(); duck.current = on; setDucking(on); };
   const remotes = useRef(new Map());              // id -> { x, z, f, dk, dn, in, lv, bl, at }
   const [hud, setHud] = useState({ level: 0, spots: 0, offs: 0, in: false, wait: "", bell: false, held: false, hot: false, dir: 0, far: 0, seen: 0 });
   const [msg, setMsg] = useState(null);
@@ -189,7 +142,7 @@ export default function ShadowSneakInner(props) {
     if (!L) return null;
     const S = L.S;
     return { lv: L.level, x: r2(S.x), z: r2(S.z), f: r2(S.face), dk: S.duck ? 1 : 0, dn: S.down > 0 ? 1 : 0, in: S.in ? 1 : 0,
-      sn: r2(S.seen), gr: S.grace > 0 ? 1 : 0, mv: r2(S.moving), b0: r2(S.b0), cp: S.cp, ht: heated((performance.now() - anchor.current) / 1000, S.heats) ? 1 : 0,
+      sn: r2(S.seen), gr: S.grace > 0 ? 1 : 0, mv: r2(S.moving), b0: r2(S.b0), ht: heated((performance.now() - anchor.current) / 1000, S.heats) ? 1 : 0,
       of: L.nextAt ? 1 : 0, sc: eng.score, sp: L.spots, n: offs.current };
   };
   const [watched, setWatched] = useState(null);
@@ -242,13 +195,17 @@ export default function ShadowSneakInner(props) {
           raf = requestAnimationFrame(frame);
           return;
         }
-        const k = keys.current, j = joy.current;
+        const k = keys.current, st = stick.current;
         let mx = 0, mz = 0;
         if (k.arrowleft || k.a) mx -= 1;
         if (k.arrowright || k.d) mx += 1;
         if (k.arrowup || k.w) mz -= 1;
         if (k.arrowdown || k.s) mz += 1;
-        if (j) { const m = Math.hypot(j.x, j.y); if (m > JOY_DEAD) { const p = (m - JOY_DEAD) / (1 - JOY_DEAD) / m; mx = j.x * p; mz = j.y * p; } }
+        if (st) {
+          const dx = st.x - st.ox, dy = st.y - st.oy, l = Math.hypot(dx, dy);
+          if (l > 6) { mx = (dx / l) * Math.min(1, l / STICK_R); mz = (dy / l) * Math.min(1, l / STICK_R); }
+          if (knobRef.current) { const c = Math.min(l, STICK_R) / (l || 1); knobRef.current.style.transform = `translate(${dx * c}px, ${dy * c}px)`; }
+        } else if (knobRef.current) knobRef.current.style.transform = "";
         const here = mates.filter((r) => r.lv === L.level);
         const rung = here.reduce((m, r) => (r.bl >= 0 && (m < 0 || r.bl < m) ? r.bl : m), -1);
         const evs = [];
@@ -258,8 +215,7 @@ export default function ShadowSneakInner(props) {
           evs.push(...step(S, W, { mx, mz, duck: duck.current || k.shift || k[" "] }, h, T - left, rung));
         }
         for (const e of evs) {
-          if (e.k === "flag") { sc?.cheer("flag", S.x, S.z); }
-          else if (e.k === "bell") { sc?.cheer("bell", S.x, S.z); sayRef.current("🔔 The lamp is staring at you — friends, run!", "info", 2600); }
+          if (e.k === "bell") { sc?.cheer("bell", S.x, S.z); sayRef.current("🔔 The lamp is staring at you — friends, run!", "info", 2600); }
           else if (e.k === "spotted") {
             L.spots++; L.bank -= PTS.spotted;
             if (coop) { S.heats.push(T); tell("spot", { lv: L.level, t: r2(T) }); }
@@ -293,7 +249,7 @@ export default function ShadowSneakInner(props) {
       const hot = heated(T, P.heats);
       sceneRef.current?.draw({
         me: { id: myId, slot: slotOf(myId), name: "", x: P.x, z: P.z, face: P.face, duck: P.duck, moving: P.moving, seen: P.seen, down: P.down, grace: P.grace, in: P.in },
-        others: others(C.level, now), beams: beamAngles(C.W, P), heat: hot, off: !!C.nextAt, cp: P.cp, rung: rungNow,
+        others: others(C.level, now), beams: beamAngles(C.W, P), heat: hot, off: !!C.nextAt, rung: rungNow,
       }, dt, now / 1000);
       if (now - lastHud > 120) {
         lastHud = now;
@@ -328,7 +284,7 @@ export default function ShadowSneakInner(props) {
         fit();
         sceneRef.current.draw({
           me: { id: Number(watchId), slot: slotOf(watchId), name: "", x: shown.x, z: shown.z, face: f.f, duck: !!f.dk, moving: f.mv, seen: f.sn, down: f.dn ? 1 : 0, grace: f.gr ? 1 : 0, in: !!f.in },
-          others: others(lv, now), beams: beamAngles(W, { b0: shown.b0 }), heat: !!f.ht, off: !!f.of, cp: f.cp, rung: [],
+          others: others(lv, now), beams: beamAngles(W, { b0: shown.b0 }), heat: !!f.ht, off: !!f.of, rung: [],
         }, dt, now / 1000);
       }
       raf = requestAnimationFrame(frame);
@@ -365,14 +321,25 @@ export default function ShadowSneakInner(props) {
         teams={eng.teams}
         message={msg}
         onQuit={eng.endMatch}
-        controls={!isSpectator ? <Pad joy={joy} duck={duck} /> : null}
+        controls={!isSpectator ? (
+          <div className="kr-controls md-controls">
+            <FloatStick stick={stick} knobRef={knobRef} label="Move" />
+            <div className="md-btns">
+              <button type="button" className={`press ${ducking ? "p-mint" : "p-sun"} kr-use sn-duck`} aria-pressed={ducking} aria-label="Duck (hold)"
+                onPointerDown={press(true)} onPointerUp={press(false)} onPointerCancel={press(false)} onPointerLeave={press(false)}>
+                Duck
+              </button>
+            </div>
+          </div>
+        ) : null}
+        landscape
       >
         {({ w, h }) => {
-          size.current.w = Math.max(1, Math.round(w - 6)); size.current.h = Math.max(1, Math.round(h - 11));
+          size.current.w = Math.max(1, Math.round(w)); size.current.h = Math.max(1, Math.round(h));
           return (
-            <div className="ds-pad" style={{ width: w, height: h }}>
+            <div className="sn-pad" style={{ width: w, height: h }} onContextMenu={(e) => e.preventDefault()}>
               <div className={`sn-stage${hud.seen ? " seen" : ""}`} style={{ width: w, height: h }}>
-                <canvas ref={canvasRef} className="ds-canvas" style={{ width: w - 6, height: h - 11 }} role="img"
+                <canvas ref={canvasRef} className="sn-canvas" style={{ width: w, height: h }} role="img"
                   aria-label={isSpectator ? `Shadow Sneak: watching ${spectatorWatching?.username || "a player"}` : "Shadow Sneak: reach the lighthouse without being caught in its beam"} />
                 {broken && note("Couldn't start the 3D view on this phone.")}
                 {isSpectator && !watched && !broken && note(`Connecting to ${spectatorWatching?.username ? `${spectatorWatching.username}'s` : "the"} game…`)}

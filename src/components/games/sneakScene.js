@@ -1,20 +1,22 @@
 // src/components/games/sneakScene.js
-// SHADOW SNEAK, drawn in 3D with the PlayRoom look kit: a toy lighthouse on
-// dark blue ground at night, short block walls standing about, and the lamp's
-// beam sweeping over it all — cut off wherever a wall stands in its way, so
-// every wall throws a real wedge of shadow. You (the kit's mover) creep from
-// shadow to shadow with the camera over your shoulder; friends are there too,
-// with their names.
+// SHADOW SNEAK, drawn in 3D with the PlayRoom look kit: a toy lighthouse in
+// a dark maze at night. The lamp is a real light, low in the tower: it lights
+// the ground round it and every wall throws a long real shadow away from it —
+// so dark ground is ground the lamp can never see, and safe. Over that the
+// beam sweeps, bright, cut off wherever a wall stands in its way. You (the
+// kit's mover) creep along with the camera above; friends are there too,
+// with their names. A landscape game.
 //
-// Only drawing: sneakSim.js has the rules. The beam on the ground is not a
-// light effect that roughly agrees with the rules — it IS the rules, drawn:
-// the same rays the sim uses to decide whether the lamp can see a spot.
+// Only drawing: sneakSim.js has the rules. The bright beam on the ground is
+// not an effect that roughly agrees with the rules — it IS the rules, drawn:
+// the same rays the sim uses to decide whether the lamp can see a spot. The
+// lamp's shadows are baked once a ground (the walls never move).
 import * as THREE from "three";
 import { TALL, LOW, HALF, cellAt } from "./sneakSim";
 import { INK, toon, at, can, cone, ball, box, mover, animate, effects, nameTag, ring } from "./toyKit";
 
 export const SNEAK_COLOURS = [0x4cc9f0, 0xff8fc7, 0x8fdb5c, 0xffa36c, 0x9b5de5, 0x3dd6c0, 0xffc53d, 0xff6b6b];
-const WALL_H = 1.1, LOW_H = 0.45, LAMP_Y = 3.3, RAYS = 30, TILT = 1.2;
+const WALL_H = 0.9, LOW_H = 0.38, LAMP_Y = 3.3, LIGHT_Y = 0.7, RAYS = 30, TILT = 1.2;
 
 let glowTex = null;
 function glow() {
@@ -33,9 +35,9 @@ function floorTex() {
   c.width = c.height = 128;
   const x = c.getContext("2d");
   for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
-    x.fillStyle = (i + j) % 2 ? "#2b3a6b" : "#304178";
+    x.fillStyle = (i + j) % 2 ? "#5b6fc4" : "#667bd2";
     x.fillRect(i * 64, j * 64, 64, 64);
-    x.strokeStyle = "rgba(20,26,56,.55)"; x.lineWidth = 3;
+    x.strokeStyle = "rgba(28,36,84,.7)"; x.lineWidth = 3;
     x.strokeRect(i * 64 + 1.5, j * 64 + 1.5, 61, 61);
   }
   const t = new THREE.CanvasTexture(c);
@@ -68,17 +70,6 @@ function lighthouse() {
   g.userData = { glass, halo };
   return g;
 }
-function flag() {
-  const g = new THREE.Group();
-  g.add(at(can(0.035, 0.035, 0.9, 0xd8d2cc, { line: 0.25 }), 0, 0.45, 0));
-  const cloth = new THREE.Mesh(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.9, 0), new THREE.Vector3(0.42, 0.74, 0), new THREE.Vector3(0, 0.58, 0)]), new THREE.MeshBasicMaterial({ color: 0x8d93b8, side: THREE.DoubleSide }));
-  g.add(cloth);
-  const pad = new THREE.Mesh(new THREE.CircleGeometry(0.36, 20), new THREE.MeshBasicMaterial({ color: 0x8d93b8, transparent: true, opacity: 0.35, depthWrite: false }));
-  pad.rotation.x = -Math.PI / 2; pad.position.y = 0.025;
-  g.add(pad);
-  g.userData = { cloth, pad };
-  return g;
-}
 function bell() {
   const g = new THREE.Group();
   g.add(at(box(0.08, 1.0, 0.08, 0x8a6a48, { line: 0.2 }), -0.22, 0.5, 0));
@@ -99,24 +90,36 @@ function bell() {
 export function createSneakScene(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false;            // the walls never move: the lamp's shadows are drawn once a ground
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0e1230);
-  scene.fog = new THREE.Fog(0x0e1230, 22, 46);
-  const camera = new THREE.PerspectiveCamera(40, 0.7, 0.1, 90);
-  // night: a cool fill from above, a little moonlight for shape, and the lamp's own warm glow
-  scene.add(new THREE.HemisphereLight(0x8fa4ff, 0x161a3a, 0.62));
-  const moon = new THREE.DirectionalLight(0xcfd6ff, 0.42);
+  scene.background = new THREE.Color(0x060817);
+  scene.fog = new THREE.Fog(0x060817, 24, 50);
+  const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 90);
+  // Night. A faint cool fill so the dark is dark blue, not black; a little
+  // moon from above so a wall's top reads; and the lamp: a warm light low in
+  // the tower (below the walls' tops, so their shadows run right to the edge
+  // of the ground — exactly where the rules say the lamp can't see).
+  scene.add(new THREE.HemisphereLight(0x7f96ff, 0x0a0d24, 0.3));
+  const moon = new THREE.DirectionalLight(0xcfd6ff, 0.26);
   moon.position.set(-5, 12, 6);
   scene.add(moon);
-  const lampGlow = new THREE.PointLight(0xffe7a0, 0.9, 16, 1.6);
+  const lamp = new THREE.PointLight(0xffe6ae, 2.3, 40, 1.1);
+  lamp.castShadow = true;
+  lamp.shadow.mapSize.set(1024, 1024);
+  lamp.shadow.camera.near = 0.3; lamp.shadow.camera.far = 40;
+  lamp.shadow.bias = -0.004; lamp.shadow.radius = 2.5;
+  scene.add(lamp);
+  const lampGlow = new THREE.PointLight(0xffe7a0, 0.7, 7, 1.6);        // lights the tower itself, from its lamp room
   scene.add(lampGlow);
   const fx = effects(scene);
   const ftex = floorTex();
   const inkBack = new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide });
 
-  let level = null;                  // { W, group, tower, flags, bells, wedges, cones }
+  let level = null;                  // { W, group, tower, bells, wedges }
   const sneakers = new Map();        // id -> { m, tag, tagText, x, z, face, fall, duck, down, in, ringM }
-  let camD = 18, halfX = 5, halfZ = 8, shake = 0, dark = 0;
+  let camD = 18, halfX = 8, halfZ = 4, shake = 0, dark = 0;
   const camAt = new THREE.Vector3(), look = new THREE.Vector3();
   let camSet = false;
 
@@ -133,16 +136,17 @@ export function createSneakScene(canvas) {
     const n = W.n;
     // the ground
     const tex = ftex.clone(); tex.needsUpdate = true; tex.repeat.set(n / 2, n / 2);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(n, n), new THREE.MeshToonMaterial({ map: tex, gradientMap: toon(0xffffff).gradientMap }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(n, n), new THREE.MeshLambertMaterial({ map: tex }));
+    floor.receiveShadow = true;
     trash.push(tex, floor.geometry, floor.material);
     floor.rotation.x = -Math.PI / 2; floor.position.set(n / 2, 0, n / 2);
     g.add(floor);
     // the walls: one drawing each for tall, low and the outer wall, and their ink shells
     const kinds = [
-      { test: (c, x, z) => c === TALL && x > 0 && z > 0 && x < n - 1 && z < n - 1, h: WALL_H, col: 0x6f7fc4 },
-      { test: (c) => c === LOW, h: LOW_H, col: 0x9fd0c8 },
-      { test: (c, x, z) => c === TALL && z !== n - 1 && (x === 0 || z === 0 || x === n - 1), h: WALL_H + 0.3, col: 0x4a5594 },
-      { test: (c, x, z) => z === n - 1, h: 0.3, col: 0x4a5594 },             // the near side is a kerb: it must never hide you
+      { test: (c, x, z) => c === TALL && x > 0 && z > 0 && x < n - 1 && z < n - 1, h: WALL_H, col: 0x3f4fa6 },
+      { test: (c) => c === LOW, h: LOW_H, col: 0x58b3a4 },
+      { test: (c, x, z) => c === TALL && z !== n - 1 && (x === 0 || z === 0 || x === n - 1), h: WALL_H + 0.3, col: 0x2f3b7c },
+      { test: (c, x, z) => z === n - 1, h: 0.3, col: 0x2f3b7c },             // the near side is a kerb: it must never hide you
     ];
     const M = new THREE.Matrix4();
     for (const k of kinds) {
@@ -152,6 +156,7 @@ export function createSneakScene(canvas) {
       const geo = new THREE.BoxGeometry(0.96, k.h, 0.96);
       const body = new THREE.InstancedMesh(geo, toon(k.col), list.length);
       const shell = new THREE.InstancedMesh(geo, inkBack, list.length);
+      body.castShadow = true;
       trash.push(geo);
       list.forEach(([x, z], i) => {
         M.makeTranslation(x + 0.5, k.h / 2, z + 0.5);
@@ -163,33 +168,29 @@ export function createSneakScene(canvas) {
     }
     // the lighthouse
     const tower = lighthouse();
+    tower.traverse((o) => { o.castShadow = false; });          // the lamp's light is inside it
     tower.position.set(W.c + 0.5, 0, W.c + 0.5);
     g.add(tower);
-    // flags and bells
-    const flags = W.checks.map((k) => { const f = flag(); f.position.set(k.x, 0, k.z); g.add(f); return f; });
+    // the bells (together)
     const bells = W.bells.map((b) => { const m = bell(); m.position.set(b.x, 0, b.z); m.rotation.y = -b.a + Math.PI / 2; g.add(m); return m; });
-    // the beams: the lit ground (a fan cut off by the walls) and a soft cone in the air
-    const wedges = [], cones = [];
+    // the beams: the brightly lit ground, a fan cut off by the walls
+    const wedges = [];
     for (let k = 0; k < W.beams; k++) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array((RAYS + 2) * 3), 3));
       const idx = [];
       for (let i = 1; i <= RAYS; i++) idx.push(0, i + 1, i);
       geo.setIndex(idx);
-      const mat = new THREE.MeshBasicMaterial({ color: 0xfff09a, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide });
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffe070, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
       const m = new THREE.Mesh(geo, mat);
       trash.push(geo, mat); m.frustumCulled = false; m.renderOrder = 2;
       g.add(m); wedges.push(m);
-      const len = 2.4;                                         // a short glow in the air at the lamp: the lit ground shows where the beam reaches
-      const cg = new THREE.ConeGeometry(Math.tan(HALF) * len, len, 20, 1, true);
-      cg.translate(0, -len / 2, 0); cg.rotateZ(Math.PI / 2);          // the point at the lamp, opening along +x
-      const cm = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ color: 0xfff2a8, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-      trash.push(cg, cm.material); cm.position.set(W.c + 0.5, LAMP_Y - 0.2, W.c + 0.5); cm.renderOrder = 3;
-      g.add(cm); cones.push(cm);
     }
     scene.add(g);
     lampGlow.position.set(W.c + 0.5, LAMP_Y, W.c + 0.5);
-    level = { W, group: g, tower, flags, bells, wedges, cones, trash, max: n * 0.75 };
+    lamp.position.set(W.c + 0.5, LIGHT_Y, W.c + 0.5);
+    renderer.shadowMap.needsUpdate = true;
+    level = { W, group: g, tower, bells, wedges, trash, max: n * 0.75 };
     camSet = false; dark = 0;
     for (const o of sneakers.values()) { scene.remove(o.m); if (o.tag) scene.remove(o.tag); scene.remove(o.ringM); }
     sneakers.clear();
@@ -199,14 +200,15 @@ export function createSneakScene(canvas) {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    // about nine and a half squares across, and at least eleven down the screen
+    // sideways (how it's played): about twenty squares across and nine down; upright, nine and eleven
     const v = (camera.fov * Math.PI) / 360, hh = Math.atan(Math.tan(v) * camera.aspect);
-    camD = Math.max(9.5 / (2 * Math.tan(hh)), 11 / (2 * Math.tan(v)));
+    const wide = camera.aspect > 1.2;
+    camD = Math.max((wide ? 20 : 9.5) / (2 * Math.tan(hh)), (wide ? 9.5 : 11) / (2 * Math.tan(v)));
     camD = Math.min(camD, 30);
     halfX = camD * Math.tan(hh); halfZ = (camD * Math.tan(v)) / Math.sin(TILT);      // how much ground the screen shows, each way from its middle
   }
 
-  // st: { me, others: [...], beams: [angles], heat, off (0..1: the lamp going out), cp, rung: [bell indexes] }
+  // st: { me, others: [...], beams: [angles], heat, off (the lamp going out), rung: [bell indexes] }
   // a sneaker: { id, slot, name, x, z, face, duck, moving, seen, down, grace, in }
   function draw(st, dt0, now) {
     if (!level) return;
@@ -214,7 +216,7 @@ export function createSneakScene(canvas) {
     dark += ((st.off ? 1 : 0) - dark) * Math.min(1, dt * 5);
     // the lamp and its beams
     const hot = st.heat ? 1 : 0;
-    const col = hot ? 0xffa066 : 0xfff09a;
+    const col = hot ? 0xff8a4a : 0xffe070;
     level.wedges.forEach((m, k) => {
       const a0 = st.beams[k] ?? 0, p = m.geometry.attributes.position.array;
       p[0] = W.c + 0.5; p[1] = 0.035; p[2] = W.c + 0.5;
@@ -225,25 +227,14 @@ export function createSneakScene(canvas) {
       m.geometry.attributes.position.needsUpdate = true;
       m.material.color.setHex(col);
       m.material.opacity = 0.8 * (1 - dark) * (0.96 + Math.sin(now * 9 + k) * 0.03);
-      const c = level.cones[k];
-      c.rotation.y = -a0;
-      c.rotation.z = -0.5;                                    // tipped down toward the ground
-      c.material.color.setHex(col);
-      c.material.opacity = 0.08 * (1 - dark);
     });
     const tu = level.tower.userData;
     tu.glass.material.color.setHex(dark > 0.5 ? 0x4a5594 : col);
     tu.halo.material.opacity = 0.9 * (1 - dark);
     tu.halo.scale.setScalar(2.6 + Math.sin(now * 5) * 0.15);
-    lampGlow.intensity = 0.9 * (1 - dark);
-    // flags: mine flies my colour
-    level.flags.forEach((f, i) => {
-      const mine = st.cp === i, c = mine ? SNEAK_COLOURS[st.me.slot % SNEAK_COLOURS.length] : 0x8d93b8;
-      f.userData.cloth.material.color.setHex(c);
-      f.userData.pad.material.color.setHex(c);
-      f.userData.pad.material.opacity = mine ? 0.55 : 0.3;
-      f.userData.cloth.scale.x = 1 + Math.sin(now * 5 + i) * 0.08;
-    });
+    lampGlow.intensity = 0.7 * (1 - dark);
+    lamp.intensity = 2.3 * (1 - dark * 0.85) * (hot ? 1.15 : 1);
+    lamp.color.setHex(hot ? 0xffc79a : 0xffe6ae);
     level.bells.forEach((b, i) => {
       const on = (st.rung || []).includes(i);
       b.userData.swing.rotation.z = on ? Math.sin(now * 16) * 0.5 : Math.sin(now * 1.5 + i) * 0.04;
@@ -258,6 +249,7 @@ export function createSneakScene(canvas) {
       let o = sneakers.get(r.id);
       if (!o) {
         const m = mover(colour, { seed: r.slot * 3 + 1 });
+        m.traverse((q) => { q.castShadow = false; });
         const ringM = ring(me ? 0xffffff : colour, 0.4);
         scene.add(m, ringM);
         o = { m, ringM, tag: null, tagText: "", x: r.x, z: r.z, face: r.face || 0, fall: 0, duck: 0, down: false, in: false, hide: 0 };
@@ -330,15 +322,12 @@ export function createSneakScene(canvas) {
     renderer.render(scene, camera);
   }
 
-  // a moment worth a flourish, at a spot: the lamp going out, a flag taken
+  // a moment worth a flourish, at a spot: the lamp going out, a bell rung
   function cheer(kind, x, z) {
     if (kind === "off" && level) {
       const W = level.W;
       fx.burst(W.c + 0.5, LAMP_Y, W.c + 0.5, { colors: [0xfff2a8, 0xffc53d, 0xffffff, 0x8fdb5c], n: 40, speed: 5 });
       fx.word("LIGHTS OUT!", W.c + 0.5, LAMP_Y + 0.9, W.c + 0.5, { color: "#ffc53d", height: 1.1, life: 1.6 });
-    } else if (kind === "flag") {
-      fx.burst(x, 0.9, z, { colors: [0x8fdb5c, 0xffffff], n: 10, speed: 2 });
-      fx.word("flag!", x, 1.5, z, { color: "#8fdb5c", height: 0.5, life: 0.9 });
     } else if (kind === "bell") {
       fx.word("ding!", x, 1.7, z, { color: "#ffc53d", height: 0.55, life: 0.9 });
     }

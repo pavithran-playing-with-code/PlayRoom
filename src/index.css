@@ -2178,15 +2178,11 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .mn-seat small{font-size:.75rem;font-weight:700;opacity:.7}
 .mn-code{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:2px dashed var(--line, rgba(0,0,0,.15))}
 .mn-code b{letter-spacing:.12em}
-/* ── Shadow Sneak (.sn-): the pad under the game, and what floats over it ── */
-.sn-pad{display:flex;gap:10px;align-items:stretch;width:100%}
-.sn-pad .ds-zone{flex:1;min-width:0}
-.sn-duck{flex:0 0 84px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:22px;border:3px solid var(--ink);
-  background:var(--sun);color:var(--ink);font-weight:800;font-size:.95rem;box-shadow:0 5px 0 var(--ink);touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
-.sn-duck span{font-size:1.7rem;line-height:1}
-.sn-duck.on{transform:translateY(4px);box-shadow:0 1px 0 var(--ink);background:var(--mint)}
+/* ── Shadow Sneak (.sn-): a landscape game, and what floats over it ── */
+.sn-pad{display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.sn-canvas{display:block;border-radius:14px;touch-action:none}
 .sn-stage{position:relative}
-.sn-stage::after{content:"";position:absolute;inset:3px 3px 8px;border-radius:16px;pointer-events:none;box-shadow:inset 0 0 0 0 rgba(255,80,80,0);transition:box-shadow .12s}
+.sn-stage::after{content:"";position:absolute;inset:0;border-radius:14px;pointer-events:none;box-shadow:inset 0 0 0 0 rgba(255,80,80,0);transition:box-shadow .12s}
 .sn-stage.seen::after{box-shadow:inset 0 0 34px 10px rgba(255,80,80,.75)}
 .sn-compass{position:absolute;top:10px;left:10px;display:flex;align-items:center;gap:6px;padding:4px 11px 4px 8px;border-radius:999px;border:2.5px solid var(--ink);
   background:rgba(255,255,255,.92);color:var(--ink);font-weight:800;font-size:.82rem;box-shadow:0 3px 0 var(--ink);pointer-events:none}
@@ -2194,6 +2190,6 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .sn-chip{position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:calc(100% - 150px);padding:4px 11px;border-radius:999px;border:2.5px solid var(--ink);
   font-weight:800;font-size:.76rem;box-shadow:0 3px 0 var(--ink);pointer-events:none;text-align:center;color:var(--ink)}
 .sn-chip.hot{background:#ffb080}
-.sn-chip.bell{background:var(--sun);top:auto;bottom:18px;max-width:calc(100% - 24px)}
+.sn-chip.bell{background:var(--sun);top:44px}
 .sn-wait{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);width:max-content;max-width:calc(100% - 32px);padding:10px 16px;border-radius:16px;border:3px solid var(--ink);
   background:rgba(255,255,255,.95);color:var(--ink);font-weight:800;text-align:center;box-shadow:0 4px 0 var(--ink);pointer-events:none}

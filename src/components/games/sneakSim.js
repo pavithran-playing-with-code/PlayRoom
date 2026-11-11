@@ -22,7 +22,7 @@ export const CROUCH = 1.7;         // m/s, ducked (a low wall hides you only the
 export const HALF = 0.25;          // half the beam's width, radians
 export const SPOT_S = 0.3;         // in the light this long: spotted
 export const COOL_S = 0.5;         // out of it this long: forgotten
-export const DOWN_S = 0.9;         // spotted: frozen this long, then back at your flag
+export const DOWN_S = 0.9;         // spotted: frozen this long, then back in your corner
 export const GRACE_S = 1.8;        // just back (or just started): can't be spotted
 export const TOUCH = 1.2;          // this near the lamp's middle: you're at its door
 export const HEAT_S = 6;           // together: someone spotted, the lamp turns faster this long…
@@ -77,6 +77,9 @@ function wayIn(W, dist, reach, sx, sz) {
   return false;
 }
 
+// walls: how much of the ground they cover, and how long each runs (LEN0 to LEN0 + LEN1 - 1 squares)
+const DENS = 0.19, LEN0 = 3, LEN1 = 5;
+
 // ── a level ─────────────────────────────────────────────────────────────────
 // coop: the bells are put out (a friend ringing one makes the lamp look at it).
 export function buildLevel(seed, level, { coop = false } = {}) {
@@ -104,10 +107,10 @@ export function buildLevel(seed, level, { coop = false } = {}) {
     for (let i = 0; i < n; i++) cells[at(i, 0)] = cells[at(i, n - 1)] = cells[at(0, i)] = cells[at(n - 1, i)] = TALL;
     // a nook in every corner: its walls keep the corner dark, so a start is safe
     for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1], [-1, -1]]) for (const [x, z] of [[2, 2], [3, 2], [2, 3]]) cells[at(sx > 0 ? x : n - 1 - x, sz > 0 ? z : n - 1 - z)] = TALL;
-    const want = Math.round((n - 2) * (n - 2) * (0.13 + go * 0.012));
+    const want = Math.round((n - 2) * (n - 2) * (DENS + go * 0.012));
     let put = 0;
     for (let tries = 0; tries < n * n * 6 && put < want; tries++) {
-      const len = 2 + Math.floor(rand() * 4), across = rand() < 0.5;
+      const len = LEN0 + Math.floor(rand() * LEN1), across = rand() < 0.5;
       const x0 = 2 + Math.floor(rand() * (n - 4)), z0 = 2 + Math.floor(rand() * (n - 4));
       const kind = rand() < lowP ? LOW : TALL;
       let ok = true;
@@ -143,7 +146,7 @@ export function buildLevel(seed, level, { coop = false } = {}) {
   W.dist = dist;
   // a corner each, dark behind its nook
   W.starts = corners.map(([x, z]) => ({ x: x + 0.5, z: z + 0.5, d: dist[at(x, z)] }));
-  // squares the lamp can never see: where flags and bells go
+  // squares the lamp can never see: where the bells go
   const dark = [];
   for (let z = 1; z < n - 1; z++) for (let x = 1; x < n - 1; x++) {
     if (cells[at(x, z)] !== OPEN) continue;
@@ -167,9 +170,7 @@ export function buildLevel(seed, level, { coop = false } = {}) {
     }
     return got;
   };
-  W.checks = spread(dark, n === 17 ? 5 : n === 21 ? 7 : 9, W.starts).map((p, i) => ({ ...p, i }));
-  const rest = dark.filter((p) => !W.checks.some((k) => k.x === p.x && k.z === p.z));
-  W.bells = coop ? spread(rest, n === 17 ? 2 : 3, []).map((p, i) => ({ ...p, i, a: Math.atan2(p.z - (c + 0.5), p.x - (c + 0.5)) })) : [];
+  W.bells = coop ? spread(dark, n === 17 ? 2 : 3, W.starts).map((p, i) => ({ ...p, i, a: Math.atan2(p.z - (c + 0.5), p.x - (c + 0.5)) })) : [];
   W.phase = rand() * Math.PI * 2;
   return W;
 }
@@ -197,7 +198,7 @@ export function newRun(W, seat = 0, T = 0) {
   const st = W.starts[((seat % 4) + 4) % 4];
   return {
     x: st.x, z: st.z, face: 0, duck: false, moving: 0,
-    cpX: st.x, cpZ: st.z, cp: -1, startD: st.d, best: st.d,
+    homeX: st.x, homeZ: st.z, startD: st.d, best: st.d,
     seen: 0, down: 0, grace: GRACE_S, spots: 0, in: false, bell: -1,
     t: 0, b0: roundAngle(W, T), heats: [], lit: false,
   };
@@ -215,7 +216,7 @@ const hits = (W, x, z) => {
 
 // One step. inp: { mx, mz (a push, length ≤ 1), duck }. T: the match clock.
 // rung: a bell someone else is standing on (its index), or -1.
-// Returns what happened: [{ k: "flag" | "spotted" | "back" | "in" | "bell" }].
+// Returns what happened: [{ k: "spotted" | "back" | "in" | "bell" }].
 export function step(S, W, inp, dt, T, rung = -1) {
   const ev = [];
   S.t += dt;
@@ -232,7 +233,7 @@ export function step(S, W, inp, dt, T, rung = -1) {
   if (S.in) { S.moving = 0; return ev; }
   if (S.down > 0) {
     S.down -= dt; S.moving = 0;
-    if (S.down <= 0) { S.x = S.cpX; S.z = S.cpZ; S.grace = GRACE_S; S.seen = 0; S.down = 0; ev.push({ k: "back" }); }
+    if (S.down <= 0) { S.x = S.homeX; S.z = S.homeZ; S.grace = GRACE_S; S.seen = 0; S.down = 0; ev.push({ k: "back" }); }
     return ev;
   }
   S.grace = Math.max(0, S.grace - dt);
@@ -247,8 +248,7 @@ export function step(S, W, inp, dt, T, rung = -1) {
   if (dz && !hits(W, S.x, S.z + dz)) S.z += dz;
   S.moving = Math.min(1, m);
   if (m > 0.05) S.face = Math.atan2(mx, mz);
-  // flags, bells, how near you've got
-  for (const k of W.checks) if (S.cp !== k.i && Math.hypot(S.x - k.x, S.z - k.z) < 0.6) { S.cp = k.i; S.cpX = k.x; S.cpZ = k.z; ev.push({ k: "flag", i: k.i }); }
+  // bells, how near you've got
   let bell = -1;
   for (const b of W.bells) if (Math.hypot(S.x - b.x, S.z - b.z) < 0.55) bell = b.i;
   if (bell !== S.bell) { S.bell = bell; if (bell >= 0) ev.push({ k: "bell", i: bell }); }

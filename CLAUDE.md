@@ -243,18 +243,22 @@ There is no test runner. What works:
   `scripts/check-tower.mjs` checks the trees and has a bot climb them (a
   few minutes; `NB=3` for a quick run); `check-sunshard.mjs` still tests
   the physics and the tether on the island levels.
-- **Shadow Sneak** (slug `sneak`) — a lighthouse in the middle of open
-  ground sweeps its beam round, short walls throw wedges of shadow, and you
-  creep from your corner to the lamp to switch it off; then a bigger ground,
-  two beams, low walls you must duck behind, three beams. Rules in
+- **Shadow Sneak** (slug `sneak`, landscape) — a lighthouse in the middle
+  of a dark maze sweeps its beam round, walls throw shadows, and you creep
+  from your corner to the lamp to switch it off; then a bigger maze, two
+  beams, low walls you must duck behind, three beams. No save points:
+  spotted, you're back in your corner. Rules in
   `sneakSim.js` (pure): `buildLevel(seed, level)` — rebuilt with more walls
   until every corner has a way in whose lit stretches can be crossed
   between beams (`wayIn`); you are seen only inside a beam with a clear line
   to the lamp (`sees`), spotted after `SPOT_S` in it, and sent back to your
-  flag. The lamp's angle is a function of the match clock (`roundAngle`), so
-  every phone agrees. Drawn by `sneakScene.js` with the look kit: the lit
-  ground is a fan of the same rays the rules use, cut off at the walls — if
-  the two ever disagree, fix the drawing. `ShadowSneakInner.jsx` (lazy) runs
+  corner. The lamp's angle is a function of the match clock (`roundAngle`), so
+  every phone agrees. Drawn by `sneakScene.js` with the look kit: the lamp
+  is a real point light low in the tower (below the walls' tops, so their
+  shadows run to the edge: dark ground is ground the lamp can't see), its
+  shadow map drawn once a maze (`shadowMap.autoUpdate` off); the bright beam
+  is a fan of the same rays the rules use, cut off at the walls — if the two
+  ever disagree, fix the drawing. `ShadowSneakInner.jsx` (lazy) runs
   it in fixed small steps of real time (at 4 fps headless it once fell
   behind the clock and nobody was ever spotted). Friends over `sn:pos`;
   together (one ground): the lamp goes out when everyone is at the door, a

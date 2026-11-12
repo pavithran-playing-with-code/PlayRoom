@@ -124,7 +124,6 @@ export default function Player() {
     if (dolby || (await soundMissing(v))) {
       if (vRef.current !== v || snd.current) return;
       if (dolby) setWaiting(true);
-      say("🔊 Dolby sound — getting it ready (the first time loads the decoder)…", 4000);
       try {
         const X = await tracksOf();
         setTracks({ audio: X.audio, subs: X.subs });

@@ -507,6 +507,12 @@ There is no test runner. What works:
   `restarts` unchanged; `window.__oldSync` gives the old behaviour, which
   must fail. The Sound check (Audio & subtitles) shows these numbers on a
   phone.
+  ▶ tapped while the film waits for its sound (the player shows ▶, so
+  people tap it) pauses it again: it used to run on silent with the sound
+  chasing it and never catching up — 25 s of silent picture in the test
+  (`TAP=1` taps ▶ all through the wait; `__oldSync` brings it back). Only
+  sound that never comes in 30 s is given up on. A film's own sound plays
+  with no message about it (no "Sound fixed"): the user asked.
 - **The Rooms page** runs: Got a code? (one box for either kind of room),
   Movie rooms (make one, then other people's), Game rooms (start one, then
   other people's). Your own room is never listed to you.

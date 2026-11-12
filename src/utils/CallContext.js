@@ -1027,7 +1027,7 @@ export function CallProvider({ children }) {
     }
     setFilm((x) => (x && x.v === v ? { ...x, audioN: n } : x));
     const a = F.audio[n];
-    say(auto ? "🔊 Sound fixed — everyone can hear it" : `🔊 ${a ? a.label : "Sound"}`);
+    if (!auto) say(`🔊 ${a ? a.label : "Sound"}`);        // picked from the menu; a film's own sound just plays, with no word about it
   }, [filmTracksOf, tellMedia, say]);
   // subtitles: track n, or null for none. Shown here over the film, and drawn
   // into the picture that goes to the call so friends see them too.
@@ -1151,7 +1151,6 @@ export function CallProvider({ children }) {
       if (!dolby) note(f0, `browser's own sound: ${missing ? "none decoded" : "playing"} (decoded bytes ${"webkitAudioDecodedByteCount" in v ? v.webkitAudioDecodedByteCount : "?"})`);
       const f = filmRef.current;
       if (!missing || !f || f.v !== v || f.sound) return;
-      say(dolby ? "🔊 Dolby sound — decoding it so everyone can hear (the first time takes a moment)…" : "🔊 This video's sound needs decoding — fixing it (the first time takes a moment)…");
       let F;
       try { F = await filmTracksOf(v); } catch { say("Couldn't load the sound decoder — open Audio & subtitles › Sound check and send me a screenshot"); if (dolby) { setFilmWait(false); v.play().catch(() => {}); } return; }
       const unhold = () => { if (dolby && filmRef.current === f) { setFilmWait(false); v.play().catch(() => {}); } };

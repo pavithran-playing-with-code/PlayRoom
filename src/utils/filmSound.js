@@ -269,7 +269,16 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
   // how long after it is handed over the sound is really heard: the phone's
   // own delay (large on Bluetooth earphones). A <video> allows for this by
   // itself; its sound is ours now, so we do.
-  const lat = () => { const l = (ac.outputLatency || ac.baseLatency || 0) + SINK_LAT; return Number.isFinite(l) ? Math.max(0, Math.min(0.35, l)) : SINK_LAT; };
+  // Eased: a phone's figure jumps about (and changes when earphones connect);
+  // followed slowly, the sound is bent to it instead of being cut.
+  let latS = null;
+  const lat = () => {
+    let l = (ac.outputLatency || ac.baseLatency || 0) + SINK_LAT;
+    l = Number.isFinite(l) ? Math.max(0, Math.min(0.35, l)) : SINK_LAT;
+    latS = latS === null ? l : latS + (l - latS) * 0.02;
+    return latS;
+  };
+  let letGo = 0;                    // gave up waiting for sound that never came: no holding until this time
   const dur = () => (Number.isFinite(v.duration) ? v.duration : Infinity);
 
   // the decoders: this film's ffmpeg, and a second one of our own
@@ -490,6 +499,7 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
   };
   // mid: the sound ran out while playing (not a start or a jump) — next time, wait for more
   const hold = (mid = false) => {
+    if (performance.now() < letGo) return;
     if (!held) { held = true; heldAt = performance.now(); st.holds = (st.holds || 0) + 1; if (mid) { strict = true; st.ranOut = (st.ranOut || 0) + 1; } try { v.pause(); } catch { /* gone */ } }
     waitFlag(true);
   };
@@ -510,6 +520,14 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
       stopAll();
       wantHead(t);
       if (!heldAt) heldAt = performance.now();
+      // ▶ tapped while it waits (the player shows ▶, so people do): the picture
+      // ran on silent with its sound chasing it and never catching up. It
+      // waits. Only sound that never comes at all (a decoder that failed) is
+      // given up on, so the film can at least be watched.
+      if (!v.paused && !(typeof window !== "undefined" && window.__oldSync)) {
+        if (performance.now() - heldAt > 30000 && !ready(t)) { held = false; heldAt = 0; letGo = performance.now() + 30000; st.gaveUp = (st.gaveUp || 0) + 1; waitFlag(false); return; }
+        try { v.pause(); } catch { /* gone */ }
+      }
       if (!ready(t) || !safe(t)) { waitFlag(true); return; }
       held = false; heldAt = 0; waitFlag(false);
       const p = v.play();
@@ -522,11 +540,13 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
     // started against a picture that isn't moving is early from then on.
     const now = performance.now();
     if (t !== seenT) { seenT = t; movedAt = now; }
-    const stuck = now - movedAt > 350;
+    // (a phone's clock may move in steps: only a long stop, or one the player owns up to, counts)
+    const stuck = now - movedAt > 1000 || (v.readyState < 3 && now - movedAt > 250);
     const old = typeof window !== "undefined" && window.__oldSync;      // for tests: the sound as it was kept before
     if (!playing) {
       if (stuck && !old) return;                    // the sound comes in when the picture moves (this runs again then)
       if (begin()) { waitFlag(false); return; }
+      if (!old && ready(t) && aheadTo(t) > t + 0.6) return;   // the sound for here is in hand (begin looks a little ahead): no reason to wait
       // its sound isn't decoded yet: the picture waits for it
       wantHead(t);
       hold();
@@ -547,7 +567,7 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
       if (stuck) { st.stalls++; stopAll(); return; }
       // far out (a jump, a long stall), or still out just after starting — when
       // nobody hears a cut: start the sound again at the right place
-      const far = Math.abs(err) > SYNC_HARD;
+      const far = Math.abs(err) > SYNC_HARD && Math.abs(playing.err) > 0.15;   // and not one odd reading
       if (far || (age > 450 && age < 2500 && Math.abs(playing.err) > 0.08 && playing.fixes < 2)) {
         const fx = far ? playing.fixes : playing.fixes + 1;
         stopAll(); st.resyncs++;

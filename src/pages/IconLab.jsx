@@ -1,139 +1,264 @@
 // src/pages/IconLab.jsx
 // TEMPORARY — delete once an icon style is chosen (with its route in App.js
-// and the 🎨 link in Navbar.jsx). Icon styles to pick from, shown on the same
-// eight games. Style 1 is what is live; 2–5 are the grown-up ones: dark,
-// minimal, no faces, no outlines, no glow. The chosen style then gets drawn
-// for every game.
+// and the 🎨 link in Navbar.jsx). Three takes on the chunky cartoon icon,
+// shown on the same eight games: what is live, and two more with other
+// subjects and other colours. The chosen one then gets drawn for every game.
 import React from "react";
 import { GAME_MAP } from "../components/games/registry";
 import GamePoster from "../components/games/GamePoster";
 
 const SAMPLE = ["dino", "flappy", "storm", "sneak", "emberfall", "blocks", "speedway", "memory"];
+const INK = "#1B1230";
+const F = { fontFamily: "Fredoka, Nunito, 'Segoe UI', sans-serif", fontWeight: 700, textAnchor: "middle" };
+
+// toy colours, each as a top-to-bottom gradient (v) and a round one (c)
+const TONES = {
+  green: ["#A6F7A0", "#2A9E48"], yellow: ["#FFF59A", "#F5A800"], orange: ["#FFC27A", "#F0601E"], red: ["#FF9A8A", "#C81E32"],
+  purple: ["#DCC2FF", "#6B3FD6"], blue: ["#A8E4FF", "#1E7FD6"], white: ["#FFFFFF", "#C6CFE8"], grey: ["#A9A5C4", "#3A3655"],
+  brown: ["#E0AC72", "#8A5A2E"], pink: ["#FFC2DE", "#D6408A"], teal: ["#9AF5E8", "#12998B"], steel: ["#F2F5FF", "#8E99BC"],
+};
+const v = (n) => `url(#il-v-${n})`;
+const c = (n) => `url(#il-c-${n})`;
 const Svg = ({ children }) => (
-  <svg viewBox="0 0 64 64" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style={{ display: "block", width: "100%", height: "100%" }}>{children}</svg>
-);
-const lin = (id, a, b, x2 = 1, y2 = 1) => (
-  <linearGradient id={id} x1="0" y1="0" x2={x2} y2={y2}><stop offset="0" stopColor={a} /><stop offset="1" stopColor={b} /></linearGradient>
-);
-// a quiet light across the top of a dark tile
-const sheen = <path d="M0 0h64v26C44 20 20 20 0 26z" fill="#FFFFFF" opacity=".045" />;
-
-/* ───────────── 2 · MIDNIGHT: a solid mark in one colour on near-black ───────────── */
-// [from, to, the mark (painted in the gradient), the quiet part (same gradient, faint)]
-const MID = {
-  dino: ["#8CF2A6", "#1FA866", <><path d="M9 51V35c0-12 9-21 22-21h11c8 0 14 5 14 13v4c0 3-2 5-5 5H38v5c0 6-4 10-10 10z" /><circle cx="37" cy="24" r="3.4" fill="#101118" /><path d="M38 36H27" stroke="#101118" strokeWidth="2.4" strokeLinecap="round" /></>, <path d="M15 22l-3-8 8 3zM23 14l0-8 7 5z" />],
-  flappy: ["#FFE27A", "#F29A1F", <><circle cx="29" cy="33" r="15" /><path d="M43 29l11 4-11 5z" /><circle cx="35" cy="28" r="3.2" fill="#101118" /><path d="M17 36c4-4 9-4 12 0-3 4-8 4-12 0z" fill="#101118" opacity=".55" /></>, <path d="M5 26l8 3-8 5z" />],
-  storm: ["#C9B6FF", "#7A4FE8", <path d="M37 27L24 44h9l-5 14 17-20h-9l6-11z" />, <path d="M14 34a10 10 0 0 1 1-20 14 14 0 0 1 27-2 10 10 0 0 1 8 22z" />],
-  sneak: ["#FFE9A8", "#E8B23A", <><path d="M24 56l3-28h10l3 28z" /><rect x="26" y="15" width="12" height="10" rx="1.5" /><path d="M23 14l9-8 9 8z" /></>, <path d="M39 20l25-10v22zM25 20L0 10v22z" />],
-  emberfall: ["#FFB36B", "#F0431E", <><path d="M32 6c3 11 17 16 17 31a17 17 0 0 1-34 0c0-8 4-12 8-15 0 6 2 9 5 9 0-9 2-16 4-25z" /><path d="M32 54a7 7 0 0 1-7-7c0-5 7-8 7-15 4 5 7 9 7 15a7 7 0 0 1-7 7z" fill="#101118" opacity=".5" /></>, null],
-  blocks: ["#E0B8FF", "#9A4FE8", <><rect x="9" y="12" width="14" height="14" rx="3" /><rect x="25" y="12" width="14" height="14" rx="3" /><rect x="41" y="12" width="14" height="14" rx="3" /><rect x="25" y="28" width="14" height="14" rx="3" /></>, <><rect x="9" y="44" width="14" height="14" rx="3" /><rect x="41" y="44" width="14" height="14" rx="3" /></>],
-  speedway: ["#FF9A9A", "#E5303F", <><rect x="12" y="8" width="4" height="50" rx="2" /><path d="M16 11h10v9H16zM36 11h10v9H36zM26 20h10v9H26zM46 20h8v9h-8zM16 29h10v9H16zM36 29h10v9H36z" /></>, <path d="M26 11h10v9H26zM46 11h8v9h-8zM16 20h10v9H16zM36 20h10v9H36zM26 29h10v9H26zM46 29h8v9h-8z" />],
-  memory: ["#FFB3D0", "#E8407F", <><rect x="29" y="13" width="24" height="36" rx="5" transform="rotate(9 41 31)" /><circle cx="41" cy="31" r="5" fill="#101118" opacity=".55" /></>, <rect x="10" y="15" width="24" height="36" rx="5" transform="rotate(-10 22 33)" />],
-};
-const midnight = (slug) => {
-  const [a, b, mark, quiet] = MID[slug];
-  const id = `il-m-${slug}`;
-  return (
-    <Svg>
-      <defs>{lin(id, a, b, 0.6, 1)}{lin("il-night", "#1C1D27", "#0C0D12", 0, 1)}</defs>
-      <rect width="64" height="64" fill="url(#il-night)" />
-      {sheen}
-      <g fill={`url(#${id})`} opacity=".3">{quiet}</g>
-      <g fill={`url(#${id})`}>{mark}</g>
-    </Svg>
-  );
-};
-
-/* ───────────── 3 · LINE: one thin white line drawing on a deep colour ───────────── */
-const LINE = {
-  dino: ["#1F7A52", "#0C3A2A", <><path d="M34 8H54V21H44V24H50V28H42V33H47V37H42V42L37 47V54H32V49H28V54H23V47L11 37V28L18 35H26L34 27Z" /><path d="M41 14.5h.1" /><path d="M6 59h52" opacity=".5" /></>],
-  flappy: ["#2A72C4", "#102E66", <><circle cx="24" cy="32" r="13" /><path d="M14 34c3-4 8-4 11 0-3 4-8 4-11 0z" /><path d="M36 30l9 3.5-9 4" /><path d="M29 27h.1" /><path d="M48 5v14h11V5M48 59V46h11v13" opacity=".5" /></>],
-  storm: ["#5A3FC0", "#1E1250", <><path d="M17 31a9.5 9.5 0 0 1 2-18.5 13 13 0 0 1 24.5 2A8.5 8.5 0 0 1 47 31" opacity=".5" /><path d="M36 24l-11 16h9l-5 17 15-21h-9l5-12z" /></>],
-  sneak: ["#2A3A8A", "#0C1238", <><path d="M23 58l4-32h10l4 32z" /><path d="M25.5 42h13" /><path d="M26 26V16h12v10M23 16l9-9 9 9z" /><path d="M43 18l16-6M43 23l16 6M21 18L5 12M21 23L5 29" opacity=".5" /></>],
-  emberfall: ["#C4421E", "#4A1010", <><path d="M32 5c2 11 16 16 16 31a16 16 0 0 1-32 0c0-7 3.5-10.5 7-14 0 6 2 8.5 4.5 8.5C27.5 21 30 14 32 5z" /><path d="M32 54a6.5 6.5 0 0 1-6.5-6.5c0-5 6.5-7.5 6.5-14 3.5 4.5 6.5 8 6.5 14A6.5 6.5 0 0 1 32 54z" opacity=".5" /></>],
-  blocks: ["#8A3FC0", "#30104A", <><path d="M13 8h38v13H39v13H25V21H13z" /><path d="M6 57V46h14v11M34 57V44h12v-8h12v21M6 57h52" opacity=".5" /></>],
-  speedway: ["#C42E3A", "#4A0C18", <><path d="M13 7v51" /><path d="M13 10c9-5 14 4 23 0s13-2 18 0v24c-5-2-9-4-18 0s-14-5-23 0z" /><path d="M24.5 9.5v24M36 10v24M45 8v24M13 22c9-5 14 4 23 0s13-2 18 0" opacity=".5" /></>],
-  memory: ["#C43E7A", "#4A1030", <><rect x="8" y="15" width="22" height="34" rx="5" transform="rotate(-8 19 32)" opacity=".5" /><rect x="34" y="15" width="22" height="34" rx="5" transform="rotate(8 45 32)" /><path d="M45 25l2 4.4 4.8.6-3.5 3.3.9 4.7-4.2-2.4-4.2 2.4.9-4.7-3.5-3.3 4.8-.6z" transform="rotate(8 45 32)" /></>],
-};
-const line = (slug) => {
-  const [a, b, art] = LINE[slug];
-  const id = `il-l-${slug}`;
-  return (
-    <Svg>
-      <defs>{lin(id, a, b)}</defs>
-      <rect width="64" height="64" fill={`url(#${id})`} />
-      <g fill="none" stroke="#FFFFFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" transform="translate(32 32) scale(.82) translate(-32 -32)">{art}</g>
-    </Svg>
-  );
-};
-
-/* ───────────── 4 · GLASS: a few sheets of frosted glass on a deep colour ───────────── */
-// abstract on purpose: the idea of the game in two or three clean shapes
-const GLASS = {
-  dino: ["#2FA36B", "#0E3F3A", <><rect x="12" y="14" width="9" height="40" rx="4.5" transform="rotate(24 16 34)" opacity=".35" /><rect x="27" y="12" width="9" height="42" rx="4.5" transform="rotate(24 31 33)" opacity=".6" /><rect x="42" y="12" width="9" height="40" rx="4.5" transform="rotate(24 46 32)" opacity=".95" /></>],
-  flappy: ["#3A8FE8", "#16307A", <><rect x="40" y="-4" width="14" height="24" rx="4" opacity=".4" /><rect x="40" y="44" width="14" height="24" rx="4" opacity=".4" /><circle cx="26" cy="32" r="11" opacity=".95" /></>],
-  storm: ["#7A5AE8", "#22124F", <><circle cx="32" cy="28" r="20" opacity=".28" /><path d="M37 14L21 36h10l-5 16 19-23H34l6-15z" opacity=".95" /></>],
-  sneak: ["#3F52B8", "#0E1440", <><path d="M32 32L70 10v44z" opacity=".3" /><rect x="14" y="16" width="8" height="32" rx="4" opacity=".55" /><circle cx="32" cy="32" r="7" opacity=".95" /></>],
-  emberfall: ["#F0602E", "#5A1220", <><path d="M32 6c9 11 18 20 18 32a18 18 0 0 1-36 0c0-12 9-21 18-32z" opacity=".4" /><path d="M32 26c5 6 10 11 10 18a10 10 0 0 1-20 0c0-7 5-12 10-18z" opacity=".95" /></>],
-  blocks: ["#A45AE8", "#32145A", <><rect x="9" y="14" width="14" height="14" rx="4" opacity=".95" /><rect x="25" y="14" width="14" height="14" rx="4" opacity=".75" /><rect x="41" y="14" width="14" height="14" rx="4" opacity=".55" /><rect x="25" y="30" width="14" height="14" rx="4" opacity=".35" /></>],
-  speedway: ["#E8404F", "#5A1024", <><circle cx="32" cy="32" r="18" fill="none" stroke="#FFFFFF" strokeWidth="8" opacity=".35" /><circle cx="44.7" cy="19.3" r="6" opacity=".95" /></>],
-  memory: ["#E8508F", "#5A1238", <><rect x="10" y="15" width="24" height="36" rx="6" transform="rotate(-10 22 33)" opacity=".4" /><rect x="30" y="13" width="24" height="36" rx="6" transform="rotate(9 42 31)" opacity=".95" /></>],
-};
-const glass = (slug) => {
-  const [a, b, art] = GLASS[slug];
-  const id = `il-g-${slug}`;
-  return (
-    <Svg>
-      <defs>{lin(id, a, b)}</defs>
-      <rect width="64" height="64" fill={`url(#${id})`} />
-      <circle cx="10" cy="6" r="34" fill="#FFFFFF" opacity=".07" />
-      <g fill="#FFFFFF">{art}</g>
-    </Svg>
-  );
-};
-
-/* ───────────── 5 · GOLD ON BLACK: an engraved sign in brushed gold ───────────── */
-const GOLD = {
-  dino: <><ellipse cx="32" cy="41" rx="9" ry="8" /><ellipse cx="20" cy="29" rx="4" ry="6" transform="rotate(-25 20 29)" /><ellipse cx="32" cy="24" rx="4.2" ry="6.5" /><ellipse cx="44" cy="29" rx="4" ry="6" transform="rotate(25 44 29)" /></>,
-  flappy: <path d="M12 26c8-10 20-12 40-10-3 5-7 8-12 9 4 0 7 0 9-1-3 6-8 9-14 10 3 1 5 1 7 0-5 6-12 8-20 6-6-2-10-7-10-14z" />,
-  storm: <path d="M38 10L18 36h11l-6 18 23-27H34l8-17z" />,
-  sneak: <><path d="M8 32c7-10 15-15 24-15s17 5 24 15c-7 10-15 15-24 15S15 42 8 32z" /><circle cx="32" cy="32" r="8.5" fill="#0B0B0E" /><circle cx="35" cy="29" r="2.6" /></>,
-  emberfall: <><path d="M29 12l3-7 3 7v26h-6z" /><rect x="21" y="38" width="22" height="4.5" rx="2" /><rect x="29.8" y="42.5" width="4.4" height="9" rx="1.5" /><circle cx="32" cy="54" r="3" /></>,
-  blocks: <path d="M13 17h38v13H39v14H25V30H13z" />,
-  speedway: <><circle cx="32" cy="32" r="17" fill="none" stroke="url(#il-gold)" strokeWidth="5" /><circle cx="32" cy="32" r="4.5" /><path d="M32 32L17 28M32 32l15-4M32 32v16" stroke="url(#il-gold)" strokeWidth="4.4" strokeLinecap="round" /></>,
-  memory: <><rect x="13" y="18" width="19" height="27" rx="4" transform="rotate(-12 22 31)" opacity=".55" /><rect x="31" y="16" width="19" height="27" rx="4" transform="rotate(10 41 30)" /></>,
-};
-const gold = (slug) => (
-  <Svg>
+  <svg viewBox="0 0 64 64" preserveAspectRatio="xMidYMid slice" aria-hidden="true" style={{ display: "block", width: "100%", height: "100%" }}>
     <defs>
-      <linearGradient id="il-gold" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="64" y2="64">
-        <stop offset="0" stopColor="#F7E3A1" /><stop offset="0.45" stopColor="#D4A94A" /><stop offset="0.7" stopColor="#F1D58A" /><stop offset="1" stopColor="#9A7426" />
-      </linearGradient>
-      {lin("il-black", "#1A1A1F", "#060608", 0, 1)}
+      {Object.entries(TONES).map(([n, [a, b]]) => (
+        <React.Fragment key={n}>
+          <linearGradient id={`il-v-${n}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={a} /><stop offset="1" stopColor={b} /></linearGradient>
+          <radialGradient id={`il-c-${n}`} cx="0.34" cy="0.26" r="0.9"><stop offset="0" stopColor={a} /><stop offset="1" stopColor={b} /></radialGradient>
+        </React.Fragment>
+      ))}
+      {/* the thick dark outline round the whole hero, heavier underneath */}
+      <filter id="il-ol" x="-25%" y="-25%" width="150%" height="160%" colorInterpolationFilters="sRGB">
+        <feMorphology in="SourceAlpha" operator="dilate" radius="1.5" result="fat" />
+        <feOffset in="fat" dy="2.2" result="low" />
+        <feMerge result="shape"><feMergeNode in="fat" /><feMergeNode in="low" /></feMerge>
+        <feFlood floodColor={INK} result="ink" />
+        <feComposite in="ink" in2="shape" operator="in" result="line" />
+        <feMerge><feMergeNode in="line" /><feMergeNode in="SourceGraphic" /></feMerge>
+      </filter>
     </defs>
-    <rect width="64" height="64" fill="url(#il-black)" />
-    {sheen}
-    <rect x="5" y="5" width="54" height="54" rx="13" fill="none" stroke="url(#il-gold)" strokeWidth="1" opacity=".7" />
-    <g fill="url(#il-gold)" transform="translate(32 32) scale(.72) translate(-32 -32)">{GOLD[slug]}</g>
-  </Svg>
+    {children}
+  </svg>
 );
+const gloss = (d, w = 2.8) => <path d={d} fill="none" stroke="#FFFFFF" strokeWidth={w} strokeLinecap="round" opacity=".8" />;
+// one fat square block: a dark slab, a top, a shine
+const cell = (x, y, s, top, side, key) => (
+  <g key={key}>
+    <rect x={x} y={y + s * 0.2} width={s} height={s} rx={s * 0.24} fill={side} />
+    <rect x={x} y={y} width={s} height={s} rx={s * 0.24} fill={top} />
+    <rect x={x + s * 0.16} y={y + s * 0.12} width={s * 0.68} height={s * 0.2} rx={s * 0.1} fill="#FFFFFF" opacity=".5" />
+  </g>
+);
+const RAYS = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
+
+/* ───────────── 2 · CHUNKY, NIGHT: new heroes on a dark tile, rays in the game's colour ───────────── */
+// [ray colour, back (no outline), hero]
+const NIGHT = {
+  // the whole dino, running
+  dino: ["#5BE07A", null, (
+    <g transform="translate(32 33) scale(1.08) translate(-32.5 -31)">
+      <path d="M34 8H54V21H44V24H50V28H42V33H47V37H42V42L37 47V54H32V49H28V54H23V47L11 37V28L18 35H26L34 27Z" fill={v("green")} stroke={v("green")} strokeWidth="3" strokeLinejoin="round" />
+      <path d="M26 37l8-8v13l-5 5h-6v-6z" fill="#EFFFD6" opacity=".8" />
+      <circle cx="41" cy="14.5" r="3.4" fill="#FFFFFF" /><circle cx="42" cy="14.8" r="1.7" fill={INK} />
+      {gloss("M37 9.5h12", 2.2)}
+      <path d="M44 22.5h6" stroke="#14602A" strokeWidth="1.8" strokeLinecap="round" />
+    </g>
+  )],
+  // a golden wing
+  flappy: ["#FFD23F", null, (
+    <g transform="rotate(-8 32 32)">
+      <path d="M6 30c10-15 27-19 52-14-3 7-9 11-16 13 5 0 9-1 12-2-4 9-11 13-20 14 4 1 7 1 10 0-7 9-18 12-29 9C8 46 3 39 6 30z" fill="#C98600" transform="translate(0 3.5)" />
+      <path d="M6 30c10-15 27-19 52-14-3 7-9 11-16 13 5 0 9-1 12-2-4 9-11 13-20 14 4 1 7 1 10 0-7 9-18 12-29 9C8 46 3 39 6 30z" fill={v("yellow")} />
+      <path d="M18 31c9-2 18-6 26-12M20 40c8-1 15-4 22-9M22 47c5 0 10-2 14-5" fill="none" stroke="#D98E00" strokeWidth="2.2" strokeLinecap="round" />
+      {gloss("M11 29c4-6 10-10 18-12", 3)}
+    </g>
+  )],
+  // one huge bolt
+  storm: ["#B99BFF", <path d="M11 14l1.5 4 4 1.5-4 1.5-1.5 4-1.5-4-4-1.5 4-1.5zM54 42l1.2 3.2 3.2 1.2-3.2 1.2-1.2 3.2-1.2-3.2-3.2-1.2 3.2-1.2z" fill="#FFFFFF" />, (
+    <>
+      <path d="M42 3L13 36h14l-8 25 32-36H36l11-22z" fill="#C98600" transform="translate(0 4)" />
+      <path d="M42 3L13 36h14l-8 25 32-36H36l11-22z" fill={v("yellow")} />
+      <path d="M38 9L23 30" stroke="#FFFFFF" strokeWidth="2.8" strokeLinecap="round" />
+    </>
+  )],
+  // a lantern
+  sneak: ["#FFE27A", null, (
+    <>
+      <path d="M22 13c0-12 20-12 20 0" fill="none" stroke="#8E8AA8" strokeWidth="4" strokeLinecap="round" />
+      <path d="M21 20h22l-4-9H25z" fill={v("grey")} />
+      <rect x="17" y="19" width="30" height="33" rx="6" fill={c("yellow")} />
+      <path d="M32 44c-5 0-7-4-5-8 1 1.5 2 1.5 2.5.5C29 32 31 30 32 26c3 3.5 6 6.5 5 11.5 1-.5 1.5-1.5 1.5-2.5 2 4-1 9-6.5 9z" fill={v("orange")} />
+      <rect x="17" y="19" width="30" height="5" fill={v("grey")} /><rect x="17" y="46" width="30" height="6" fill={v("grey")} />
+      <rect x="13" y="50" width="38" height="9" rx="3.5" fill={v("grey")} />
+      {gloss("M21 28v12", 2.6)}
+    </>
+  )],
+  // a shield with a flame on it
+  emberfall: ["#FF7A3D", null, (
+    <g transform="rotate(-6 32 32)">
+      <path d="M32 3l25 8v21c0 15-10 24-25 29C17 56 7 47 7 32V11z" fill="#6E7898" transform="translate(0 3)" />
+      <path d="M32 3l25 8v21c0 15-10 24-25 29C17 56 7 47 7 32V11z" fill={v("steel")} />
+      <path d="M32 10l19 6v16c0 11-7.5 18-19 22-11.5-4-19-11-19-22V16z" fill={v("red")} />
+      <path d="M32 47c-7 0-9.5-5.5-7-11 1.3 2 3 2 3.5.7C27 31 31 27.5 32 22c4.5 4.5 8.5 9 7 16 1.3-.7 2-2 2-3.5 3 5.5 0 12.5-9 12.5z" fill={v("yellow")} />
+      {gloss("M12 15l14-4.5", 2.6)}
+    </g>
+  )],
+  // a stack of blocks
+  blocks: ["#B06BF0", null, (
+    <g transform="rotate(-6 32 32)">
+      {cell(4, 37, 18, "#5CD0F5", "#1E86B0", "a")}{cell(23, 37, 18, "#FFD23F", "#C98600", "b")}{cell(42, 37, 18, "#FF6B6B", "#B81F2A", "c")}
+      {cell(13.5, 18, 18, "#8FE06B", "#3F962A", "d")}{cell(32.5, 18, 18, "#D29BFF", "#7A3FD6", "e")}
+      {cell(23, -1, 18, "#FF9BCF", "#C2468A", "f")}
+    </g>
+  )],
+  // the chequered flag
+  speedway: ["#FF5A76", null, (
+    <g transform="rotate(-9 32 32)">
+      <rect x="8" y="4" width="6" height="58" rx="3" fill={v("brown")} />
+      <rect x="14" y="8" width="44" height="32" rx="3" fill="#B8BED6" transform="translate(0 2.5)" />
+      <rect x="14" y="8" width="44" height="30" rx="3" fill="#FFFFFF" />
+      {[[0, 0], [2, 0], [1, 1], [3, 1], [0, 2], [2, 2]].map(([x, y]) => <rect key={`${x}-${y}`} x={14 + x * 11} y={8 + y * 10} width="11" height="10" fill="#2B2440" />)}
+      {gloss("M17 11h8", 2)}
+    </g>
+  )],
+  // a card you haven't turned yet
+  memory: ["#FF8FC7", null, (
+    <g transform="rotate(8 32 32)">
+      <rect x="12" y="10" width="40" height="52" rx="9" fill="#3A2496" />
+      <rect x="12" y="3" width="40" height="52" rx="9" fill={v("purple")} />
+      <rect x="17" y="8" width="30" height="42" rx="5" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity=".55" />
+      <text x="32" y="42" fontSize="36" fill="#3A2496" {...F} transform="translate(0 2.5)">?</text>
+      <text x="32" y="42" fontSize="36" fill="#FFFFFF" {...F}>?</text>
+    </g>
+  )],
+};
+const night = (slug) => {
+  const [ray, back, hero] = NIGHT[slug];
+  return (
+    <Svg>
+      <radialGradient id="il-nt" cx="0.5" cy="0.5" r="0.72"><stop offset="0" stopColor="#3A2F78" /><stop offset="1" stopColor="#0B0820" /></radialGradient>
+      <rect width="64" height="64" fill="url(#il-nt)" />
+      {RAYS.map((a) => <path key={a} d="M32 32L26-20h12z" fill={ray} opacity=".2" transform={`rotate(${a} 32 32)`} />)}
+      {back}
+      <g filter="url(#il-ol)">{hero}</g>
+    </Svg>
+  );
+};
+
+/* ───────────── 3 · CHUNKY, POP: other heroes again, on a bright striped tile ───────────── */
+// [tile colour, back (no outline), hero]
+const POP = {
+  // the cactus you jump
+  dino: ["#FF7A59", null, (
+    <>
+      <path d="M10 57h44" stroke="#B5622A" strokeWidth="7" strokeLinecap="round" />
+      <path d="M26 38h-5a6 6 0 0 1-6-6v-8" fill="none" stroke="#2F9E48" strokeWidth="9" strokeLinecap="round" />
+      <path d="M38 31h5a6 6 0 0 0 6-6v-6" fill="none" stroke="#2F9E48" strokeWidth="9" strokeLinecap="round" />
+      <rect x="24" y="8" width="16" height="48" rx="8" fill={v("green")} />
+      <path d="M29 14v32" stroke="#D6FFD0" strokeWidth="2.6" strokeLinecap="round" opacity=".8" />
+      <path d="M13.5 25v6M50.5 20v5" stroke="#A6F7A0" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="34" cy="8" r="4.5" fill={c("pink")} /><circle cx="34" cy="8" r="1.6" fill="#FFF59A" />
+    </>
+  )],
+  // the pipes and the gap
+  flappy: ["#5B5BE8", null, (
+    <>
+      <rect x="20" y="-8" width="24" height="24" fill={v("green")} /><rect x="15" y="11" width="34" height="10" rx="3.5" fill={v("green")} />
+      <rect x="20" y="50" width="24" height="24" fill={v("green")} /><rect x="15" y="43" width="34" height="10" rx="3.5" fill={v("green")} />
+      <rect x="23" y="-8" width="4" height="18" fill="#E0FFE0" opacity=".7" /><rect x="23" y="54" width="4" height="18" fill="#E0FFE0" opacity=".7" />
+      <rect x="18" y="13" width="14" height="2.6" rx="1.3" fill="#FFFFFF" opacity=".6" /><rect x="18" y="45" width="14" height="2.6" rx="1.3" fill="#FFFFFF" opacity=".6" />
+      <path d="M0-8l2.4 5.2 5.6.7-4.1 3.8 1.1 5.6L0 4.5l-5 2.8 1.1-5.6-4.1-3.8 5.6-.7z" fill={v("yellow")} transform="translate(32 32)" />
+    </>
+  )],
+  // shards coming down
+  storm: ["#2EC4B6", null, (
+    <>
+      <g transform="rotate(-22 14 38)"><path d="M14 22l7 12-7 22-7-22z" fill={v("pink")} /><path d="M14 22l7 12h-7z" fill="#FFE3F2" /></g>
+      <g transform="rotate(20 50 36)"><path d="M50 20l7 12-7 22-7-22z" fill={v("pink")} /><path d="M50 20l7 12h-7z" fill="#FFE3F2" /></g>
+      <path d="M32 3l12 20-12 38-12-38z" fill="#D6408A" />
+      <path d="M32 3L20 23h12z" fill="#FFE3F2" /><path d="M32 3l12 20H32z" fill="#FFB0D8" /><path d="M20 23l12 38V23z" fill="#FF7ABF" />
+      {gloss("M26 19l4-7", 2.4)}
+    </>
+  )],
+  // a torch, on
+  sneak: ["#7A4FE8", <path d="M40 24L70 4v52z" fill="#FFF3A8" opacity=".9" />, (
+    <g transform="rotate(-12 28 34)">
+      <rect x="2" y="27" width="30" height="16" rx="5" fill={v("grey")} />
+      <rect x="6" y="29.5" width="18" height="3" rx="1.5" fill="#FFFFFF" opacity=".45" />
+      <rect x="12" y="34" width="8" height="5" rx="2.5" fill={v("red")} />
+      <path d="M30 26l14-7v32l-14-7z" fill={v("steel")} />
+      <ellipse cx="44" cy="35" rx="4.5" ry="16" fill={c("yellow")} />
+    </g>
+  )],
+  // the ember itself: a red shard
+  emberfall: ["#FFD66B", null, (
+    <g transform="rotate(8 32 32)">
+      <path d="M32 3l21 13v28L32 60 11 44V16z" fill="#A81826" />
+      <path d="M32 3l21 13-21 13-21-13z" fill="#FFC2B8" />
+      <path d="M11 16l21 13v31L11 44z" fill="#F0413A" />
+      <path d="M53 16L32 29v31l21-16z" fill="#B81F2A" />
+      <path d="M32 29v31" stroke="#FF9A8A" strokeWidth="1.4" />
+      {gloss("M19 14l10-6", 2.6)}
+    </g>
+  )],
+  // the L
+  blocks: ["#2A9BE8", null, (
+    <g transform="rotate(10 32 32)">
+      {cell(13, 2, 18, "#FFB36B", "#C4601E", "a")}{cell(13, 21, 18, "#FFB36B", "#C4601E", "b")}{cell(13, 40, 18, "#FFB36B", "#C4601E", "c")}{cell(32, 40, 18, "#FFB36B", "#C4601E", "d")}
+    </g>
+  )],
+  // a wheel
+  speedway: ["#8FDB5C", null, (
+    <>
+      <circle cx="32" cy="34" r="27" fill="#1A1630" />
+      <circle cx="32" cy="31" r="27" fill={c("grey")} />
+      {RAYS.map((a) => <path key={a} d="M32 5v6" stroke="#1A1630" strokeWidth="3.4" strokeLinecap="round" transform={`rotate(${a + 15} 32 31)`} />)}
+      <circle cx="32" cy="31" r="16" fill="#1A1630" />
+      <circle cx="32" cy="31" r="14" fill={c("white")} />
+      {[0, 72, 144, 216, 288].map((a) => <path key={a} d="M32 31V19" stroke="#8E99BC" strokeWidth="4.2" strokeLinecap="round" transform={`rotate(${a} 32 31)`} />)}
+      <circle cx="32" cy="31" r="4.5" fill={c("red")} />
+      {gloss("M11 22a23 23 0 0 1 13-11", 3)}
+    </>
+  )],
+  // a pair, found
+  memory: ["#FFB02E", null, (
+    <>
+      {[[-11, 21, 31], [11, 43, 33]].map(([r, cx, cy]) => (
+        <g key={r} transform={`rotate(${r} ${cx} ${cy})`}>
+          <rect x={cx - 13} y={cy - 15} width="26" height="38" rx="6.5" fill="#B8ACD9" />
+          <rect x={cx - 13} y={cy - 20} width="26" height="38" rx="6.5" fill={v("white")} />
+          <path d={`M${cx} ${cy + 7}c-7.5-5.5-10-9-10-13a5 5 0 0 1 10-1.5 5 5 0 0 1 10 1.5c0 4-2.5 7.5-10 13z`} fill={v("pink")} />
+          <path d={`M${cx - 6} ${cy - 8}l2-2`} stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+        </g>
+      ))}
+    </>
+  )],
+};
+const pop = (slug) => {
+  const [bg, back, hero] = POP[slug];
+  return (
+    <Svg>
+      <rect width="64" height="64" fill={bg} />
+      {[-48, -24, 0, 24, 48].map((x) => <path key={x} d={`M${x} 64L${x + 64} 0h12L${x + 12} 64z`} fill="#FFFFFF" opacity=".14" />)}
+      <path d="M0 40h64v24H0z" fill="#1B1230" opacity=".1" />
+      {back}
+      <g filter="url(#il-ol)">{hero}</g>
+    </Svg>
+  );
+};
 
 const STYLES = [
-  { name: "Chunky cartoon (live now)", note: "For comparison.", toy: true, draw: (slug) => <GamePoster slug={slug} /> },
-  { name: "Midnight", note: "Near-black tile, one solid mark in the game's colour.", draw: midnight },
-  { name: "Line", note: "One thin white line drawing on a deep colour.", draw: line },
-  { name: "Glass", note: "Abstract: the idea of the game in two or three sheets of frosted glass.", draw: glass },
-  { name: "Gold on black", note: "A sign in brushed gold, thin gold frame.", draw: gold },
+  { name: "Chunky (live now)", note: "Sunburst in the game's own colour.", draw: (slug) => <GamePoster slug={slug} /> },
+  { name: "Chunky, night", note: "New drawings on a dark tile; the rays carry the game's colour.", draw: night },
+  { name: "Chunky, pop", note: "New drawings again, on a bright striped tile in a clashing colour.", draw: pop },
 ];
-
-// the grown-up styles get a plain tile: no ink border, no toy shadow
-const PLAIN = { display: "block", width: "100%", maxWidth: 100, aspectRatio: "1", borderRadius: "23%", overflow: "hidden", boxShadow: "0 6px 14px rgba(10,8,30,.28)" };
 
 export default function IconLab() {
   return (
     <div style={{ maxWidth: 760, margin: "0 auto", padding: "18px 16px 120px" }}>
       <h1 className="display" style={{ fontSize: "1.5rem", margin: "0 0 4px" }}>🎨 Icon styles</h1>
-      <p className="muted" style={{ margin: "0 0 18px", fontSize: ".9rem" }}>Eight games in each style. Pick one by its number. This page is temporary.</p>
+      <p className="muted" style={{ margin: "0 0 18px", fontSize: ".9rem" }}>Eight games in each. Pick by number — or mix: "the drawings of 2 on the colours of 3". This page is temporary.</p>
       {STYLES.map((s, i) => (
         <section key={s.name} className="pop" style={{ padding: 14, marginBottom: 18 }}>
           <h2 className="display" style={{ fontSize: "1.15rem", margin: 0 }}>Style {i + 1} — {s.name}</h2>
@@ -143,9 +268,7 @@ export default function IconLab() {
               const name = (GAME_MAP[slug] && GAME_MAP[slug].name) || slug;
               return (
                 <div key={slug} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, minWidth: 0 }}>
-                  {s.toy
-                    ? <span className="pc-tile-ic poster" style={{ borderRadius: 18 }}>{s.draw(slug)}</span>
-                    : <span style={PLAIN}>{s.draw(slug)}</span>}
+                  <span className="pc-tile-ic poster" style={{ borderRadius: 18 }}>{s.draw(slug)}</span>
                   <span style={{ fontSize: ".68rem", fontWeight: 800, textAlign: "center", lineHeight: 1.1 }}>{name}</span>
                 </div>
               );

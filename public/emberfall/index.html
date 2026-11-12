@@ -104,7 +104,7 @@ body:not(.touch) #prompt{max-width:min(520px,70vw)}
 #feed{left:50%;bottom:calc(var(--sab) + 64px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px;width:min(360px,60vw)}
 #hud.in-dialog #feed{bottom:auto;top:var(--boss-top);width:min(300px,40vw)}
 .fline{max-width:100%;padding:4px 12px;border-radius:99px;background:var(--panel);border:1px solid var(--pline);font:700 13px/1.3 var(--nfont);color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:opacity .35s,transform .35s;animation:fIn .25s ease-out}
-.fline.gold{color:var(--gold)}.fline.big{font:800 13px/1.3 var(--hfont);letter-spacing:1px;color:var(--gold);border-color:var(--ember)}
+.fline.tip{white-space:normal;max-width:min(440px,86vw);text-align:center;border-radius:14px;border-color:var(--ember);padding:6px 14px}.fline.gold{color:var(--gold)}.fline.big{font:800 13px/1.3 var(--hfont);letter-spacing:1px;color:var(--gold);border-color:var(--ember)}
 .fline.out{opacity:0;transform:translateY(-6px)}
 @keyframes fIn{from{opacity:0;transform:translateY(8px)}}
 /* dialogue, bottom-centre middle band */
@@ -2529,7 +2529,8 @@ function updatePickups(dt){
     if(d<reach){
       if(p.kind==='coin'){game.coins++;sfx('coin');feed('',{key:'coin',n:1,fmt:n=>'+'+n+' Coins',cls:'gold'});}
       else if(p.kind==='potion'){game.pots++;sfx('pick');feed('',{key:'pot',n:1,fmt:n=>'+'+n+(n>1?' Potions':' Potion'),cls:'gold'});}
-      else{game.shards[p.idx]=true;toast('Ember Shard recovered!',3.2);sfx('shard');burst(P.x,P.y+1.5,P.z,p.col,40,7,1,.2,2);const n=game.shards.filter(Boolean).length;if(n===3&&game.stage===1){game.stage=2;}setQuestText();saveGame();}
+      else{game.shards[p.idx]=true;sfx('shard');burst(P.x,P.y+1.5,P.z,p.col,40,7,1,.2,2);const n=game.shards.filter(Boolean).length;if(n===3&&game.stage===1){game.stage=2;}setQuestText();saveGame();
+        {const c=SHARD_STORY[p.idx];if(c)storyCards([{k:c.k+'  \u00b7  '+n+' of 3',h:c.h,p:c.p+(n===3?' That is all three. Take them home to Elder Maren.':'')}],()=>toast('Ember Shard recovered! '+n+' of 3',3.2));else toast('Ember Shard recovered!',3.2);}}   // p7c: what you have just won
       scene.remove(p.m);if(p.beam)scene.remove(p.beam);game.pickups.splice(i,1);}
   }
 }
@@ -2789,7 +2790,7 @@ function updateBoss(e,dt,d,dx,dz){
   const P=game.player,def=e.def,c=e.c;
   const face=(ty,rate=6)=>{e.yaw+=angDiff(e.yaw,ty)*Math.min(1,dt*rate);};
   if(!e.awake){
-    if(d<(def.final?30:24)&&!P.dead){e.awake=true;e.state='chase';game.boss=e;$('boss').hidden=false;$('bname').textContent=def.name;sfx('roar');cam.shake=.6;toast(def.name,2.4);if(game.music)game.music.boss=true;}
+    if(d<(def.final?30:24)&&!P.dead){e.awake=true;e.state='chase';game.boss=e;$('boss').hidden=false;$('bname').textContent=def.name;sfx('roar');cam.shake=.6;bossIntro(e.kind,def.name);if(game.music)game.music.boss=true;}
     else{poseAny(e,{sp:0,phase:e.phase,seed:e.seed,bossy:true});e.y=gh(e.x,e.z);c.root.position.set(e.x,e.y,e.z);c.root.rotation.y=e.yaw;return;}
   }
   if(P.dead||d>(def.final?70:55)){if(game.boss===e){e.awake=false;e.state='idle';e.hp=Math.min(e.maxhp,e.hp+e.maxhp*.5);game.boss=null;$('boss').hidden=true;if(game.music)game.music.boss=false;}return;}
@@ -3201,21 +3202,36 @@ function lines(npc){
   const n=game.shards.filter(Boolean).length,S=game.stage;
   if(npc.id==='elder'){
     if(S===0)return{l:['Traveler... you arrive at a dark hour. The Flame of Emberfall, the heart of our isle, has gone out.','Its light shattered into three Ember Shards, each taken by a guardian: the Moss Troll in the western woods, the Frost Warden on the northern peak, and the Magma Brute in the eastern crater.','Bring the shards to me and I will open the Hollow Gate. Take care out there. The wilds are not kind. Follow the paths, they lead to every lair.'],end:()=>{game.stage=1;game.pots+=1;toast('Quest begun: The Ember Shards',3);setQuestText();saveGame();sfx('bell');}};
-    if(S===1)return{l:[n?`You carry ${n} of the three shards. Good.`:'The shards are still out there, traveler.','Moss Troll in the west woods. Frost Warden on the peak to the north. Magma Brute in the eastern crater. Keep to the paths and mind your stamina.']};
+    if(S===1){   // p7c: she knows which you have, and what each one cost
+      const got=[game.shards[0],game.shards[1],game.shards[2]],left=['the Moss Troll in the west woods','the Frost Warden on the north peak','the Magma Brute in the east crater'].filter((_,i)=>!got[i]);
+      if(!n)return{l:['The shards are still out there, traveler. The brazier behind me has been cold three nights now.','Start with the Moss Troll in the west woods: it is the nearest, and the slowest. Follow the golden beam; it always shows the way.','Roll when a guardian raises its weapon. And spend your coins with Torv and Pip before you go: a sharper blade and a few potions are worth more than courage.']};
+      return{l:[n===1?'One shard. I can feel its warmth from here. I had almost forgotten what that was like.':'Two shards! The brazier stirred this morning, just for a breath. It knows they are coming home.',
+        (got[0]?'The woods are quiet again, the foresters say. ':'')+(got[1]?'The wind has dropped on the peak. ':'')+(got[2]?'The crater has stopped spitting. ':'')+'Still to find: '+left.join(', and ')+'.',
+        'The guardians were not our enemies, once. They only kept what was given to them to keep. Be quick, and be kind about it if you can.']};
+    }
     if(S===2)return{l:['The shards... all three. They remember the flame.','Stand back. I will wake the Hollow Gate.'],end:()=>{game.stage=3;litBrazier();openGate();setQuestText();ensureColossus();saveGame();}};
     if(S===3)return{l:['The Hollow Gate stands open, north of the village past the old pillars.','End the Cinder Colossus, and the flame will burn again.']};
     return{l:['The flame burns again, thanks to you. Emberfall is safe, and you are always welcome here.']};
   }
   if(npc.id==='smith'){
     const cost=60+30*game.dmgUp;
-    return{l:[game.dmgUp>=6?'I can sharpen no more. That blade is a masterpiece.':'A good blade is half the fight. I can sharpen yours.'],opts:game.dmgUp>=6?[]:[{label:`Sharpen blade +3 damage  (${cost} coins)`,fn:()=>{if(game.coins>=cost){game.coins-=cost;game.dmgUp++;sfx('chest');toast('Blade sharpened',1.8);return 'There. Hear that ring? Fresh edge.';}return 'Come back when your purse is heavier.';}}]};
+    return{l:[game.dmgUp>=6?'I can sharpen no more. That blade is a masterpiece.':n>=1?'That shard on your belt is warming my whole forge. Let me put a proper edge on that blade for the next one.':'A good blade is half the fight. I can sharpen yours.'],opts:game.dmgUp>=6?[]:[{label:`Sharpen blade +3 damage  (${cost} coins)`,fn:()=>{if(game.coins>=cost){game.coins-=cost;game.dmgUp++;sfx('chest');toast('Blade sharpened',1.8);return 'There. Hear that ring? Fresh edge.';}return 'Come back when your purse is heavier.';}}]};
   }
   if(npc.id==='merchant'){
     const vc=120+60*Math.max(0,game.hpUp);
     return{l:['Potions! Fresh potions! Best prices on the isle, and the only prices on the isle.'],opts:[{label:'Healing potion  (25 coins)',fn:()=>{if(game.coins>=25){game.coins-=25;game.pots++;sfx('pick');return 'Pleasure doing business!';}return 'Not enough coins, friend.';}},game.hpUp<3?{label:`Vitality tonic +15 max health  (${vc} coins)`,fn:()=>{if(game.coins>=vc){game.coins-=vc;game.hpUp++;game.player.maxhp+=15;game.player.hp+=15;sfx('level');return 'Strong as an ox. A very small ox.';}return 'Not enough coins, friend.';}}:null].filter(Boolean)};
   }
-  if(npc.id==='bree')return{l:[S<3?'Are you going out there? I hear the goblins are camped along the paths. Watch the archers!':'Is it true? Did you really beat the Colossus? Tell me everything!','Hint: jump over the shockwave when a big one slams the ground!']};
-  if(npc.id==='cob')return{l:['Back in my day we fought wolves with spoons.','Press R when your blue bar is full. Meteor Slam: you leap, you crash, they fall over. Very dramatic. Very effective.','And the roll has invincibility frames, young one. Use it.']};
+  if(npc.id==='bree'){   // p7c: she follows how you're getting on
+    if(S>=4)return{l:['You did it! The bell hasn’t stopped ringing. Tell me everything, from the start!']};
+    if(S===3)return{l:['The big gate opened by itself! Everyone ran. I didn’t. Well, I ran a bit.','Hint: jump over the shockwave when a big one slams the ground!']};
+    if(n>=1)return{l:[`You found ${n===1?'one':n===2?'two':'all three'}! Can I see? It’s so warm. Mama says the nights are less cold already.`,'Hint: jump over the shockwave when a big one slams the ground!']};
+    return{l:['Are you going out there? I hear the goblins are camped along the paths. Watch the archers!','Hint: jump over the shockwave when a big one slams the ground!']};
+  }
+  if(npc.id==='cob'){
+    if(S>=4)return{l:['A thousand years that flame burned, then three nights dark, then you. I shall be telling this one for the rest of my days.']};
+    if(n>=2)return{l:['Two of them? Hm. I owe Torv a coin. I said you’d not come back from the first.','The last guardian will be the angriest. Keep your blue bar for when it staggers.']};
+    return{l:['Back in my day we fought wolves with spoons.',touchDev?'Tap the star when your blue bar is full. Meteor Slam: you leap, you crash, they fall over. Very dramatic. Very effective.':'Press R when your blue bar is full. Meteor Slam: you leap, you crash, they fall over. Very dramatic. Very effective.','And nothing can touch you while you roll, young one. Use it.']};
+  }
   return{l:['...']};
 }
 function openDialog(npc){
@@ -3241,11 +3257,102 @@ function advanceDialog(){
 function closeDialog(){const D=game.dialog;if(!D)return;game.dialog=null;$('dlg').hidden=true;if(D.end)D.end();}
 function updateDialog(dt){const D=game.dialog;if(!D)return;if(D.typed<D.full.length){D.typed=Math.min(D.full.length,D.typed+dt*60);$('dtxt').textContent=D.full.slice(0,Math.floor(D.typed));if(Math.floor(D.typed)%3===0)sfx('talk');}}
 
+/* ================= p7c: the story told, and the game taught =================
+   storyCards()  a few full-screen cards of story (the opening, each shard won, the ending): tap to go on, Skip to leave
+   bossIntro()   a guardian's name, title and a line as it wakes (it doesn't stop the fight)
+   tipTick()     one short tip, once ever, at the moment it's useful (attack, roll, heal, the slam, lock on, ride, beacons)
+   All of it is page furniture: nothing here changes a rule, and a failure just means no card. */
+const OPENING=[
+  {k:'Emberfall',h:'The Flame has gone out',p:'For a thousand years one fire burned at the heart of this isle. It kept the cold from the peaks, the rot from the woods and the dark from every door.'},
+  {k:'Three nights ago',h:'It broke into three shards',p:'Three guardians of the old world woke and each carried one away: the Moss Troll into the western woods, the Frost Warden up the northern peak, the Magma Brute down into the eastern crater.'},
+  {k:'Now',h:'You are the last one who can bring them back',p:'Elder Maren is waiting by the cold brazier in the village. Speak with her first.'}];
+const SHARD_STORY=[
+  {k:'The Shard of Root',h:'The woods breathe again',p:'The troll was no monster. It was the forest\u2019s keeper, holding the only warmth it had left. The shard is heavy and warm in your hand.'},
+  {k:'The Shard of Frost',h:'The peak falls quiet',p:'The Warden stood its watch for an age and never once came down. It let go of the shard only when it fell. The wind up here has stopped.'},
+  {k:'The Shard of Cinder',h:'The crater cools',p:'The Brute burned because the shard burned. With it gone, the lava dims to a slow red glow. This one is almost too hot to hold.'}];
+const EPILOGUE=[
+  {k:'The Sunken Hollow',h:'The Colossus falls',p:'It was the flame\u2019s first guardian, and the last. It never left its post; it only forgot what it was guarding.'},
+  {k:'Emberfall',h:'The Flame burns again',p:'Light runs back along the old paths, up the peak and down into the woods. In the village someone is already ringing the bell.'}];
+const BOSS_LORE={troll:['Keeper of the Western Woods','It has held the Shard of Root for three nights and will not give it up.'],
+  warden:['Watcher of the Northern Peak','It has not left its post in a thousand years.'],
+  magma:['The Fire Under the Crater','It burns because the shard burns.'],
+  colossus:['First Guardian of the Flame','It forgot what it was guarding. Remind it.']};
+const STORY={el:null,q:[],i:0,done:null,at:0};
+function storyEl(){
+  if(STORY.el)return STORY.el;
+  const d=document.createElement('div');d.id='story';
+  d.style.cssText='position:fixed;inset:0;z-index:9;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:6vh 9vw;text-align:center;background:radial-gradient(ellipse at center,rgba(28,14,6,.86),rgba(6,3,2,.97));color:#ffe9c4;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:none;transition:opacity .35s';
+  d.innerHTML='<div id="stK" style="font:700 13px var(--nfont,serif);letter-spacing:.32em;color:#e0a040;text-transform:uppercase"></div>'+
+    '<h3 id="stH" style="margin:0;font:800 clamp(24px,5.2vw,44px)/1.15 var(--hfont,serif);color:#ffd27a;text-shadow:0 2px 0 #3a1c08"></h3>'+
+    '<p id="stP" style="margin:0;max-width:640px;font:600 clamp(15px,2.4vw,21px)/1.5 var(--nfont,serif)"></p>'+
+    '<div id="stC" style="margin-top:8px;font:700 12px var(--nfont,serif);letter-spacing:.2em;opacity:.7"></div>'+
+    '<button id="stS" type="button" style="position:absolute;right:calc(env(safe-area-inset-right,0px) + 16px);top:calc(env(safe-area-inset-top,0px) + 14px);padding:8px 16px;border-radius:999px;border:2px solid rgba(255,210,122,.6);background:rgba(40,20,8,.7);color:#ffd27a;font:700 13px var(--nfont,serif)">Skip</button>';
+  document.body.appendChild(d);
+  d.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();if(e.target&&e.target.id==='stS')storyEnd();else storyNext();});
+  STORY.el=d;return d;
+}
+function storyShow(){
+  const c=STORY.q[STORY.i],d=storyEl(),last=STORY.i>=STORY.q.length-1;
+  d.querySelector('#stK').textContent=c.k||'';d.querySelector('#stH').textContent=c.h||'';d.querySelector('#stP').textContent=c.p||'';
+  d.querySelector('#stC').textContent=(touchDev?'TAP':'CLICK OR PRESS ENTER')+(last?' TO BEGIN':' TO GO ON')+'  \u00b7  '+(STORY.i+1)+' / '+STORY.q.length;
+  d.querySelector('#stS').style.display=STORY.q.length>1&&!last?'':'none';
+  d.style.display='flex';d.style.opacity=0;STORY.at=performance.now();requestAnimationFrame(()=>{d.style.opacity=1;});
+}
+function storyCards(cards,done){
+  if(WATCH||!cards||!cards.length){if(done)done();return;}
+  try{STORY.q=cards;STORY.i=0;STORY.done=done||null;game.story=true;storyShow();if(document.pointerLockElement)document.exitPointerLock();}
+  catch(e){game.story=false;if(done)done();}
+}
+function storyNext(){if(!game.story||performance.now()-STORY.at<350)return;if(STORY.i<STORY.q.length-1){STORY.i++;storyShow();try{sfx('ui');}catch(e){}}else storyEnd();}
+function storyEnd(){if(!game.story)return;game.story=false;if(STORY.el)STORY.el.style.display='none';const f=STORY.done;STORY.done=null;if(f){try{f();}catch(e){}}}
+window.addEventListener('keydown',e=>{if(!game.story)return;
+  if(e.code==='Enter'||e.code==='Space'||e.code==='KeyE'){e.preventDefault();e.stopImmediatePropagation();storyNext();}
+  else if(e.code==='Escape'){e.preventDefault();e.stopImmediatePropagation();storyEnd();}},true);
+function bossIntro(kind,name){
+  try{
+    const L=BOSS_LORE[kind];if(!L||WATCH)return;
+    let d=$('bossIntro');
+    if(!d){d=document.createElement('div');d.id='bossIntro';
+      d.style.cssText='position:fixed;left:50%;top:24%;transform:translateX(-50%);z-index:7;pointer-events:none;text-align:center;width:min(640px,88vw);opacity:0;transition:opacity .45s';
+      d.innerHTML='<div id="biT" style="font:700 13px var(--nfont,serif);letter-spacing:.3em;color:#e0a040;text-transform:uppercase;text-shadow:0 1px 3px #000"></div><div id="biN" style="font:800 clamp(28px,6vw,54px)/1.1 var(--hfont,serif);color:#ffd27a;text-shadow:0 3px 0 #3a1c08,0 0 18px rgba(0,0,0,.8)"></div><div id="biL" style="margin-top:6px;font:600 clamp(14px,2.2vw,19px)/1.4 var(--nfont,serif);color:#ffe9c4;text-shadow:0 1px 4px #000"></div>';
+      document.body.appendChild(d);}
+    d.querySelector('#biT').textContent=L[0];d.querySelector('#biN').textContent=name;d.querySelector('#biL').textContent=L[1];
+    d.style.opacity=1;clearTimeout(bossIntro.t);bossIntro.t=setTimeout(()=>{d.style.opacity=0;},3600);
+  }catch(e){}
+}
+/* tips: each shown once ever (kept with the save's settings), one at a time, never in a dialogue or a story card */
+const TIPS={seen:null,cd:0};
+function tipOnce(id,touchTxt,keyTxt){
+  if(!TIPS.seen)TIPS.seen=store.get('ef-tips',{})||{};
+  if(TIPS.seen[id])return false;
+  TIPS.seen[id]=1;store.set('ef-tips',TIPS.seen);TIPS.cd=7;
+  feed(touchDev?touchTxt:keyTxt,{cls:'big tip',dur:6});try{sfx('ui');}catch(e){}
+  return true;
+}
+function tipTick(dt){
+  try{
+    TIPS.cd-=dt;
+    const P=game.player;if(!P||P.dead||game.dialog||game.story||TIPS.cd>0||game.st!=='play'||WATCH)return;
+    let near=null,nd=1e9,wind=false;
+    for(const e of game.enemies){if(e.state==='dead')continue;const d=Math.hypot(e.x-P.x,e.z-P.z);if(d<nd){nd=d;near=e;}if(d<7&&e.state==='windup')wind=true;}
+    if(near&&nd<9&&tipOnce('atk','Tap the sword button to attack. Three taps in a row make a combo.','Press J (or click) to attack. Three in a row make a combo.'))return;
+    if(wind&&tipOnce('roll','It\u2019s winding up! Roll through the blow: nothing can hurt you while you roll.','It\u2019s winding up! Press K to roll through the blow: nothing can hurt you while you roll.'))return;
+    if(P.hp<P.maxhp*.45&&game.pots>0&&tipOnce('heal','You\u2019re hurt. Tap the flask to drink a potion.','You\u2019re hurt. Press Q to drink a potion.'))return;
+    if(P.mp>=100&&near&&nd<14&&tipOnce('slam','Your blue bar is full: tap the star for a Meteor Slam.','Your blue bar is full: press R for a Meteor Slam.'))return;
+    if(game.boss&&game.boss.awake&&game.boss.state!=='dead'&&tipOnce('lock','Lock on to the guardian (the target button) so the camera keeps it in view.','Press F to lock on to the guardian: the camera keeps it in view.'))return;
+    if(!near||nd>20){const o=nearestInteract();
+      if(o&&o.kind==='horse'&&tipOnce('horse','A horse! Tap the action button to ride: the isle is big.','A horse! Press E to ride: the isle is big.'))return;
+      if(o&&o.kind==='tower'&&tipOnce('tower','A watchtower. Light its beacon and you can travel back here from the map.','A watchtower. Light its beacon (E) and you can travel back here from the map.'))return;}
+  }catch(e){}
+}
+
 /* ================= quest, interaction ================= */
-function setQuestText(){
+function setQuestText(quiet){
   const n=game.shards.filter(Boolean).length,S=game.stage;
-  const t=['Speak with Elder Maren in the village.',`Recover the Ember Shards (${n}/3). Moss Troll in the west woods, Frost Warden on the north peak, Magma Brute in the east crater.`,'Return to Elder Maren with the shards.','Enter the Sunken Hollow north of the village and defeat the Cinder Colossus.','The flame burns again. Explore freely, or hunt what remains.'][S];
-  const prevQ=HUD.questTxt;HUD.questTxt=t;if(prevQ&&prevQ!==t&&game.st==='play')feed('Quest updated',{cls:'big'});
+  /* p7c: the shards one at a time — the one you're nearest to, by name and place */
+  let step='';if(S===1){try{const o=getObjective();if(o&&o.next)step=o.next.charAt(0).toUpperCase()+o.next.slice(1);}catch(e){}}
+  const t=['Speak with Elder Maren in the village.',`Ember Shards ${n}/3. `+(step?'Next: '+step+'.':'Three guardians hold them: west woods, north peak, east crater.'),'All three shards! Return to Elder Maren in the village.','Enter the Sunken Hollow north of the village and defeat the Cinder Colossus.','The flame burns again. Explore freely, or hunt what remains.'][S];
+  const prevQ=HUD.questTxt;HUD.questTxt=t;if(prevQ&&prevQ!==t&&game.st==='play'&&!quiet)feed('Quest updated',{cls:'big'});
   $('qtext').textContent=t;[...$('qsh').children].forEach((s,i)=>s.classList.toggle('on',!!game.shards[i]||S>=3));
   if(world.sockets)world.sockets.forEach((so,i)=>{const lit=S>=3;so.m.material.color.set(lit?so.col:'#2a2a2a');});
 }
@@ -3284,9 +3391,11 @@ function guideSig(){let sh=0;for(const p of game.pickups)if(p.kind==='shard')sh+
 function guideTick(){
   const now=performance.now();if(now-GUIDE.t<125)return;GUIDE.t=now;
   const P=game.player,o=getObjective(),sig=guideSig();
+  tipTick(.125);
+  if(game.stage===1&&o&&o.next!==GUIDE.qn){GUIDE.qn=o.next;setQuestText(true);}
   if(GUIDE.sig!==null&&sig!==GUIDE.sig&&o&&game.st==='play')toast('Next: '+o.next.charAt(0).toUpperCase()+o.next.slice(1),3.2);
   GUIDE.sig=sig;
-  const fight=!!(game.boss&&game.boss.awake&&game.boss.state!=='dead'),show=GUIDE.on&&!!o&&!fight&&!game.dialog&&game.st==='play'&&!P.dead;
+  const fight=!!(game.boss&&game.boss.awake&&game.boss.state!=='dead'),show=GUIDE.on&&!!o&&!fight&&!game.dialog&&!game.story&&game.st==='play'&&!P.dead;
   const el=$('guide');
   if(show!==GUIDE.vis){GUIDE.vis=show;el.classList.toggle('off',!show);}
   if(show){
@@ -3391,11 +3500,12 @@ function startGame(cont){
   applyWorld(s);
   $('title').hidden=true;$('hud').hidden=false;$('touch').hidden=!touchDev;$('pause').hidden=true;$('dead').hidden=true;$('end').hidden=true;
   game.st='play';game.dialog=null;$('dlg').hidden=true;game.regionName='';fadeIn();ctlHint();
-  if(!s)setTimeout(()=>toast('Find Elder Maren in the village',3.2),600);
+  if(!s)setTimeout(()=>storyCards(OPENING,()=>toast('Find Elder Maren in the village',3.2)),500);   // p7c: the story so far, then the first step
 }
 function fadeIn(){const f=$('fade');f.style.transition='none';f.style.opacity=1;requestAnimationFrame(()=>requestAnimationFrame(()=>{f.style.transition='opacity .9s';f.style.opacity=0;}));}
 function toTitle(){GUIDE.sig=null;GUIDE.entered=false;guideBeam(null);if(PANEL.open)closePanel();game.st='title';saveGame();$('title').hidden=false;$('hud').hidden=true;$('touch').hidden=true;$('pause').hidden=true;$('dead').hidden=true;$('end').hidden=true;$('dlg').hidden=true;game.dialog=null;$('bCont').disabled=!store.get('ef-save',null);$('bCont').style.opacity=store.get('ef-save',null)?1:.45;if(document.pointerLockElement)document.exitPointerLock();}
 function victory(){
+  if(!game.epi&&!WATCH){game.epi=true;storyCards(EPILOGUE,()=>victory());return;}   // p7c: how it ends, then the tally
   game.won=true;$('endtxt').textContent=`The Cinder Colossus is no more and the Flame of Emberfall burns anew. Level ${game.lvl}, ${game.kills} foes felled, ${game.deaths} falls, ${Math.round((game.playT||0)/60)} minutes on the isle.`;
   $('end').hidden=false;if(document.pointerLockElement)document.exitPointerLock();sfx('bell');musicSting('level');
 }

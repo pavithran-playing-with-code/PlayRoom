@@ -314,6 +314,14 @@ There is no test runner. What works:
   ring, hit numbers land big and settle. Drawing only, pooled, and wrapped
   so a failure means no effect, never a broken game. Written without being
   run (the user tests on their phone; see the memory note).
+  Story and teaching (p7c, the block above the quest code): `storyCards()`
+  shows full-screen cards (the opening on a new journey, one for each shard
+  won, the ending before the tally; tap to go on, Skip), `bossIntro()` a
+  guardian's title and a line as it wakes, `tipTick()` one tip, once ever
+  (`ef-tips`), at the moment it's useful — attack, roll, heal, the slam,
+  lock on, a horse, a watchtower. The quest line names the one step you're
+  on (`setQuestText`, from `getObjective`), and the villagers' lines follow
+  the shards you hold (`lines`). Also written without being run.
   **Co-op is not in the rebuild yet**: each player plays their own island and
   `ef:msg` is ignored. The old two-player version is kept beside it as
   `index-backup-before-p6a.html` + `game.js` (and `game-backup-before-p6a.js`);

@@ -1002,12 +1002,12 @@ export function CallProvider({ children }) {
     return f.open;
   }, []);
   // the film's sound, from now on: audio track n, decoded here
-  const pickAudio = useCallback(async (v, n, auto = false) => {
+  const pickAudio = useCallback(async (v, n, auto = false, start = false) => {
     const f = filmRef.current;
     if (!f || f.v !== v) return;
     const F = await filmTracksOf(v);
     note(f, `sound: starting track ${n + 1}${auto ? " (automatic)" : ""}`);
-    const snd = await F.sound(n, v, { onWait: (w) => setFilmWait(w) });
+    const snd = await F.sound(n, v, { onWait: (w) => setFilmWait(w), start });
     if (filmRef.current !== f) { snd.stop(); return; }
     note(f, "sound: decoder playing — the call now gets the decoded sound");
     if (f.sound) f.sound.stop();
@@ -1089,7 +1089,10 @@ export function CallProvider({ children }) {
     hideFilm(v);
     const ok = await new Promise((res) => { v.onloadedmetadata = () => res(true); v.onerror = () => res(false); });
     if (!ok) { v.remove(); URL.revokeObjectURL(url); say("This phone can't play that video. Try an .mp4."); return; }
-    try { await v.play(); } catch { /* the controls' ▶ starts it */ }
+    // Dolby / DTS sound has to be decoded here: the picture doesn't start until
+    // that sound is ready (pickAudio's `start`) — never a silent first scene
+    const dolby = await dolbyLike(file);
+    if (!dolby) { try { await v.play(); } catch { /* the controls' ▶ starts it */ } }
     let stream = null, stop = () => {}, drawn = false;     // drawn: the picture goes out through a canvas (an iPhone), which draws subtitles itself
     const cap = v.captureStream || v.mozCaptureStream;
     if (cap) {
@@ -1131,7 +1134,7 @@ export function CallProvider({ children }) {
       screenRef.current = stream; setScreen(stream);
       for (const P of pcs.current.values()) shareInto(P, stream);
       tellMedia(micRef.current, camRef.current);
-      say("🎬 Everyone in the call can see and hear it. 🎧 headphones keep your mic from picking it up.");
+      if (callRef.current && callRef.current.members.length > 1) say("🎬 Everyone in the call can see and hear it. 🎧 headphones keep your mic from picking it up.");
     };
     go();
     // Sound the browser can't play (Dolby AC-3 / E-AC-3, DTS… — most
@@ -1142,8 +1145,7 @@ export function CallProvider({ children }) {
       const f0 = filmRef.current;
       note(f0, `file: ${file.name.slice(0, 50)} · ${(file.size / 1048576).toFixed(0)} MB · ${file.type || "no type"}`);
       note(f0, `this phone: ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, "").slice(0, 110)}`);
-      const dolby = await dolbyLike(file);
-      if (dolby) warmDecoder();
+      if (dolby) { warmDecoder(); setFilmWait(true); }
       note(f0, `Dolby/DTS in the file's headers: ${dolby ? "yes" : "no"}`);
       const missing = dolby || (await soundMissing(v));
       if (!dolby) note(f0, `browser's own sound: ${missing ? "none decoded" : "playing"} (decoded bytes ${"webkitAudioDecodedByteCount" in v ? v.webkitAudioDecodedByteCount : "?"})`);
@@ -1151,10 +1153,11 @@ export function CallProvider({ children }) {
       if (!missing || !f || f.v !== v || f.sound) return;
       say(dolby ? "🔊 Dolby sound — decoding it so everyone can hear (the first time takes a moment)…" : "🔊 This video's sound needs decoding — fixing it (the first time takes a moment)…");
       let F;
-      try { F = await filmTracksOf(v); } catch { say("Couldn't load the sound decoder — open Audio & subtitles › Sound check and send me a screenshot"); return; }
-      if (!F.audio.length) { say("This video has no sound"); return; }
-      try { await pickAudio(v, (F.audio.find((x) => x.def) || F.audio[0]).n, true); }
-      catch (e) { note(filmRef.current, `sound: FAILED — ${e && e.message ? e.message : e}`); say("The sound didn't start — open Audio & subtitles › Sound check"); }
+      try { F = await filmTracksOf(v); } catch { say("Couldn't load the sound decoder — open Audio & subtitles › Sound check and send me a screenshot"); if (dolby) { setFilmWait(false); v.play().catch(() => {}); } return; }
+      const unhold = () => { if (dolby && filmRef.current === f) { setFilmWait(false); v.play().catch(() => {}); } };
+      if (!F.audio.length) { say("This video has no sound"); unhold(); return; }
+      try { await pickAudio(v, (F.audio.find((x) => x.def) || F.audio[0]).n, true, dolby); }
+      catch (e) { note(filmRef.current, `sound: FAILED — ${e && e.message ? e.message : e}`); say("The sound didn't start — open Audio & subtitles › Sound check"); unhold(); }
     })();
   }, [stopShare, tellMedia, say, hideFilm, filmTracksOf, pickAudio]);
   // for the menu: the tracks, and picking one

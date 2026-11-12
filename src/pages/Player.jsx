@@ -83,12 +83,13 @@ export default function Player() {
     return F.current;
   }, [file]);
   // the film's sound from now on: track n, decoded here
-  const pickAudio = useCallback(async (n, quiet) => {
+  // `start`: the film hasn't begun — it begins when its sound is ready, never before
+  const pickAudio = useCallback(async (n, quiet, start = false) => {
     const v = vRef.current;
     if (!v) return;
     try {
       const X = await tracksOf();
-      const s = await X.sound(n, v, { onWait: setWaiting });
+      const s = await X.sound(n, v, { onWait: setWaiting, start });
       if (snd.current) snd.current.stop();
       snd.current = s; setAudioN(n);
       if (!quiet) say(`🔊 ${X.audio[n] ? X.audio[n].label : "Sound"}`);
@@ -112,21 +113,27 @@ export default function Player() {
     const r = getResume(file);
     if (r > 30 && r < (v.duration || 0) - 30) { v.currentTime = r; setResumeAt(r); setTimeout(() => setResumeAt(0), 6000); }
     v.playbackRate = speed;
-    try { await v.play(); } catch { /* the ▶ starts it */ }
     poke();
-    // Dolby / DTS sound: decode it ourselves at once (the browser plays it silent,
-    // and Chrome on Android even says it's playing it); else the browser's word
+    // Dolby / DTS sound (the browser plays it silent, and Chrome on Android
+    // even says it's playing it): decode it ourselves, and don't start the
+    // picture until its sound is ready — never a silent first scene.
     const f = file;
     const dolby = await dolbyLike(f);
     if (vRef.current !== v || f !== file) return;
+    if (!dolby) { try { await v.play(); } catch { /* the ▶ starts it */ } }
     if (dolby || (await soundMissing(v))) {
       if (vRef.current !== v || snd.current) return;
-      say("🔊 Dolby sound — decoding it (the first time loads the decoder)…", 4000);
+      if (dolby) setWaiting(true);
+      say("🔊 Dolby sound — getting it ready (the first time loads the decoder)…", 4000);
       try {
         const X = await tracksOf();
         setTracks({ audio: X.audio, subs: X.subs });
-        if (X.audio.length) await pickAudio((X.audio.find((a) => a.def) || X.audio[0]).n, true);
-      } catch { say("Couldn't load the sound decoder — check the connection and open the video again", 5000); }
+        if (X.audio.length) await pickAudio((X.audio.find((a) => a.def) || X.audio[0]).n, true, dolby);
+        else if (dolby) { setWaiting(false); v.play().catch(() => {}); }
+      } catch {
+        say("Couldn't load the sound decoder — check the connection and open the video again", 5000);
+        if (dolby) { setWaiting(false); v.play().catch(() => {}); }
+      }
     }
   };
   useEffect(() => {
@@ -280,7 +287,7 @@ export default function Player() {
           </div>
         ) : <div className={`pl-flash ${level.side || ""}`}>{level.text}</div>
       )}
-      {waiting && <div className="pl-chip">🔊 Sound catching up…</div>}
+      {waiting && <div className="pl-chip">🔊 Getting the sound ready…</div>}
       {note && <div className="pl-note">{note}</div>}
       {resume > 0 && (
         <div className="pl-resume">Carried on from {fmt(resume)}

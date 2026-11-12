@@ -437,13 +437,29 @@ There is no test runner. What works:
   `DOM.setFileInputFiles` (make one with ffmpeg.wasm: E-AC-3 + AAC + SRT) and
   listening to the page's <audio> sink with an AnalyserNode; `window.__pl`
   gives the decoder's numbers and the tap timings.
-- **Movie Night** (slug `movie`, `pages/MovieRoom.jsx`) is a room, not a game:
-  never started (the start route refuses it), it stays `waiting` so people
-  can drop in from the Rooms list mid-film. Everyone seated joins the room's
-  call (`call:room` in `config/calls.js`, id `r-<code>`: no ringing, no
-  friendship needed, 4 at most, open with one in it, kept fresh in the
-  database while anyone is in it) and a movie is played to it with the
-  call's `playFilm`. `check-calls.js` tests the room call.
+- **A movie room** (slug `movie`, `pages/MovieRoom.jsx`) is a kind of room,
+  not a game: made from the Rooms page (which lists movie rooms and game
+  rooms apart), never on the Play or Home lists (`room: true` in the
+  registry keeps it out of `GAMES`; `GAME_MAP` still has it). No seats to
+  pick, nothing to start (the start route refuses it): it stays `waiting`,
+  so people can walk in from the Rooms list mid-film. Alone it is a movie
+  player — `playFilm` with no call and no microphone, drawn by CallLayer as
+  a movie screen (`solo`: a film of mine with nobody to show it to). When a
+  second person is seated everyone joins the room's call (`call:room` in
+  `config/calls.js`, id `r-<code>`: no ringing, no friendship needed, 4 at
+  most, open with one in it, kept fresh in the database while anyone is in
+  it) and the same film, still playing, goes to them: now it's the call
+  screen. `check-calls.js` tests the room call.
+- **A film's picture never plays without its sound** (`filmSound.js`
+  `playSound`): where the film is — its start, a jump — a quick 4 s piece
+  (`head`) is decoded from that very moment, ahead of the 10 s pieces, on
+  two decoders from the start; until it is ready the picture is held
+  (paused by us, `held`; `start` begins a film only once its sound is here)
+  and "Getting the sound ready…" shows. A decoder falling behind mid-film
+  holds it the same way. A Dolby film is recognised before it is started
+  (`dolbyLike`), so its first scene is never silent. The player test
+  (`window.__pl.stats()`: `held`, `holds`, `headMs`) checks the picture
+  hasn't moved when the sound begins, and after a jump.
 - **One account, two devices** — a call is on one device: the others hear
   `call:mine`, show "In a call on your other device", can't start a second
   call, and can take it over (`call:move`). A match is played on one device:

@@ -2193,3 +2193,24 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .sn-chip.bell{background:var(--sun);top:44px}
 .sn-wait{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);width:max-content;max-width:calc(100% - 32px);padding:10px 16px;border-radius:16px;border:3px solid var(--ink);
   background:rgba(255,255,255,.95);color:var(--ink);font-weight:800;text-align:center;box-shadow:0 4px 0 var(--ink);pointer-events:none}
+/* ── Rooms: the movie room card and the movie rooms list (.rm-movie) ── */
+.rm-movie{padding:18px;display:grid;grid-template-columns:auto 1fr;gap:12px 14px;align-items:center;background:var(--coral);color:#fff}
+.rm-movie-icon{font-size:46px;line-height:1}
+.rm-movie-txt h2{margin:0 0 4px;color:#fff}
+.rm-movie-txt p{margin:0 0 8px;font-weight:700;font-size:.9rem}
+.rm-movie-opt{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.82rem}
+.rm-movie > .press{grid-column:1 / -1}
+.rm-movies{display:flex;flex-direction:column;gap:10px}
+.rm-movie-row{display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;width:100%;cursor:pointer}
+.rm-movie-row:disabled{opacity:.6;cursor:default}
+.rm-movie-row-icon{font-size:30px;line-height:1}
+.rm-movie-row-txt{flex:1;min-width:0;display:flex;flex-direction:column}
+.rm-movie-row-txt b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rm-movie-row-txt small{font-weight:700;opacity:.7}
+/* a film with nobody to show it to (a movie room of one): a movie screen, not a call */
+.call-screen.solo .call-share{bottom:0}
+.call-screen.solo::after{display:none}
+.call-screen.solo .call-share-tag{display:none}
+.call-solo-bar{position:absolute;left:10px;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:6;display:flex;gap:8px;flex-wrap:wrap;max-width:calc(100% - 20px)}
+.call-solo-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;border:2px solid rgba(255,255,255,.85);background:rgba(20,16,30,.62);color:#fff;font:800 12px var(--font-body,system-ui);cursor:pointer}
+.call-screen.solo .cw-tracks-btn{top:calc(env(safe-area-inset-top,0px) + 50px)}

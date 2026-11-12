@@ -277,7 +277,7 @@ function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks
       <div className="cw-film-box" ref={box} style={lv.filter ? { filter: lv.filter } : undefined} />
       {lv.level}
       <SubLine v={film.v} cues={film.cues} />
-      {waiting && <div className="cw-film-wait">🔊 Sound catching up…</div>}
+      {waiting && <div className="cw-film-wait">🔊 Getting the sound ready…</div>}
       <button type="button" className="cw-tracks-btn" onPointerDown={(e) => e.stopPropagation()} onClick={() => setMenu(true)} aria-label="Audio and subtitles">
         <Icon name="film" size={14} /> Audio &amp; subtitles
       </button>
@@ -527,6 +527,10 @@ export default function CallLayer() {
   };
 
   const others = call ? call.members.filter((m) => m.id !== C.myId) : [];
+  // A film of mine with nobody to show it to (a movie room with only me in
+  // it — no call at all, or the room's call once the others have left): a
+  // movie screen, not a call screen. Someone walks in, and it's the call again.
+  const solo = !!C.film && (!call || (!!call.room && others.length === 0));
   const shownOthers = others.filter((m) => seen(m.id));
   const showMe = seen("me");
   const hiddenN = others.filter((m) => !seen(m.id)).length + (showMe ? 0 : 1);   // on the 👥 button
@@ -843,7 +847,22 @@ export default function CallLayer() {
         </div>
       )}
 
-      {call && expanded && (
+      {solo && expanded && (
+        <div className="call-screen n1 sharing solo" role="dialog" aria-label="Movie">
+          <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={null} volume={C.filmVolume} waiting={C.filmWait} tracks={C.filmTracks} onAudio={C.filmAudio} onSubs={C.filmSubs} diag={C.filmDiag} />
+          <div className="call-solo-bar">
+            <button type="button" className="call-solo-btn" onClick={() => C.setExpanded(false)}>← Room</button>
+            <label className="call-solo-btn">
+              🎬 Another movie
+              <input type="file" accept="video/*,.mkv,.avi,.mov,.webm,.ts,.m4v" hidden
+                onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) C.playFilm(f); }} />
+            </label>
+            <button type="button" className="call-solo-btn" onClick={() => C.share()}>✕ Stop</button>
+          </div>
+        </div>
+      )}
+
+      {call && expanded && !solo && (
         <div className={`call-screen n${Math.max(1, seats)}${shown || watch || C.film ? " sharing" : ""}${chatOpen ? " chatting" : ""}`} role="dialog" aria-label="Call">
           {call.phase === "outgoing" ? (
             <div className="call-stage">

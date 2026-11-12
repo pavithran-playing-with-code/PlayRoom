@@ -26,6 +26,7 @@ const SEG = 10;                  // seconds of sound per piece (short: the first
 const AHEAD = 6;                 // pieces decoded ahead of the film (60 s)
 const RATE = 48000;
 const LEAD = 0.06;               // seconds: a piece starts this far ahead, so it's never late
+const HEAD = 4;                  // seconds: the quick first piece, from exactly where the film is (a start, a jump)
 
 // ffmpeg's ~30 MB, fetched once as blobs (a worker may only load code from its own site)
 let coreURLs = null;
@@ -214,7 +215,13 @@ export async function filmSound(file, v, opts) {
 //     forward or back drops the work queued for where it was;
 //   • two ffmpegs decode at once (the second starts after the first sound),
 //     so the sound stays well ahead of the picture on a phone.
-async function playSound(ff, path, n, v, { onWait, file } = {}) {
+// The picture never plays without its sound. Where the film is (its start,
+// or after a jump) a quick HEAD-second piece is decoded first, from that very
+// moment — ready several times sooner than a whole SEG piece — and until
+// it is, the picture is held (paused by us, `held`), then let go with its
+// sound. If the decoders ever fall behind mid-film, the same: it waits.
+// `start`: the film hasn't begun — begin it when its sound is ready.
+async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC({ sampleRate: RATE });
   const master = ac.createGain(), local = ac.createGain(), out = ac.createMediaStreamDestination(), here = ac.createMediaStreamDestination();
@@ -236,7 +243,9 @@ async function playSound(ff, path, n, v, { onWait, file } = {}) {
   const tries = new Map();          // piece -> times it came out bad
   const tag = `${++mountN}`;
   const st = { pieces: 0, failed: 0, ms: 0, peak: 0, restarts: 0, workers: 1 };
-  let alive = true, playing = null, cur = 0, silentSince = 0, waitShown = false;
+  let alive = true, playing = null, cur = 0, waitShown = false;
+  let held = !!start;               // the picture is paused by us, waiting for its sound
+  let head = null, headN = 0;       // { t0, buf, busy, tok }: the quick piece for where the film is
   const dur = () => (Number.isFinite(v.duration) ? v.duration : Infinity);
 
   // the decoders: this film's ffmpeg, and a second one of our own
@@ -255,17 +264,37 @@ async function playSound(ff, path, n, v, { onWait, file } = {}) {
     })().catch(() => {});
   };
 
-  // decode one piece on one decoder: from i*SEG, SEG seconds, stereo 48 kHz
-  const decode = async (w, i) => {
-    const o = `/s${tag}_${i}.raw`, t0 = performance.now();
+  // `secs` of sound from `from` on one decoder, stereo 48 kHz: the samples, or none
+  const raw = async (w, from, secs, name) => {
+    const o = `/s${tag}_${name}.raw`;
     await w.ff.exec(["-hide_banner", "-loglevel", "error", "-probesize", "2000000", "-analyzeduration", "1000000",
-      "-ss", String(i * SEG), "-i", w.path, "-t", String(SEG),
+      "-ss", String(from), "-i", w.path, "-t", String(secs),
       "-map", `0:a:${n}`, "-vn", "-sn", "-dn", "-ac", "2", "-ar", String(RATE), "-f", "s16le", o]).catch(() => {});
     let data;
     try { data = await w.ff.readFile(o); await w.ff.deleteFile(o); } catch { data = null; }
+    return data ? new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2)) : new Int16Array(0);
+  };
+  const toBuffer = (f, len) => {
+    const buf = ac.createBuffer(2, Math.max(1, len), RATE), L = buf.getChannelData(0), R = buf.getChannelData(1);
+    let pk = 0;
+    for (let k = 0; k < len; k++) { L[k] = f[2 * k] / 32768; R[k] = f[2 * k + 1] / 32768; const a = Math.abs(L[k]); if (a > pk) pk = a; }
+    st.peak = Math.max(st.peak, pk);
+    return buf;
+  };
+  // the quick piece: HEAD seconds from where the film is
+  const decodeHead = async (w, h) => {
+    const t0 = performance.now();
+    const f = await raw(w, h.t0, HEAD, `h${h.tok}`);
+    st.headMs = Math.round(performance.now() - t0);
+    const len = Math.floor(f.length / 2);
+    return alive && len > RATE / 2 ? toBuffer(f, len) : null;
+  };
+  // decode one piece on one decoder: from i*SEG, SEG seconds
+  const decode = async (w, i) => {
+    const t0 = performance.now();
+    const f = await raw(w, i * SEG, SEG, String(i));
     st.ms = Math.round(performance.now() - t0);
     if (!alive) return null;
-    const f = data ? new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2)) : new Int16Array(0);
     const len = Math.floor(f.length / 2);
     // came out short (a read that failed part way): again — twice, then let it be
     const full = Math.min(SEG, dur() - i * SEG) - 0.3;
@@ -275,11 +304,8 @@ async function playSound(ff, path, n, v, { onWait, file } = {}) {
       if (k < 3) return null;
       if (!len) return ac.createBuffer(2, Math.max(1, Math.round(Math.max(0.5, full) * RATE)), RATE);
     }
-    const buf = ac.createBuffer(2, Math.max(1, len), RATE), L = buf.getChannelData(0), R = buf.getChannelData(1);
-    let pk = 0;
-    for (let k = 0; k < len; k++) { L[k] = f[2 * k] / 32768; R[k] = f[2 * k + 1] / 32768; const a = Math.abs(L[k]); if (a > pk) pk = a; }
-    st.pieces++; st.peak = Math.max(st.peak, pk);
-    return buf;
+    st.pieces++;
+    return toBuffer(f, len);
   };
   // give every free decoder the most urgent piece: the one the film is in,
   // then the next ones in order; pieces it has left behind are dropped
@@ -287,6 +313,20 @@ async function playSound(ff, path, n, v, { onWait, file } = {}) {
   const pump = () => {
     if (!alive) return;
     for (const k of [...jobs.keys()]) if (!wanted(k)) jobs.delete(k);
+    // first of all, the quick piece for where the film is
+    if (head && !head.buf && !head.busy) {
+      const w = workers.find((x) => !x.busy);
+      if (w) {
+        const h = head;
+        h.busy = true; w.busy = true;
+        decodeHead(w, h).then((b) => {
+          w.busy = false; h.busy = false;
+          if (!alive) return;
+          if (head === h) { if (b) h.buf = b; else head = null; }
+          tick(); pump();
+        });
+      }
+    }
     for (const w of workers) {
       if (w.busy || !jobs.size) continue;
       let best = null, bs = Infinity;
@@ -299,7 +339,6 @@ async function playSound(ff, path, n, v, { onWait, file } = {}) {
     w.busy = false; busy.delete(i);
     if (!alive) return;
     if (b) { cache.set(i, b); if (i === cur && !playing) tick(); }
-    if (cache.size && workers.length < 2) addSecond();
     pump();
   };
   const want = (i) => { if (wanted(i) && !cache.has(i) && !busy.has(i)) jobs.set(i, true); };
@@ -309,27 +348,35 @@ async function playSound(ff, path, n, v, { onWait, file } = {}) {
     for (const s of playing.srcs) { try { s.stop(); } catch { /* done */ } }
     playing = null;
   };
-  // piece i from `from` seconds into it, at the context's time `at`
-  const schedule = (i, at, from) => {
-    const b = cache.get(i);
-    if (!b) return false;
-    const s = ac.createBufferSource();
-    s.buffer = b; s.playbackRate.value = v.playbackRate || 1;
-    s.connect(master);
-    s.start(at, Math.max(0, from));
-    playing.srcs.push(s);
-    playing.last = i;
+  // a buffer that starts at film time `base`, from `from` seconds into it, at the context's time `at`
+  const put = (b, at, from, base) => {
+    const src = ac.createBufferSource();
+    src.buffer = b; src.playbackRate.value = v.playbackRate || 1;
+    src.connect(master);
+    src.start(at, Math.max(0, from));
+    playing.srcs.push(src);
+    playing.endT = base + b.duration;                                   // the film time this sound runs to
     playing.endAt = at + (b.duration - Math.max(0, from)) / (v.playbackRate || 1);
-    return true;
+  };
+  // the quick piece, if it has the sound for film time t
+  const headFor = (t) => (head && head.buf && t >= head.t0 - 0.05 && t < head.t0 + head.buf.duration - 0.6 ? head : null);
+  const ready = (t) => cache.has(Math.floor(t / SEG)) || !!headFor(t);
+  // ask for the quick piece for film time t (unless its sound is here, or coming)
+  const wantHead = (t) => {
+    if (cache.has(Math.floor(t / SEG)) || t >= dur() - 0.3) return;
+    if (head && t >= head.t0 - 0.05 && t < head.t0 + HEAD - 0.6) return;
+    head = { t0: Math.max(0, t), buf: null, busy: false, tok: ++headN };
+    pump();
   };
   const begin = () => {
     const t = v.currentTime, i = Math.floor(t / SEG), rate = v.playbackRate || 1;
-    const b = cache.get(i), from = t + LEAD * rate - i * SEG;
+    let b = cache.get(i), base = i * SEG;
+    if (b && t + LEAD * rate - base >= b.duration - 0.05) { cache.delete(i); b = null; }   // too short: decode it again
+    if (!b) { const h = headFor(t); if (h) { b = h.buf; base = h.t0; } }
     if (!b) return false;
-    if (from >= b.duration - 0.05) { cache.delete(i); return false; }   // too short: decode it again
     const at = ac.currentTime + LEAD;
     playing = { srcs: [], t0: t + LEAD * rate, c0: at, rate };
-    schedule(i, at, from);
+    put(b, at, t + LEAD * rate - base, base);
     st.restarts++;
     return true;
   };
@@ -337,6 +384,10 @@ async function playSound(ff, path, n, v, { onWait, file } = {}) {
     if (on === waitShown) return;
     waitShown = on;
     if (onWait) onWait(on);
+  };
+  const hold = () => {
+    if (!held) { held = true; st.holds = (st.holds || 0) + 1; try { v.pause(); } catch { /* gone */ } }
+    waitFlag(true);
   };
 
   function tick() {
@@ -347,22 +398,37 @@ async function playSound(ff, path, n, v, { onWait, file } = {}) {
     for (const k of cache.keys()) if (k < cur - 2 || k > cur + AHEAD + 1) cache.delete(k);
     pump();
     kick();
-    if (v.seeking || v.ended || v.paused) { stopAll(); silentSince = 0; waitFlag(false); return; }
+    if (v.ended || t >= dur() - 0.3) { stopAll(); held = false; waitFlag(false); return; }
+    if (v.seeking) { stopAll(); return; }
     if (ac.state === "suspended") ac.resume().catch(() => {});
+    // held by us for its sound: let it go the moment the sound is here
+    if (held) {
+      stopAll();
+      wantHead(t);
+      if (!ready(t)) { waitFlag(true); return; }
+      held = false; waitFlag(false);
+      const p = v.play();
+      if (p && p.catch) p.catch(() => {});
+      return;                                       // "playing" brings us back to begin
+    }
+    if (v.paused) { stopAll(); waitFlag(false); return; }
     if (!playing) {
-      if (begin()) { silentSince = 0; waitFlag(false); return; }
-      // not decoded yet: the film plays on, the sound joins as soon as it's here
-      if (!silentSince) silentSince = performance.now();
-      waitFlag(performance.now() - silentSince > 1500);
+      if (begin()) { waitFlag(false); return; }
+      // its sound isn't decoded yet: the picture waits for it
+      wantHead(t);
+      hold();
       return;
     }
     // drifted (a stall, a jump, a new speed): start again from where the film is
     const expect = playing.t0 + (ac.currentTime - playing.c0) * playing.rate;
     if (Math.abs(expect - t) > 0.3 || playing.rate !== (v.playbackRate || 1)) { stopAll(); tick(); return; }
-    // the next piece, right after this one
-    if (playing.endAt - ac.currentTime < 3) schedule(playing.last + 1, playing.endAt, 0);
-    // ran out (the next piece wasn't ready in time): start again when it is
-    if (playing.endAt - ac.currentTime < -0.05) stopAll();
+    // what comes next, right after this
+    if (playing.endAt - ac.currentTime < 3) {
+      const i = Math.floor((playing.endT + 0.001) / SEG), nb = cache.get(i), from = playing.endT - i * SEG;
+      if (nb && from < nb.duration - 0.02) put(nb, playing.endAt, from, i * SEG);
+    }
+    // ran out (the next piece wasn't ready in time): the picture waits
+    if (playing.endAt - ac.currentTime < -0.05) { stopAll(); if (playing === null && !ready(v.currentTime)) { wantHead(v.currentTime); hold(); } }
   }
   const evs = ["play", "pause", "seeking", "seeked", "ratechange", "ended", "playing"];
   const onEv = (e) => {
@@ -375,12 +441,14 @@ async function playSound(ff, path, n, v, { onWait, file } = {}) {
   document.addEventListener("pointerdown", wake, true);
   const every = setInterval(tick, 150);
   v.muted = true;                   // its own sound (silent, or wrong) is out of the way
+  addSecond();                      // two decoders from the start: one for where the film is, one for what follows
+  wantHead(v.currentTime);
   tick();
 
   return {
     track: out.stream.getAudioTracks()[0],
     // for the Sound check
-    stats: () => ({ ...st, ctx: ac.state, playing: !!playing, waiting: waitShown, muted: v.muted, vol: local.gain.value,
+    stats: () => ({ ...st, ctx: ac.state, playing: !!playing, waiting: waitShown, held, muted: v.muted, vol: local.gain.value,
       player: sink.paused ? "paused" : "playing", queued: jobs.size, ahead: [...cache.keys()].filter((k) => k >= cur).length, errs: ffErrs.slice() }),
     setVolume(x) { local.gain.value = Math.max(0, Math.min(1, x)); },
     volume() { return local.gain.value; },

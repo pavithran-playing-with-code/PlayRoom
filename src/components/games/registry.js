@@ -43,7 +43,7 @@ import ShadowSneak from "./ShadowSneak";
 //                    made for it); otherwise the lobby starts it unticked
 //   coopLabel        what playing as a team means in this game (a short line)
 //   coopNote         what the waiting room says to a team room
-export const GAMES = [
+const ALL = [
   {
     slug: "mahjong", name: "Mahjong Solitaire", icon: "🀄",
     blurb: "Match free tiles and clear the board before the clock stops.",
@@ -229,17 +229,21 @@ export const GAMES = [
     Component: ShadowSneak,
   },
   {
-    // Not a game: a room to watch a movie together (src/pages/MovieRoom.jsx).
+    // Not a game: a room to watch a movie in (src/pages/MovieRoom.jsx), made
+    // from the Rooms page. `room: true` keeps it off the Play and Home lists;
+    // it is here so a room of it has a name, an icon and a colour.
     // It is never started; the room's call plays the film (config/calls.js).
     slug: "movie", name: "Movie Night", icon: "🎬",
     blurb: "Watch a movie together: pick one from your phone and everyone in the room sees and hears it, Dolby sound and subtitles included. Talk over it like you're on the same sofa.",
     minPlayers: 2, maxPlayers: 4, tag: "Watch", col: "var(--coral)",
-    defaultDuration: 0, endless: true, watch: true,
+    defaultDuration: 0, endless: true, room: true,
     Component: () => null,
   },
 ];
 
-export const GAME_MAP = Object.fromEntries(GAMES.map((g) => [g.slug, g]));
+// the games you can pick to play (a movie room isn't one)
+export const GAMES = ALL.filter((g) => !g.room);
+export const GAME_MAP = Object.fromEntries(ALL.map((g) => [g.slug, g]));
 
 export function getGame(slug) {
   return GAME_MAP[slug] || null;

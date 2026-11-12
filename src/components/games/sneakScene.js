@@ -70,6 +70,23 @@ function lighthouse() {
   g.userData = { glass, halo };
   return g;
 }
+// A flag. Not yours: a grey pennant hanging low. Yours: bright green, flying
+// high, a star on the pole and a glow under it — nobody should have to wonder.
+function flag() {
+  const g = new THREE.Group();
+  g.add(at(can(0.04, 0.04, 1.25, 0xd8d2cc, { line: 0.25, shadow: false }), 0, 0.62, 0));
+  const cloth = new THREE.Mesh(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.3, 0), new THREE.Vector3(0.62, 0.08, 0), new THREE.Vector3(0, -0.14, 0)]), new THREE.MeshBasicMaterial({ color: 0x7d86ad, side: THREE.DoubleSide }));
+  cloth.position.set(0.03, 0.55, 0);
+  const star = new THREE.Mesh(new THREE.OctahedronGeometry(0.13), new THREE.MeshBasicMaterial({ color: 0xffe070 }));
+  star.position.y = 1.36;
+  const pad = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.46, 28), new THREE.MeshBasicMaterial({ color: 0x7d86ad, transparent: true, opacity: 0.35, depthWrite: false }));
+  pad.rotation.x = -Math.PI / 2; pad.position.y = 0.03;
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow(), color: 0x7cff6b, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  halo.position.y = 0.9; halo.scale.setScalar(2.2);
+  g.add(cloth, star, pad, halo);
+  g.userData = { cloth, star, pad, halo, up: 0 };
+  return g;
+}
 function bell() {
   const g = new THREE.Group();
   g.add(at(box(0.08, 1.0, 0.08, 0x8a6a48, { line: 0.2 }), -0.22, 0.5, 0));
@@ -117,7 +134,7 @@ export function createSneakScene(canvas) {
   const ftex = floorTex();
   const inkBack = new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide });
 
-  let level = null;                  // { W, group, tower, bells, wedges }
+  let level = null;                  // { W, group, tower, flags, bells, wedges }
   const sneakers = new Map();        // id -> { m, tag, tagText, x, z, face, fall, duck, down, in, ringM }
   let camD = 18, halfX = 8, halfZ = 4, shake = 0, dark = 0;
   const camAt = new THREE.Vector3(), look = new THREE.Vector3();
@@ -172,6 +189,7 @@ export function createSneakScene(canvas) {
     tower.position.set(W.c + 0.5, 0, W.c + 0.5);
     g.add(tower);
     // the bells (together)
+    const flags = W.checks.map((k) => { const f = flag(); f.position.set(k.x, 0, k.z); g.add(f); return f; });
     const bells = W.bells.map((b) => { const m = bell(); m.position.set(b.x, 0, b.z); m.rotation.y = -b.a + Math.PI / 2; g.add(m); return m; });
     // the beams: the brightly lit ground, a fan cut off by the walls
     const wedges = [];
@@ -190,7 +208,7 @@ export function createSneakScene(canvas) {
     lampGlow.position.set(W.c + 0.5, LAMP_Y, W.c + 0.5);
     lamp.position.set(W.c + 0.5, LIGHT_Y, W.c + 0.5);
     renderer.shadowMap.needsUpdate = true;
-    level = { W, group: g, tower, bells, wedges, trash, max: n * 0.75 };
+    level = { W, group: g, tower, flags, bells, wedges, trash, max: n * 0.75 };
     camSet = false; dark = 0;
     for (const o of sneakers.values()) { scene.remove(o.m); if (o.tag) scene.remove(o.tag); scene.remove(o.ringM); }
     sneakers.clear();
@@ -208,7 +226,7 @@ export function createSneakScene(canvas) {
     halfX = camD * Math.tan(hh); halfZ = (camD * Math.tan(v)) / Math.sin(TILT);      // how much ground the screen shows, each way from its middle
   }
 
-  // st: { me, others: [...], beams: [angles], heat, off (the lamp going out), rung: [bell indexes] }
+  // st: { me, others: [...], beams: [angles], heat, off (the lamp going out), cp (my flag), warn (0..1: about to turn back), rung: [bell indexes] }
   // a sneaker: { id, slot, name, x, z, face, duck, moving, seen, down, grace, in }
   function draw(st, dt0, now) {
     if (!level) return;
@@ -226,15 +244,30 @@ export function createSneakScene(canvas) {
       }
       m.geometry.attributes.position.needsUpdate = true;
       m.material.color.setHex(col);
-      m.material.opacity = 0.8 * (1 - dark) * (0.96 + Math.sin(now * 9 + k) * 0.03);
+      // about to turn the other way: it flickers
+      const blink = st.warn > 0 && Math.sin(now * 46) > 0 ? 0.35 : 1;
+      m.material.opacity = 0.8 * (1 - dark) * (0.96 + Math.sin(now * 9 + k) * 0.03) * blink;
     });
     const tu = level.tower.userData;
-    tu.glass.material.color.setHex(dark > 0.5 ? 0x4a5594 : col);
+    tu.glass.material.color.setHex(dark > 0.5 ? 0x4a5594 : st.warn > 0 && Math.sin(now * 46) > 0 ? 0xff5a4a : col);
     tu.halo.material.opacity = 0.9 * (1 - dark);
     tu.halo.scale.setScalar(2.6 + Math.sin(now * 5) * 0.15);
     lampGlow.intensity = 0.7 * (1 - dark);
     lamp.intensity = 2.3 * (1 - dark * 0.85) * (hot ? 1.15 : 1);
     lamp.color.setHex(hot ? 0xffc79a : 0xffe6ae);
+    // flags: the one that's yours flies high and green
+    level.flags.forEach((f, i) => {
+      const u = f.userData, mine = st.cp === i;
+      u.up += ((mine ? 1 : 0) - u.up) * Math.min(1, dt * 7);
+      u.cloth.position.y = 0.55 + u.up * 0.5;
+      u.cloth.scale.set(1 + u.up * 0.35 + Math.sin(now * 6 + i) * 0.06 * (0.4 + u.up), 1 + u.up * 0.35, 1);
+      u.cloth.material.color.setHex(mine ? 0x7cff6b : 0x7d86ad);
+      u.star.visible = u.up > 0.5; u.star.rotation.y = now * 3;
+      u.pad.material.color.setHex(mine ? 0x7cff6b : 0x7d86ad);
+      u.pad.material.opacity = mine ? 0.75 + Math.sin(now * 4) * 0.2 : 0.35;
+      u.pad.scale.setScalar(1 + u.up * 0.25);
+      u.halo.material.opacity = u.up * (0.5 + Math.sin(now * 4) * 0.12);
+    });
     level.bells.forEach((b, i) => {
       const on = (st.rung || []).includes(i);
       b.userData.swing.rotation.z = on ? Math.sin(now * 16) * 0.5 : Math.sin(now * 1.5 + i) * 0.04;
@@ -328,6 +361,9 @@ export function createSneakScene(canvas) {
       const W = level.W;
       fx.burst(W.c + 0.5, LAMP_Y, W.c + 0.5, { colors: [0xfff2a8, 0xffc53d, 0xffffff, 0x8fdb5c], n: 40, speed: 5 });
       fx.word("LIGHTS OUT!", W.c + 0.5, LAMP_Y + 0.9, W.c + 0.5, { color: "#ffc53d", height: 1.1, life: 1.6 });
+    } else if (kind === "flag") {
+      fx.burst(x, 1.1, z, { colors: [0x7cff6b, 0xffffff, 0xffe070], n: 22, speed: 3 });
+      fx.word("SAVED!", x, 1.9, z, { color: "#7cff6b", height: 0.7, life: 1.2 });
     } else if (kind === "bell") {
       fx.word("ding!", x, 1.7, z, { color: "#ffc53d", height: 0.55, life: 0.9 });
     }

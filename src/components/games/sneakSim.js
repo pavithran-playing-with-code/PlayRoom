@@ -20,14 +20,16 @@ export const R = 0.3;              // the sneaker, a circle this wide
 export const RUN = 3.0;            // m/s
 export const CROUCH = 1.7;         // m/s, ducked (a low wall hides you only then)
 export const HALF = 0.25;          // half the beam's width, radians
-export const SPOT_S = 0.3;         // in the light this long: spotted
+export const SPOT_S = 0.24;        // in the light this long: spotted
 export const COOL_S = 0.5;         // out of it this long: forgotten
-export const DOWN_S = 0.9;         // spotted: frozen this long, then back in your corner
+export const DOWN_S = 0.9;         // spotted: frozen this long, then back at your flag (your corner, until you've taken one)
 export const GRACE_S = 1.8;        // just back (or just started): can't be spotted
 export const TOUCH = 1.2;          // this near the lamp's middle: you're at its door
-export const HEAT_S = 6;           // together: someone spotted, the lamp turns faster this long…
-export const HEAT_X = 0.5;         // …by this much
+export const HEAT_S = 8;           // together: someone spotted, the lamp turns faster this long…
+export const HEAT_X = 0.6;         // …by this much
 export const TURN = 2.4;           // rad/s the lamp swings to a bell, and back to its round
+export const WARN_S = 0.8;         // the lamp flickers this long before it turns the other way
+export const CROWD = 0.05;         // every player past the first: the lamp this much faster
 export const PTS = { step: 12, off: 400, quick: 300, quickLose: 4, spotted: 20 };
 
 export const sizeFor = (level) => (level < 1 ? 17 : level < 3 ? 21 : 25);
@@ -82,16 +84,19 @@ const DENS = 0.19, LEN0 = 3, LEN1 = 5;
 
 // ── a level ─────────────────────────────────────────────────────────────────
 // coop: the bells are put out (a friend ringing one makes the lamp look at it).
-export function buildLevel(seed, level, { coop = false } = {}) {
+// players: how many are in the room — more of you, a faster lamp.
+export function buildLevel(seed, level, { coop = false, players = 1 } = {}) {
   const n = sizeFor(level), c = (n - 1) / 2;
   const rand = seededRand(levelCode(seed, level));
   const at = (x, z) => z * n + x;
-  // The lamp. One beam on the first ground (about 6 s of dark, and the walk in
-  // is 6 s: you can nearly run it); two from the second (5 s of dark, falling
-  // to under 4 as it turns faster, on grounds that take 7 to 10 s to cross);
-  // three from the seventh (3.5 s of dark, falling to under 3).
-  const beams = level >= 6 ? 3 : level >= 1 ? 2 : 1;
-  const omega = beams === 1 ? 0.95 : beams === 2 ? 0.6 + (level - 1) * 0.05 : Math.min(0.75, 0.6 + (level - 6) * 0.03);
+  // The lamp. Two beams from the first maze (4.5 s of dark between them, and
+  // the walk in is 6 s: you have to stop on the way), turning faster each
+  // maze; three from the fourth (2.9 s of dark, falling to 2). From the third
+  // maze it also turns the other way now and then (`turns`). And with more of
+  // you in the room, faster.
+  const beams = level >= 3 ? 3 : 2;
+  const crowd = 1 + CROWD * (Math.max(1, Math.min(6, players)) - 1);
+  const omega = (beams === 2 ? 0.62 + level * 0.06 : Math.min(0.85, 0.62 + (level - 3) * 0.03)) * crowd;
   // the longest stretch of lit ground you can cross between two beams, in squares
   const reach = Math.max(3, Math.floor(((Math.PI * 2) / (omega * beams) - (2 * HALF) / omega) * RUN * 0.42));
   const lowP = level >= 2 ? Math.min(0.4, 0.2 + (level - 2) * 0.05) : 0;     // low walls from the third maze on: they hide you only if you duck
@@ -170,18 +175,41 @@ export function buildLevel(seed, level, { coop = false } = {}) {
     }
     return got;
   };
-  W.bells = coop ? spread(dark, n === 17 ? 2 : 3, W.starts).map((p, i) => ({ ...p, i, a: Math.atan2(p.z - (c + 0.5), p.x - (c + 0.5)) })) : [];
+  // flags: walk over one and it's yours — spotted, you're back at it, not in your corner
+  W.checks = spread(dark, n === 17 ? 3 : n === 21 ? 4 : 5, W.starts).map((p, i) => ({ ...p, i }));
+  const rest = dark.filter((p) => !W.checks.some((k) => k.x === p.x && k.z === p.z));
+  W.bells = coop ? spread(rest, n === 17 ? 2 : 3, W.starts).map((p, i) => ({ ...p, i, a: Math.atan2(p.z - (c + 0.5), p.x - (c + 0.5)) })) : [];
   W.phase = rand() * Math.PI * 2;
+  // when the lamp turns the other way: every 6 to 11 s from the third maze on, for as long as a match can be
+  W.turns = [];
+  if (level >= 2) for (let t = 5 + rand() * 5; t < 1900; t += 6 + rand() * 5) W.turns.push(t);
   return W;
 }
 
 // ── the lamp ────────────────────────────────────────────────────────────────
 // Where beam 0 points on its round at match time T. heats: the times someone
 // was spotted (together) — the lamp turns faster for HEAT_S after each.
-export function roundAngle(W, T, heats = []) {
+// the lamp's own clock: the match clock, run fast for a while after each spotting
+export function lampClock(T, heats = []) {
   let extra = 0;
   for (const h of heats) extra += Math.max(0, Math.min(T, h + HEAT_S) - h) * HEAT_X;
-  return W.phase + W.omega * (T + extra);
+  return T + extra;
+}
+export const roundAngle = (W, T, heats = []) => W.phase + W.omega * swept(W, lampClock(T, heats));
+// how far round the lamp has gone by time x, counting the stretches it ran backwards
+function swept(W, x) {
+  const tu = W.turns;
+  if (!tu || !tu.length || x <= tu[0]) return x;
+  let at = tu[0], dir = -1, prev = tu[0];
+  for (let k = 1; k < tu.length && tu[k] < x; k++) { at += dir * (tu[k] - prev); prev = tu[k]; dir = -dir; }
+  return at + dir * (x - prev);
+}
+// which way the lamp is turning at its clock's time T (lampClock; 1 or -1), and how soon it will turn the other way (0..1 inside the warning)
+export function lampTurn(W, T) {
+  const tu = W.turns || [];
+  let dir = 1, next = Infinity;
+  for (let k = 0; k < tu.length; k++) { if (tu[k] <= T) dir = -dir; else { next = tu[k]; break; } }
+  return { dir, warn: next - T < WARN_S ? 1 - (next - T) / WARN_S : 0 };
 }
 // every beam's angle now (beam 0 is S.b0: it may be off its round, held by a bell)
 export const beamAngles = (W, S) => Array.from({ length: W.beams }, (_, k) => S.b0 + (k * Math.PI * 2) / W.beams);
@@ -198,7 +226,7 @@ export function newRun(W, seat = 0, T = 0) {
   const st = W.starts[((seat % 4) + 4) % 4];
   return {
     x: st.x, z: st.z, face: 0, duck: false, moving: 0,
-    homeX: st.x, homeZ: st.z, startD: st.d, best: st.d,
+    homeX: st.x, homeZ: st.z, cp: -1, startD: st.d, best: st.d,
     seen: 0, down: 0, grace: GRACE_S, spots: 0, in: false, bell: -1,
     t: 0, b0: roundAngle(W, T), heats: [], lit: false,
   };
@@ -216,7 +244,7 @@ const hits = (W, x, z) => {
 
 // One step. inp: { mx, mz (a push, length ≤ 1), duck }. T: the match clock.
 // rung: a bell someone else is standing on (its index), or -1.
-// Returns what happened: [{ k: "spotted" | "back" | "in" | "bell" }].
+// Returns what happened: [{ k: "flag" | "spotted" | "back" | "in" | "bell" }].
 export function step(S, W, inp, dt, T, rung = -1) {
   const ev = [];
   S.t += dt;
@@ -248,7 +276,8 @@ export function step(S, W, inp, dt, T, rung = -1) {
   if (dz && !hits(W, S.x, S.z + dz)) S.z += dz;
   S.moving = Math.min(1, m);
   if (m > 0.05) S.face = Math.atan2(mx, mz);
-  // bells, how near you've got
+  // flags, bells, how near you've got
+  for (const k of W.checks) if (S.cp !== k.i && Math.hypot(S.x - k.x, S.z - k.z) < 0.6) { S.cp = k.i; S.homeX = k.x; S.homeZ = k.z; ev.push({ k: "flag", i: k.i }); }
   let bell = -1;
   for (const b of W.bells) if (Math.hypot(S.x - b.x, S.z - b.z) < 0.55) bell = b.i;
   if (bell !== S.bell) { S.bell = bell; if (bell >= 0) ev.push({ k: "bell", i: bell }); }

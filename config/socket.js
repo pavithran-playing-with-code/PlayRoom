@@ -232,8 +232,9 @@ function initSocket(httpServer) {
     });
 
     // Shadow Sneak: where my sneaker is on the ground (everyone sees everyone
-    // creeping; together, who is at the door and who is on a bell), and the
-    // moment I was spotted (together: the lamp turns faster for all of us).
+    // creeping; together, who is at the door and who is on a bell), the moment
+    // I was spotted (together: the lamp turns faster for all of us) and the
+    // moment I put the lamp out (against each other: it's out for everyone).
     socket.on("sn:pos", (msg) => {
       const code = msg && msg.code;
       if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code)) return;
@@ -246,10 +247,10 @@ function initSocket(httpServer) {
     });
     socket.on("sn:ev", (msg) => {
       const code = msg && msg.code;
-      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code) || msg.k !== "spot") return;
-      const lv = Number(msg.lv), t = Number(msg.t);
+      if (typeof code !== "string" || !/^[A-Za-z0-9]{4,8}$/.test(code) || (msg.k !== "spot" && msg.k !== "off")) return;
+      const lv = Number(msg.lv), t = Number(msg.t) || 0;
       if (!Number.isInteger(lv) || lv < 0 || lv > 999 || !Number.isFinite(t) || t < 0 || t > 1e6) return;
-      socket.to(roomChannel(code)).emit("sn:ev", { user_id: uid, k: "spot", lv, t });
+      socket.to(roomChannel(code)).emit("sn:ev", { user_id: uid, k: msg.k, lv, t });
     });
 
     // Dino Dash: my dino on the course (everyone runs the same one), carried

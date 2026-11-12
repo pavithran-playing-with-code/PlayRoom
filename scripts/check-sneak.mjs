@@ -10,7 +10,7 @@
 // Also: the same seed gives the same maze; corners and bells are in
 // shadow; a bell holds the lamp and it goes back to its round; being spotted
 // sends you back to your corner.
-import { buildLevel, newRun, step, sees, roundAngle, sizeFor, OPEN, HALF, RUN, TOUCH, GRACE_S, DOWN_S, HEAT_S } from "../src/components/games/sneakSim.js";
+import { buildLevel, newRun, step, sees, roundAngle, lampTurn, sizeFor, OPEN, HALF, RUN, TOUCH, GRACE_S, DOWN_S, HEAT_S, HEAT_X } from "../src/components/games/sneakSim.js";
 
 const NS = Number(process.env.NS || 12);
 let fails = 0;
@@ -105,7 +105,7 @@ let planned = 0, unplanned = [], arrived = 0, spotted = 0, walked = 0; const bad
 for (let s = 0; s < NS; s++) {
   const seed = 1000 + s * 7717;
   for (const level of [0, 1, 2, 3, 4, 6, 8]) {
-    const W = buildLevel(seed, level);
+    const W = buildLevel(seed, level, { players: (s % 3) * 2 + 1 });      // alone, three and five in the room
     for (let seat = 0; seat < 4; seat++) {
       const found = plan(W, seat);
       if (!found) { unplanned.push(`${seed}/L${level}/c${seat}`); continue; }
@@ -129,17 +129,18 @@ for (const l of Object.keys(times)) { const a = times[l].sort((x, y) => x - y); 
   const A = buildLevel(4242, 3), B = buildLevel(4242, 3), C = buildLevel(4243, 3);
   check("the same seed builds the same maze", A.cells.join() === B.cells.join() && A.phase === B.phase && JSON.stringify(A.starts) === JSON.stringify(B.starts));
   check("another seed builds another", A.cells.join() !== C.cells.join());
-  let ok = true, bells = 0, lows = 0;
+  let ok = true, flags = 0, bells = 0, lows = 0;
   for (let s = 0; s < NS; s++) for (const level of [0, 2, 4, 7]) {
     const W = buildLevel(77 + s * 131, level, { coop: true });
     for (const p of W.starts) if (sees(W, p.x, p.z, false) || p.d < 4) ok = false;
-    for (const p of W.bells) if (sees(W, p.x, p.z, false)) ok = false;
-    bells += W.bells.length;
+    for (const p of [...W.checks, ...W.bells]) if (sees(W, p.x, p.z, false)) ok = false;
+    for (const b of W.bells) if (W.checks.some((k) => k.x === b.x && k.z === b.z)) ok = false;
+    flags += W.checks.length; bells += W.bells.length;
     if (level >= 2) lows += W.cells.filter((c) => c === 1).length;
     if (W.dist.some((d, i) => W.cells[i] === OPEN && d < 0)) ok = false;       // every open square reaches the lamp
   }
-  check("corners and bells are all in shadow; every square reaches the lamp", ok);
-  check("together: every maze has bells", bells >= NS * 4 * 2, `${bells} bells`);
+  check("corners, flags and bells are all in shadow; every square reaches the lamp", ok);
+  check("every maze has flags, and (together) bells", flags >= NS * 4 * 3 && bells >= NS * 4 * 2, `${flags} flags, ${bells} bells`);
   check("low walls come in from the third maze", lows > 0 && buildLevel(5, 0).cells.every((c) => c !== 1));
   check("alone or against each other: no bells", buildLevel(5, 2).bells.length === 0);
 }
@@ -156,8 +157,28 @@ for (const l of Object.keys(times)) { const a = times[l].sort((x, y) => x - y); 
   for (let i = 0; i < 30 && !S.down; i++) ev = ev.concat(step(S, W, { mx: 0, mz: 0 }, 1 / 60, T));
   check("in the beam with nothing between: spotted in about a third of a second", S.down > 0 && S.spots === 1 && ev.some((e) => e.k === "spotted"));
   for (let i = 0; i < 80; i++) ev = ev.concat(step(S, W, { mx: 0, mz: 0 }, 1 / 60, T));
-  check("...then back in your corner, safe for a moment", S.x === W.starts[0].x && S.z === W.starts[0].z && S.grace > 0 && ev.some((e) => e.k === "back"));
+  check("...then back in your corner (no flag taken yet), safe for a moment", S.x === W.starts[0].x && S.z === W.starts[0].z && S.grace > 0 && ev.some((e) => e.k === "back"));
   check("the wait is short", DOWN_S <= 1 && GRACE_S >= 1.5);
+  // a flag: walk over it and it's yours; spotted, you're back at it
+  {
+    const F = buildLevel(99, 0), R2 = newRun(F, 0, 0), k = F.checks[0];
+    R2.x = k.x; R2.z = k.z;
+    const e1 = step(R2, F, { mx: 0, mz: 0 }, 1 / 60, 0);
+    R2.x = F.c + 0.5 - 1.5; R2.z = F.c + 0.5 - 1.5; R2.grace = 0;
+    const a2 = Math.atan2(R2.z - (F.c + 0.5), R2.x - (F.c + 0.5)), T2 = (a2 - F.phase) / F.omega;
+    R2.b0 = a2;
+    for (let i = 0; i < 120; i++) step(R2, F, { mx: 0, mz: 0 }, 1 / 60, T2);
+    check("a flag you walk over is yours, and spotted you're back at it", e1.some((e) => e.k === "flag" && e.i === k.i) && R2.cp === k.i && R2.spots === 1 && R2.x === k.x && R2.z === k.z);
+  }
+  // the lamp turning the other way, and a crowd
+  {
+    const A = buildLevel(1234, 3), B = buildLevel(1234, 3, { players: 4 }), E = buildLevel(1234, 0);
+    const t0 = A.turns[0];
+    const before = roundAngle(A, t0) - roundAngle(A, t0 - 1), after = roundAngle(A, t0 + 1) - roundAngle(A, t0);
+    check("from the third maze the lamp turns the other way now and then", A.turns.length > 50 && before > 0 && after < 0 && Math.abs(before + after) < 1e-9 && E.turns.length === 0);
+    check("...with a flicker of warning first", lampTurn(A, t0 - 0.4).warn > 0.3 && lampTurn(A, t0 - 2).warn === 0 && lampTurn(A, t0 - 0.1).dir === 1 && lampTurn(A, t0 + 0.1).dir === -1);
+    check("more players in the room: a faster lamp, the same maze", B.omega > A.omega * 1.1 && B.cells.join() === A.cells.join());
+  }
   // a low wall: build one between the lamp and a spot
   const L = buildLevel(99, 0);
   const x = L.c + 0.5 + 3, z = L.c + 0.5;
@@ -177,7 +198,7 @@ for (const l of Object.keys(times)) { const a = times[l].sort((x, y) => x - y); 
   for (let i = 0; i < 360; i++) { step(S, W, { mx: 0, mz: 0 }, 1 / 60, T, -1); T += 1 / 60; }
   check("...let go, it's back on its round within a few seconds", Math.abs(wrap(S.b0 - roundAngle(W, T - 1 / 60))) < 0.03 && !S.held);
   const cold = roundAngle(W, 20), hot = roundAngle(W, 20, [10]);
-  check("someone spotted: the lamp turns faster for a while, then as before", hot > cold && Math.abs((roundAngle(W, 30, [10]) - roundAngle(W, 20 + 0, [10])) - W.omega * 10) < 1e-9 && Math.abs(hot - cold - W.omega * 0.5 * HEAT_S) < 1e-9);
+  check("someone spotted: the lamp turns faster for a while, then as before", hot > cold && Math.abs((roundAngle(W, 30, [10]) - roundAngle(W, 20 + 0, [10])) - W.omega * 10) < 1e-9 && Math.abs(hot - cold - W.omega * HEAT_X * HEAT_S) < 1e-9);
   check("reaching the lamp: you're in", (() => { const s2 = newRun(W, 0, 0); s2.x = W.c + 0.5 - 1; s2.z = W.c + 0.5; const e = step(s2, W, { mx: 0, mz: 0 }, 1 / 60, 0); return s2.in && e.some((x) => x.k === "in") && TOUCH > 1; })());
 }
 

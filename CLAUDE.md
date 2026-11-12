@@ -244,34 +244,45 @@ There is no test runner. What works:
   few minutes; `NB=3` for a quick run); `check-sunshard.mjs` still tests
   the physics and the tether on the island levels.
 - **Shadow Sneak** (slug `sneak`, landscape) — a lighthouse in the middle
-  of a dark maze sweeps its beam round, walls throw shadows, and you creep
-  from your corner to the lamp to switch it off; then a bigger maze, two
-  beams, low walls you must duck behind, three beams. No save points:
-  spotted, you're back in your corner. Rules in
-  `sneakSim.js` (pure): `buildLevel(seed, level)` — rebuilt with more walls
-  until every corner has a way in whose lit stretches can be crossed
-  between beams (`wayIn`); you are seen only inside a beam with a clear line
-  to the lamp (`sees`), spotted after `SPOT_S` in it, and sent back to your
-  corner. The lamp's angle is a function of the match clock (`roundAngle`), so
-  every phone agrees. Drawn by `sneakScene.js` with the look kit: the lamp
-  is a real point light low in the tower (below the walls' tops, so their
-  shadows run to the edge: dark ground is ground the lamp can't see), its
-  shadow map drawn once a maze (`shadowMap.autoUpdate` off); the bright beam
-  is a fan of the same rays the rules use, cut off at the walls — if the two
-  ever disagree, fix the drawing. `ShadowSneakInner.jsx` (lazy) runs
-  it in fixed small steps of real time (at 4 fps headless it once fell
-  behind the clock and nobody was ever spotted). Friends over `sn:pos`;
-  together (one ground): the lamp goes out when everyone is at the door, a
-  🔔 bell holds the lamp on whoever stands on it, and anyone spotted makes
-  it turn faster for all (`sn:ev` → `heats`); the win is `lampGoal` lamps
-  (pairs_matched 1, `COOP_GOAL`). `scripts/check-sneak.mjs` plans an unseen
-  route through every kind of ground and walks it through the rules.
-  `window.__sn[<player id>]` reaches a run in tests. Its sound
+  of a dark maze sweeps its beams round, walls throw shadows, and you creep
+  from your corner to the lamp to switch it off; then a bigger maze, low
+  walls you must duck behind, a third beam. Two beams from the first maze,
+  three from the fourth; from the third maze the lamp turns the other way
+  now and then (`W.turns`, `lampTurn`: it flickers `WARN_S` first); more
+  players in the room, a faster lamp (`CROWD`). Flags (`W.checks`) are save
+  points: walk over one and it's yours — it must be unmistakable (it flies
+  up green with a glow and "SAVED!"; a flag whose colour barely changed was
+  the user's one complaint about them) — and spotted, you're back at it.
+  Rules in `sneakSim.js` (pure): `buildLevel(seed, level, { coop, players })`
+  — rebuilt with more walls until every corner has a way in whose lit
+  stretches can be crossed between beams (`wayIn`); you are seen only inside
+  a beam with a clear line to the lamp (`sees`), spotted after `SPOT_S` in
+  it. The lamp's angle is a function of the match clock (`roundAngle`, on
+  `lampClock`), so every phone agrees. Drawn by `sneakScene.js` with the
+  look kit: the lamp is a real point light low in the tower (below the
+  walls' tops, so their shadows run to the edge: dark ground is ground the
+  lamp can't see), its shadow map drawn once a maze (`shadowMap.autoUpdate`
+  off); the bright beam is a fan of the same rays the rules use, cut off at
+  the walls — if the two ever disagree, fix the drawing.
+  `ShadowSneakInner.jsx` (lazy) runs it in fixed small steps of real time
+  (at 4 fps headless it once fell behind the clock and nobody was ever
+  spotted). Friends over `sn:pos`. Against each other it is a race: one
+  lamp for everybody — the first there puts it out (`sn:ev` `off`) and
+  takes its points, the rest are moved on with what they'd earned getting
+  near. Together (one maze): the lamp goes out when everyone is at the
+  door, a 🔔 bell holds the lamp on whoever stands on it, and anyone
+  spotted makes it turn faster for all (`sn:ev` `spot` → `heats`); the win
+  is `lampGoal` lamps (pairs_matched 1, `COOP_GOAL`).
+  `scripts/check-sneak.mjs` plans an unseen route through every kind of
+  maze (alone, three and five in the room) and walks it through the rules.
+  `window.__sn[<player id>]` reaches a run in tests; two players are tested
+  in one page joined by a pretend socket (two 3D scenes crawl in headless
+  Chrome: wait for each step, don't sleep a fixed time). Its sound
   (`sneakAudio.js`, Web Audio, nothing recorded) is part of the play: the
   lamp's hum swells as a beam comes round to you (`beamNear`) and an alarm
-  climbs while you're in the light; footsteps, a sting when spotted, a tune
-  when the lamp goes out. Tests measure it muted (`__sn[id].audio.state()`
-  and `.level()`); a watcher hears nothing.
+  climbs while you're in the light; footsteps, a sting when spotted, three
+  pips before the lamp turns back, a tune when it goes out. Tests measure
+  it muted (`__sn[id].audio.state()` and `.level()`); a watcher hears nothing.
 - **Emberfall** (slug `emberfall`, solo only for now — the registry offers
   one seat until co-op is ported) is a finished single page,
   `public/emberfall/index.html` (the mobile rebuild, worked on outside this

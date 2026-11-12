@@ -6,12 +6,17 @@
 // turns it on a phone held upright): the stick under your left thumb, Duck
 // under your right.
 //
-// Caught in the light for a third of a second and you're spotted: back in
-// your corner. The room's clock ends the match, not a lamp going out: every
-// lamp is points, and the next maze is ready at once.
+// Caught in the light for a quarter of a second and you're spotted: back at
+// your flag (walk over a flag and it's yours: it flies up green), or your
+// corner if you have none. From the third maze the lamp sometimes turns the
+// other way — it flickers first. The room's clock ends the match, not a lamp
+// going out: every lamp is points, and the next maze is ready at once.
 //
-//   alone / against each other   everyone sneaks the same grounds from their
-//       own corner, on their own (you see each other creeping); most points wins
+//   alone                        how many lamps before the clock stops
+//   against each other           a race: one lamp for everybody. The first
+//       to reach it puts it out and takes its points; the rest are moved on
+//       to the next maze with only what they'd earned getting near. More of
+//       you in the room, a faster lamp. Most points wins
 //   together (mode "coop")       one ground for all of you. The lamp goes
 //       out only when EVERYONE is at its door. Stand on a bell and the lamp
 //       turns to stare at it for as long as you stay — your friends run
@@ -31,7 +36,7 @@ import useGameEngine from "./useGameEngine";
 import useSpecStream from "./useSpecStream";
 import { useSocket } from "../../utils/SocketContext";
 import FloatStick from "../together/FloatStick";
-import { buildLevel, newRun, step, beamAngles, heated, progressPoints, offPoints, PTS } from "./sneakSim";
+import { buildLevel, newRun, step, beamAngles, heated, lampTurn, lampClock, progressPoints, offPoints, PTS } from "./sneakSim";
 import { createSneakScene } from "./sneakScene";
 import { makeSneakAudio, beamNear } from "./sneakAudio";
 
@@ -42,7 +47,7 @@ const STICK_R = 44;
 const r2 = (v) => Math.round(v * 100) / 100;
 // together: lamps to put out for the win — more with a longer clock
 export const lampGoal = (secs) => (secs === 0 ? 3 : secs <= 150 ? 2 : 4);
-const TWIST = { 1: "Two beams now!", 2: "Low walls: hold Duck to hide behind them", 3: "The biggest maze", 6: "Three beams!" };
+const TWIST = { 1: "A bigger maze, a faster lamp", 2: "Low walls: hold Duck — and the lamp can turn back (it flickers first)", 3: "Three beams, the biggest maze" };
 
 export default function ShadowSneakInner(props) {
   const { roomCode, seed, players, currentUser, onGameEnd, durationSeconds = 120,
@@ -111,12 +116,12 @@ export default function ShadowSneakInner(props) {
   useEffect(() => () => clearTimeout(msgT.current), []);
 
   const startLevel = (level, T, bank) => {
-    const W = buildLevel(seed, level, { coop });
+    const W = buildLevel(seed, level, { coop, players: seatedRef.current.length });
     const S = newRun(W, slotOf(myId), T);
     live.current = { level, W, S, bank, nextAt: 0, spots: live.current ? live.current.spots : 0 };
     if (sceneRef.current) sceneRef.current.setLevel(W);
     if (level > 0) sayRef.current(`Lamp ${level + 1}${TWIST[level] ? ` — ${TWIST[level]}` : ""}`, "info", 3000);
-    else sayRef.current(coop ? "Reach the lighthouse together — stay out of its beam" : "Sneak to the lighthouse — stay out of its beam", "info", 4000);
+    else sayRef.current(coop ? "Reach the lighthouse together — stay out of its beam" : roomCode && seatedRef.current.length > 1 ? "Race to the lighthouse — the first one there puts it out" : "Sneak to the lighthouse — stay out of its beam", "info", 4000);
   };
 
   // the 3D view
@@ -141,7 +146,18 @@ export default function ShadowSneakInner(props) {
     };
     const onEv = (m) => {
       const L = live.current;
-      if (!coop || !L || Number(m.user_id) === myId || m.k !== "spot" || m.lv !== L.level) return;
+      if (!L || Number(m.user_id) === myId || m.lv !== L.level) return;
+      // against each other: someone put the lamp out — it's out for everyone, and on we all go
+      if (m.k === "off" && !coop) {
+        if (L.nextAt) return;                     // I got there too
+        L.bank += progressPoints(L.S);
+        L.nextAt = performance.now() + NEXT_MS;
+        if (sceneRef.current) sceneRef.current.cheer("off");
+        if (audio.current) audio.current.sfx.beaten();
+        sayRef.current(`💡 ${nameOf(m.user_id)} got there first!`, "error", 1800);
+        return;
+      }
+      if (!coop || m.k !== "spot") return;
       L.S.heats.push(Number(m.t) || 0);
       sayRef.current(`🔥 ${nameOf(m.user_id)} was spotted — the lamp speeds up!`, "error", 2600);
       if (audio.current) audio.current.sfx.heat();
@@ -157,7 +173,7 @@ export default function ShadowSneakInner(props) {
     if (!L) return null;
     const S = L.S;
     return { lv: L.level, x: r2(S.x), z: r2(S.z), f: r2(S.face), dk: S.duck ? 1 : 0, dn: S.down > 0 ? 1 : 0, in: S.in ? 1 : 0,
-      sn: r2(S.seen), gr: S.grace > 0 ? 1 : 0, mv: r2(S.moving), b0: r2(S.b0), ht: heated((performance.now() - anchor.current) / 1000, S.heats) ? 1 : 0,
+      sn: r2(S.seen), gr: S.grace > 0 ? 1 : 0, mv: r2(S.moving), b0: r2(S.b0), cp: S.cp, ht: heated((performance.now() - anchor.current) / 1000, S.heats) ? 1 : 0,
       of: L.nextAt ? 1 : 0, sc: eng.score, sp: L.spots, n: offs.current };
   };
   const [watched, setWatched] = useState(null);
@@ -192,7 +208,7 @@ export default function ShadowSneakInner(props) {
   useEffect(() => {
     if (isSpectator) return undefined;
     if (!live.current) startLevel(0, (performance.now() - anchor.current) / 1000, 0);
-    let raf, last = performance.now(), sent = 0, sentKey = "", pushed = -1, lastHud = 0;
+    let raf, last = performance.now(), sent = 0, sentKey = "", pushed = -1, lastHud = 0, warned = false;
     const tell = (k, extra) => { if (socket && roomCode) socket.emit("sn:ev", { code: roomCode, k, ...extra }); };
     const frame = (now) => {
       // real time, whatever the frame rate: a slow phone takes several small steps a frame
@@ -202,7 +218,9 @@ export default function ShadowSneakInner(props) {
       let L = live.current;
       const S = L.S, W = L.W, sc = sceneRef.current;
       const px0 = S.x, pz0 = S.z;                   // where I was: how far I walked this frame, for the footsteps
-      const mates = coop ? [...remotes.current.values()].filter((r) => now - r.at < FRESH_MS) : [];
+      // everyone else here: together we share the maze; against each other it's one lamp for all, so we stay on the same one
+      const mates = roomCode ? [...remotes.current.values()].filter((r) => now - r.at < FRESH_MS) : [];
+      const race = !coop && !!roomCode && seatedRef.current.length > 1;
       if (!overRef.current) {
         // together: a friend already on a later ground — on we go
         const ahead = mates.reduce((m, r) => Math.max(m, r.lv || 0), L.level);
@@ -232,7 +250,8 @@ export default function ShadowSneakInner(props) {
         }
         const A = audio.current;
         for (const e of evs) {
-          if (e.k === "bell") { sc?.cheer("bell", S.x, S.z); A?.sfx.bell(); sayRef.current("🔔 The lamp is staring at you — friends, run!", "info", 2600); }
+          if (e.k === "flag") { sc?.cheer("flag", S.x, S.z); A?.sfx.flag(); sayRef.current("🚩 Flag saved — if you're spotted, you come back here", "success", 2400); }
+          else if (e.k === "bell") { sc?.cheer("bell", S.x, S.z); A?.sfx.bell(); sayRef.current("🔔 The lamp is staring at you — friends, run!", "info", 2600); }
           else if (e.k === "spotted") {
             L.spots++; L.bank -= PTS.spotted;
             A?.sfx.spotted();
@@ -246,6 +265,7 @@ export default function ShadowSneakInner(props) {
           L.bank += progressPoints(S) + offPoints(S);
           L.nextAt = now + NEXT_MS;
           offs.current += 1;
+          if (race) tell("off", { lv: L.level });
           sc?.cheer("off");
           A?.sfx.off();
           sayRef.current(coop && offs.current === goal ? "💡 Lights out — that's the goal! Keep going" : `💡 Lights out! +${offPoints(S)}`, "success", 1800);
@@ -267,13 +287,15 @@ export default function ShadowSneakInner(props) {
       fit();
       const rungNow = [...new Set([P.bell, ...mates.filter((r) => r.lv === C.level).map((r) => r.bl)].filter((b) => b >= 0))];
       const hot = heated(T, P.heats);
+      const lt = lampTurn(C.W, lampClock(T, P.heats));
+      if (lt.warn > 0 && !warned && !C.nextAt) { warned = true; audio.current?.sfx.turn(); } else if (lt.warn === 0) warned = false;
       if (audio.current && !overRef.current) {
         const moved = Math.hypot(P.x - px0, P.z - pz0);
-        audio.current.frame({ near: P.in || P.down > 0 ? 0 : beamNear(C.W, beamAngles(C.W, P), P.x, P.z), seen: P.down > 0 ? 0 : P.seen, moved: moved < 1 ? moved : 0, duck: P.duck, hot, off: !!C.nextAt });
+        audio.current.frame({ near: P.in || P.down > 0 ? 0 : beamNear(C.W, beamAngles(C.W, P), P.x, P.z, P.held ? 1 : lt.dir), seen: P.down > 0 ? 0 : P.seen, moved: moved < 1 ? moved : 0, duck: P.duck, hot, off: !!C.nextAt });
       }
       sceneRef.current?.draw({
         me: { id: myId, slot: slotOf(myId), name: "", x: P.x, z: P.z, face: P.face, duck: P.duck, moving: P.moving, seen: P.seen, down: P.down, grace: P.grace, in: P.in },
-        others: others(C.level, now), beams: beamAngles(C.W, P), heat: hot, off: !!C.nextAt, rung: rungNow,
+        others: others(C.level, now), beams: beamAngles(C.W, P), heat: hot, off: !!C.nextAt, cp: P.cp, warn: C.nextAt || P.held ? 0 : lt.warn, rung: rungNow,
       }, dt, now / 1000);
       if (now - lastHud > 120) {
         lastHud = now;
@@ -300,7 +322,7 @@ export default function ShadowSneakInner(props) {
       last = now;
       const Lf = spec.current, f = Lf && Lf.f;
       if (f && sceneRef.current) {
-        if (f.lv !== lv) { lv = f.lv; W = buildLevel(seed, lv, { coop }); sceneRef.current.setLevel(W); shown.set = false; }
+        if (f.lv !== lv) { lv = f.lv; W = buildLevel(seed, lv, { coop, players: seatedRef.current.length }); sceneRef.current.setLevel(W); shown.set = false; }
         if (!shown.set) { shown.x = f.x; shown.z = f.z; shown.b0 = f.b0; shown.set = true; }
         shown.x += (f.x - shown.x) * Math.min(1, dt * 12); shown.z += (f.z - shown.z) * Math.min(1, dt * 12);
         let d = f.b0 - shown.b0; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
@@ -308,7 +330,7 @@ export default function ShadowSneakInner(props) {
         fit();
         sceneRef.current.draw({
           me: { id: Number(watchId), slot: slotOf(watchId), name: "", x: shown.x, z: shown.z, face: f.f, duck: !!f.dk, moving: f.mv, seen: f.sn, down: f.dn ? 1 : 0, grace: f.gr ? 1 : 0, in: !!f.in },
-          others: others(lv, now), beams: beamAngles(W, { b0: shown.b0 }), heat: !!f.ht, off: !!f.of, rung: [],
+          others: others(lv, now), beams: beamAngles(W, { b0: shown.b0 }), heat: !!f.ht, off: !!f.of, cp: f.cp, warn: 0, rung: [],
         }, dt, now / 1000);
       }
       raf = requestAnimationFrame(frame);

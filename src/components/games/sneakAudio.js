@@ -60,6 +60,9 @@ export function makeSneakAudio() {
   const sfx = {
     spotted: () => { tone(880, 0.12, "square", 0.16, 0, 0); tone(660, 0.14, "square", 0.16, 0, 0.11); tone(196, 0.55, "sawtooth", 0.2, 70, 0.22); },
     back: () => tone(300, 0.22, "sine", 0.1, 620),
+    flag: () => seq([659, 880, 1175], 0.09, 0.3, 0.13),
+    turn: () => { tone(980, 0.09, "square", 0.07); tone(980, 0.09, "square", 0.07, 0, 0.16); tone(980, 0.09, "square", 0.07, 0, 0.32); },
+    beaten: () => seq([440, 349, 262], 0.14, 0.4, 0.12),
     bell: () => { tone(1320, 0.9, "sine", 0.16); tone(1980, 0.7, "sine", 0.07); tone(2640, 0.4, "sine", 0.04); },
     door: () => seq([523, 659], 0.11, 0.22, 0.12),
     heat: () => { tone(220, 0.35, "sawtooth", 0.1, 440); tone(233, 0.35, "sawtooth", 0.08, 466, 0.02); },
@@ -106,16 +109,16 @@ export function makeSneakAudio() {
 }
 
 // How close a beam is to pointing at (x, z), 0..1 — 1 when it's on you. The
-// beams turn the same way, so the one about to arrive counts for more than
-// the one that has just passed.
-export function beamNear(W, angles, x, z) {
+// beams turn the same way (`dir`: which), so the one about to arrive counts
+// for more than the one that has just passed.
+export function beamNear(W, angles, x, z, dir = 1) {
   const a = Math.atan2(z - (W.c + 0.5), x - (W.c + 0.5));
   let best = 0;
   for (const b of angles) {
     let d = (a - b) % (Math.PI * 2);
     if (d > Math.PI) d -= Math.PI * 2;
     if (d < -Math.PI) d += Math.PI * 2;
-    // d > 0: the beam hasn't reached me yet (it turns toward bigger angles)
+    d *= dir;                         // d > 0: the beam hasn't reached me yet (the way it's turning now)
     const k = d >= 0 ? 1 - d / 1.1 : 1 + d / 0.45;
     if (k > best) best = k;
   }

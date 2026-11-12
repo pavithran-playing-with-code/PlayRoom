@@ -12,8 +12,7 @@ import { GAME_MAP } from "../components/games/registry";
 import useGames from "../components/games/useGames";
 import { useToast, Avatar, Icon } from "../components/ui";
 import GameIcon from "../components/games/GameIcon";
-import GamePoster from "../components/games/GamePoster";
-import { hasPoster } from "../components/games/gamePosters";
+import GamePoster, { hasPoster } from "../components/games/GamePoster";
 import { SONGS, LEVELS } from "../components/games/pianoSongs";
 import HowTo from "../components/games/HowTo";
 

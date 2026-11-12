@@ -20,6 +20,7 @@ import Friends         from "./pages/Friends";
 import Rooms           from "./pages/Rooms";
 import TabBar          from "./components/TabBar";
 import Profile         from "./pages/Profile";
+import UpdatePrompt from "./components/UpdatePrompt";
 import { installErrorReporting } from "./utils/reportError";
 
 // Hollow Hours is big and only a few will open it: its own chunk
@@ -54,6 +55,8 @@ export default function App() {
       <ToastProvider>
       {/* Sparkle trail + tap bursts + confetti, above everything, click-through */}
       <FunLayer />
+      {/* "A new version is ready — Update": the installed app finds out by itself */}
+      <UpdatePrompt />
       <BrowserRouter>
         {/* Live friend requests, invites and "X is online", on every page, mid-game too */}
         <Notifier />

@@ -493,6 +493,20 @@ There is no test runner. What works:
   pause and no picture without sound (`window.__pl.stats()`: `held`,
   `holds`, `ranOut`, `headMs`, `est`). A fast test machine hides this
   whole class of bug.
+- **A film's sound stays on its picture** (`playSound`'s `tick`): the gap
+  between the sound heard and the picture shown is measured every tick
+  (`stats().off`, ms; it allows for the phone's own output delay, `lat`) and
+  closed by bending the sound's speed up to 3% (`retime`), never by cutting
+  it; only 250 ms out, or still out just after a start, is the sound started
+  again. It used to be left anywhere within 300 ms, so every ▶, jump or
+  dropped frame left it out of step for good. Sound starts only once the
+  picture is really moving, and stops while it is stalled. Every decoded
+  piece is its whole length (`aresample=async=1:first_pts=0`, and padded): a
+  short one paused the film at that spot. Test: make the picture slip by
+  patching the video's `currentTime` getter and watch `off` come back with
+  `restarts` unchanged; `window.__oldSync` gives the old behaviour, which
+  must fail. The Sound check (Audio & subtitles) shows these numbers on a
+  phone.
 - **The Rooms page** runs: Got a code? (one box for either kind of room),
   Movie rooms (make one, then other people's), Game rooms (start one, then
   other people's). Your own room is never listed to you.

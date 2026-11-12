@@ -4,7 +4,7 @@
 // rounded corners).
 //
 // The style is "Flat": a drawing of one object (public/game-icons/<slug>.svg,
-// Microsoft's Fluent Emoji, MIT — see the README beside them) on one solid
+// Google's Noto Emoji, Apache 2.0 — see the README beside them) on one solid
 // colour with slanted stripes, and a hard ink shadow under the drawing like
 // the rest of PlayRoom. To give a game an icon: put its drawing in that
 // folder under its slug and add its colour to POSTERS. A game with none, or

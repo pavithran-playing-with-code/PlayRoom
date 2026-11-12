@@ -524,6 +524,16 @@ There is no test runner. What works:
   libx264 at 6 Mbps, E-AC-3 5.1, 8 minutes ≈ 400 MB). The movie screen
   (CallContext's `playFilm`) is tested on a temporary route that calls
   `useCall().playFilm(file)`; `window.__film()` is its Sound check.
+- **Subtitles come a stretch at a time** (`F.subtitles(n, { where, onPart,
+  alive })` in `filmSound.js`): reading them means reading the film, and
+  the whole of a 2 GB film took minutes on a phone with nothing on the
+  screen — "subtitles are not working". The 3 minutes the film is in are
+  read first (the promise gives those lines), then onward from wherever the
+  film is, then the rest, each handed to `onPart`; a line cut by a stretch's
+  edge is joined again. A phone with no room for a third ffmpeg borrows the
+  sound's. Test with a film carrying an SRT track ("Line N" every 4 s):
+  jump to the middle, pick the subtitles, and the right line must be up in
+  a second or two; then jump back to the start for the rest.
 - **The Rooms page** runs: Got a code? (one box for either kind of room),
   Movie rooms (make one, then other people's), Game rooms (start one, then
   other people's). Your own room is never listed to you.

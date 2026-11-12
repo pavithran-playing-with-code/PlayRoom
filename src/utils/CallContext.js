@@ -1049,12 +1049,18 @@ export function CallProvider({ children }) {
       f.cues = null; f.subN = null;
       setFilm((x) => (x && x.v === v ? { ...x, subN: null, cues: null } : x));
     };
+    const tok = f.subTok = (f.subTok || 0) + 1;        // which pick of subtitles is the current one
     if (n === null) { off(); return; }
     const F = await filmTracksOf(v);
-    say("💬 Loading subtitles — a long film takes a little while…");
-    const cues = await F.subtitles(n);
-    if (filmRef.current !== f) return;
-    if (!cues || !cues.length) { say("Couldn't read those subtitles"); return; }
+    say("💬 Loading subtitles…");
+    // the stretch the film is in comes first, the rest of the film after it
+    const cues = await F.subtitles(n, {
+      where: () => v.currentTime,
+      alive: () => filmRef.current === f && f.subTok === tok,
+      onPart: (l) => { if (filmRef.current === f && f.subTok === tok) { f.cues = l; setFilm((x) => (x && x.v === v ? { ...x, cues: l } : x)); } },
+    });
+    if (filmRef.current !== f || f.subTok !== tok) return;
+    if (!cues) { say("Couldn't read those subtitles"); return; }
     off();
     f.cues = cues; f.subN = n;
     setFilm((x) => (x && x.v === v ? { ...x, subN: n, cues } : x));

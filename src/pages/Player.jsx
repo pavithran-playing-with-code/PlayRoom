@@ -71,6 +71,7 @@ export default function Player() {
     setTracks(null); setAudioN(null); setSubN(null); setCues(null); setSpeed(1);
   };
   const close = () => {
+    subTok.current++;
     if (snd.current) { snd.current.stop(); snd.current = null; }
     if (F.current) { F.current.then((x) => x.close()).catch(() => {}); F.current = null; }
     if (url) URL.revokeObjectURL(url);
@@ -95,13 +96,21 @@ export default function Player() {
       if (!quiet) say(`🔊 ${X.audio[n] ? X.audio[n].label : "Sound"}`);
     } catch { say("Couldn't play that sound track — check the connection (the decoder loads once)"); }
   }, [tracksOf, say]);
+  const subTok = useRef(0);                         // which pick of subtitles is the current one
   const pickSubs = useCallback(async (n) => {
+    const tok = ++subTok.current;
     if (n === null) { setSubN(null); setCues(null); return; }
     say("💬 Loading subtitles…", 6000);
     try {
       const X = await tracksOf();
-      const c = await X.subtitles(n);
-      if (!c || !c.length) { say("Couldn't read those subtitles"); return; }
+      // the stretch the film is in comes first, the rest of the film after it
+      const c = await X.subtitles(n, {
+        where: () => (vRef.current ? vRef.current.currentTime : 0),
+        alive: () => subTok.current === tok,
+        onPart: (l) => { if (subTok.current === tok) setCues(l); },
+      });
+      if (subTok.current !== tok) return;
+      if (!c) { say("Couldn't read those subtitles"); return; }
       setSubN(n); setCues(c); say(`💬 ${X.subs[n].label}`);
     } catch { say("Couldn't read those subtitles"); }
   }, [tracksOf, say]);

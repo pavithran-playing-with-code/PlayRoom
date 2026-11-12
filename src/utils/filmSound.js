@@ -165,7 +165,10 @@ function parseStreams(lines) {
   }
   for (const a of audio) a.label = [a.title || a.lang || `Track ${a.n + 1}`, a.title && a.lang && !a.title.includes(a.lang) ? a.lang : "", `${CODEC[a.codec] || a.codec}${a.ch ? " " + a.ch : ""}`].filter(Boolean).join(" · ");
   for (const s of subs) s.label = [s.title || s.lang || `Subtitles ${s.n + 1}`, s.title && s.lang && !s.title.includes(s.lang) ? s.lang : "", s.forced ? "forced" : "", s.text ? "" : "picture — can't be shown"].filter(Boolean).join(" · ");
-  return { audio, subs };
+  // "Duration: 01:52:03.45, start: …"
+  let dur = 0;
+  for (const l of lines) { const d = /Duration: (\d+):(\d+):(\d+(?:\.\d+)?)/.exec(l); if (d) { dur = d[1] * 3600 + d[2] * 60 + Number(d[3]); break; } }
+  return { audio, subs, dur };
 }
 
 // "00:01:02.345 --> 00:01:04.000" blocks, the text without its tags
@@ -197,20 +200,76 @@ export async function openFilm(file) {
     probe: log.filter((l) => /Input #|Duration|Stream #/.test(l)).map((l) => l.trim().slice(0, 140)).slice(0, 12),
     // the sound of audio track n, in step with the video
     sound: (n, v, opts) => playSound(ff, path, n, v, { ...(opts || {}), file }),
-    // text subtitles n, read out whole — by a second ffmpeg, so the sound
-    // never waits behind it (it has to read through the whole file)
-    async subtitles(n) {
+    // Text subtitles n. Reading them means reading the film, and a whole film
+    // is gigabytes — minutes on a phone, with nothing on the screen meanwhile,
+    // which looked like subtitles not working. So they are read a stretch at
+    // a time (PART), the stretch the film is in first: the promise gives the
+    // lines so far once that one is in, and `onPart(lines)` hands over more
+    // as each next stretch arrives (wherever the film has got to by then,
+    // then the rest). `where()` is the film's time now; `alive()` false
+    // stops it. Its own ffmpeg, so the sound never waits behind it; a phone
+    // with no room for another borrows the sound's.
+    async subtitles(n, { where, onPart, alive } = {}) {
       const s = info.subs[n];
       if (!s || !s.text) return null;
-      let f2;
+      const live = () => !alive || alive();
+      let f2 = null, p2 = path, own = false;
       try {
-        f2 = await newFF();
+        f2 = await newFF(); own = true;
         await f2.createDir("/f"); await f2.mount("WORKERFS", { files: [file] }, "/f");
-        await f2.exec(["-hide_banner", "-loglevel", "error", "-i", `/f/${file.name}`, "-map", `0:s:${n}`, "-vn", "-an", "-c:s", "webvtt", "/s.vtt"]);
-        const out = await f2.readFile("/s.vtt", "utf8");
-        return parseVTT(typeof out === "string" ? out : new TextDecoder().decode(out));
-      } catch { return null; }
-      finally { try { f2 && f2.terminate(); } catch { /* gone */ } }
+        p2 = `/f/${file.name}`;
+      } catch { try { own && f2 && f2.terminate(); } catch { /* gone */ } f2 = ff; p2 = path; own = false; }
+      const done = () => { if (own) { try { f2.terminate(); } catch { /* gone */ } } };
+      const run = (args) => (own ? f2.exec(args) : queued(() => f2.exec(args)));
+      const o = `/sub${++mountN}.vtt`;
+      const read = async (from, secs) => {
+        const args = ["-hide_banner", "-loglevel", "error"];
+        if (from !== null) args.push("-ss", String(from));
+        args.push("-i", p2);
+        if (secs) args.push("-t", String(secs));
+        args.push("-map", `0:s:${n}`, "-vn", "-an", "-c:s", "webvtt", "-y", o);
+        await run(args).catch(() => {});
+        let out;
+        try { out = await f2.readFile(o, "utf8"); await f2.deleteFile(o); } catch { return null; }
+        const cues = parseVTT(typeof out === "string" ? out : new TextDecoder().decode(out));
+        if (from) for (const c of cues) { c.a += from; c.b += from; }
+        return cues;
+      };
+      const total = info.dur || 0;
+      // a film whose length isn't known: all at once, as before
+      if (!total) { try { return await read(null, 0); } finally { done(); } }
+      const PART = 180, OVER = 8, parts = Math.ceil(total / PART), got = new Set(), all = [];
+      // lines from a stretch, into the list: one cut in two by a stretch's edge is joined again
+      const add = (cues) => {
+        for (const c of cues) {
+          const same = all.find((x) => x.text === c.text && c.a <= x.b + 0.05 && x.a <= c.b + 0.05);
+          if (same) { same.a = Math.min(same.a, c.a); same.b = Math.max(same.b, c.b); } else all.push(c);
+        }
+        all.sort((x, y) => x.a - y.a);
+      };
+      const next = () => {
+        const here = Math.max(0, Math.min(parts - 1, Math.floor(((where && where()) || 0) / PART)));
+        for (let k = here; k < parts; k++) if (!got.has(k)) return k;
+        for (let k = 0; k < here; k++) if (!got.has(k)) return k;
+        return -1;
+      };
+      const one = async (k) => {
+        got.add(k);
+        const from = Math.max(0, k * PART - OVER);
+        const cues = await read(from, (k + 1) * PART - from + 1);
+        if (cues) add(cues);
+        return !!cues;
+      };
+      let first;
+      try { first = await one(next()); } catch { first = false; }
+      if (!first || !live()) { done(); return first ? all.slice() : null; }
+      (async () => {
+        try {
+          for (let k = next(); k >= 0 && live(); k = next()) { await one(k); if (live() && onPart) onPart(all.slice()); }
+        } catch { /* what's read stays */ }
+        done();
+      })();
+      return all.slice();
     },
     close() { queued(async () => { try { await ff.unmount(dir); await ff.deleteDir(dir); } catch { /* fine */ } }); },
   };

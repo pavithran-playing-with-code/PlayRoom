@@ -2224,3 +2224,7 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 .upd-btns{display:flex;flex-direction:column;align-items:center;gap:4px;flex:none}
 .upd-later{border:0;background:none;color:var(--ink);font-weight:800;font-size:.75rem;text-decoration:underline;padding:2px 6px;cursor:pointer}
 @keyframes updIn{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+/* ── game posters (GamePoster): a picture that fills its box, clipped to the box's corners ── */
+.game-poster{display:block;width:100%;height:100%}
+.pc-tile-ic.poster,.pc-again-ic.poster,.lsheet-ic.poster{overflow:hidden;background-image:none;padding:0}
+

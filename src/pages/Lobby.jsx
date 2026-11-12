@@ -12,6 +12,8 @@ import { GAME_MAP } from "../components/games/registry";
 import useGames from "../components/games/useGames";
 import { useToast, Avatar, Icon } from "../components/ui";
 import GameIcon from "../components/games/GameIcon";
+import GamePoster from "../components/games/GamePoster";
+import { hasPoster } from "../components/games/gamePosters";
 import { SONGS, LEVELS } from "../components/games/pianoSongs";
 import HowTo from "../components/games/HowTo";
 
@@ -305,7 +307,7 @@ export default function Lobby() {
           <div className="pc-again" style={{ background: lastGame.col }}>
             <button type="button" className="pc-again-info" onClick={() => openGame(lastGame.slug)}
               aria-label={`Change settings for ${lastGame.name}`}>
-              <span className="pc-again-ic"><GameIcon icon={lastGame.icon} slug={lastGame.slug} /></span>
+              <span className={`pc-again-ic${hasPoster(lastGame.slug) ? " poster" : ""}`}><GamePoster icon={lastGame.icon} slug={lastGame.slug} /></span>
               <span className="pc-again-txt">
                 <small>Play again</small>
                 <b>{lastGame.name}</b>
@@ -343,7 +345,7 @@ export default function Lobby() {
             <div className="pc-grid">
               {shown.map((g) => (
                 <button key={g.slug} type="button" className="pc-tile" data-game={g.slug} onClick={() => openGame(g.slug)}>
-                  <span className="pc-tile-ic" style={{ backgroundColor: g.col }}><GameIcon icon={g.icon} slug={g.slug} /></span>
+                  <span className={`pc-tile-ic${hasPoster(g.slug) ? " poster" : ""}`} style={{ backgroundColor: g.col }}><GamePoster icon={g.icon} slug={g.slug} /></span>
                   <span className="pc-tile-name">{g.name}</span>
                 </button>
               ))}
@@ -357,7 +359,7 @@ export default function Lobby() {
           <div className="lsheet" role="dialog" aria-modal="true" aria-label={`Start ${selected.name}`}
             onClick={(e) => e.stopPropagation()}>
             <div className="lsheet-head" style={{ background: selected.col }}>
-              <span className="lsheet-ic"><GameIcon icon={selected.icon} slug={selected.slug} /></span>
+              <span className={`lsheet-ic${hasPoster(selected.slug) ? " poster" : ""}`}><GamePoster icon={selected.icon} slug={selected.slug} /></span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <h2>{selected.name}</h2>
                 {selected.blurb && <p>{selected.blurb}</p>}

@@ -2470,6 +2470,7 @@ function enemyStep(e,mx,mz,dt){
 }
 function damageEnemy(e,amt,sx,sz,kb=4,crit=false,silent=false){
   if(e.state==='dead')return;
+  if(!CO.rx&&amt>0)netSend({t:'hit',id:e.id,a:Math.round(amt),c:crit?1:0,x:sR1(e.x),z:sR1(e.z)});   // p7d
   e.hp-=amt;e.flash=.18;e.hit=1;e.aggroT=6;
   if(e.state==='idle'||e.state==='wander')e.state='chase';
   dmgNum(e.x,e.y+(e.def.scale||1)*1.9,e.z,Math.round(amt),crit?'#ffd24a':'#fff',crit);
@@ -2580,7 +2581,7 @@ function nearestEnemy(maxD,fwdOnly){
   return best;
 }
 function startAttack(P){
-  const idx=P.combo>0?(P.atkIdx+1)%3:0;P.atkIdx=idx;P.atkT=0;P.hitDone=false;P.state='attack';P.st=Math.max(0,P.st-9);P.stDelay=.7;
+  const idx=P.combo>0?(P.atkIdx+1)%3:0;P.atkIdx=idx;P.atkT=0;P.atkN=((P.atkN|0)+1)%1000;P.hitDone=false;P.state='attack';P.st=Math.max(0,P.st-9);P.stDelay=.7;
   let t=game.lock&&game.lock.state!=='dead'?game.lock:nearestEnemy(5,true);
   if(t){const d=Math.hypot(t.x-P.x,t.z-P.z);P.yaw=Math.atan2(t.x-P.x,t.z-P.z);P.lungeX=Math.sin(P.yaw)*Math.min(d-1,3.4)*3;P.lungeZ=Math.cos(P.yaw)*Math.min(d-1,3.4)*3;}
   else{P.yaw=game.mode==='first'?cam.yaw:(Math.hypot(input.mx,input.my)>.1?P.moveYaw:P.yaw);P.lungeX=Math.sin(P.yaw)*3;P.lungeZ=Math.cos(P.yaw)*3;}
@@ -3897,6 +3898,7 @@ function drawHUD(){
     const p=proj(e.x,e.y+(e.def.scale||1)*2.2+(e.c.isWolf?-.5:0),e.z);if(!p||inAv(p[0],p[1]))continue;const w=44,x=p[0]-w/2,y=p[1];
     hx.fillStyle='rgba(0,0,0,.6)';hx.fillRect(x-1,y-1,w+2,7);hx.fillStyle=e.state==='windup'?'#ffb02a':'#e5483f';hx.fillRect(x,y,w*clamp(e.hp/e.maxhp,0,1),5);}
   // damage numbers
+  coopNames(hx);
   for(const q of game.pops){const k=q.t/1.1;const p=proj(q.x,q.y+k*1.4,q.z);if(!p||inAv(p[0],p[1]))continue;hx.globalAlpha=Math.max(0,1-k*k);hx.font=`800 ${Math.round((q.big?26:18)*(1+Math.max(0,.16-q.t)*4.5))}px 'Cinzel',serif`;   /* p7b: each number lands big and settles */hx.lineWidth=4;hx.strokeStyle='rgba(0,0,0,.75)';hx.strokeText(q.txt,p[0],p[1]);hx.fillStyle=q.col;hx.fillText(q.txt,p[0],p[1]);}
   if(game.bark&&!game.dialog){const bk=game.bark,p=proj(bk.n.x,bk.n.y+2.7,bk.n.z);if(p&&!inAv(p[0],p[1]-20)){const k=bk.t,al=Math.min(1,k*4,(3.4-k)*3);hx.globalAlpha=Math.max(0,al);hx.font="700 16px 'Alegreya Sans',sans-serif";const w=hx.measureText(bk.txt).width+22,x=p[0]-w/2,y=p[1]-34;hx.fillStyle='rgba(255,246,222,.95)';hx.strokeStyle='#5a3a22';hx.lineWidth=2.5;hx.beginPath();hx.roundRect(x,y,w,30,10);hx.fill();hx.stroke();hx.beginPath();hx.moveTo(p[0]-6,y+30);hx.lineTo(p[0],y+38);hx.lineTo(p[0]+6,y+30);hx.fill();hx.fillStyle='#3a2410';hx.fillText(bk.txt,p[0],y+16);hx.globalAlpha=1;}}
   hx.globalAlpha=1;
@@ -3912,6 +3914,7 @@ function step(dt){
   Input.poll(dt);
   const P=game.player;
   updatePlayer(dt);
+  coopTick(dt);   // p7d: my friend, drawn; and me, said to the room
   music.combat=0;
   const _en=PERFX.en;_en.length=0;for(const e of game.enemies)_en.push(e);   // fix2: a reused copy (updateEnemy can remove one)
   for(const e of _en){updateEnemy(e,dt);if(e.c&&e.c.root)e.c.root.visible=(Math.abs(e.x-P.x)<75&&Math.abs(e.z-P.z)<75)||e.boss&&e.awake;if(e.state==='chase'||e.state==='windup'||e.state==='attack')music.combat=1;}
@@ -4430,7 +4433,7 @@ function netTick(){if(!EMBED||WATCH)return;const now=performance.now();if(now-NE
 function netReady(){NET.ready=true;netPost({ef:'ready'});}
 function netWho(){
   const others=Object.entries(NET.names).filter(([id])=>+id!==NET.me).map(([,n])=>n).filter(Boolean);
-  const el=$('withwho');if(el)el.textContent=others.length?'In this room with '+others.join(' and ')+'. For now each of you explores your own island.':'';
+  const el=$('withwho');if(el)el.textContent=others.length?(NET.coop?'On this isle with '+others.join(' and ')+': you see each other, fight the same guardians and share the quest.':'In this room with '+others.join(' and ')+'. Each of you has your own island: most points wins.'):'';
 }
 function netInit(m){
   NET.on=true;NET.me=+(m.me&&m.me.id)||0;NET.coop=!!m.coop;NET.names={};if(m.me)NET.names[NET.me]=m.me.name;for(const p of m.peers||[])NET.names[+p.id]=p.name;
@@ -4457,8 +4460,123 @@ if(EMBED)addEventListener('message',e=>{
   else if(m.ef==='init'){netInit(m);if(WATCH&&m.watch){WS.name=String(m.watch.name||'');wsBanner();}}
   else if(m.ef==='watch'){if(WATCH){WS.name=String(m.name||'');WS.f=null;WS.seen=false;wsBanner();}}
   else if(m.ef==='names'){for(const p of m.peers||[])NET.names[+p.id]=p.name;netWho();}
+  else if(m.ef==='msg'){if(!WATCH)coopMsg(+m.from||0,m.d);}   // p7d: my friend's page, by way of the room
   else if(m.ef==='over'){if(WATCH){WS.over=true;wsBanner();}else netOver();}
 });
+/* ================= p7d: two on one island (playing together, part 1) =================
+   In a "Play as a team" room (init says coop) the two pages are one island:
+     p    where I am and what I'm doing, ~12 times a second: the other page draws my hero from it (updatePeers)
+     hit  a blow I landed on an enemy (its id, the damage, where it stood): the other page's copy of that enemy takes
+          it too, so guardians and camps are beaten together and both get the coins and XP
+     q    how far the quest has got (stage, shards, guardians beaten, beacons lit, the Flame relit): merged, never
+          taken back — a shard one of us picks up is both of ours, and the Colossus falling is the win for both
+   Each page still runs its own enemies (they chase whoever is on that page), keeps its own health, coins, level
+   and save. One world for the enemies too (who they chase, where they stand) is part 2.
+   Every message goes page → PlayRoom → the room's socket → the other page (netSend / {ef:'msg'}). Not in watch
+   mode, and not in a room played against each other: there, each island is its own. */
+const CO={peers:new Map(),sendT:0,qT:0,qSig:'',rx:false,LIVE:4000};
+function coopOn(){return NET.on&&NET.coop&&!WATCH;}
+function netSend(d){if(coopOn())netPost({ef:'send',d});}
+function coopPeer(id){
+  let r=CO.peers.get(id);
+  if(!r){r={id,name:NET.names[id]||'Friend',at:0,c:null,hero:null,d:null,m:null,trail:null,phase:0,deadT:0,atk:-1,atkKey:'',swung:false,emote:null,live:false};CO.peers.set(id,r);}
+  return r;
+}
+function coopLive(){const a=[],now=performance.now();for(const r of CO.peers.values())if(r.m&&now-r.at<CO.LIVE)a.push(r);return a;}
+function coopState(){
+  const kb=[];for(const id of game.killed)if(String(id).indexOf('boss-')===0)kb.push(id);
+  return{t:'q',st:game.stage,sh:game.shards.map(x=>x?1:0),kb,tw:OW.towers.map(t=>t.on?1:0),won:game.won?1:0};
+}
+function coopApply(r,m){
+  CO.rx=true;
+  try{
+    const sh=m.sh||[];let got=0;
+    for(let i=0;i<3;i++)if(sh[i]&&!game.shards[i]){game.shards[i]=true;got++;}
+    // a guardian my friend has beaten is beaten here too
+    for(const id of m.kb||[]){if(game.killed.has(id))continue;const e=game.enemies.find(q=>q.id===id&&q.state!=='dead');if(e){e.hp=0;killEnemy(e);}else game.killed.add(id);}
+    // a shard lying here that we already hold
+    for(let i=game.pickups.length-1;i>=0;i--){const pk=game.pickups[i];if(pk.kind==='shard'&&game.shards[pk.idx]){scene.remove(pk.m);if(pk.beam)scene.remove(pk.beam);game.pickups.splice(i,1);}}
+    const n=game.shards.filter(Boolean).length;
+    if(got)toast(r.name+' recovered an Ember Shard! '+n+' of 3',3.2);
+    let st=game.stage;if(n===3&&st===1)st=2;if((m.st|0)>st)st=Math.min(4,m.st|0);
+    if(st!==game.stage){const was=game.stage;game.stage=st;
+      if(was<1&&st>=1)toast('Quest begun: The Ember Shards',3);
+      if(was<3&&st>=3){litBrazier();openGate();ensureColossus();}}
+    const tw=m.tw||[];for(let i=0;i<OW.towers.length;i++)if(tw[i]&&!OW.towers[i].on){OW.towers[i].on=true;owPaintTower(OW.towers[i]);}
+    setQuestText(true);
+    if(m.won&&!game.won){game.stage=4;setQuestText(true);victory();}
+  }catch(e){}
+  CO.rx=false;
+}
+function coopMsg(from,d){
+  if(!coopOn()||!d||!from||from===NET.me)return;
+  const r=coopPeer(from);
+  if(d.t==='p'){
+    const first=!r.m||performance.now()-r.at>CO.LIVE;
+    r.m=d;r.at=performance.now();r.name=NET.names[from]||r.name;
+    if(!r.d||Math.hypot(r.d.x-d.x,r.d.z-d.z)>30)r.d={x:+d.x||0,y:+d.y||0,z:+d.z||0,yaw:+d.yaw||0};
+    if(d.s==='attack'){const key=(d.ai|0)+'/'+(d.n|0);if(key!==r.atkKey){r.atkKey=key;r.atk=+d.at||0;r.swung=false;}}else{r.atk=-1;r.atkKey='';}
+    const ek=d.em||null;if(ek!==(r.emote&&r.emote.kind))r.emote=ek?{kind:ek,t:0}:null;
+    if(first){if(playing())toast(r.name+' is on the isle with you',2.8);CO.qT=0;CO.qSig='';}   // and they hear how far we've got
+  }
+  else if(d.t==='hit'){
+    const e=game.enemies.find(q=>q.id===d.id&&q.state!=='dead');
+    if(e&&Math.hypot(e.x-(+d.x||0),e.z-(+d.z||0))<30){CO.rx=true;try{const o=r.d||e;damageEnemy(e,Math.max(0,+d.a||0),o.x,o.z,2,!!d.c,true);}catch(e2){}CO.rx=false;}
+  }
+  else if(d.t==='q')coopApply(r,d);
+  else if(d.t==='bye'){r.m=null;if(r.c)r.c.root.visible=false;}
+}
+/* my hero, said to the room; and the quest, when it moves on (and every few seconds, for whoever has just arrived) */
+function coopSend(dt){
+  const P=game.player,now=performance.now();
+  if(now-CO.sendT>=80){CO.sendT=now;
+    netSend({t:'p',x:sR2(P.x),y:sR2(P.y),z:sR2(P.z),yaw:sR2(P.yaw),vx:sR1(P.vx),vy:sR1(P.vy),vz:sR1(P.vz),
+      s:P.state,ai:P.atkIdx|0,at:sR2(P.atkT||0),n:P.atkN|0,rt:P.state==='roll'?sR2(P.rollT):0,sw:P.swim?1:0,gl:(P.gliding||P.climbing)?1:0,gr:P.grounded?1:0,
+      dd:P.dead?1:0,hu:P.hurtT>0?1:0,mt:P.mount?1:0,h:game.hero,em:P.emote?P.emote.kind:0});}
+  const q=coopState(),sig=JSON.stringify(q);
+  if(sig!==CO.qSig||now-CO.qT>4000){CO.qSig=sig;CO.qT=now;netSend(q);}
+}
+const _coP={emote:null,state:'free',hurtT:0,mount:null,swim:false,grounded:true,rest:false};
+function updatePeers(dt){
+  const now=performance.now(),P=game.player;
+  for(const r of CO.peers.values()){
+    const m=r.m,live=!!m&&now-r.at<CO.LIVE;
+    if(r.live&&!live&&playing())toast(r.name+' has left the isle',2.4);
+    r.live=live;
+    if(!live){if(r.c)r.c.root.visible=false;if(r.trail)r.trail.m.visible=false;continue;}
+    const hid=HEROES[m.h]?m.h:'knight';
+    if(!r.c||r.hero!==hid){if(r.c)scene.remove(r.c.root);r.c=makeHero(hid);r.hero=hid;scene.add(r.c.root);}
+    if(!r.trail)r.trail=makeTrail();
+    const d=r.d,age=Math.min(.15,(now-r.at)/1000),k=Math.min(1,dt*12);
+    d.x+=((+m.x||0)+(+m.vx||0)*age-d.x)*k;d.z+=((+m.z||0)+(+m.vz||0)*age-d.z)*k;d.y+=((+m.y||0)-d.y)*k;d.yaw+=angDiff(d.yaw,+m.yaw||0)*k;
+    const spd=Math.hypot(+m.vx||0,+m.vz||0);r.phase+=dt*(6+spd*1.35);r.deadT=m.dd?r.deadT+dt:0;
+    if(r.atk>=0){r.atk=Math.min(1,r.atk+dt/[.44,.44,.66][m.ai|0]);
+      // their swing, drawn here as mine is
+      if(!r.swung&&r.atk>=ATK_HIT[m.ai|0]){r.swung=true;const ai=m.ai|0,hs=(HEROES[hid].o&&HEROES[hid].o.scale)||1;swoosh(d.x+Math.sin(d.yaw)*.35,d.y+(ai===2?1.5:1.2)*hs,d.z+Math.cos(d.yaw)*.35,d.yaw,ai,ATK_TINT[ai]||ATK_TINT[0],(ai===2?1.25:1.05)*hs,ai===2?.24:.19);}}
+    const c=r.c,air=!m.gr&&!m.sw&&!m.gl&&m.s==='free';
+    const st={sp:clamp(spd/(m.mt?19:8.6),0,1),phase:r.phase,seed:0,swim:!!m.sw,hit:m.hu?1:0,atk:r.atk,atkIdx:m.ai|0,roll:m.s==='roll'?(+m.rt||0):-1,glide:!!m.gl,dead:m.dd?Math.min(1,r.deadT*2.2):0};
+    if(air)st.air=clamp((+m.vy||0)/8,-1,1);
+    c.lift=m.gr?0:clamp(-(+m.vy||0)/10,-1,1);poseHumanoid(c,st,game.time);
+    if(r.emote&&!m.dd){const ix=input.mx,iy=input.my,ij=input.jump;input.mx=0;input.my=0;input.jump=0;_coP.emote=r.emote;try{applyEmote(_coP,c,game.time);}catch(e){}r.emote=_coP.emote;input.mx=ix;input.my=iy;input.jump=ij;}
+    c.root.position.set(d.x,d.y+(m.sw?-.1:0),d.z);c.root.rotation.y=d.yaw;c.root.visible=Math.abs(d.x-P.x)<160&&Math.abs(d.z-P.z)<160;
+    setFlash(c,m.hu?.6:0);
+    updateTrail(r.trail,c,r.atk>.22&&r.atk<.7,dt,ATK_TINT[m.ai|0]||ATK_TINT[0]);
+  }
+}
+function coopTick(dt){
+  if(!coopOn())return;
+  try{coopSend(dt);updatePeers(dt);}catch(e){}
+}
+// their names over their heads, on the HUD
+function coopNames(hx){
+  if(!coopOn())return;
+  try{
+    hx.save();hx.globalAlpha=1;hx.textAlign='center';hx.textBaseline='alphabetic';hx.font="800 15px 'Cinzel',serif";hx.lineWidth=4;hx.strokeStyle='rgba(0,0,0,.75)';
+    for(const r of CO.peers.values()){if(!r.live||!r.d||!r.c||!r.c.root.visible)continue;const p=proj(r.d.x,r.d.y+2.45,r.d.z);if(!p)continue;hx.strokeText(r.name,p[0],p[1]);hx.fillStyle='#9fe8ff';hx.fillText(r.name,p[0],p[1]);}
+    hx.restore();
+  }catch(e){}
+}
+
 /* fix1: full screen, so the phone's status bar goes. In PlayRoom the room page goes full screen (it holds the sideways
    turn for an upright phone; a full-screen frame would lose it): a tap here posts {ef:'fs'}, and the tap's activation
    carries to the parent. On its own the page asks for itself. Every tap asks again while not full screen (after the app
@@ -4475,7 +4593,7 @@ function askFull(){
 }
 /* fix8: no full screen at all: Chrome shows its "To exit full screen" notice on every entry, and players asked for it gone */
 /* fix1: Quit (with its confirm) leaves the room in PlayRoom: the room's own Leave button is gone for Emberfall */
-function quitOut(){toTitle();if(EMBED)netPost({ef:'leave'});}
+function quitOut(){netSend({t:'bye'});toTitle();if(EMBED)netPost({ef:'leave'});}
 
 /* ================= platform: layout, orientation, audio unlock, visibility, context loss, frame-rate net ================= */
 const DEBUG=(()=>{try{return new URLSearchParams(location.search).get('debug')==='1';}catch(e){return false;}})();

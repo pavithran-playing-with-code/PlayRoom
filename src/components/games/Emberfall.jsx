@@ -17,10 +17,14 @@
 //   • { ef: 'fs' } (a tap in the page) puts this page full screen, so a phone's
 //     status bar goes; the tap's activation reaches us from the frame. The whole
 //     page, not the frame: it keeps the sideways turn for an upright phone
-// The current page (the mobile rebuild) speaks the same bridge but has no co-op
-// yet: it ignores ef:msg, so two players each play their own island. How the
-// old co-op worked (who runs the enemies, a second hero, two to a horse): the
-// NET section of public/emberfall/game.js, kept with index-backup-before-p6a.html.
+// Playing together (a team room, part 1 — the page's "p7d" block): the two pages
+// are one island. Each says where its hero is (drawn on the other), the blows
+// it lands (the other's copy of that enemy takes them too) and how far the
+// quest has got (merged: a shard either wins is both's, the Colossus falling
+// is the win for both). Each page still runs its own enemies. Against each
+// other (not a team room) each has their own island and the points decide.
+// The old version's fuller co-op (one host running every enemy, two to a
+// horse) is the NET section of public/emberfall/game.js, for part 2.
 // Watching (useSpecStream): while a friend watches, frame() pokes the page ({ ef: 'spec-want' }) and
 // relays the newest picture it posted ({ ef: 'frame', f }); the watcher loads the page with &watch=1 and
 // posts every frame that arrives into it. The page draws the player's game from them: no input, no sound,

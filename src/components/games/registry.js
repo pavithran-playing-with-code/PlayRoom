@@ -205,9 +205,11 @@ const ALL = [
   },
   {
     slug: "emberfall", name: "Emberfall", icon: "🔥",
-    blurb: "A 3D island adventure: pick a hero, beat three guardians for their Ember Shards, then the Cinder Colossus.",
-    minPlayers: 1, maxPlayers: 1, tag: "Adventure", col: "var(--coral)",   // solo only, for now
-    defaultDuration: 0, endless: true,
+    blurb: "A 3D island adventure, alone or with a friend: pick a hero, beat three guardians for their Ember Shards, then the Cinder Colossus.",
+    minPlayers: 1, maxPlayers: 2, tag: "Adventure", col: "var(--coral)",
+    coopMax: 2, coopDefault: true, defaultDuration: 0, endless: true,
+    coopLabel: "one island — the same guardians, one quest",
+    coopNote: "You're on the same island: you see each other, your blows land on the same guardians, and a shard either of you wins is both of yours. Untick it and you each get your own island and race for points.",
     Component: Emberfall,
   },
   {

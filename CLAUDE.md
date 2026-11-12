@@ -183,7 +183,7 @@ There is no test runner. What works:
   places plus `togetherWorld.js` GAMES and COOP, `matchResult.js`
   TOGETHER_GAMES and the `NOT IN (...)` list in `server.js`.
 - **Every game is played solo, together and against each other** — never
-  only one. Emberfall is the exception for now, due an upgrade.
+  only one.
 - **The look kit** (`src/components/games/toyKit.js`) is how 3D games should
   look: toon light in three steps, ink outlines (an inverted shell), soft
   shadows, a `mover()` character that squashes, blinks and walks,
@@ -283,8 +283,7 @@ There is no test runner. What works:
   climbs while you're in the light; footsteps, a sting when spotted, three
   pips before the lamp turns back, a tune when it goes out. Tests measure
   it muted (`__sn[id].audio.state()` and `.level()`); a watcher hears nothing.
-- **Emberfall** (slug `emberfall`, solo only for now — the registry offers
-  one seat until co-op is ported) is a finished single page,
+- **Emberfall** (slug `emberfall`, 1–2 players) is a finished single page,
   `public/emberfall/index.html` (the mobile rebuild, worked on outside this
   repo as `emberfall-p*.html`; three.js from the CDN, falling back to the
   `three.min.js` beside it), run in a frame by `Emberfall.jsx`, which only
@@ -322,20 +321,23 @@ There is no test runner. What works:
   lock on, a horse, a watchtower. The quest line names the one step you're
   on (`setQuestText`, from `getObjective`), and the villagers' lines follow
   the shards you hold (`lines`). Also written without being run.
-  **Co-op is not in the rebuild yet**: each player plays their own island and
-  `ef:msg` is ignored. The old two-player version is kept beside it as
-  `index-backup-before-p6a.html` + `game.js` (and `game-backup-before-p6a.js`);
-  how its co-op worked, for porting: the page posts `send`, the
-  room gets `ef:msg` (passed on whole by `config/socket.js`, size-capped),
-  and back. The NET section of game.js is the co-op: the playing player with
-  the lowest id hosts (enemies, bosses, time, weather; a snapshot `w` ~8/s),
-  the other's enemies are puppets, its hits go to the host (`hit`), the host's
-  blows come back (`hurt`); world changes (chests, trees, smashed objects,
-  forage, towers, quest) are sent as they happen and applied without loot,
-  and a returning player asks for all of it (`hello` → `full`). Two can ride
-  one horse (seat 0 drives, seat 1 behind). Test it with two frames and a
-  relay in one headless page (`window.__ef` reaches everything); a room for it
-  needs its `game_types` row (`sql/emberfall.sql`).
+  **Playing together, part 1** (p7d, the `CO` block by the bridge; only in a
+  team room, `init.coop`): the page posts `send`, the room gets `ef:msg`
+  (passed on whole by `config/socket.js`, size-capped), and back as
+  `{ef:'msg'}`. Three messages: `p` (my hero, ~12/s — the other page draws
+  it with `updatePeers`: pose, swing, emote, name on the HUD), `hit` (a blow
+  I landed: the other page's copy of that enemy, found by id and checked by
+  place, takes it too — `CO.rx` stops it echoing), `q` (stage, shards,
+  guardians beaten, beacons, the win: merged by `coopApply`, never taken
+  back). Each page still runs its own enemies, so where an enemy stands
+  differs between the two phones: that is part 2 — one host running them, as
+  the old version did (kept beside the page as `index-backup-before-p6a.html`
+  + `game.js`, its NET section: the lowest id hosts, a snapshot `w` ~8/s,
+  the other's enemies are puppets, `hit` / `hurt`, world changes sent as
+  they happen, `hello` → `full`, two to a horse). Not a team room: each has
+  their own island and the points decide. Written without being run; test
+  with two frames and a relay in one headless page (`window.__ef`) if the
+  user allows testing again.
 - **Hollow Hours** (slug `hollow`, 1–2 players, endless) is a side-on
   horror adventure in three.js r128: a small child, a house built for
   giants, six rooms — the Nursery, the Hall (the Keeper, blind, hunts by

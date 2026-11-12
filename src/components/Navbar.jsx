@@ -63,6 +63,8 @@ export default function Navbar() {
 
             <div className="navme">
               {/* Friends' faces with online pips: tap for who's on and last seen */}
+              {/* temporary: the icon-style picker (pages/IconLab.jsx) */}
+              <Link to="/icons" className="chip" aria-label="Icon styles" style={{ fontSize: "1.05rem", padding: "4px 9px" }}>🎨</Link>
               <FriendsDock max={narrow ? 2 : 3} size={32} />
 
               <span className="menuwrap" ref={menuRef}>

@@ -311,6 +311,18 @@ if (process.env.NODE_ENV !== "test") {
 const server = http.createServer(app);
 const io = initSocket(server);
 app.set("io", io);
+// Which build this server is serving: the main script's hashed name, read once
+// from the built page. Every connection is told it, so an app still running an
+// older build (the installed app keeps what it loaded) can offer "Update" the
+// moment a deploy goes live — src/components/UpdatePrompt.jsx. No build
+// (development): nothing is sent.
+let BUILD_ID = "";
+try {
+  const page = require("fs").readFileSync(path.join(__dirname, "build", "index.html"), "utf8");
+  const m = /static\/js\/main\.[a-z0-9]+\.js/i.exec(page);
+  if (m) BUILD_ID = m[0];
+} catch { /* no build here */ }
+if (BUILD_ID) io.on("connection", (socket) => { socket.emit("app:version", BUILD_ID); });
 // The worlds of the together games run here, on the same socket.
 require("./config/togetherWorld").attach(io);
 // Memory, Mahjong, Number Rush and Pipes played together: one board, the

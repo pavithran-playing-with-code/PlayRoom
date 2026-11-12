@@ -3,11 +3,13 @@
 //
 // The installed app (and any tab left open) keeps running the version it
 // loaded until it is reloaded, and most people don't know to reload. So the
-// app looks for itself: every few minutes, and whenever it comes back to the
-// front, it fetches the home page fresh (the server never lets that be kept)
-// and reads the name of the main script in it. A build's scripts carry its
-// hash in their names, so a different name is a new version: a card slides up
-// with one button, which reloads.
+// server says so when a new one goes live: a deploy restarts it, every open
+// app's socket connects again, and each connection is told the build being
+// served (`app:version`, the main script's hashed name — server.js). A name
+// that isn't this page's own is a new version: a card slides up with one
+// button, which reloads. No timer. For someone not logged in (no socket),
+// the app looks once whenever it is brought back to the front: it fetches the
+// home page fresh and reads the main script's name out of it.
 //
 // It never interrupts: in a game (body.in-game) or a call it waits, and shows
 // once you're out. It can be put off ("Later") for half an hour.
@@ -16,8 +18,8 @@
 // (a game's lazy chunk) fails to load it — that also means "there's a new
 // version", so the card shows at once.
 import React, { useEffect, useRef, useState } from "react";
+import { useSocket } from "../utils/SocketContext";
 
-const CHECK_MS = 3 * 60 * 1000;
 const LATER_MS = 30 * 60 * 1000;
 const MAIN = /static\/js\/main\.[a-z0-9]+\.js/i;
 
@@ -30,6 +32,7 @@ function mine() {
 const busy = () => document.body.classList.contains("in-game") || !!document.querySelector(".call-screen, .call-ring");
 
 export default function UpdatePrompt() {
+  const { socket } = useSocket() || {};
   const [ready, setReady] = useState(false);     // a newer version is out
   const [show, setShow] = useState(false);       // …and now is a good moment to say so
   const [going, setGoing] = useState(false);
@@ -56,20 +59,27 @@ export default function UpdatePrompt() {
       if (/ChunkLoadError|Loading chunk|Loading CSS chunk/i.test(msg)) found();
     };
     const onFront = () => { if (!document.hidden) check(); };
-    const t = setInterval(check, CHECK_MS);
-    const first = setTimeout(check, 20000);
     document.addEventListener("visibilitychange", onFront);
     window.addEventListener("focus", onFront);
     window.addEventListener("unhandledrejection", onFail);
     window.addEventListener("error", onFail);
     return () => {
-      alive = false; clearInterval(t); clearTimeout(first);
+      alive = false;
       document.removeEventListener("visibilitychange", onFront);
       window.removeEventListener("focus", onFront);
       window.removeEventListener("unhandledrejection", onFail);
       window.removeEventListener("error", onFail);
     };
   }, []);
+
+  // the server, on every connection (so: right after a deploy), says which build it is serving
+  useEffect(() => {
+    if (!socket) return undefined;
+    const me = mine();
+    const onVersion = (v) => { if (me && typeof v === "string" && v && v !== me && !readyRef.current) { readyRef.current = true; setReady(true); } };
+    socket.on("app:version", onVersion);
+    return () => socket.off("app:version", onVersion);
+  }, [socket]);
 
   // say so only when it won't interrupt a game or a call
   useEffect(() => {

@@ -564,11 +564,14 @@ There is no test runner. What works:
   refreshes it, or the app is installed again.)
 - **"A new version is ready — Update"** (`src/components/UpdatePrompt.jsx`,
   mounted in App): the installed app keeps running the bundle it loaded, so
-  it checks by itself — every 3 minutes and whenever it comes to the front it
-  fetches `/` fresh and compares the main script's hashed name with its own;
-  different, or a lazy chunk that fails to load, and a card offers Update (a
-  reload). It waits while in a game (`body.in-game`) or a call, and "Later"
-  puts it off half an hour. The server already sends `index.html` no-store.
+  the server says when a new one is live. `server.js` reads the main
+  script's hashed name from `build/index.html` at start (`BUILD_ID`) and
+  tells every socket connection (`app:version`); a deploy restarts the
+  server, every app reconnects, and one whose own script has another name
+  shows a card with Update (a reload). No timer (the user asked). Without a
+  socket (logged out) it looks once when brought to the front (fetches `/`
+  fresh), and a lazy chunk failing to load counts too. It waits while in a
+  game (`body.in-game`) or a call; "Later" puts it off half an hour.
 - **The Rooms page** runs: Got a code? (one box for either kind of room),
   Movie rooms (make one, then other people's), Game rooms (start one, then
   other people's). Your own room is never listed to you.

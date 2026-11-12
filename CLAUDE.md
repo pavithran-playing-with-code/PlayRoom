@@ -297,6 +297,16 @@ There is no test runner. What works:
   (GameFrame `helpOnly`, `noHelp`) — How to play is in the page's own menu.
   It asks for full screen once a session (Android shows an exit notice on
   every entry).
+  Its people are jointed (p7a): `jointed()` cuts every arm and leg at the
+  elbow / knee into `limb.lower`, which `poseHumanoid` bends — a walk and
+  run with knee lift and heel kick, elbows, hips and chest turning against
+  each other, an idle that breathes and looks about, a pose in the air, a
+  lean into turns. Heroes, enemies and villagers share it. What a hand
+  holds hangs from the forearm (`hang`), and a hand's place in the world is
+  `handAt()` — not `arms[i].localToWorld`. The whole game crawls in
+  headless Chrome (allow 45 s to load, tens of seconds a step); to look at
+  poses, render a strip of them from `window.__ef` (`makeHero`,
+  `poseHumanoid`, `renderer`) into a canvas, as the hero portraits do.
   **Co-op is not in the rebuild yet**: each player plays their own island and
   `ef:msg` is ignored. The old two-player version is kept beside it as
   `index-backup-before-p6a.html` + `game.js` (and `game-backup-before-p6a.js`);

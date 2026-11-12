@@ -20,7 +20,6 @@ import Friends         from "./pages/Friends";
 import Rooms           from "./pages/Rooms";
 import TabBar          from "./components/TabBar";
 import Profile         from "./pages/Profile";
-import IconLab         from "./pages/IconLab";   // temporary: the icon-style picker
 import UpdatePrompt from "./components/UpdatePrompt";
 import { installErrorReporting } from "./utils/reportError";
 
@@ -98,7 +97,6 @@ function WithNav() {
         <Route path="/rooms"       element={<ProtectedRoute><Rooms /></ProtectedRoute>} />
         <Route path="/friends"     element={<ProtectedRoute><Friends /></ProtectedRoute>} />
         <Route path="/profile"     element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-        <Route path="/icons"       element={<IconLab />} />
         <Route path="*"            element={<Navigate to="/" replace />} />
       </Routes>
       <TabBar />

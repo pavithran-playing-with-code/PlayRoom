@@ -980,6 +980,8 @@ export function CallProvider({ children }) {
       sending: f.stream ? f.stream.getAudioTracks().map((t) => `${t.label || "track"} ${t.readyState}${t.enabled ? "" : " (off)"}`).join(", ") || "no sound track" : "—",
     };
   }, []);
+  // for tests: the Sound check's numbers
+  useEffect(() => { window.__film = () => filmDiag(); return () => { delete window.__film; }; }, [filmDiag]);
   // its tracks, read by ffmpeg once (filmSound.openFilm)
   const filmTracksOf = useCallback((v) => {
     const f = filmRef.current;

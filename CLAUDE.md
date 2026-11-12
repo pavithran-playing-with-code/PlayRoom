@@ -513,6 +513,17 @@ There is no test runner. What works:
   (`TAP=1` taps ▶ all through the wait; `__oldSync` brings it back). Only
   sound that never comes in 30 s is given up on. A film's own sound plays
   with no message about it (no "Sound fixed"): the user asked.
+- **A film is read in big bites** (`biteReads` in the vendored
+  `src/vendor/ffmpeg/worker.js`): WORKERFS read it 32 KB at a time, 320
+  blocking reads for 10 s of a 6 Mbps film — three quarters of a piece's
+  time on a laptop, more on a phone, and why the sound fell behind and the
+  film paused. A megabyte at a time: 938 ms → 247 ms a piece.
+  `stats().io` is the last piece's reads; `window.__noBite` reads the old
+  way. Test with a film of a real size: a small test file hides it (make one
+  in headless Chrome with the core itself: `testsrc2` + `noise` through
+  libx264 at 6 Mbps, E-AC-3 5.1, 8 minutes ≈ 400 MB). The movie screen
+  (CallContext's `playFilm`) is tested on a temporary route that calls
+  `useCall().playFilm(file)`; `window.__film()` is its Sound check.
 - **The Rooms page** runs: Got a code? (one box for either kind of room),
   Movie rooms (make one, then other people's), Game rooms (start one, then
   other people's). Your own room is never listed to you.

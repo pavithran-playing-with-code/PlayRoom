@@ -62,10 +62,14 @@ const getCore = () => {
   }
   return coreURLs;
 };
+// what the last pieces cost in reading the file: { n reads, MB, ms } (the Sound check, tests)
+const ioSeen = { n: 0, mb: 0, ms: 0 };
 async function newFF() {
   const { FFmpeg } = await import("../vendor/ffmpeg/classes.js");
   const ff = new FFmpeg();
   await ff.load(await getCore());
+  ff.on("log", ({ message }) => { const m = /^pr-io (\d+) (\d+) (\d+)/.exec(message || ""); if (m) { ioSeen.n = +m[1]; ioSeen.mb = +(m[2] / 1048576).toFixed(1); ioSeen.ms = +m[3]; } });
+  if (typeof window !== "undefined" && window.__noBite) await ff.exec(["-pr-bite", "0"]);     // for tests: the file read as it used to be
   return ff;
 }
 // ffmpeg's last complaints, for the Sound check
@@ -112,7 +116,12 @@ export function soundMissing(v) {
 // the start (MKV, and MP4 with its index first) and the end (MP4 with its
 // index last) — for the codec names the containers use. No ffmpeg needed.
 const MARKS = ["A_EAC3", "A_AC3", "A_DTS", "A_TRUEHD", "A_MLP", "ec-3", "ac-3", "dtsc", "dtsh", "dtsl", "dtse", "mlpa"];
-export async function dolbyLike(file) {
+const dolbySeen = new WeakMap();
+export function dolbyLike(file) {
+  if (!dolbySeen.has(file)) dolbySeen.set(file, dolbyLook(file));
+  return dolbySeen.get(file);
+}
+async function dolbyLook(file) {
   const look = async (from, to) => {
     const b = new Uint8Array(await file.slice(from, to).arrayBuffer());
     let s = "";
@@ -610,7 +619,7 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
   return {
     track: out.stream.getAudioTracks()[0],
     // for the Sound check
-    stats: () => ({ ...st, lat: Math.round(lat() * 1000), ctx: ac.state, playing: !!playing, waiting: waitShown, held, muted: v.muted, vol: local.gain.value,
+    stats: () => ({ ...st, io: { ...ioSeen }, lat: Math.round(lat() * 1000), ctx: ac.state, playing: !!playing, waiting: waitShown, held, muted: v.muted, vol: local.gain.value,
       player: sink.paused ? "paused" : "playing", queued: jobs.size, ahead: [...cache.keys()].filter((k) => k >= cur).length, errs: ffErrs.slice() }),
     setVolume(x) { local.gain.value = Math.max(0, Math.min(1, x)); },
     volume() { return local.gain.value; },

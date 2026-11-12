@@ -3,6 +3,53 @@
 import { CORE_URL, FFMessageType } from "./const.js";
 import { ERROR_UNKNOWN_MESSAGE_TYPE, ERROR_NOT_LOADED, ERROR_IMPORT_FAILURE, } from "./errors.js";
 let ffmpeg;
+// PlayRoom (the one change here beyond the README's): a film mounted with
+// WORKERFS was read 32 KB at a time, each a blocking read of its own — some
+// 200 of them for 10 s of an ordinary film, and on a phone every one costs.
+// It is read a megabyte at a time instead and the last few kept, so the
+// file's header and index aren't fetched again for every piece.
+const io = { n: 0, bytes: 0, ms: 0, off: false };
+const BITE = 1 << 20, KEEP = 12;
+const biteReads = (core) => {
+    const W = core.FS.filesystems.WORKERFS;
+    if (!W || !W.stream_ops || W.__pr)
+        return;
+    W.__pr = true;
+    const reader = new FileReaderSync();
+    const plain = W.stream_ops.read;
+    W.stream_ops.read = (stream, buffer, offset, length, position) => {
+        const node = stream.node, size = node.size;
+        if (io.off || !node.contents || typeof node.contents.slice !== "function") {
+            const t0 = performance.now();
+            const r = plain(stream, buffer, offset, length, position);
+            io.n++; io.bytes += r; io.ms += performance.now() - t0;
+            return r;
+        }
+        if (position >= size)
+            return 0;
+        const end = Math.min(size, position + length);
+        const bites = node.__bites || (node.__bites = new Map());
+        let done = 0;
+        while (position + done < end) {
+            const p = position + done, k = Math.floor(p / BITE);
+            let b = bites.get(k);
+            if (b) { bites.delete(k); bites.set(k, b); }
+            else {
+                const t0 = performance.now();
+                b = new Uint8Array(reader.readAsArrayBuffer(node.contents.slice(k * BITE, Math.min(size, (k + 1) * BITE))));
+                io.n++; io.bytes += b.length; io.ms += performance.now() - t0;
+                bites.set(k, b);
+                if (bites.size > KEEP) bites.delete(bites.keys().next().value);
+            }
+            const from = p - k * BITE, n = Math.min(b.length - from, end - p);
+            if (n <= 0)
+                break;
+            buffer.set(b.subarray(from, from + n), offset + done);
+            done += n;
+        }
+        return done;
+    };
+};
 const load = async ({ coreURL: _coreURL, wasmURL: _wasmURL, workerURL: _workerURL, }) => {
     const first = !ffmpeg;
     try {
@@ -31,6 +78,7 @@ const load = async ({ coreURL: _coreURL, wasmURL: _wasmURL, workerURL: _workerUR
         // Encoded wasmURL and workerURL in the URL as a hack to fix locateFile issue.
         mainScriptUrlOrBlob: `${coreURL}#${btoa(JSON.stringify({ wasmURL, workerURL }))}`,
     });
+    biteReads(ffmpeg);
     ffmpeg.setLogger((data) => self.postMessage({ type: FFMessageType.LOG, data }));
     ffmpeg.setProgress((data) => self.postMessage({
         type: FFMessageType.PROGRESS,
@@ -39,10 +87,14 @@ const load = async ({ coreURL: _coreURL, wasmURL: _wasmURL, workerURL: _workerUR
     return first;
 };
 const exec = ({ args, timeout = -1 }) => {
+    // PlayRoom: ["-pr-bite", "0" | "1"] turns the big-bite reading off or on (tests compare the two)
+    if (args[0] === "-pr-bite") { io.off = args[1] === "0"; return 0; }
+    io.n = 0; io.bytes = 0; io.ms = 0;
     ffmpeg.setTimeout(timeout);
     ffmpeg.exec(...args);
     const ret = ffmpeg.ret;
     ffmpeg.reset();
+    self.postMessage({ type: FFMessageType.LOG, data: { type: "io", message: `pr-io ${io.n} ${io.bytes} ${Math.round(io.ms)}` } });
     return ret;
 };
 const writeFile = ({ path, data }) => {

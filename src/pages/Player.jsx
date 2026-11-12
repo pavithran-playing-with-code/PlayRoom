@@ -13,6 +13,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { openFilm, dolbyLike, soundMissing, warmDecoder } from "../utils/filmSound";
+import { isInstalled } from "../components/LandscapeGate";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const fmt = (t) => {
@@ -72,6 +73,7 @@ export default function Player() {
   };
   const close = () => {
     subTok.current++;
+    if (turned.current) { turned.current = false; try { window.screen.orientation.unlock(); } catch { /* fine */ } }
     if (snd.current) { snd.current.stop(); snd.current = null; }
     if (F.current) { F.current.then((x) => x.close()).catch(() => {}); F.current = null; }
     if (url) URL.revokeObjectURL(url);
@@ -183,8 +185,20 @@ export default function Player() {
   };
   const setVolume = (x) => { const v = vRef.current; if (snd.current) snd.current.setVolume(x); else if (v) v.volume = x; };
   const getVolume = () => { const v = vRef.current; return snd.current ? snd.current.volume() : v ? v.volume : 1; };
+  const turned = useRef(false);                     // the installed app: the film is held sideways by ⛶
   const full = async () => {
     const el = stageRef.current;
+    // The installed app has the whole screen already and never asks the
+    // browser for full screen (Chrome answers with a notice no page can turn
+    // off): ⛶ there turns the film sideways and back.
+    if (isInstalled()) {
+      const o = window.screen.orientation;
+      try {
+        if (turned.current) { turned.current = false; o.unlock(); }
+        else { await o.lock("landscape"); turned.current = true; }
+      } catch { /* not on this phone */ }
+      return;
+    }
     try {
       if (document.fullscreenElement) { await document.exitFullscreen(); return; }
       await el.requestFullscreen();

@@ -263,7 +263,7 @@ function TrackMenu({ film, tracks, onAudio, onSubs, onClose, diag }) {
   );
 }
 
-function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks, onAudio, onSubs, diag }) {
+function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks, onAudio, onSubs, diag, pseudo }) {
   const [menu, setMenu] = useState(false);
   const box = useRef(null);
   useLayoutEffect(() => {
@@ -274,7 +274,7 @@ function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks
   }, [film, hide]);
   const lv = useLevels({ getVol: () => volume(), setVol: (x) => volume(x) });
   return (
-    <div className="call-share cw-film" ref={shareRef} {...lv.handlers}>
+    <div className={`call-share cw-film${pseudo ? " pfull" : ""}`} ref={shareRef} {...lv.handlers}>
       <div className="cw-film-box" ref={box} style={lv.filter ? { filter: lv.filter } : undefined} />
       {lv.level}
       <SubLine v={film.v} cues={film.cues} />
@@ -568,6 +568,17 @@ export default function CallLayer() {
     if (!el) return;
     try {
       if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+      // The installed app never asks the browser for full screen: Chrome
+      // answers every such request with its own notice ("drag from the top to
+      // exit full screen") and no page can turn that off. The app already
+      // has the whole screen (manifest.json: fullscreen), so it is our own
+      // full screen there, turned sideways for a film.
+      if (isInstalled()) {
+        const on = !pseudo;
+        setPseudo(on);
+        try { await window.screen.orientation.lock(on ? "landscape" : "any"); } catch { /* not on every phone */ }
+        return;
+      }
       if (el.requestFullscreen) {
         await el.requestFullscreen();
         // a film on a phone: sideways (where the phone lets a page turn it)
@@ -850,7 +861,7 @@ export default function CallLayer() {
 
       {solo && expanded && (
         <div className="call-screen n1 sharing solo" role="dialog" aria-label="Movie">
-          <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={null} volume={C.filmVolume} waiting={C.filmWait} tracks={C.filmTracks} onAudio={C.filmAudio} onSubs={C.filmSubs} diag={C.filmDiag} />
+          <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={null} volume={C.filmVolume} waiting={C.filmWait} tracks={C.filmTracks} onAudio={C.filmAudio} onSubs={C.filmSubs} diag={C.filmDiag} pseudo={pseudo} />
           <div className="call-solo-bar">
             <button type="button" className="call-solo-btn" onClick={() => C.setExpanded(false)}>← Room</button>
             <label className="call-solo-btn">
@@ -875,7 +886,7 @@ export default function CallLayer() {
             </div>
           ) : C.film ? (
             <>
-              <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={stageFaces} volume={C.filmVolume} waiting={C.filmWait} tracks={C.filmTracks} onAudio={C.filmAudio} onSubs={C.filmSubs} diag={C.filmDiag} />
+              <FilmStage film={C.film} hide={C.hideFilm} shareRef={shareRef} onBig={big} faces={stageFaces} volume={C.filmVolume} waiting={C.filmWait} tracks={C.filmTracks} onAudio={C.filmAudio} onSubs={C.filmSubs} diag={C.filmDiag} pseudo={pseudo} />
               {strip}
             </>
           ) : watch ? (

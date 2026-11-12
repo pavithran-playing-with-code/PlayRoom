@@ -534,6 +534,17 @@ There is no test runner. What works:
   sound's. Test with a film carrying an SRT track ("Line N" every 4 s):
   jump to the middle, pick the subtitles, and the right line must be up in
   a second or two; then jump back to the start for the rest.
+- **The installed app never asks the browser for full screen.** Chrome
+  answers every `requestFullscreen` with its own notice ("<site> — drag from
+  the top to exit full screen") and no page can turn that off; the user
+  wants never to see it. So `manifest.json` is `display: fullscreen` (the
+  app has the whole screen always, no status bar), and where `isInstalled()`
+  ⛶ is our own full screen (`.pfull`, the film stage too) plus
+  `orientation.lock` — in the call, the movie screen and the Player. Only
+  a browser tab still uses the Fullscreen API. Don't add a
+  `requestFullscreen` that the installed app can reach. (A phone that
+  installed the app before this keeps the old manifest until Chrome
+  refreshes it, or the app is installed again.)
 - **The Rooms page** runs: Got a code? (one box for either kind of room),
   Movie rooms (make one, then other people's), Game rooms (start one, then
   other people's). Your own room is never listed to you.

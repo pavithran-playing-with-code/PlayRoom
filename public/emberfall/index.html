@@ -2374,15 +2374,78 @@ function makeTrail(){
 const _tp=new THREE.Vector3(),_hp=new THREE.Vector3();
 function updateTrail(tr,c,active,dt,tint){
   if(active){c.tip.getWorldPosition(_tp);c.weapon.getWorldPosition(_hp);tr.pts.unshift({t:_tp.clone(),h:_hp.clone(),a:1});}
-  for(const p of tr.pts)p.a-=dt*7;
+  for(const p of tr.pts)p.a-=dt*5;   // p7b: it lingers a little longer
   while(tr.pts.length&&tr.pts[tr.pts.length-1].a<=0)tr.pts.pop();
   if(tr.pts.length>tr.N)tr.pts.length=tr.N;
   const pos=tr.geo.attributes.position.array,col=tr.geo.attributes.color.array,n=tr.pts.length;
   for(let i=0;i<tr.N;i++){const p=tr.pts[Math.min(i,n-1)];const a=p?Math.max(0,p.a):0;
     if(!p){pos.fill(0,i*6,i*6+6);col.fill(0,i*6,i*6+6);continue;}
-    const hl=p.h.clone().lerp(p.t,.35);pos[i*6]=p.t.x;pos[i*6+1]=p.t.y;pos[i*6+2]=p.t.z;pos[i*6+3]=hl.x;pos[i*6+4]=hl.y;pos[i*6+5]=hl.z;
+    const hl=p.h.clone().lerp(p.t,.12);   // p7b: nearly the whole blade, not its last thirdpos[i*6]=p.t.x;pos[i*6+1]=p.t.y;pos[i*6+2]=p.t.z;pos[i*6+3]=hl.x;pos[i*6+4]=hl.y;pos[i*6+5]=hl.z;
     const k=a*(i<n?1:0);col[i*6]=tint[0]*k;col[i*6+1]=tint[1]*k;col[i*6+2]=tint[2]*k;col[i*6+3]=tint[0]*k*.2;col[i*6+4]=tint[1]*k*.2;col[i*6+5]=tint[2]*k*.2;}
   tr.geo.attributes.position.needsUpdate=true;tr.geo.attributes.color.needsUpdate=true;tr.m.visible=n>1;
+}
+
+/* ================= p7b: attack feel — the slash you see, the blow you feel =================
+   swoosh()  a bright crescent drawn along each swing's path (a curved blade of light, not a row of sparks)
+   impact()  where a blow lands: a star of light that snaps open, and sparks thrown the way the blow went
+   cam.punch a short push-in of the camera on a hit (it eases back by itself)
+   Everything here is drawing only, pooled, and never throws: a failure just means no effect. */
+const FX={sw:[],swLive:[],im:[],imLive:[],tex:null};
+function fxStarTex(){
+  if(FX.tex)return FX.tex;
+  const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');x.translate(64,64);
+  const g=x.createRadialGradient(0,0,0,0,0,60);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.25,'rgba(255,255,255,.55)');g.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle=g;x.beginPath();x.arc(0,0,60,0,TAU);x.fill();
+  x.fillStyle='rgba(255,255,255,.95)';
+  for(let i=0;i<4;i++){x.rotate(PI/4*(i?1:0));x.beginPath();x.moveTo(0,-62);x.quadraticCurveTo(5,-6,62,0);x.quadraticCurveTo(5,6,0,62);x.quadraticCurveTo(-5,6,-62,0);x.quadraticCurveTo(-5,-6,0,-62);x.fill();if(i===1)break;}
+  FX.tex=new THREE.CanvasTexture(c);return FX.tex;
+}
+function swooshMesh(){
+  const g=new THREE.RingGeometry(1.15,2.55,30,2,-1.3,2.6),pos=g.attributes.position,col=new Float32Array(pos.count*3);
+  for(let i=0;i<pos.count;i++){const x=pos.getX(i),y=pos.getY(i),r=Math.hypot(x,y),a=Math.atan2(y,x);
+    const edge=clamp((r-1.15)/1.4,0,1),tip=clamp(1-Math.abs(a)/1.3,0,1),v=Math.pow(edge,2.2)*Math.pow(tip,.55);col[i*3]=col[i*3+1]=col[i*3+2]=v;}
+  g.setAttribute('color',new THREE.BufferAttribute(col,3));
+  const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:1,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,fog:false}));
+  m.frustumCulled=false;m.matrixAutoUpdate=false;m.renderOrder=6;scene.add(m);return m;
+}
+const _sx=new THREE.Vector3(),_sy=new THREE.Vector3(),_sz=new THREE.Vector3(),_sa=new THREE.Vector3(),_sb=new THREE.Vector3();
+/* A crescent from the hero at (x,y,z) facing `yaw`. k: 0 a cut down across the body, 1 a rising cut, 2 an overhead chop.
+   tint [r,g,b]; size in metres (the blade's reach is about 2.5 × size). */
+function swoosh(x,y,z,yaw,k,tint,size=1,life=.2){
+  try{
+    const m=FX.sw.pop()||swooshMesh();
+    const fx=Math.sin(yaw),fz=Math.cos(yaw),rx=fz,rz=-fx;
+    // X: where the middle of the arc points; Y: the way the blade travels along it
+    if(k===1){_sx.set(fx,.25,fz);_sy.set(-rx*.6,.8,-rz*.6);}
+    else if(k===2){_sx.set(fx*.8,.6,fz*.8);_sy.set(fx*.6,-.8,fz*.6);}
+    else{_sx.set(fx,.05,fz);_sy.set(-rx*.86,-.5,-rz*.86);}
+    _sx.normalize();_sz.crossVectors(_sx,_sy).normalize();_sy.crossVectors(_sz,_sx).normalize();
+    m.userData={t:0,life,x,y,z,size,X:_sx.clone(),Y:_sy.clone(),Z:_sz.clone()};
+    m.material.color.setRGB(tint[0],tint[1],tint[2]);m.material.opacity=0;m.visible=true;FX.swLive.push(m);
+  }catch(e){}
+}
+const FXI={geo:null};
+function impactSprite(){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:fxStarTex(),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,depthTest:false,fog:false}));s.renderOrder=7;scene.add(s);return s;}
+/* A blow landing at (x,y,z), struck from (sx,sz). big: a crit, a finisher or a kill. */
+function impact(x,y,z,sx,sz,col,big){
+  try{
+    const s=FX.im.pop()||impactSprite();s.position.set(x,y,z);s.material.color.setHex(col);s.material.rotation=R()*PI;s.material.opacity=1;s.visible=true;
+    s.userData={t:0,life:big?.2:.14,size:big?3.4:2.1};FX.imLive.push(s);
+    let dx=x-sx,dz=z-sz;const d=Math.hypot(dx,dz)||1;dx/=d;dz/=d;
+    const n=big?12:7;for(let i=0;i<n;i++){const sp=7+R()*9,sd=(R()-.5)*1.3;spark(x,y+(R()-.5)*.5,z,(dx-dz*sd)*sp,1.5+R()*4,(dz+dx*sd)*sp,i%3?col:0xffffff,.22+R()*.2,big?.15:.11,16);}
+    cam.punch=Math.max(cam.punch||0,big?1:.55);
+  }catch(e){}
+}
+function updateFx(dt){
+  for(let i=FX.swLive.length-1;i>=0;i--){const m=FX.swLive[i],u=m.userData;u.t+=dt/u.life;
+    if(u.t>=1){m.visible=false;FX.swLive.splice(i,1);FX.sw.push(m);continue;}
+    const e=1-(1-u.t)*(1-u.t),sc=u.size*(.72+.5*e),a=lerp(-.55,.5,e),ca=Math.cos(a),sa=Math.sin(a);
+    _sa.copy(u.X).multiplyScalar(ca).addScaledVector(u.Y,sa).multiplyScalar(sc);_sb.copy(u.Y).multiplyScalar(ca).addScaledVector(u.X,-sa).multiplyScalar(sc);
+    m.matrix.makeBasis(_sa,_sb,u.Z).setPosition(u.x,u.y,u.z);m.matrixWorldNeedsUpdate=true;m.material.opacity=Math.min(1,(1-u.t)*1.6);}
+  for(let i=FX.imLive.length-1;i>=0;i--){const s=FX.imLive[i],u=s.userData;u.t+=dt/u.life;
+    if(u.t>=1){s.visible=false;FX.imLive.splice(i,1);FX.im.push(s);continue;}
+    const e=1-(1-u.t)*(1-u.t)*(1-u.t),sc=u.size*(.35+.65*e);s.scale.set(sc,sc,1);s.material.opacity=1-u.t*u.t;}
+  if(cam.punch>0)cam.punch=Math.max(0,cam.punch-dt*5.5);
 }
 
 function toast(txt,dur=2.6){feed(txt,{dur:clamp(dur,2.5,4)});}
@@ -2414,6 +2477,8 @@ function damageEnemy(e,amt,sx,sz,kb=4,crit=false,silent=false){
   if(!e.boss){e.kx=dx/d*kb*2;e.kz=dz/d*kb*2;if(e.state==='windup'||e.state==='chase'||e.state==='recover'||e.state==='attack'){e.state='stagger';e.t=0;e.windup=-1;e.atk=-1;}}
   else{e.kx=dx/d*kb*.3;e.kz=dz/d*kb*.3;if(e.state==='recover'||e.state==='stun')amt*=1;}
   burst(e.x,e.y+1.2*(e.def.scale||1),e.z,crit?0xffe27a:0xffffff,crit?14:8,4,.5,.14);
+  /* p7b: the blow itself — a star of light on the side it came from, sparks thrown on through */
+  if(!silent){const sc=e.def.scale||1,pull=Math.min(d,e.r*.7+.2);impact(e.x-dx/d*pull,e.y+1.15*sc,e.z-dz/d*pull,sx,sz,crit?0xffd24a:(e.hp<=0?0xffb060:0xfff4d8),crit||e.hp<=0||e.boss);}
   sfx(crit?'crit':'hit');
   if(e.hp<=0)killEnemy(e);
 }
@@ -2421,6 +2486,7 @@ function killEnemy(e){
   e.state='dead';e.deadT=0;e.hp=0;game.kills++;game.killed.add(e.id);
   for(const d of decals)if(d.userData.owner===e)d.visible=false;
   const def=e.def;burst(e.x,e.y+1,e.z,0xffd070,e.boss?60:18,e.boss?9:5,.9,.2);
+  if(!e.boss){game.hitstop=Math.max(game.hitstop,.09);for(let i=0;i<16;i++){const a=i/16*TAU;spark(e.x+Math.sin(a)*.5,e.y+.9,e.z+Math.cos(a)*.5,Math.sin(a)*7,2.5,Math.cos(a)*7,i%2?0xffd070:0xffffff,.4,.15,7);}}   // p7b: a ring thrown out as it falls
   addXP(def.xp);
   const n=def.coins?Math.round(RR(def.coins[0],def.coins[1])):Math.round(RR(40,70));
   for(let i=0;i<n;i++)dropPickup('coin',e.x+RR(-.8,.8),e.z+RR(-.8,.8),e.y+1);
@@ -2473,7 +2539,7 @@ function hurtPlayer(dmg,fx,fz,kind){
   const P=game.player;if(P.dead||game.st!=='play')return false;
   if(P.iT>0){if(P.state==='roll'&&!P.pd&&kind!=='lava'){P.pd=true;P.counter=2.2;P.mp=Math.min(100,P.mp+40);P.iT=Math.max(P.iT,.6);game.slow=.9;cam.shake=Math.max(cam.shake,.3);dmgNum(P.x,P.y+2.6,P.z,'PERFECT DODGE!','#ffe27a',true);toast('Counter ready — strike!',1.6);burst(P.x,P.y+1,P.z,0xffe27a,26,5,.7,.14);sfx('spin',1);}return false;}
   if((HEROES[game.hero]||{}).kit==='quake')dmg*=.8;
-  P.hp-=dmg;P.iT=.55;P.hurtT=.25;P.flash=.3;game.hurtV=1;cam.shake=Math.max(cam.shake,.35);
+  P.hp-=dmg;P.iT=.55;P.hurtT=.25;P.flash=.3;game.hurtV=1;cam.shake=Math.max(cam.shake,.35);impact(P.x,P.y+1.2,P.z,fx===undefined?P.x:fx,fz===undefined?P.z-1:fz,0xff5a4a,dmg>=18);
   const dx=P.x-fx,dz=P.z-fz,d=Math.hypot(dx,dz)||1;P.kbx=dx/d*7;P.kbz=dz/d*7;
   if(P.state==='attack'||P.state==='slam'){P.state='free';P.slam=null;}
   dmgNum(P.x,P.y+2.2,P.z,Math.round(dmg),'#ff6a5a');burst(P.x,P.y+1.2,P.z,0xff5a4a,10,4,.5,.14);sfx('hurt');game.hitstop=.06;
@@ -2500,7 +2566,7 @@ function playerHit(range,arc,mul,kb){
   for(const b of world.breakables){if(b.hp<=0)continue;const dx=b.x-P.x,dz=b.z-P.z,d=Math.hypot(dx,dz);if(d>range+.5)continue;if(arc<3&&(dx*fx+dz*fz)/(d||1)<Math.cos(arc))continue;breakBreakable(b);}
   hitObjects(range,arc,mul);
   if(hits&&P.counter>0){P.counter=0;burst(P.x,P.y+1.2,P.z,0xffd27a,30,7,.6,.16);dmgNum(P.x,P.y+2.4,P.z,'COUNTER!','#ffd27a',true);}
-  if(hits){game.hitstop=Math.max(game.hitstop,.05);/* fix3: a heavy hit held .095 s */cam.shake=Math.max(cam.shake,.12+mul*.08);}
+  if(hits){game.hitstop=Math.max(game.hitstop,mul>1.5?.085:.06);/* fix3: a heavy hit held .095 s; p7b: .06, a finisher .085 */cam.shake=Math.max(cam.shake,.14+mul*.1);}
   return hits;
 }
 function breakBreakable(b){
@@ -2555,7 +2621,7 @@ function updatePlayer(dt){
   else if(P.state==='attack'){
     const dur=[.44,.44,.66][P.atkIdx];P.atkT+=dt/dur;
     const lf=Math.max(0,1-P.atkT*2.2);P.vx=P.lungeX*lf;P.vz=P.lungeZ*lf;
-    if(!P.hitDone&&P.atkT>=ATK_HIT[P.atkIdx]){P.hitDone=true;owChop();const k=P.atkIdx;heroSwing(P,k);slashArc(P,k);spark3(P);if(k===2){playerHit(6.2,PI+1,.7,12);cam.shake=Math.max(cam.shake,.35);for(let i=0;i<28;i++){const a=i/28*TAU;spark(P.x+Math.sin(a)*1.2,P.y+.3,P.z+Math.cos(a)*1.2,Math.sin(a)*9,.8,Math.cos(a)*9,0xffc060,.5,.16,0);}burst(P.x,P.y+.2,P.z,0xd8c8a0,14,4,.5,.16);sfx('smash');}}
+    if(!P.hitDone&&P.atkT>=ATK_HIT[P.atkIdx]){P.hitDone=true;owChop();const k=P.atkIdx;heroSwing(P,k);slashArc(P,k);spark3(P);{const tn=ATK_TINT[k]||ATK_TINT[0],hs=(HEROES[game.hero]||{}).o&&(HEROES[game.hero].o.scale||1)||1;swoosh(P.x+Math.sin(P.yaw)*.35,P.y+(k===2?1.5:1.2)*hs,P.z+Math.cos(P.yaw)*.35,P.yaw,k,tn,(k===2?1.25:1.05)*hs,k===2?.24:.19);}if(k===2){playerHit(6.2,PI+1,.7,12);cam.shake=Math.max(cam.shake,.35);for(let i=0;i<28;i++){const a=i/28*TAU;spark(P.x+Math.sin(a)*1.2,P.y+.3,P.z+Math.cos(a)*1.2,Math.sin(a)*9,.8,Math.cos(a)*9,0xffc060,.5,.16,0);}burst(P.x,P.y+.2,P.z,0xd8c8a0,14,4,.5,.16);sfx('smash');}}
     if(input.attack>0&&P.atkT<=.55){P.atkQ=true;input.attack=0;}            // fix3: a press during the swing is kept for the next one
     if(P.atkT>.55&&(input.attack>0||P.atkQ)){input.attack=0;P.atkQ=false;P.combo=.1;startAttack(P);}
     else if(P.atkT>=1){P.state='free';P.combo=.5;P.atkQ=false;}
@@ -2660,6 +2726,7 @@ function endDecal(d){if(d){d.visible=false;d.userData.owner=null;}}
 function updateEnemy(e,dt){
   const P=game.player,c=e.c;
   e.flash=Math.max(0,e.flash-dt);e.hit=Math.max(0,e.hit-dt*5);e.cd-=dt;e.aggroT-=dt;
+  if(c.pivot&&c.pivot.scale){const h=e.hit*e.hit;c.pivot.scale.set(1+h*.14,1-h*.16,1+h*.14);}   // p7b: squashed by the blow, springing back
   const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz);
   c.root.visible=d<150;
   if(e.state==='dead'){e.deadT+=dt/.9;poseAny(e,{sp:0,phase:e.phase,dead:Math.min(1,e.deadT),seed:e.seed});if(e.deadT>=2.4){scene.remove(c.root);if(e.trail)scene.remove(e.trail.m);game.enemies.splice(game.enemies.indexOf(e),1);}else if(e.deadT>1.4)c.root.position.y-=dt*.6;return;}
@@ -3493,7 +3560,8 @@ function updateCamera(dt){
   const hc=P.c.head,cp=P.c.cape;
   const target=_camT.set(P.x,P.y+(m==='top'?.6:1.6)+(P.swim?-.6:0),P.z);
   const sh=cam.shake>0?cam.shake:0;cam.shake=Math.max(0,cam.shake-dt*2.2);
-  const fovTarget=(m==='top'?44:m==='first'?78:62)+(P.state==='roll'?5:0)+(P.sp>.8&&P.state==='free'?4:0);cam.fov=lerp(cam.fov,fovTarget,Math.min(1,dt*6));if(Math.abs(camera.fov-cam.fov)>.01){camera.fov=cam.fov;camera.updateProjectionMatrix();}
+  const fovTarget=(m==='top'?44:m==='first'?78:62)+(P.state==='roll'?5:0)+(P.sp>.8&&P.state==='free'?4:0);cam.fov=lerp(cam.fov,fovTarget,Math.min(1,dt*6));
+  {const pf=cam.fov-(cam.punch||0)*3.2;if(Math.abs(camera.fov-pf)>.01){camera.fov=pf;camera.updateProjectionMatrix();}}   // p7b: a hit pushes the view in for a moment
   if(m==='first'){
     hc.visible=false;if(cp)cp.visible=false;
     const ey=P.y+1.72+(P.swim?-.5:0);_f.set(Math.sin(cam.yaw)*Math.cos(cam.pitch),-Math.sin(cam.pitch),Math.cos(cam.yaw)*Math.cos(cam.pitch));
@@ -3719,7 +3787,7 @@ function drawHUD(){
     const p=proj(e.x,e.y+(e.def.scale||1)*2.2+(e.c.isWolf?-.5:0),e.z);if(!p||inAv(p[0],p[1]))continue;const w=44,x=p[0]-w/2,y=p[1];
     hx.fillStyle='rgba(0,0,0,.6)';hx.fillRect(x-1,y-1,w+2,7);hx.fillStyle=e.state==='windup'?'#ffb02a':'#e5483f';hx.fillRect(x,y,w*clamp(e.hp/e.maxhp,0,1),5);}
   // damage numbers
-  for(const q of game.pops){const k=q.t/1.1;const p=proj(q.x,q.y+k*1.4,q.z);if(!p||inAv(p[0],p[1]))continue;hx.globalAlpha=Math.max(0,1-k*k);hx.font=`800 ${q.big?26:18}px 'Cinzel',serif`;hx.lineWidth=4;hx.strokeStyle='rgba(0,0,0,.75)';hx.strokeText(q.txt,p[0],p[1]);hx.fillStyle=q.col;hx.fillText(q.txt,p[0],p[1]);}
+  for(const q of game.pops){const k=q.t/1.1;const p=proj(q.x,q.y+k*1.4,q.z);if(!p||inAv(p[0],p[1]))continue;hx.globalAlpha=Math.max(0,1-k*k);hx.font=`800 ${Math.round((q.big?26:18)*(1+Math.max(0,.16-q.t)*4.5))}px 'Cinzel',serif`;   /* p7b: each number lands big and settles */hx.lineWidth=4;hx.strokeStyle='rgba(0,0,0,.75)';hx.strokeText(q.txt,p[0],p[1]);hx.fillStyle=q.col;hx.fillText(q.txt,p[0],p[1]);}
   if(game.bark&&!game.dialog){const bk=game.bark,p=proj(bk.n.x,bk.n.y+2.7,bk.n.z);if(p&&!inAv(p[0],p[1]-20)){const k=bk.t,al=Math.min(1,k*4,(3.4-k)*3);hx.globalAlpha=Math.max(0,al);hx.font="700 16px 'Alegreya Sans',sans-serif";const w=hx.measureText(bk.txt).width+22,x=p[0]-w/2,y=p[1]-34;hx.fillStyle='rgba(255,246,222,.95)';hx.strokeStyle='#5a3a22';hx.lineWidth=2.5;hx.beginPath();hx.roundRect(x,y,w,30,10);hx.fill();hx.stroke();hx.beginPath();hx.moveTo(p[0]-6,y+30);hx.lineTo(p[0],y+38);hx.lineTo(p[0]+6,y+30);hx.fill();hx.fillStyle='#3a2410';hx.fillText(bk.txt,p[0],y+16);hx.globalAlpha=1;}}
   hx.globalAlpha=1;
   // lock reticle
@@ -3739,7 +3807,7 @@ function step(dt){
   for(const e of _en){updateEnemy(e,dt);if(e.c&&e.c.root)e.c.root.visible=(Math.abs(e.x-P.x)<75&&Math.abs(e.z-P.z)<75)||e.boss&&e.awake;if(e.state==='chase'||e.state==='windup'||e.state==='attack')music.combat=1;}
   if(game.boss&&game.boss.state!=='dead')music.combat=1;else if(music.boss){music.boss=false;}
   {let j=0;for(const q of game.pops){q.t+=dt;if(q.t<1.1)game.pops[j++]=q;}game.pops.length=j;}   // fix2: in place
-  updateProjs(dt,game);updatePickups(dt);updateParticles(dt);updateNPCs(dt);updateDialog(dt);
+  updateProjs(dt,game);updatePickups(dt);updateParticles(dt);updateFx(dt);updateNPCs(dt);updateDialog(dt);
   worldFx(dt,P);
   // dialog/region/hud
   const reg=regionOf(P.x,P.z);if(reg!==lastRegion){lastRegion=reg;$('regionname').textContent=reg;if(game.st==='play'&&game.time>2)toast(reg,2.2);}
@@ -4228,7 +4296,7 @@ function watchStep(dt){
   const cc=Array.isArray(f.c)?f.c:[0,.38,7.5,'third',0];game.lock=null;game.dialog=null;
   cam.yaw+=angDiff(cam.yaw,+cc[0]||0)*k;cam.pitch+=((+cc[1]||0)-cam.pitch)*k;cam.dist+=((+cc[2]||7.5)-cam.dist)*k;cam.shake=Math.max(cam.shake,+cc[4]||0);
   /* the world, the view and the HUD */
-  updateParticles(dt);updateNPCs(dt);
+  updateParticles(dt);updateFx(dt);updateNPCs(dt);
   WX.next=1e12;worldFx(dt,P);
   const reg=regionOf(P.x,P.z);if(reg!==lastRegion){lastRegion=reg;$('regionname').textContent=reg;}
   updateCamera(dt);treeOcclude();updateSky(game.T,camera.position,P);weatherLook();

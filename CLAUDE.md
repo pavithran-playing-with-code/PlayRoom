@@ -307,6 +307,13 @@ There is no test runner. What works:
   headless Chrome (allow 45 s to load, tens of seconds a step); to look at
   poses, render a strip of them from `window.__ef` (`makeHero`,
   `poseHumanoid`, `renderer`) into a canvas, as the hero portraits do.
+  Attack feel (p7b, the FX block above `toast`): `swoosh()` draws a crescent
+  of light along each swing, `impact()` a star and thrown sparks where a blow
+  lands (enemy or hero), `cam.punch` pushes the view in for a moment, an
+  enemy is squashed by a hit (`pivot.scale` from `e.hit`), a kill throws a
+  ring, hit numbers land big and settle. Drawing only, pooled, and wrapped
+  so a failure means no effect, never a broken game. Written without being
+  run (the user tests on their phone; see the memory note).
   **Co-op is not in the rebuild yet**: each player plays their own island and
   `ef:msg` is ignored. The old two-player version is kept beside it as
   `index-backup-before-p6a.html` + `game.js` (and `game-backup-before-p6a.js`);

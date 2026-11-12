@@ -24,27 +24,15 @@ const POSTERS = {
 };
 export const hasPoster = (slug) => !!POSTERS[slug];
 
-const STRIPES = [-66.8, -50.1, -33.4, -16.7, 0, 16.7, 33.4, 50.1];
-
 export default function GamePoster({ slug, icon }) {
   const [broken, setBroken] = useState(false);
   const col = POSTERS[slug];
   if (!col || broken) return <GameIcon icon={icon} slug={slug} />;
+  // A plain <img>, shadowed in CSS (.game-poster.flat in index.css): inside an
+  // SVG filter the drawing can be rasterised small and come out soft.
   return (
-    <svg className="game-poster" viewBox="0 0 64 64" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
-      <defs>
-        {/* the drawing's own shape, in ink, a little down and to the right */}
-        <filter id="gp-flat" x="-10%" y="-10%" width="125%" height="125%" colorInterpolationFilters="sRGB">
-          <feOffset in="SourceAlpha" dx="2.1" dy="2.6" result="low" />
-          <feFlood floodColor="#1B1230" result="ink" />
-          <feComposite in="ink" in2="low" operator="in" result="shadow" />
-          <feMerge><feMergeNode in="shadow" /><feMergeNode in="SourceGraphic" /></feMerge>
-        </filter>
-      </defs>
-      <rect width="64" height="64" fill={col} />
-      {STRIPES.map((x) => <path key={x} d={`M${x} 64L${x + 64} 0h8.35L${x + 8.35} 64z`} fill="#FFFFFF" opacity=".16" />)}
-      <image href={`${process.env.PUBLIC_URL}/game-icons/${slug}.svg`} x="8.3" y="7.7" width="47.4" height="47.4"
-        filter="url(#gp-flat)" onError={() => setBroken(true)} />
-    </svg>
+    <span className="game-poster flat" style={{ backgroundColor: col }} aria-hidden="true">
+      <img src={`${process.env.PUBLIC_URL}/game-icons/${slug}.svg`} alt="" draggable="false" onError={() => setBroken(true)} />
+    </span>
   );
 }

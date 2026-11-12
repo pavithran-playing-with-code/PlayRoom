@@ -1,11 +1,14 @@
 // src/pages/Rooms.jsx
-// Rooms, of two kinds. Game rooms: getting into someone else's match — a code
-// a friend sent, or an open room (starting your own is the Play tab, /lobby).
-// Movie rooms: made right here — you're in at once, nothing to start — and
-// listed on their own, so friends can walk in while the film is on.
+// Rooms, of two kinds, down one page:
+//   Got a code?   one box for either kind — the code says which room it is
+//   Movie rooms   make one right here (you're in at once, nothing to start),
+//                 then other people's open ones, to walk in while the film's on
+//   Game rooms    start one (the Play tab), then other people's open ones
+// Your own room is never listed to you: you're in it, or you left it.
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api } from "../utils/api";
+import { useAuth } from "../utils/AuthContext";
 import { GAME_MAP } from "../components/games/registry";
 import { useToast, Icon } from "../components/ui";
 import PeekBuddy from "../components/characters/PeekBuddy";
@@ -14,6 +17,7 @@ import GameIcon from "../components/games/GameIcon";
 export default function Rooms() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { user } = useAuth();
 
   const [rooms, setRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
@@ -69,51 +73,17 @@ export default function Rooms() {
     try { await join(code); } catch { toast.error("Could not join."); }
   }
 
-  const gameRooms = rooms.filter((r) => r.game_slug !== "movie");
-  const movieRooms = rooms.filter((r) => r.game_slug === "movie");
+  const others = rooms.filter((r) => Number(r.host_id) !== Number(user?.id));
+  const gameRooms = others.filter((r) => r.game_slug !== "movie");
+  const movieRooms = others.filter((r) => r.game_slug === "movie");
 
   return (
     <div className="wrap">
       <div className="mid">
-        <div className="pop rm-movie">
-          <div className="rm-movie-icon" aria-hidden="true">🍿</div>
-          <div className="rm-movie-txt">
-            <h2 className="rm-h">Movie room</h2>
-            <p>Play a movie from your phone. Alone it's your own player; when friends walk in they watch it with you, and you can talk.</p>
-            <label className="rm-movie-opt">
-              <input type="checkbox" className="switch" checked={moviePrivate} onChange={(e) => setMoviePrivate(e.target.checked)} />
-              <span>{moviePrivate ? "Private — only people with the link" : "Public — anyone can walk in from the list below"}</span>
-            </label>
-          </div>
-          <button type="button" className="press p-sun full" onClick={makeMovieRoom} disabled={making}>
-            {making ? "Opening…" : "🎬 Create a movie room"}
-          </button>
-        </div>
-
-        <section className="sec" style={{ marginTop: 26 }}>
-          <div className="sec-h">
-            <h2 className="rm-h">🎬 Movie rooms</h2>
-            <span className="chip c-coral">{movieRooms.length} open</span>
-          </div>
-          {movieRooms.length === 0 ? (
-            <div className="note" style={{ background: "var(--paper2)", textAlign: "center" }}>{loadingRooms ? "Looking for rooms…" : "No movie rooms open right now."}</div>
-          ) : (
-            <div className="rm-movies">
-              {movieRooms.map((room) => (
-                <button key={room.id} className="pop rm-movie-row" onClick={() => quickJoin(room.room_code)} disabled={Number(room.player_count) >= Number(room.max_players)}>
-                  <span className="rm-movie-row-icon" aria-hidden="true">🎬</span>
-                  <span className="rm-movie-row-txt"><b>{room.host_name}'s movie room</b><small>{room.player_count} of {room.max_players} watching</small></span>
-                  <span className="chip c-sun">{Number(room.player_count) >= Number(room.max_players) ? "Full" : "Join"}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <div className="pop rm-code" style={{ marginTop: 30 }}>
+        <div className="pop rm-code">
           <h2 className="rm-h"><Icon name="link" size={22} stroke={2.8} /> Got a code?</h2>
           <p className="muted" style={{ fontSize: ".9rem", marginBottom: 14 }}>
-            Type the six letters your friend sent you.
+            Type the six letters your friend sent you — a game room or a movie room.
           </p>
           <form onSubmit={handleJoin}>
             {/* Six letter tiles. A transparent input sits over them so the
@@ -134,20 +104,53 @@ export default function Rooms() {
           </form>
         </div>
 
+
+        <section className="sec" style={{ marginTop: 30 }}>
+          <div className="sec-h">
+            <h2 className="rm-h">🎬 Movie rooms</h2>
+            <span className="chip c-coral">{movieRooms.length} open</span>
+          </div>
+          <div className="pop rm-movie" style={{ marginBottom: 14 }}>
+          <div className="rm-movie-icon" aria-hidden="true">🍿</div>
+          <div className="rm-movie-txt">
+            <h3 className="rm-h">Your own movie room</h3>
+            <p>Play a movie from your phone. Alone it's your own player; when friends walk in they watch it with you, and you can talk.</p>
+            <label className="rm-movie-opt">
+              <input type="checkbox" className="switch" checked={moviePrivate} onChange={(e) => setMoviePrivate(e.target.checked)} />
+              <span>{moviePrivate ? "Private — only people with the link" : "Public — anyone can walk in from the list below"}</span>
+            </label>
+          </div>
+          <button type="button" className="press p-sun full" onClick={makeMovieRoom} disabled={making}>
+            {making ? "Opening…" : "🎬 Create a movie room"}
+          </button>
+        </div>
+
+          {movieRooms.length === 0 ? (
+            <div className="note" style={{ background: "var(--paper2)", textAlign: "center" }}>{loadingRooms ? "Looking for rooms…" : "Nobody else has a movie room open right now."}</div>
+          ) : (
+            <div className="rm-movies">
+              {movieRooms.map((room) => (
+                <button key={room.id} className="pop rm-movie-row" onClick={() => quickJoin(room.room_code)} disabled={Number(room.player_count) >= Number(room.max_players)}>
+                  <span className="rm-movie-row-icon" aria-hidden="true">🎬</span>
+                  <span className="rm-movie-row-txt"><b>{room.host_name}'s movie room</b><small>{room.player_count} of {room.max_players} watching</small></span>
+                  <span className="chip c-sun">{Number(room.player_count) >= Number(room.max_players) ? "Full" : "Join"}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="sec" style={{ marginTop: 30 }}>
           <div className="sec-h">
             <h2 className="rm-h"><Icon name="globe" size={26} stroke={2.6} /> Game rooms</h2>
             <span className="chip c-mint">{gameRooms.length} open</span>
           </div>
+          <Link to="/lobby" className="press p-coral full" style={{ marginBottom: 14 }}><Icon name="play" size={18} /> Start a game room</Link>
 
           {loadingRooms ? (
             <div className="note" style={{ background: "var(--paper2)", textAlign: "center" }}>Looking for rooms…</div>
           ) : gameRooms.length === 0 ? (
-            <div className="pop" style={{ padding: "40px 20px", textAlign: "center" }}>
-              <div style={{ fontSize: "3rem", marginBottom: 10 }}>🪑</div>
-              <p className="muted">No open game rooms right now.</p>
-              <Link to="/lobby" className="press p-coral" style={{ marginTop: 16 }}><Icon name="play" size={18} /> Start one</Link>
-            </div>
+            <div className="note" style={{ background: "var(--paper2)", textAlign: "center" }}>Nobody else has a game room open right now.</div>
           ) : (
             <div className="tiles">
               {gameRooms.map((room) => {

@@ -2196,7 +2196,7 @@ html[data-theme="dark"] body:not(.in-game) .p-ghost:hover,html[data-theme="dark"
 /* ── Rooms: the movie room card and the movie rooms list (.rm-movie) ── */
 .rm-movie{padding:18px;display:grid;grid-template-columns:auto 1fr;gap:12px 14px;align-items:center;background:var(--coral);color:#fff}
 .rm-movie-icon{font-size:46px;line-height:1}
-.rm-movie-txt h2{margin:0 0 4px;color:#fff}
+.rm-movie-txt h2,.rm-movie-txt h3{margin:0 0 4px;color:#fff}
 .rm-movie-txt p{margin:0 0 8px;font-weight:700;font-size:.9rem}
 .rm-movie-opt{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.82rem}
 .rm-movie > .press{grid-column:1 / -1}

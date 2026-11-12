@@ -455,16 +455,26 @@ There is no test runner. What works:
   most, open with one in it, kept fresh in the database while anyone is in
   it) and the same film, still playing, goes to them: now it's the call
   screen. `check-calls.js` tests the room call.
-- **A film's picture never plays without its sound** (`filmSound.js`
-  `playSound`): where the film is — its start, a jump — a quick 4 s piece
-  (`head`) is decoded from that very moment, ahead of the 10 s pieces, on
-  two decoders from the start; until it is ready the picture is held
-  (paused by us, `held`; `start` begins a film only once its sound is here)
-  and "Getting the sound ready…" shows. A decoder falling behind mid-film
-  holds it the same way. A Dolby film is recognised before it is started
-  (`dolbyLike`), so its first scene is never silent. The player test
-  (`window.__pl.stats()`: `held`, `holds`, `headMs`) checks the picture
-  hasn't moved when the sound begins, and after a jump.
+- **A film's picture never plays without its sound, and once going it
+  doesn't stop** (`filmSound.js` `playSound`): where the film is — its start,
+  a jump — two quick pieces (`head`: 4 s, then the 6 s after it) are decoded
+  side by side from that very moment, ahead of the 10 s pieces, on two
+  decoders from the start. The picture is held (paused by us, `held`;
+  `start` begins a film only once its sound is here) until the sound in hand
+  will outlast the time the next piece still needs, judged from how fast
+  this phone is really decoding (`safe`, `rate`) — letting go the moment
+  the first quick piece arrived started the film and paused it again 4 s
+  later on a phone. A decoder that still falls behind mid-film holds once
+  more, for longer (`strict`). A Dolby film is recognised before it is
+  started (`dolbyLike`), so its first scene is never silent. Test with a
+  decoder as slow as a phone's (`window.__slowFF` = ms of work per second
+  of sound; 400 is a mid phone): the first half minute must play with no
+  pause and no picture without sound (`window.__pl.stats()`: `held`,
+  `holds`, `ranOut`, `headMs`, `est`). A fast test machine hides this
+  whole class of bug.
+- **The Rooms page** runs: Got a code? (one box for either kind of room),
+  Movie rooms (make one, then other people's), Game rooms (start one, then
+  other people's). Your own room is never listed to you.
 - **One account, two devices** — a call is on one device: the others hear
   `call:mine`, show "In a call on your other device", can't start a second
   call, and can take it over (`call:move`). A match is played on one device:

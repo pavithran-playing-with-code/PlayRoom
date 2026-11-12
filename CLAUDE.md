@@ -266,7 +266,12 @@ There is no test runner. What works:
   it turn faster for all (`sn:ev` → `heats`); the win is `lampGoal` lamps
   (pairs_matched 1, `COOP_GOAL`). `scripts/check-sneak.mjs` plans an unseen
   route through every kind of ground and walks it through the rules.
-  `window.__sn[<player id>]` reaches a run in tests.
+  `window.__sn[<player id>]` reaches a run in tests. Its sound
+  (`sneakAudio.js`, Web Audio, nothing recorded) is part of the play: the
+  lamp's hum swells as a beam comes round to you (`beamNear`) and an alarm
+  climbs while you're in the light; footsteps, a sting when spotted, a tune
+  when the lamp goes out. Tests measure it muted (`__sn[id].audio.state()`
+  and `.level()`); a watcher hears nothing.
 - **Emberfall** (slug `emberfall`, solo only for now — the registry offers
   one seat until co-op is ported) is a finished single page,
   `public/emberfall/index.html` (the mobile rebuild, worked on outside this

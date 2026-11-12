@@ -33,6 +33,7 @@ import { useSocket } from "../../utils/SocketContext";
 import FloatStick from "../together/FloatStick";
 import { buildLevel, newRun, step, beamAngles, heated, progressPoints, offPoints, PTS } from "./sneakSim";
 import { createSneakScene } from "./sneakScene";
+import { makeSneakAudio, beamNear } from "./sneakAudio";
 
 const SEND_MS = 100;
 const NEXT_MS = 1700;              // the lamp is out: this long to enjoy it, then the next ground
@@ -82,8 +83,21 @@ export default function ShadowSneakInner(props) {
   const size = useRef({ w: 0, h: 0, set: { w: 0, h: 0 } });
   const [broken, setBroken] = useState(false);
   const live = useRef(null);                      // { level, W, S, bank, nextAt, spots }
-  // for tests: each sneaker's run, by player id
-  useEffect(() => { const all = (window.__sn = window.__sn || {}); all[myId] = live; return () => { delete all[myId]; }; }, [myId]);
+  // The sound (sneakAudio.js): the lamp's hum swelling as a beam comes round,
+  // the alarm while you're in the light, your footsteps. A watcher hears none.
+  const audio = useRef(null);
+  if (audio.current === null && !isSpectator) audio.current = makeSneakAudio();
+  useEffect(() => {
+    const A = audio.current;
+    if (!A) return undefined;
+    const wake = () => A.init();                  // a phone allows no sound before a tap
+    document.addEventListener("pointerdown", wake, true);
+    document.addEventListener("keydown", wake, true);
+    return () => { document.removeEventListener("pointerdown", wake, true); document.removeEventListener("keydown", wake, true); A.close(); };
+  }, []);
+  useEffect(() => { if (eng.gameOver && audio.current) { audio.current.quiet(); audio.current.sfx.over(); } }, [eng.gameOver]);
+  // for tests: each sneaker's run (and its sound), by player id
+  useEffect(() => { const all = (window.__sn = window.__sn || {}); all[myId] = live; live.audio = audio.current; return () => { delete all[myId]; }; }, [myId]);
   const stick = useRef(null), knobRef = useRef(null), duck = useRef(false), keys = useRef({});
   const [ducking, setDucking] = useState(false);
   const press = (on) => (e) => { e.preventDefault(); duck.current = on; setDucking(on); };
@@ -130,6 +144,7 @@ export default function ShadowSneakInner(props) {
       if (!coop || !L || Number(m.user_id) === myId || m.k !== "spot" || m.lv !== L.level) return;
       L.S.heats.push(Number(m.t) || 0);
       sayRef.current(`🔥 ${nameOf(m.user_id)} was spotted — the lamp speeds up!`, "error", 2600);
+      if (audio.current) audio.current.sfx.heat();
     };
     socket.on("sn:pos", onPos); socket.on("sn:ev", onEv);
     return () => { socket.off("sn:pos", onPos); socket.off("sn:ev", onEv); };
@@ -186,6 +201,7 @@ export default function ShadowSneakInner(props) {
       const T = (now - anchor.current) / 1000;
       let L = live.current;
       const S = L.S, W = L.W, sc = sceneRef.current;
+      const px0 = S.x, pz0 = S.z;                   // where I was: how far I walked this frame, for the footsteps
       const mates = coop ? [...remotes.current.values()].filter((r) => now - r.at < FRESH_MS) : [];
       if (!overRef.current) {
         // together: a friend already on a later ground — on we go
@@ -214,13 +230,16 @@ export default function ShadowSneakInner(props) {
           left -= h;
           evs.push(...step(S, W, { mx, mz, duck: duck.current || k.shift || k[" "] }, h, T - left, rung));
         }
+        const A = audio.current;
         for (const e of evs) {
-          if (e.k === "bell") { sc?.cheer("bell", S.x, S.z); sayRef.current("🔔 The lamp is staring at you — friends, run!", "info", 2600); }
+          if (e.k === "bell") { sc?.cheer("bell", S.x, S.z); A?.sfx.bell(); sayRef.current("🔔 The lamp is staring at you — friends, run!", "info", 2600); }
           else if (e.k === "spotted") {
             L.spots++; L.bank -= PTS.spotted;
+            A?.sfx.spotted();
             if (coop) { S.heats.push(T); tell("spot", { lv: L.level, t: r2(T) }); }
           }
-          else if (e.k === "in" && coop && here.some((r) => !r.in)) sayRef.current("You're at the door — the lamp goes out when everyone is", "info", 3000);
+          else if (e.k === "back") A?.sfx.back();
+          else if (e.k === "in" && coop && here.some((r) => !r.in)) { A?.sfx.door(); sayRef.current("You're at the door — the lamp goes out when everyone is", "info", 3000); }
         }
         // the lamp goes out: mine at once; together, when everyone here is at the door
         if (S.in && !L.nextAt && (!coop || here.every((r) => r.in))) {
@@ -228,6 +247,7 @@ export default function ShadowSneakInner(props) {
           L.nextAt = now + NEXT_MS;
           offs.current += 1;
           sc?.cheer("off");
+          A?.sfx.off();
           sayRef.current(coop && offs.current === goal ? "💡 Lights out — that's the goal! Keep going" : `💡 Lights out! +${offPoints(S)}`, "success", 1800);
         }
         if (L.nextAt && now >= L.nextAt) { startLevel(L.level + 1, T, L.bank); L = live.current; }
@@ -247,6 +267,10 @@ export default function ShadowSneakInner(props) {
       fit();
       const rungNow = [...new Set([P.bell, ...mates.filter((r) => r.lv === C.level).map((r) => r.bl)].filter((b) => b >= 0))];
       const hot = heated(T, P.heats);
+      if (audio.current && !overRef.current) {
+        const moved = Math.hypot(P.x - px0, P.z - pz0);
+        audio.current.frame({ near: P.in || P.down > 0 ? 0 : beamNear(C.W, beamAngles(C.W, P), P.x, P.z), seen: P.down > 0 ? 0 : P.seen, moved: moved < 1 ? moved : 0, duck: P.duck, hot, off: !!C.nextAt });
+      }
       sceneRef.current?.draw({
         me: { id: myId, slot: slotOf(myId), name: "", x: P.x, z: P.z, face: P.face, duck: P.duck, moving: P.moving, seen: P.seen, down: P.down, grace: P.grace, in: P.in },
         others: others(C.level, now), beams: beamAngles(C.W, P), heat: hot, off: !!C.nextAt, rung: rungNow,

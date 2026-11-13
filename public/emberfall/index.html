@@ -2726,12 +2726,13 @@ function telegraph(e,x,z,r,col){const d=getDecal();if(!d)return null;d.visible=t
 function decalFill(d,k){if(!d)return;d.userData.b.scale.set(Math.max(.01,k),Math.max(.01,k),1);d.userData.b.material.opacity=.15+.3*k;}
 function endDecal(d){if(d){d.visible=false;d.userData.owner=null;}}
 function updateEnemy(e,dt){
-  const P=game.player,c=e.c;
+  const P=coopTarget(e),c=e.c;   // p7e: the nearest of us (alone: me)
   e.flash=Math.max(0,e.flash-dt);e.hit=Math.max(0,e.hit-dt*5);e.cd-=dt;e.aggroT-=dt;
   if(c.pivot&&c.pivot.scale){const h=e.hit*e.hit;c.pivot.scale.set(1+h*.14,1-h*.16,1+h*.14);}   // p7b: squashed by the blow, springing back
   const dx=P.x-e.x,dz=P.z-e.z,d=Math.hypot(dx,dz);
   c.root.visible=d<150;
   if(e.state==='dead'){e.deadT+=dt/.9;poseAny(e,{sp:0,phase:e.phase,dead:Math.min(1,e.deadT),seed:e.seed});if(e.deadT>=2.4){scene.remove(c.root);if(e.trail)scene.remove(e.trail.m);game.enemies.splice(game.enemies.indexOf(e),1);}else if(e.deadT>1.4)c.root.position.y-=dt*.6;return;}
+  if(CO.role===2){coopPuppet(e,dt);return;}   // p7e: my friend's page runs the enemies; here they are drawn from it
   const act=d<80||e.state!=='idle';if(!act){return;}
   e.kx*=Math.max(0,1-dt*6);e.kz*=Math.max(0,1-dt*6);if(Math.abs(e.kx)+Math.abs(e.kz)>.1)enemyStep(e,e.kx,e.kz,dt);
   if(e.boss)return updateBoss(e,dt,d,dx,dz);
@@ -2765,15 +2766,15 @@ function updateEnemy(e,dt){
       e.t+=dt;e.windup=Math.min(1,e.t/def.wind);if(e.t<def.wind*.7)face(Math.atan2(dx,dz),def.bow?14:8);
       if(def.bow)e.bow=0;
       if(e.t>=def.wind){
-        if(def.bow){const a=Math.atan2(dx,dz);const sp=22,dist=Math.max(d,1),vy=((P.y+1.1)-(e.y+1.4))/(dist/sp);fireProj({kind:'arrow',x:e.x+Math.sin(a)*.8,y:e.y+1.3,z:e.z+Math.cos(a)*.8,vx:Math.sin(a)*sp,vz:Math.cos(a)*sp,vy:vy,dmg:def.dmg,col:0xe8d8a8,r:.5});sfx('arrow');e.state='recover';e.t=0;e.cd=RR(1.4,2.4);}
+        if(def.bow){const a=Math.atan2(dx,dz);const sp=22,dist=Math.max(d,1),vy=((P.y+1.1)-(e.y+1.4))/(dist/sp);enemyProj({kind:'arrow',x:e.x+Math.sin(a)*.8,y:e.y+1.3,z:e.z+Math.cos(a)*.8,vx:Math.sin(a)*sp,vz:Math.cos(a)*sp,vy:vy,dmg:def.dmg,col:0xe8d8a8,r:.5});sfx('arrow');e.state='recover';e.t=0;e.cd=RR(1.4,2.4);}
         else if(def.wolf){e.state='attack';e.t=0;e.hitDone=false;e.lx=Math.sin(e.yaw);e.lz=Math.cos(e.yaw);sfx('growl');}
         else{e.state='attack';e.t=0;e.hitDone=false;sfx('swing',3);}
       }
       break;}
     case'attack':{
       e.t+=dt;
-      if(def.wolf){e.atk=e.t/.32;enemyStep(e,e.lx*12,e.lz*12,dt);if(!e.hitDone&&d<1.7){e.hitDone=true;hurtPlayer(def.dmg,e.x,e.z,'melee');}if(e.t>=.32){e.state='recover';e.t=0;e.cd=RR(.8,1.5);}}
-      else{e.atk=-1;if(!e.hitDone){e.hitDone=true;const dot=(dx*Math.sin(e.yaw)+dz*Math.cos(e.yaw))/(d||1);if(d<def.range+.8&&dot>.2)hurtPlayer(def.dmg,e.x,e.z,'melee');burst(e.x+Math.sin(e.yaw)*1.5,e.y+.4,e.z+Math.cos(e.yaw)*1.5,0xd8c8a0,6,3,.3,.12);}
+      if(def.wolf){e.atk=e.t/.32;enemyStep(e,e.lx*12,e.lz*12,dt);if(!e.hitDone&&d<1.7){e.hitDone=true;enemyHurt(def.dmg,e.x,e.z,'melee');}if(e.t>=.32){e.state='recover';e.t=0;e.cd=RR(.8,1.5);}}
+      else{e.atk=-1;if(!e.hitDone){e.hitDone=true;const dot=(dx*Math.sin(e.yaw)+dz*Math.cos(e.yaw))/(d||1);if(d<def.range+.8&&dot>.2)enemyHurt(def.dmg,e.x,e.z,'melee');burst(e.x+Math.sin(e.yaw)*1.5,e.y+.4,e.z+Math.cos(e.yaw)*1.5,0xd8c8a0,6,3,.3,.12);}
         e.recover=1;if(e.t>=.12){e.state='recover';e.t=0;e.cd=RR(.5,1.1);}}
       break;}
     case'recover':{e.t+=dt;e.recover=1-e.t/(def.rec||.8);if(e.t>=(def.rec||.8)){e.state='chase';}break;}
@@ -2788,7 +2789,7 @@ function poseAny(e,s){if(e.c.isWolf)poseWolf(e.c,s,game.time);else poseHumanoid(
 
 /* ---------- bosses ---------- */
 function updateBoss(e,dt,d,dx,dz){
-  const P=game.player,def=e.def,c=e.c;
+  const P=CO.tp||game.player,def=e.def,c=e.c;   // p7e: the one updateEnemy chose
   const face=(ty,rate=6)=>{e.yaw+=angDiff(e.yaw,ty)*Math.min(1,dt*rate);};
   if(!e.awake){
     if(d<(def.final?30:24)&&!P.dead){e.awake=true;e.state='chase';game.boss=e;$('boss').hidden=false;$('bname').textContent=def.name;sfx('roar');cam.shake=.6;bossIntro(e.kind,def.name);if(game.music)game.music.boss=true;}
@@ -2808,10 +2809,10 @@ function updateBoss(e,dt,d,dx,dz){
         const pool=def.pats.filter(p=>p!==e.lastPat),pick=pool[Math.floor(R()*pool.length)];
         e.pat=pick;e.lastPat=pick;e.state='windup';e.t=0;e.hitDone=false;
         e.wtime={slam:1.0,sweep:.8,charge:.95,volley:.8,rain:.7}[pick]*(e.phase2?.8:1);
-        if(pick==='slam'){e.dec=telegraph(e,e.x,e.z,S*3.1,0xff3a2a);}
-        else if(pick==='sweep'){e.dec=telegraph(e,e.x+Math.sin(e.yaw)*S*1.6,e.z+Math.cos(e.yaw)*S*1.6,S*2.0,0xff3a2a);}
-        else if(pick==='charge'){e.tx=P.x;e.tz=P.z;e.dec=telegraph(e,e.tx,e.tz,2.2,0xffb02a);}
-        else if(pick==='rain'){e.dec=null;e.strikes=[];const n=e.phase2?9:6;for(let i=0;i<n;i++){const a=R()*TAU,r=i<3?RR(0,2):RR(3,10);const sx=P.x+Math.cos(a)*r,sz=P.z+Math.sin(a)*r;e.strikes.push({x:sx,z:sz,t:-(.3+i*.16),dec:telegraph(e,sx,sz,2.8,def.ele==='ice'?0x6fd0ff:0xff6a1a)});}}
+        if(pick==='slam'){e.dec=teleNet(e.wtime,e,e.x,e.z,S*3.1,0xff3a2a);}
+        else if(pick==='sweep'){e.dec=teleNet(e.wtime,e,e.x+Math.sin(e.yaw)*S*1.6,e.z+Math.cos(e.yaw)*S*1.6,S*2.0,0xff3a2a);}
+        else if(pick==='charge'){e.tx=P.x;e.tz=P.z;e.dec=teleNet(e.wtime+.6,e,e.tx,e.tz,2.2,0xffb02a);}
+        else if(pick==='rain'){e.dec=null;e.strikes=[];const n=e.phase2?9:6;for(let i=0;i<n;i++){const a=R()*TAU,r=i<3?RR(0,2):RR(3,10);const sx=P.x+Math.cos(a)*r,sz=P.z+Math.sin(a)*r;e.strikes.push({x:sx,z:sz,t:-(.3+i*.16),dec:teleNet(1.1+i*.16,e,sx,sz,2.8,def.ele==='ice'?0x6fd0ff:0xff6a1a)});}}
         else if(pick==='volley'){e.dec=null;}
         sfx('windup');
       }
@@ -2825,23 +2826,23 @@ function updateBoss(e,dt,d,dx,dz){
       if(Math.random()<.5)spark(e.x+RR(-1,1)*S,e.y+S*1.5,e.z+RR(-1,1)*S,0,2,0,def.col||0xffffff,.5,.15,-2);
       if(k>=1){
         if(e.pat==='slam'){const R2=S*3.1;burst(e.x,e.y+.3,e.z,0xd8c8a0,30,R2*1.4,.7,.25);for(let i=0;i<24;i++){const a=i*TAU/24;spark(e.x+Math.cos(a)*2,e.y+.3,e.z+Math.sin(a)*2,Math.cos(a)*R2*2.2,2,Math.sin(a)*R2*2.2,def.ele==='fire'?0xff7a2a:def.ele==='ice'?0x9fe8ff:0xd8c8a0,.5,.2,6);}cam.shake=.9;sfx('slam');
-          if(d<R2+.4&&P.y<gh(P.x,P.z)+1.0)hurtPlayer(e.dmg,e.x,e.z,'slam');endDecal(e.dec);e.state='recover';e.t=0;e.rec=1.0;e.cd=e.phase2?.9:1.5;}
-        else if(e.pat==='sweep'){const cx=e.x+Math.sin(e.yaw)*S*1.6,cz=e.z+Math.cos(e.yaw)*S*1.6;burst(cx,e.y+1,cz,0xffffff,24,6,.4,.2);cam.shake=.5;sfx('swing',3);if(Math.hypot(P.x-cx,P.z-cz)<S*2.0+.4)hurtPlayer(e.dmg,e.x,e.z,'sweep');endDecal(e.dec);e.state='recover';e.t=0;e.rec=.8;e.cd=e.phase2?.7:1.2;}
+          coopFx('slam',e.x,e.z,R2,def.ele);hitHeroes(h=>Math.hypot(h.x-e.x,h.z-e.z)<R2+.4&&h.y<gh(h.x,h.z)+1.0,e.dmg,e.x,e.z,'slam');endDecal(e.dec);e.state='recover';e.t=0;e.rec=1.0;e.cd=e.phase2?.9:1.5;}
+        else if(e.pat==='sweep'){const cx=e.x+Math.sin(e.yaw)*S*1.6,cz=e.z+Math.cos(e.yaw)*S*1.6;burst(cx,e.y+1,cz,0xffffff,24,6,.4,.2);cam.shake=.5;sfx('swing',3);coopFx('sweep',cx,cz,0,'');hitHeroes(h=>Math.hypot(h.x-cx,h.z-cz)<S*2.0+.4,e.dmg,e.x,e.z,'sweep');endDecal(e.dec);e.state='recover';e.t=0;e.rec=.8;e.cd=e.phase2?.7:1.2;}
         else if(e.pat==='charge'){e.state='charge';e.t=0;e.hitDone=false;sfx('roar');}
-        else if(e.pat==='volley'){const n=e.phase2?7:4,a0=Math.atan2(dx,dz);for(let i=0;i<n;i++){const a=a0+(i-(n-1)/2)*.28,sp=15;fireProj({kind:'orb',x:e.x+Math.sin(a)*S,y:e.y+S*1.4,z:e.z+Math.cos(a)*S,vx:Math.sin(a)*sp,vz:Math.cos(a)*sp,vy:(P.y+1-(e.y+S*1.4))/(Math.max(d,2)/sp),dmg:Math.round(e.dmg*.7),col:def.ele==='ice'?0x8fe8ff:0xff7a2a,r:.5,life:4});}sfx('fire');e.state='recover';e.t=0;e.rec=.9;e.cd=e.phase2?.8:1.4;}
+        else if(e.pat==='volley'){const n=e.phase2?7:4,a0=Math.atan2(dx,dz);for(let i=0;i<n;i++){const a=a0+(i-(n-1)/2)*.28,sp=15;enemyProj({kind:'orb',x:e.x+Math.sin(a)*S,y:e.y+S*1.4,z:e.z+Math.cos(a)*S,vx:Math.sin(a)*sp,vz:Math.cos(a)*sp,vy:(P.y+1-(e.y+S*1.4))/(Math.max(d,2)/sp),dmg:Math.round(e.dmg*.7),col:def.ele==='ice'?0x8fe8ff:0xff7a2a,r:.5,life:4});}sfx('fire');e.state='recover';e.t=0;e.rec=.9;e.cd=e.phase2?.8:1.4;}
         else if(e.pat==='rain'){e.state='rain';e.t=0;}
       }
       break;}
     case'charge':{
       e.t+=dt;const a=Math.atan2(e.tx-e.x,e.tz-e.z),dd=Math.hypot(e.tx-e.x,e.tz-e.z);e.yaw=a;moveSp=e.spd*4;enemyStep(e,Math.sin(a)*20,Math.cos(a)*20,dt);
       if(Math.random()<.7)spark(e.x,e.y+.3,e.z,RR(-2,2),RR(1,3),RR(-2,2),0xd8c8a0,.5,.2);
-      if(!e.hitDone&&d<S*.9+.8){e.hitDone=true;hurtPlayer(e.dmg,e.x,e.z,'charge');}
+      if(!e.hitDone&&d<S*.9+.8){e.hitDone=true;enemyHurt(e.dmg,e.x,e.z,'charge');}
       if(dd<2.2||e.t>1.2){endDecal(e.dec);e.state='recover';e.t=0;e.rec=1.5;e.cd=1.0;cam.shake=.5;burst(e.x,e.y+.3,e.z,0xd8c8a0,20,5,.5,.2);e.vuln=1.5;}
       break;}
     case'rain':{
       e.t+=dt;let alive=0;
       for(const s of e.strikes){s.t+=dt;if(s.done)continue;alive++;if(s.dec)decalFill(s.dec,clamp((s.t+.2)/1.0,0,1));
-        if(s.t>=.8){s.done=true;endDecal(s.dec);burst(s.x,gh(s.x,s.z)+.5,s.z,def.ele==='ice'?0x9fe8ff:0xff7a2a,22,5,.6,.22);for(let i=0;i<8;i++)spark(s.x+RR(-.5,.5),gh(s.x,s.z)+RR(2,8),s.z+RR(-.5,.5),0,-14,0,def.ele==='ice'?0xcfeaff:0xffb04a,.35,.25,0);sfx('boom');cam.shake=Math.max(cam.shake,.25);if(Math.hypot(P.x-s.x,P.z-s.z)<2.8&&P.y<gh(P.x,P.z)+1.6)hurtPlayer(Math.round(e.dmg*.8),s.x,s.z,'rain');}}
+        if(s.t>=.8){s.done=true;endDecal(s.dec);burst(s.x,gh(s.x,s.z)+.5,s.z,def.ele==='ice'?0x9fe8ff:0xff7a2a,22,5,.6,.22);for(let i=0;i<8;i++)spark(s.x+RR(-.5,.5),gh(s.x,s.z)+RR(2,8),s.z+RR(-.5,.5),0,-14,0,def.ele==='ice'?0xcfeaff:0xffb04a,.35,.25,0);sfx('boom');cam.shake=Math.max(cam.shake,.25);coopFx('boom',s.x,s.z,0,def.ele);hitHeroes(h=>Math.hypot(h.x-s.x,h.z-s.z)<2.8&&h.y<gh(h.x,h.z)+1.6,Math.round(e.dmg*.8),s.x,s.z,'rain');}}
       if(e.t>2.6||alive===0&&e.t>.6){e.state='recover';e.t=0;e.rec=.8;e.cd=e.phase2?.8:1.3;e.strikes=null;}
       break;}
     case'recover':{e.t+=dt;e.recover=1-e.t/e.rec;if(e.vuln)e.vuln-=dt;if(e.t>=e.rec){e.state='chase';e.vuln=0;}break;}
@@ -4433,7 +4434,7 @@ function netTick(){if(!EMBED||WATCH)return;const now=performance.now();if(now-NE
 function netReady(){NET.ready=true;netPost({ef:'ready'});}
 function netWho(){
   const others=Object.entries(NET.names).filter(([id])=>+id!==NET.me).map(([,n])=>n).filter(Boolean);
-  const el=$('withwho');if(el)el.textContent=others.length?(NET.coop?'On this isle with '+others.join(' and ')+': you see each other, fight the same guardians and share the quest.':'In this room with '+others.join(' and ')+'. Each of you has your own island: most points wins.'):'';
+  const el=$('withwho');if(el)el.textContent=others.length?(NET.coop?'On this isle with '+others.join(' and ')+': one island, the same enemies, one quest.':'In this room with '+others.join(' and ')+'. Each of you has your own island: most points wins.'):'';
 }
 function netInit(m){
   NET.on=true;NET.me=+(m.me&&m.me.id)||0;NET.coop=!!m.coop;NET.names={};if(m.me)NET.names[NET.me]=m.me.name;for(const p of m.peers||[])NET.names[+p.id]=p.name;
@@ -4470,11 +4471,10 @@ if(EMBED)addEventListener('message',e=>{
           it too, so guardians and camps are beaten together and both get the coins and XP
      q    how far the quest has got (stage, shards, guardians beaten, beacons lit, the Flame relit): merged, never
           taken back — a shard one of us picks up is both of ours, and the Colossus falling is the win for both
-   Each page still runs its own enemies (they chase whoever is on that page), keeps its own health, coins, level
-   and save. One world for the enemies too (who they chase, where they stand) is part 2.
+   Each page keeps its own health, coins, level and save. The enemies are one set for both: part 2 (p7e), below.
    Every message goes page → PlayRoom → the room's socket → the other page (netSend / {ef:'msg'}). Not in watch
    mode, and not in a room played against each other: there, each island is its own. */
-const CO={peers:new Map(),sendT:0,qT:0,qSig:'',rx:false,LIVE:4000};
+const CO={peers:new Map(),sendT:0,qT:0,qSig:'',rx:false,LIVE:4000,role:0,hostId:0,tp:null,wT:0,tele:[],by:new Map()};
 function coopOn(){return NET.on&&NET.coop&&!WATCH;}
 function netSend(d){if(coopOn())netPost({ef:'send',d});}
 function coopPeer(id){
@@ -4524,6 +4524,11 @@ function coopMsg(from,d){
     if(e&&Math.hypot(e.x-(+d.x||0),e.z-(+d.z||0))<30){CO.rx=true;try{const o=r.d||e;damageEnemy(e,Math.max(0,+d.a||0),o.x,o.z,2,!!d.c,true);}catch(e2){}CO.rx=false;}
   }
   else if(d.t==='q')coopApply(r,d);
+  else if(d.t==='w')coopWorldIn(from,d);
+  else if(d.t==='hurt'){if(+d.to===NET.me&&from===CO.hostId&&CO.role===2)hurtPlayer(clamp(+d.a||0,0,60),+d.x||0,+d.z||0,String(d.k||'melee'));}
+  else if(d.t==='pj'){if(from===CO.hostId&&CO.role===2&&d.o){const o=d.o;fireProj({kind:o.kind==='orb'?'orb':'arrow',x:+o.x||0,y:+o.y||0,z:+o.z||0,vx:+o.vx||0,vy:+o.vy||0,vz:+o.vz||0,dmg:clamp(+o.dmg||0,0,60),col:+o.col||0xffd070,r:clamp(+o.r||.5,.2,1.5),life:clamp(+o.life||5,.2,6)});sfx(o.kind==='orb'?'fire':'arrow');}}
+  else if(d.t==='tg'){if(from===CO.hostId&&CO.role===2){const dec=telegraph(game.enemies.find(q=>q.id===d.id)||null,+d.x||0,+d.z||0,clamp(+d.r||2,.5,12),+d.c||0xff3a2a);if(dec)CO.tele.push({dec,t:0,d:clamp(+d.d||1,.2,4)});}}
+  else if(d.t==='fx'){if(from===CO.hostId&&CO.role===2)coopFxIn(d);}
   else if(d.t==='bye'){r.m=null;if(r.c)r.c.root.visible=false;}
 }
 /* my hero, said to the room; and the quest, when it moves on (and every few seconds, for whoever has just arrived) */
@@ -4563,9 +4568,155 @@ function updatePeers(dt){
     updateTrail(r.trail,c,r.atk>.22&&r.atk<.7,dt,ATK_TINT[m.ai|0]||ATK_TINT[0]);
   }
 }
+/* ================= p7e: playing together, part 2 — one set of enemies =================
+   The page with the lowest player id is the host: its enemies are the real ones. They go for whichever hero is
+   nearest (coopTarget), and a blow that lands on my friend is sent to them (hurt) instead of struck here.
+     w     the host's enemies, ~8 times a second: [id, kind, x, z, yaw, state, hp, windup, attack, speed, awake]
+           for every one near either of us or doing anything. The other page draws its own copies from that
+           (coopPuppet) and runs no enemy thinking at all; one it doesn't have yet (a summoned goblin) is made.
+     hurt  a blow that landed on you (the host decided it from where it last saw you; a roll still dodges it)
+     pj    an arrow or an orb let fly: your page flies its own copy, and that copy is what can hit you
+     tg    a warning circle on the ground (a slam, a charge, falling fire), and how long until it lands
+     fx    the slam, sweep or blast itself, to see and hear
+   Blows on an enemy still go both ways as `hit` (part 1), so each page gives its own coins and XP. If the host
+   stops being heard (4 s), the other page takes the enemies over where they stand (coopTakeOver). Alone, or in a
+   room that isn't a team room, CO.role stays 0 and none of this runs. */
+const CO_ST={idle:1,wander:1,chase:1,return:1,windup:1,attack:1,recover:1,stagger:1,charge:1,rain:1,stun:1};
+function coopRole(){
+  let h=NET.me,n=0;const now=performance.now();
+  for(const r of CO.peers.values()){
+    if(!r.m||now-r.at>=CO.LIVE)continue;
+    n++;if(r.id<h)h=r.id;
+    const d=r.d||r.m,q=r.px||(r.px={peer:r,iT:0,x:0,y:0,z:0,dead:false});
+    q.x=+d.x||0;q.y=+d.y||0;q.z=+d.z||0;q.dead=!!r.m.dd;
+  }
+  const was=CO.role;CO.hostId=h;CO.role=n?(h===NET.me?1:2):0;
+  if(was===2&&CO.role!==2)coopTakeOver();
+}
+// the host has gone: these enemies are mine to run now, from where they stand
+function coopTakeOver(){
+  for(const e of game.enemies){
+    if(e.state==='dead')continue;
+    e.net=null;e.dec=null;e.strikes=null;e.t=0;e.windup=-1;e.atk=-1;e.cd=1;e.kx=0;e.kz=0;
+    if(e.boss){e.pat=null;if(e.awake&&e.state!=='idle')e.state='chase';else{e.state='idle';e.awake=false;}}
+    else if(e.state!=='idle'&&e.state!=='chase'&&e.state!=='return')e.state='chase';
+  }
+  for(const x of CO.tele)if(x.dec.visible)endDecal(x.dec);
+  CO.tele.length=0;
+}
+// who this enemy is after: the nearest of us still standing (only the host asks; anyone else gets themselves)
+function coopTarget(e){
+  const P=game.player;CO.tp=null;
+  if(CO.role!==1)return P;
+  let best=P,bd=Math.hypot(P.x-e.x,P.z-e.z)+(P.dead?1e4:0);
+  for(const r of CO.peers.values()){const q=r.px;if(!q||!r.live)continue;const d=Math.hypot(q.x-e.x,q.z-e.z)+(q.dead?1e4:0);if(d<bd){bd=d;best=q;}}
+  if(best!==P)CO.tp=best;
+  return best;
+}
+// a blow on the one it was aimed at
+function enemyHurt(dmg,fx,fz,kind){
+  const T=CO.tp;
+  if(T&&T.peer){netSend({t:'hurt',to:T.peer.id,a:Math.round(dmg),x:sR1(fx),z:sR1(fz),k:kind});return true;}
+  return hurtPlayer(dmg,fx,fz,kind);
+}
+// a blow on everyone it reaches (a slam, a sweep, falling fire)
+function hitHeroes(test,dmg,fx,fz,kind){
+  let me=false;try{me=!!test(game.player);}catch(e){}
+  if(me)hurtPlayer(dmg,fx,fz,kind);
+  if(CO.role!==1)return;
+  for(const r of CO.peers.values()){const q=r.px;let hit=false;try{hit=!!q&&r.live&&!q.dead&&!!test(q);}catch(e){}if(hit)netSend({t:'hurt',to:r.id,a:Math.round(dmg),x:sR1(fx),z:sR1(fz),k:kind});}
+}
+function enemyProj(o){
+  if(CO.role===1)netSend({t:'pj',o:{kind:o.kind,x:sR2(o.x),y:sR2(o.y),z:sR2(o.z),vx:sR2(o.vx),vy:sR2(o.vy),vz:sR2(o.vz),dmg:o.dmg,col:o.col,r:o.r,life:o.life||5}});
+  return fireProj(o);
+}
+function teleNet(dur,e,x,z,r,col){
+  if(CO.role===1)netSend({t:'tg',id:e.id,x:sR1(x),z:sR1(z),r:sR1(r),c:col,d:sR2(dur)});
+  return telegraph(e,x,z,r,col);
+}
+function coopFx(k,x,z,r,ele){if(CO.role===1)netSend({t:'fx',k,x:sR1(x),z:sR1(z),r:sR1(r),e:ele||''});}
+function coopFxIn(d){
+  const P=game.player,x=+d.x||0,z=+d.z||0;if(Math.hypot(x-P.x,z-P.z)>70)return;
+  const y=gh(x,z),hot=d.e==='ice'?0x9fe8ff:0xff7a2a;
+  if(d.k==='slam'){const R2=clamp(+d.r||5,1,12);burst(x,y+.3,z,0xd8c8a0,30,R2*1.4,.7,.25);for(let i=0;i<24;i++){const a=i*TAU/24;spark(x+Math.cos(a)*2,y+.3,z+Math.sin(a)*2,Math.cos(a)*R2*2.2,2,Math.sin(a)*R2*2.2,d.e?hot:0xd8c8a0,.5,.2,6);}cam.shake=Math.max(cam.shake,.7);sfx('slam');}
+  else if(d.k==='sweep'){burst(x,y+1,z,0xffffff,24,6,.4,.2);cam.shake=Math.max(cam.shake,.4);sfx('swing',3);}
+  else if(d.k==='boom'){burst(x,y+.5,z,hot,22,5,.6,.22);for(let i=0;i<8;i++)spark(x+RR(-.5,.5),y+RR(2,8),z+RR(-.5,.5),0,-14,0,d.e==='ice'?0xcfeaff:0xffb04a,.35,.25,0);sfx('boom');cam.shake=Math.max(cam.shake,.25);}
+}
+// the host's enemies, said to the room
+function coopWorld(){
+  const P=game.player,a=[];
+  for(const e of game.enemies){
+    let near=e.state!=='idle'||Math.hypot(e.x-P.x,e.z-P.z)<85;
+    if(!near)for(const r of CO.peers.values()){const q=r.px;if(q&&r.live&&Math.hypot(e.x-q.x,e.z-q.z)<85){near=true;break;}}
+    if(!near)continue;
+    const dead=e.state==='dead';
+    a.push([e.id,e.kind,sR1(e.x),sR1(e.z),sR2(e.yaw),e.state,Math.max(0,Math.round(e.hp)),
+      dead?-1:sR2(e.state==='windup'?e.windup:-1),
+      dead?-1:sR2(e.boss?((e.state==='recover'&&e.t<.25)?e.t/.25:-1):e.atk),
+      sR2(e.boss?Math.min(1,e.sp*3):e.sp),e.awake?1:0]);
+    if(a.length>=48)break;
+  }
+  netSend({t:'w',e:a});
+}
+// …and heard here
+function coopWorldIn(from,d){
+  if(CO.role!==2||from!==CO.hostId||!Array.isArray(d.e))return;
+  const now=performance.now(),by=CO.by;by.clear();for(const e of game.enemies)by.set(e.id,e);
+  for(const w of d.e){
+    if(!Array.isArray(w))continue;
+    const id=w[0],st=String(w[5]||'idle');let e=by.get(id);
+    if(!e){
+      if(st==='dead'||game.killed.has(id)||typeof w[1]!=='string'||!(WS_OWN(BOSSDEF,w[1])||WS_OWN(ETYPES,w[1])))continue;
+      e=spawnEnemy(w[1],+w[2]||0,+w[3]||0,id,[+w[2]||0,+w[3]||0]);if(!e)continue;by.set(id,e);
+    }
+    if(e.state==='dead')continue;
+    if(st==='dead'){CO.rx=true;try{e.hp=0;killEnemy(e);}catch(x){}CO.rx=false;continue;}
+    const n=e.net||(e.net={});
+    n.x=+w[2]||0;n.z=+w[3]||0;n.yaw=+w[4]||0;n.st=CO_ST[st]?st:'idle';n.wu=+w[7];n.ak=+w[8];n.sp=clamp(+w[9]||0,0,1.5);n.aw=!!w[10];n.at=now;
+    const hp=+w[6];if(hp>0)e.hp=Math.min(e.maxhp,hp);
+  }
+}
+// one of the host's enemies, drawn here: eased to where it is, posed as what it is doing
+function coopPuppet(e,dt){
+  const c=e.c,n=e.net,P=game.player,def=e.def,fresh=!!n&&performance.now()-n.at<1500;
+  e.kx=0;e.kz=0;
+  if(fresh){
+    const k=Math.min(1,dt*10);
+    if(Math.hypot(n.x-e.x,n.z-e.z)>25){e.x=n.x;e.z=n.z;e.yaw=n.yaw;}
+    else{e.x+=(n.x-e.x)*k;e.z+=(n.z-e.z)*k;e.yaw+=angDiff(e.yaw,n.yaw)*k;}
+    e.state=n.st;e.windup=n.wu>=0?n.wu:-1;e.atk=n.ak>=0?n.ak:-1;e.sp=lerp(e.sp,n.sp,k);if(e.boss)e.awake=n.aw;
+  }else{
+    e.windup=-1;e.atk=-1;e.sp=lerp(e.sp,0,Math.min(1,dt*6));if(e.state!=='idle')e.state='idle';if(e.boss)e.awake=false;
+  }
+  e.phase+=dt*(5+e.sp*8);e.y=gh(e.x,e.z);e.recover=0;
+  if(e.boss){
+    poseAny(e,{sp:e.sp,phase:e.phase,windup:e.windup,recover:0,hit:e.hit,seed:e.seed,bossy:true,atk:e.atk,atkIdx:2});
+    const near=Math.hypot(P.x-e.x,P.z-e.z)<70;
+    if(e.awake&&near&&!P.dead){
+      if(game.boss!==e){game.boss=e;$('boss').hidden=false;$('bname').textContent=def.name;if(game.music)game.music.boss=true;if(!e.met){e.met=true;try{sfx('roar');bossIntro(e.kind,def.name);}catch(x){}}}
+      $('bfill').style.transform='scaleX('+clamp(e.hp/e.maxhp,0,1)+')';
+    }else if(game.boss===e){game.boss=null;$('boss').hidden=true;if(game.music)game.music.boss=false;}
+  }else poseAny(e,{sp:e.sp,phase:e.phase,windup:e.windup,atk:e.atk,bow:def.bow&&e.state==='windup'?0:-1,recover:0,hit:e.hit,seed:e.seed});
+  c.root.position.set(e.x,e.y,e.z);c.root.rotation.y=e.yaw;
+  setFlash(c,e.flash>0?e.flash*3.5:(e.state==='windup'?.25+.2*Math.sin(game.time*30):0));
+}
+// the warning circles my friend's page told me of
+function coopTeleTick(dt){
+  for(let i=CO.tele.length-1;i>=0;i--){
+    const x=CO.tele[i];x.t+=dt;
+    if(!x.dec.visible){CO.tele.splice(i,1);continue;}
+    if(x.t>=x.d){endDecal(x.dec);CO.tele.splice(i,1);continue;}
+    decalFill(x.dec,Math.min(1,x.t/x.d));
+  }
+}
 function coopTick(dt){
-  if(!coopOn())return;
+  if(!coopOn()){CO.role=0;return;}
+  try{coopRole();}catch(e){CO.role=0;}
   try{coopSend(dt);updatePeers(dt);}catch(e){}
+  try{
+    if(CO.role===1){const now=performance.now();if(now-CO.wT>=125){CO.wT=now;coopWorld();}}
+    if(CO.tele.length)coopTeleTick(dt);
+  }catch(e){}
 }
 // their names over their heads, on the HUD
 function coopNames(hx){

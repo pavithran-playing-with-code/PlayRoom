@@ -329,12 +329,17 @@ There is no test runner. What works:
   I landed: the other page's copy of that enemy, found by id and checked by
   place, takes it too — `CO.rx` stops it echoing), `q` (stage, shards,
   guardians beaten, beacons, the win: merged by `coopApply`, never taken
-  back). Each page still runs its own enemies, so where an enemy stands
-  differs between the two phones: that is part 2 — one host running them, as
-  the old version did (kept beside the page as `index-backup-before-p6a.html`
-  + `game.js`, its NET section: the lowest id hosts, a snapshot `w` ~8/s,
-  the other's enemies are puppets, `hit` / `hurt`, world changes sent as
-  they happen, `hello` → `full`, two to a horse). Not a team room: each has
+  back). **Part 2** (p7e, the block under it): one set of enemies. The page with the
+  lowest player id is the host (`CO.role` 1; the other 2; alone 0): its
+  enemies are the real ones and go for whichever hero is nearest
+  (`coopTarget`); a blow on the friend is sent (`hurt`) instead of struck.
+  It says its enemies ~8/s (`w`), the other page draws its copies from that
+  (`coopPuppet`, no enemy thinking there), flies its own copy of each arrow
+  or orb (`pj`: that copy is what hits you), and shows the warning circles
+  (`tg`) and blasts (`fx`). The host unheard for 4 s: the other takes the
+  enemies over (`coopTakeOver`). The old version's NET section (kept beside
+  the page as `index-backup-before-p6a.html` + `game.js`) did the same and
+  more (two to a horse, world changes). Not a team room: each has
   their own island and the points decide. Written without being run; test
   with two frames and a relay in one headless page (`window.__ef`) if the
   user allows testing again.

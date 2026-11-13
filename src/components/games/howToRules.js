@@ -52,7 +52,7 @@ export const HOW_TO = {
   dino: {
     name: "Dino Dash",
     goal: "Run as far as you can.",
-    steps: ["Tap (or ▲) to jump the cacti.", "Hold Duck (or ▼) to get under the birds.", "A crash knocks you back to slow and costs a few points — keep running."],
+    steps: ["Tap (or ▲) to jump the cacti.", "Birds fly low: jump them too.", "A crash knocks you back to slow and costs a few points — keep running."],
     tip: "The faster you get, the earlier you need to jump.",
   },
   numbers: {

@@ -291,9 +291,9 @@ export default function DinoDashInner(props) {
         { label: "Best run", value: `${Math.floor(best / UNITS_PER_METRE)}m` },
       ];
 
-  // One big jump button. Everything can be jumped — a robot cleared 1,566
-  // obstacles across 30 courses without ducking once, the middle birds
-  // included — so phones get no duck button; ↓ still ducks on a keyboard.
+  // One big jump button, and a tap is a whole jump (dinoSim releaseJump): every
+  // obstacle, birds included, is low and cleared by jumping. ↓ still ducks on a
+  // keyboard (it drops you faster in the air).
   const controls = !isSpectator ? (
     <>
       <button className="press p-sun dino-btn dino-jump" onPointerDown={(e) => { e.preventDefault(); press(); }}

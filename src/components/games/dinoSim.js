@@ -47,8 +47,10 @@ export function makeCourse(seed) {
       const d = pos;
       let o;
       if (d > 2600 && rand() < 0.3) {
-        // low: jump it · middle: duck under it · high: just keep running
-        const lift = [8, 34, 72][Math.floor(rand() * 3)];
+        // Always low enough to jump, like a cactus. There used to be middle
+        // and high birds too (duck under, or run under) — but a phone has only
+        // Jump, and jumping at a high bird, the natural thing to do, was a crash.
+        const lift = [6, 12, 18][Math.floor(rand() * 3)];
         o = { x: d, kind: "bird", w: 42, h: 26, lift };
       } else {
         const big = rand() < 0.45;
@@ -87,8 +89,12 @@ export function jump(s) {
   s.y = 0.01;
 }
 
+// Letting go used to cut the jump short ("hold for higher"). On a phone a tap
+// IS a quick press and release, so every tap was a short hop that couldn't
+// clear a cactus: "I jump correctly and still lose". Every jump is a whole
+// jump now; only one already high over everything can be cut.
 export function releaseJump(s) {
-  if (s.vy > JUMP_CUT) s.vy = JUMP_CUT;
+  if (s.y > 96 && s.vy > JUMP_CUT) s.vy = JUMP_CUT;
 }
 
 export function setDuck(s, on) {
@@ -98,12 +104,12 @@ export function setDuck(s, on) {
 export function dinoBox(s) {
   return s.duck && s.y <= 0
     ? { l: DINO_X + 6, r: DINO_X + 56, b: 2, t: 24 }
-    : { l: DINO_X + 8, r: DINO_X + 38, b: s.y + 2, t: s.y + 42 };
+    : { l: DINO_X + 12, r: DINO_X + 34, b: s.y + 6, t: s.y + 40 };   // a little inside the drawing: a near miss is a miss
 }
 
 export function obstacleBox(s, o) {
   const left = DINO_X + (o.x - s.x);
-  return { l: left + 3, r: left + o.w - 3, b: o.lift + 3, t: o.lift + o.h - 3 };
+  return { l: left + 6, r: left + o.w - 6, b: o.lift + 3, t: o.lift + o.h - 7 };
 }
 
 function overlap(a, b) {

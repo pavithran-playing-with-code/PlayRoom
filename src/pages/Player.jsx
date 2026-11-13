@@ -12,7 +12,7 @@
 // wide film). Nothing leaves the phone: the file is read where it is.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { openFilm, dolbyLike, soundMissing, warmDecoder } from "../utils/filmSound";
+import { openFilm, dolbyLike, soundMissing, warmDecoder, BOOST } from "../utils/filmSound";
 import { isInstalled } from "../components/LandscapeGate";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -51,6 +51,13 @@ export default function Player() {
   const F = useRef(null);                            // the file opened by ffmpeg (a promise)
   const snd = useRef(null);                          // the decoded sound, when in use
   const hideT = useRef(0), noteT = useRef(0), levelT = useRef(0);
+  // The Sound check (Audio & subs): what happened to this film's sound, step
+  // by step, so a phone where it stays silent can show why.
+  const log = useRef([]);
+  const t0 = useRef(0);
+  const mark = useCallback((text) => { log.current = [...log.current.slice(-13), `${((performance.now() - t0.current) / 1000).toFixed(1)}s  ${text}`]; }, []);
+  const [diag, setDiag] = useState(null);
+  const [locked, setLocked] = useState(false);     // the sound is decoded but the phone hasn't let it out yet: a tap does
 
   // for tests (and a curious friend's console): the decoder's numbers, the taps
   const taps = useRef([]);
@@ -66,8 +73,10 @@ export default function Player() {
   const pick = (f) => {
     if (!f) return;
     close();
+    log.current = []; t0.current = performance.now();
+    mark(`file: ${f.name.slice(0, 40)} · ${(f.size / 1048576).toFixed(0)} MB · ${f.type || "no type"}`);
     // Dolby sound: start reading the file's tracks at once, while the picture loads
-    dolbyLike(f).then((d) => { if (d && !F.current) { warmDecoder(); F.current = openFilm(f).catch((e) => { F.current = null; throw e; }); } });
+    dolbyLike(f).then((d) => { mark(`Dolby/DTS in the headers: ${d ? "yes" : "no"}`); if (d && !F.current) { warmDecoder(); F.current = openFilm(f).catch((e) => { F.current = null; throw e; }); } });
     setErr(""); setFile(f); setUrl(URL.createObjectURL(f));
     setTracks(null); setAudioN(null); setSubN(null); setCues(null); setSpeed(1);
   };
@@ -83,8 +92,14 @@ export default function Player() {
   const tracksOf = useCallback(() => {
     if (!file) return Promise.reject(new Error("no file"));
     if (!F.current) F.current = openFilm(file).catch((e) => { F.current = null; throw e; });
-    return F.current;
-  }, [file]);
+    const p = F.current;
+    if (!p.seen) {                                  // (once per opening) how it went, for the Sound check
+      p.seen = true;
+      p.then((X) => mark(`decoder ready · ${X.audio.length} sound, ${X.subs.length} subtitle tracks${X.audio.length ? " · " + X.audio.map((a) => a.codec).join(", ") : ""}`),
+        (e) => mark(`decoder FAILED — ${e && e.message ? e.message : e}`));
+    }
+    return p;
+  }, [file, mark]);
   // the film's sound from now on: track n, decoded here
   // `start`: the film hasn't begun — it begins when its sound is ready, never before
   const pickAudio = useCallback(async (n, quiet, start = false) => {
@@ -92,12 +107,15 @@ export default function Player() {
     if (!v) return;
     try {
       const X = await tracksOf();
+      const keep = snd.current ? snd.current.volume() : 1;
       const s = await X.sound(n, v, { onWait: setWaiting, start });
       if (snd.current) snd.current.stop();
+      s.setVolume(keep);
       snd.current = s; setAudioN(n);
+      mark(`sound: track ${n + 1} started${start ? " (the film waits for it)" : ""}`);
       if (!quiet) say(`🔊 ${X.audio[n] ? X.audio[n].label : "Sound"}`);
-    } catch { say("Couldn't play that sound track — check the connection (the decoder loads once)"); }
-  }, [tracksOf, say]);
+    } catch (e) { mark(`sound FAILED — ${e && e.message ? e.message : e}`); say("Couldn't play that sound track — check the connection (the decoder loads once)"); }
+  }, [tracksOf, say, mark]);
   const subTok = useRef(0);                         // which pick of subtitles is the current one
   const pickSubs = useCallback(async (n) => {
     const tok = ++subTok.current;
@@ -131,8 +149,11 @@ export default function Player() {
     const f = file;
     const dolby = await dolbyLike(f);
     if (vRef.current !== v || f !== file) return;
+    mark(`picture ready · ${Math.round(v.duration || 0)} s${dolby ? " · sound to be decoded here" : ""}`);
     if (!dolby) { try { await v.play(); } catch { /* the ▶ starts it */ } }
-    if (dolby || (await soundMissing(v))) {
+    const missing = dolby || (await soundMissing(v));
+    if (!dolby) mark(`the phone's own sound: ${missing ? "none decoded" : "playing"}`);
+    if (missing) {
       if (vRef.current !== v || snd.current) return;
       if (dolby) setWaiting(true);
       try {
@@ -140,7 +161,8 @@ export default function Player() {
         setTracks({ audio: X.audio, subs: X.subs });
         if (X.audio.length) await pickAudio((X.audio.find((a) => a.def) || X.audio[0]).n, true, dolby);
         else if (dolby) { setWaiting(false); v.play().catch(() => {}); }
-      } catch {
+      } catch (e) {
+        mark(`sound FAILED — ${e && e.message ? e.message : e}`);
         say("Couldn't load the sound decoder — check the connection and open the video again", 5000);
         if (dolby) { setWaiting(false); v.play().catch(() => {}); }
       }
@@ -168,6 +190,27 @@ export default function Player() {
     }, 150);
     return () => clearInterval(id);
   }, [cues]);
+  // Decoded sound the phone is holding back (its sound engine asleep, or the
+  // player refused without a tap): say so — any tap lets it out.
+  useEffect(() => {
+    if (!url) { setLocked(false); return undefined; }
+    const id = setInterval(() => {
+      const s = snd.current ? snd.current.stats() : null, v = vRef.current;
+      setLocked(!!s && !!v && !v.paused && (s.ctx !== "running" || s.player !== "playing"));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [url]);
+  // the Sound check, while the tracks menu is open
+  useEffect(() => {
+    if (menu !== "tracks") { setDiag(null); return undefined; }
+    const read = () => {
+      const s = snd.current ? snd.current.stats() : null, v = vRef.current;
+      setDiag({ lines: log.current.slice(), s, v: v ? `${v.currentTime.toFixed(1)} s · ${v.paused ? "paused" : "playing"} · muted ${v.muted} · phone decoded ${"webkitAudioDecodedByteCount" in v ? v.webkitAudioDecodedByteCount : "?"}` : "—" });
+    };
+    read();
+    const id = setInterval(read, 700);
+    return () => clearInterval(id);
+  }, [menu]);
   // keep the screen awake while it plays
   useEffect(() => {
     if (!playing || !navigator.wakeLock) return undefined;
@@ -183,7 +226,8 @@ export default function Player() {
     v.currentTime = Math.max(0, Math.min((v.duration || 0) - 0.5, v.currentTime + d));
     showLevel({ kind: "skip", text: d > 0 ? `⏩ +${d}s` : `⏪ ${d}s`, side: d > 0 ? "right" : "left" });
   };
-  const setVolume = (x) => { const v = vRef.current; if (snd.current) snd.current.setVolume(x); else if (v) v.volume = x; };
+  const setVolume = (x) => { const v = vRef.current; if (snd.current) snd.current.setVolume(x); else if (v) v.volume = Math.min(1, x); };
+  const maxVolume = () => (snd.current ? BOOST : 1);   // decoded sound goes past 100%, like VLC; the phone's own can't
   const getVolume = () => { const v = vRef.current; return snd.current ? snd.current.volume() : v ? v.volume : 1; };
   const turned = useRef(false);                     // the installed app: the film is held sideways by ⛶
   const full = async () => {
@@ -243,7 +287,7 @@ export default function Player() {
     }
     const k = (s.y0 - e.clientY) / Math.max(160, s.h * 0.7);
     if (s.mode === "b") { const v = Math.max(0.15, Math.min(1.6, s.from + k * 1.45)); setBright(v); showLevel({ kind: "b", v, side: "left" }); }
-    else { const v = Math.max(0, Math.min(1, s.from + k)); setVolume(v); showLevel({ kind: "v", v, side: "right" }); }
+    else { const top = maxVolume(), v = Math.max(0, Math.min(top, s.from + k * (top > 1 ? 1.6 : 1))); setVolume(v); showLevel({ kind: "v", v, side: "right" }); }
   };
   const up = (e) => {
     const s = g.current;
@@ -284,7 +328,7 @@ export default function Player() {
           <ul className="pl-feats">
             <li>👆 Double-tap a side: ⏪ 10 s / ⏩ 10 s</li>
             <li>☀️ Swipe up/down on the left: brightness</li>
-            <li>🔊 Swipe up/down on the right: volume</li>
+            <li>🔊 Swipe up/down on the right: volume (up to 300% on Dolby films)</li>
             <li>↔️ Swipe sideways: scrub through</li>
             <li>📍 Carries on where you stopped</li>
           </ul>
@@ -304,12 +348,13 @@ export default function Player() {
         level.kind === "b" || level.kind === "v" ? (
           <div className={`pl-level ${level.side}`}>
             <span>{level.kind === "b" ? "☀️" : level.v === 0 ? "🔇" : "🔊"}</span>
-            <i><b style={{ height: `${Math.round((level.kind === "b" ? (level.v - 0.15) / 1.45 : level.v) * 100)}%` }} /></i>
+            <i><b style={{ height: `${Math.round((level.kind === "b" ? (level.v - 0.15) / 1.45 : Math.min(1, level.v)) * 100)}%`, ...(level.kind === "v" && level.v > 1 ? { background: "#FF8A3D" } : null) }} /></i>
             <em>{Math.round(level.v * 100)}%</em>
           </div>
         ) : <div className={`pl-flash ${level.side || ""}`}>{level.text}</div>
       )}
       {waiting && <div className="pl-chip">🔊 Getting the sound ready…</div>}
+      {locked && !waiting && <div className="pl-chip">🔇 Tap the screen for sound</div>}
       {note && <div className="pl-note">{note}</div>}
       {resume > 0 && (
         <div className="pl-resume">Carried on from {fmt(resume)}
@@ -359,6 +404,19 @@ export default function Player() {
                 ))}
                 {!tracks.subs.length && <p>No subtitles in this file</p>}
               </>
+            )}
+            {diag && (
+              <details style={{ marginTop: 10, fontSize: ".72rem", lineHeight: 1.35, textAlign: "left", wordBreak: "break-word" }}>
+                <summary style={{ fontWeight: 800, cursor: "pointer" }}>🩺 Sound check</summary>
+                {diag.lines.map((l, i) => <div key={i}>{l}</div>)}
+                <div>picture: {diag.v}</div>
+                {diag.s ? (
+                  <div>
+                    decoder: {diag.s.pieces} pieces ok, {diag.s.failed} failed, last {diag.s.ms} ms · loudest {diag.s.peak.toFixed(2)} · sound engine {diag.s.ctx} · player {diag.s.player} · decoders {diag.s.workers} · ready ahead {diag.s.ahead} · {diag.s.waiting ? "waiting" : diag.s.playing ? "playing" : "idle"} · volume {Math.round(diag.s.vol * 100)}% · off {diag.s.off} ms
+                    {diag.s.errs && diag.s.errs.length ? <div>ffmpeg: {diag.s.errs.join(" | ")}</div> : null}
+                  </div>
+                ) : <div>decoded sound: not in use (the phone plays the file's own sound)</div>}
+              </details>
             )}
           </div>
         </div>

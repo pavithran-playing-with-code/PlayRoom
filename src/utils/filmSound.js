@@ -37,6 +37,10 @@ const SYNC_DONE = 0.008;         // … and how close it is brought
 const SYNC_HARD = 0.25;          // this far out: start the sound again at the right place
 const SYNC_MAX = 0.03;           // the most the sound's speed is bent
 const NEXT = 1.5;                // seconds before a piece ends that the next is lined up behind it
+// How far the film's sound can be turned up here past its own level (VLC goes
+// to 200%): a film mixed down from 5.1 is quiet on a phone. Only what is heard
+// on this phone — what goes to a call stays as it is.
+export const BOOST = 3;
 const SINK_LAT = 0.02;           // seconds the <audio> player adds on top of the sound engine's own delay (a guess)
 
 // ffmpeg's ~30 MB, fetched once as blobs (a worker may only load code from its own site)
@@ -309,7 +313,14 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
   const AC = window.AudioContext || window.webkitAudioContext;
   const ac = new AC({ sampleRate: RATE });
   const master = ac.createGain(), local = ac.createGain(), out = ac.createMediaStreamDestination(), here = ac.createMediaStreamDestination();
-  master.connect(out); master.connect(local); local.connect(here);
+  master.connect(out); master.connect(local);
+  // turned up past 100% the loud moments would crackle: a limiter holds the
+  // peaks just under full and leaves everything quieter alone
+  try {
+    const lim = ac.createDynamicsCompressor();
+    lim.threshold.value = -2; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.2;
+    local.connect(lim); lim.connect(here);
+  } catch { local.connect(here); }
   // Heard here through an <audio> player, like the call's voices — not
   // straight from Web Audio: on Android, once a call has the microphone the
   // phone is in call-audio mode, and Web Audio's own output played for a
@@ -680,7 +691,7 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
     // for the Sound check
     stats: () => ({ ...st, io: { ...ioSeen }, lat: Math.round(lat() * 1000), ctx: ac.state, playing: !!playing, waiting: waitShown, held, muted: v.muted, vol: local.gain.value,
       player: sink.paused ? "paused" : "playing", queued: jobs.size, ahead: [...cache.keys()].filter((k) => k >= cur).length, errs: ffErrs.slice() }),
-    setVolume(x) { local.gain.value = Math.max(0, Math.min(1, x)); },
+    setVolume(x) { local.gain.value = Math.max(0, Math.min(BOOST, x)); },
     volume() { return local.gain.value; },
     stop() {
       alive = false;

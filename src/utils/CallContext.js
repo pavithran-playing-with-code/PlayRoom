@@ -27,7 +27,7 @@ import { deviceId } from "./deviceId";
 import { cleanMic } from "./cleanMic";
 import { howlGuard } from "./howlGuard";
 import { useDrawnSideways } from "../components/LandscapeGate";
-import { openFilm, soundMissing, dolbyLike, warmDecoder } from "./filmSound";
+import { openFilm, soundMissing, dolbyLike, warmDecoder, BOOST } from "./filmSound";
 
 const CallContext = createContext(null);
 
@@ -234,6 +234,7 @@ export function CallProvider({ children }) {
   const filmVolume = useCallback((x) => {
     const f = filmRef.current;
     if (!f) return 1;
+    if (x === "max") return f.sound ? BOOST : 1;      // decoded sound can go past 100%; the player's own can't
     if (x === undefined) return f.sound ? f.sound.volume() : f.v.volume;
     if (f.sound) f.sound.setVolume(x); else f.v.volume = Math.max(0, Math.min(1, x));
     return x;

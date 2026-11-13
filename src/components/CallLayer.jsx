@@ -148,7 +148,7 @@ function useZoom(key) {
 // on the right half the volume. A level shows while you swipe. Only a
 // clearly vertical swipe of one finger counts; taps, the player's own
 // controls and two-finger zoom are left alone.
-function useLevels({ getVol, setVol, off = false }) {
+function useLevels({ getVol, setVol, maxVol, off = false }) {
   const [bright, setBright] = useState(1);
   const [shown, setShown] = useState(null);          // { kind: "b" | "v", v }
   const g = useRef(null), fingers = useRef(0), hideT = useRef(0);
@@ -172,7 +172,7 @@ function useLevels({ getVol, setVol, off = false }) {
       }
       const k = (s.y0 - p.y) / Math.max(160, s.h * 0.75);
       if (s.side === "b") { const v = Math.max(0.15, Math.min(1.6, s.from + k * 1.45)); setBright(v); show("b", v); }
-      else { const v = Math.max(0, Math.min(1, s.from + k)); setVol(v); show("v", v); }
+      else { const top = maxVol ? maxVol() : 1, v = Math.max(0, Math.min(top, s.from + k * (top > 1 ? 1.6 : 1))); setVol(v); show("v", v); }
     },
   };
   handlers.onPointerUp = (e) => {
@@ -183,7 +183,7 @@ function useLevels({ getVol, setVol, off = false }) {
   const level = shown && (
     <div className={`cw-level ${shown.kind === "b" ? "left" : "right"}`} aria-live="polite">
       <span>{shown.kind === "b" ? "☀️" : shown.v === 0 ? "🔇" : "🔊"}</span>
-      <i><b style={{ height: `${Math.round((shown.kind === "b" ? (shown.v - 0.15) / 1.45 : shown.v) * 100)}%` }} /></i>
+      <i><b style={{ height: `${Math.round((shown.kind === "b" ? (shown.v - 0.15) / 1.45 : Math.min(1, shown.v)) * 100)}%`, ...(shown.kind === "v" && shown.v > 1 ? { background: "#FF8A3D" } : null) }} /></i>
       <em>{Math.round(shown.v * 100)}%</em>
     </div>
   );
@@ -272,7 +272,7 @@ function FilmStage({ film, hide, shareRef, onBig, faces, volume, waiting, tracks
     el.appendChild(v);
     return () => hide(v);
   }, [film, hide]);
-  const lv = useLevels({ getVol: () => volume(), setVol: (x) => volume(x) });
+  const lv = useLevels({ getVol: () => volume(), setVol: (x) => volume(x), maxVol: () => volume("max") });
   return (
     <div className={`call-share cw-film${pseudo ? " pfull" : ""}`} ref={shareRef} {...lv.handlers}>
       <div className="cw-film-box" ref={box} style={lv.filter ? { filter: lv.filter } : undefined} />

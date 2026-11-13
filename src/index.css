@@ -597,17 +597,26 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
 .memgrid{display:grid;touch-action:manipulation}
 /* Mahjong: a stack of big ivory tiles on green felt. Each tile shows its
    thickness down and to the right; a raised layer sits up and to the left. */
+/* the table: felt with a fine weave, inside a wooden rail */
 .mj-felt{position:relative;border-radius:22px;touch-action:manipulation;overflow:hidden;
-  background:radial-gradient(ellipse at 50% 35%,#2f9b55 0%,#1f7a40 60%,#165e31 100%);
-  box-shadow:inset 0 0 0 3px var(--ink),inset 0 0 40px rgba(0,0,0,.25)}
+  background:radial-gradient(rgba(255,255,255,.055) 1px,transparent 1.6px) 0 0/7px 7px,
+    radial-gradient(ellipse at 50% 30%,#3aa868 0%,#1f7a44 55%,#12502c 100%);
+  box-shadow:inset 0 0 0 3px var(--ink),inset 0 0 0 9px #9a6634,inset 0 0 0 11px #5e3a1a,inset 0 0 60px rgba(0,0,0,.4)}
+/* a tile: an ivory face with a bevel; its thickness (ivory, then a jade back,
+   as real tiles have) and the shadow it throws are box-shadows set per size */
 .mj-tile{position:absolute;padding:0;display:flex;align-items:center;justify-content:center;line-height:1;
-  border:2px solid var(--ink);background:linear-gradient(160deg,#fffdf4 0%,#f7efd9 70%,#efe2c1 100%);
+  border:1.5px solid #4a3a22;background:linear-gradient(160deg,#fffffb 0%,#fbf4e0 55%,#f0e2bd 100%);
   cursor:pointer;transition:top .12s,filter .12s;-webkit-tap-highlight-color:transparent}
-.mj-tile span{filter:drop-shadow(0 1px 0 rgba(46,33,64,.25))}
-.mj-tile.stuck{filter:brightness(.82) saturate(.75);cursor:not-allowed}
-.mj-tile.sel{background:linear-gradient(160deg,#fff6c9 0%,#ffe27a 100%)}
-.mj-tile.hint{background:linear-gradient(160deg,#ffe3f1 0%,#ffb3d6 100%)}
-.mj-tile.down{background:repeating-linear-gradient(45deg,#3dd6c0 0 7px,#2fb8a4 7px 14px);filter:none}
+.mj-tile::before{content:"";position:absolute;inset:1.5px;border-radius:inherit;pointer-events:none;
+  border-top:2px solid rgba(255,255,255,.95);border-left:2px solid rgba(255,255,255,.8);
+  border-right:2px solid rgba(190,160,100,.22);border-bottom:2px solid rgba(190,160,100,.3)}
+.mj-tile span{position:relative;filter:drop-shadow(0 1px 0 rgba(46,33,64,.28))}
+/* one you can't take yet sits in shade, so the free ones stand out */
+.mj-tile.stuck{filter:brightness(.72) saturate(.7);cursor:not-allowed}
+.mj-tile.sel{background:linear-gradient(160deg,#fffbe0 0%,#ffe27a 100%)}
+.mj-tile.hint{background:linear-gradient(160deg,#fff0f7 0%,#ffb3d6 100%)}
+.mj-tile.down{background:repeating-linear-gradient(45deg,#36ab76 0 6px,#2a8f60 6px 12px);border-color:#173d2a;filter:none}
+.mj-tile.down::before{border-color:rgba(255,255,255,.28) rgba(0,0,0,.12) rgba(0,0,0,.16) rgba(255,255,255,.2)}
 .mj-level{position:absolute;left:50%;top:38%;z-index:5;transform:translate(-50%,-50%);pointer-events:none;
   display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 22px;border-radius:20px;
   background:var(--sun);border:3px solid var(--ink);box-shadow:0 5px 0 var(--ink);text-align:center;
@@ -616,10 +625,39 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
 .mj-level span{font-size:.85rem;font-weight:700}
 @keyframes mj-lvl{0%{transform:translate(-50%,-50%) scale(.5);opacity:0}12%{transform:translate(-50%,-50%) scale(1.12);opacity:1}
   20%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0}}
-.memcard{width:100%;height:100%;padding:0;border:3px solid var(--ink);border-radius:14px;
-  display:flex;align-items:center;justify-content:center;user-select:none;line-height:1;
-  -webkit-tap-highlight-color:transparent;
-  transition:transform .16s,box-shadow .16s,background .16s}
+/* Memory: playing cards on a felt table. A card is a box that turns over
+   (.mem-in): a patterned back, a cream face; a found pair turns gold and a
+   light runs across it once. */
+.mem-table{position:relative}
+.mem-table::before{content:"";position:absolute;inset:-9px;border-radius:22px;pointer-events:none;
+  background:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1.6px) 0 0/7px 7px,
+    radial-gradient(ellipse at 50% 30%,#3aa868 0%,#1f7a44 55%,#12502c 100%);
+  box-shadow:inset 0 0 0 3px var(--ink),inset 0 0 0 7px #9a6634,inset 0 0 0 9px #5e3a1a,inset 0 0 50px rgba(0,0,0,.35)}
+.memgrid{position:relative}
+.memcard{width:100%;height:100%;padding:0;border:0;background:none;border-radius:14px;display:block;
+  user-select:none;line-height:1;perspective:700px;-webkit-tap-highlight-color:transparent;transition:transform .16s}
+.memcard.up{transform:translateY(-2px)}
+.mem-in{position:relative;display:block;width:100%;height:100%;transform-style:preserve-3d;
+  transition:transform .34s cubic-bezier(.3,1.25,.5,1)}
+.memcard.up .mem-in{transform:rotateY(180deg)}
+.mem-f{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  border:3px solid var(--ink);border-radius:14px;box-shadow:0 5px 0 var(--ink),0 9px 10px rgba(0,0,0,.28);
+  backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.mem-back{color:rgba(255,255,255,.9);
+  background:repeating-linear-gradient(45deg,rgba(255,255,255,.13) 0 5px,transparent 5px 10px),
+    repeating-linear-gradient(-45deg,rgba(255,255,255,.13) 0 5px,transparent 5px 10px),
+    linear-gradient(160deg,#8f72ff 0%,#5a3fd6 100%)}
+.mem-back::before{content:"";position:absolute;inset:11%;border:2px solid rgba(255,255,255,.6);border-radius:9px}
+.mem-back i{position:relative;font-style:normal;font-size:.62em;text-shadow:0 2px 0 rgba(46,33,64,.35)}
+.mem-front{transform:rotateY(180deg);background:linear-gradient(160deg,#ffffff 0%,#fdf7e6 100%)}
+.mem-front span{filter:drop-shadow(0 2px 0 rgba(46,33,64,.18))}
+.memcard.mem-peek .mem-front{background:#FFE3E3}
+.memcard.matched .mem-front{background:linear-gradient(160deg,#fffbe0 0%,#ffe27a 100%);
+  box-shadow:0 2px 0 var(--ink),0 4px 6px rgba(0,0,0,.2)}
+.memcard.matched .mem-front::after{content:"";position:absolute;top:-20%;bottom:-20%;left:-60%;width:45%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.9),transparent);transform:skewX(-18deg);
+  animation:memShine .7s ease-out .15s 1 both}
+@keyframes memShine{from{left:-60%}to{left:130%}}
 
 /* together: the deck you've just cleared, before the next is dealt */
 .mem-cleared .memcard{animation:memWin .55s ease-out}

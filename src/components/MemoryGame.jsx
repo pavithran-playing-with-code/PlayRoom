@@ -265,7 +265,7 @@ export default function MemoryGame({
         {({ w, h }) => {
           const L = layout(w, h, shown.length);
           return (
-            <div style={{ position: "relative" }}>
+            <div className="mem-table">
             {levelUp > 1 && (
               <div className="mj-level" key={levelUp}>
                 <b>Level {levelUp}</b>
@@ -281,20 +281,19 @@ export default function MemoryGame({
                 const face = card.face;
                 const ring = card.by !== null ? T.colourOf(card.by) : null;
                 return (
-                  <button key={card.id} type="button" className={`memcard${card.peek ? " mem-peek" : ""}`}  /* not "peek": that's the home page's
+                  <button key={card.id} type="button" className={`memcard${face ? " up" : ""}${card.matched ? " matched" : ""}${card.peek ? " mem-peek" : ""}`}  /* not "peek": that's the home page's
                     hover preview (absolute, invisible) — a wrong pair vanished and the whole board shifted */ onClick={() => flip(idx)}
                     aria-label={face ? card.emoji : "Face-down card"}
-                    style={{
-                      fontSize: Math.round(L.cw * 0.5),
-                      cursor: face || isSpectator ? "default" : "pointer",
-                      // matched cards go lime and settle flat; a face-up card lifts.
-                      // Together, a card somebody has up wears their colour.
-                      background: card.matched ? "var(--lime)" : card.peek ? "#FFE3E3" : face ? "#fff" : "var(--sun)",
-                      boxShadow: card.matched ? "0 2px 0 var(--ink)"
-                        : ring ? `0 5px 0 var(--ink), inset 0 0 0 5px ${ring}` : "0 5px 0 var(--ink)",
-                      transform: face ? "translateY(-2px)" : "translateY(0)",
-                    }}>
-                    {face ? card.emoji : "🎴"}
+                    style={{ fontSize: Math.round(L.cw * 0.5), cursor: face || isSpectator ? "default" : "pointer" }}>
+                    {/* the card turns over: its back, and its face (which only holds the
+                        picture while it is up). Together, a card somebody has up wears
+                        their colour. */}
+                    <span className="mem-in">
+                      <span className="mem-f mem-back"><i>✦</i></span>
+                      <span className="mem-f mem-front" style={ring && !card.matched ? { boxShadow: `0 5px 0 var(--ink), 0 9px 10px rgba(0,0,0,.28), inset 0 0 0 5px ${ring}` } : undefined}>
+                        <span>{face ? card.emoji : ""}</span>
+                      </span>
+                    </span>
                   </button>
                 );
               })}

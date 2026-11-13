@@ -399,7 +399,9 @@ export default function MahjongGame({
                       top: L.oy + (at.y / 2) * L.th - at.z * L.d - up,
                       width: L.tw, height: L.th, fontSize: Math.round(L.tw * 0.6),
                       borderRadius: Math.max(6, Math.round(L.tw * 0.14)),
-                      boxShadow: `${L.d}px ${L.d}px 0 #c9b385, ${L.d}px ${L.d}px 0 2px var(--ink)${isSel ? ", 0 0 0 4px var(--sun)" : mate ? `, 0 0 0 4px ${mate}` : ""}`,
+                      // (first listed is on top) a ring if it's picked; then the tile's side: ivory,
+                      // a jade back, a dark edge; and the soft shadow it throws on what's under it
+                      boxShadow: `${isSel ? "0 0 0 3px var(--sun), " : mate ? `0 0 0 3px ${mate}, ` : ""}${Math.max(1, Math.round(L.d * 0.45))}px ${Math.max(1, Math.round(L.d * 0.45))}px 0 #f1e3bf, ${L.d}px ${L.d}px 0 ${down ? "#1f7a50" : "#2e9e6b"}, ${L.d}px ${L.d}px 0 1.5px #173d2a, ${L.d + 2}px ${L.d + 4}px 6px rgba(0,0,0,.38)`,
                     }}>
                     <span>{down ? "" : tile.e}</span>
                   </button>

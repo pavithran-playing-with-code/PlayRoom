@@ -52,13 +52,16 @@ function dino(colour) {
   const tail = new THREE.Group();
   tail.position.set(-0.36, 0.62, 0);
   const t1 = at(P(cn(0.2, 0.62), colour, { line: 0.08 }), -0.26, 0.04, 0); t1.rotation.z = Math.PI / 2 + 0.25; tail.add(t1);
+  for (let i = 0; i < 3; i++) { const st = at(P(sph(0.07), dark, { line: 0, shadow: false }), -0.12 - i * 0.13, 0.13 + i * 0.03, 0, 0.7, 0.35, 1.5 - i * 0.3); tail.add(st); }
   body.add(tail);
   // spikes down the back
   for (let i = 0; i < 4; i++) { const sp = at(P(cn(0.07, 0.18), dark, { line: 0.12 }), -0.3 + i * 0.18, 0.98 - Math.abs(i - 1.2) * 0.06, 0); sp.rotation.z = 0.25; body.add(sp); }
   // the head on a neck, a snout, eyes, nostrils, a smile
   const head = new THREE.Group();
   head.position.set(0.36, 1.05, 0);
+  head.scale.setScalar(1.14);
   head.add(at(P(sph(0.28), colour), 0.06, 0.04, 0, 1.15, 0.95, 0.95));
+  for (const s of [-1, 1]) { const tooth = at(P(cn(0.03, 0.08), 0xffffff, { line: 0, shadow: false }), 0.4, -0.17, s * 0.09); tooth.rotation.z = Math.PI; head.add(tooth); }
   head.add(at(P(sph(0.2), colour), 0.3, -0.04, 0, 1.1, 0.8, 0.9));
   const eyes = [-1, 1].map((s) => { const e = at(eye(0.085), 0.12, 0.14, s * 0.2); e.lookAt(e.position.x + 0.7, e.position.y, e.position.z + s * 0.6); head.add(e); return e; });
   for (const s of [-1, 1]) head.add(at(P(sph(0.025), INK, { line: 0, shadow: false }), 0.5, 0.02, s * 0.07));
@@ -159,6 +162,14 @@ function chunk(i, mats) {
   ground.position.set(x0 + CHUNK / 2, -3, -6);
   ground.receiveShadow = true;
   g.add(ground);
+  const track = new THREE.Mesh(bx(CHUNK + 0.3, 0.02, 1.5), mats.track);
+  track.position.set(x0 + CHUNK / 2, 0.011, -0.05);
+  track.receiveShadow = true;
+  g.add(track);
+  for (let k = 0; k < 5; k++) {                     // tufts of dry grass along the track
+    const x = x0 + hash(i, k + 90) * CHUNK, z = (hash(k, i + 90) > 0.5 ? 1.1 : -1.3) - hash(i + 5, k) * 0.5;
+    for (let q = 0; q < 3; q++) { const blade = at(new THREE.Mesh(cn(0.035, 0.26), mats.grass), x + (q - 1) * 0.07, 0.12, z); blade.rotation.z = (q - 1) * 0.35; g.add(blade); }
+  }
   for (let k = 0; k < 10; k++) {
     const x = x0 + hash(i, k) * CHUNK, z = 1.4 + hash(k, i) * 2.5;
     g.add(at(new THREE.Mesh(sph(1), mats.pebble), x, 0, z, 0.08 + hash(i + 3, k) * 0.1, 0.05, 0.08));
@@ -199,7 +210,8 @@ export function createDinoScene(canvas, course) {
   Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 8, bottom: -6, near: 1, far: 50 });
   sun.shadow.bias = -0.0008;
   scene.add(hemi, sun, sun.target);
-  const mats = { sand: toon(s0.sand).clone(), dune: toon(s0.dune).clone(), mesa: toon(0xd98f63).clone(), pebble: toon(0xc9a36b), cloud: toon(0xffffff).clone() };
+  const mats = { sand: toon(s0.sand).clone(), dune: toon(s0.dune).clone(), mesa: toon(0xd98f63).clone(), pebble: toon(0xc9a36b), cloud: toon(0xffffff).clone(),
+    track: toon(s0.sand).clone(), grass: toon(0xc9b45a).clone() };
   const orb = new THREE.Mesh(new THREE.SphereGeometry(1.6, 24, 18), new THREE.MeshBasicMaterial({ color: s0.orb, fog: false }));
   scene.add(orb);
   const starPts = [];
@@ -227,7 +239,7 @@ export function createDinoScene(canvas, course) {
   }
 
   function obstaclesAround(sx) {
-    const lo = sx - 200, hi = sx + VIEW_W + 300;
+    const lo = sx - 260, hi = sx + VIEW_W + 300;
     for (const [i, g] of obs) { const o = course.list[i]; if (!o || o.x + o.w < lo || o.x > hi) { scene.remove(g); obs.delete(i); } }
     for (let i = 0; i < course.list.length; i++) {
       const o = course.list[i];
@@ -235,7 +247,12 @@ export function createDinoScene(canvas, course) {
       if (o.x > hi) break;
       if (!obs.has(i)) {
         const g = o.kind === "cactus" ? cactus(o, i) : bird();
-        g.position.set(o.x / U, o.lift / U, 0);
+        // The rules measure an obstacle from the dino (it is hit when o.x - s.x
+        // is about 12 to 34), and the dino is drawn DINO_X further along — so
+        // is the obstacle. Without DINO_X here every cactus was drawn 64 units
+        // behind where it really stood: you had to jump before it seemed to
+        // arrive, and the crash came as it passed under the tail.
+        g.position.set((o.x + DINO_X) / U, o.lift / U, 0);
         g.userData.kind = o.kind;
         scene.add(g);
         obs.set(i, g);
@@ -260,6 +277,8 @@ export function createDinoScene(canvas, course) {
     mix(A.sand, B.sand, mats.sand.color);
     mix(A.dune, B.dune, mats.dune.color);
     mats.mesa.color.copy(mats.dune.color).multiplyScalar(0.82);
+    mats.track.color.copy(mats.sand.color).lerp(cA.set(0xffffff), 0.28);
+    mats.grass.color.copy(mats.dune.color).multiplyScalar(0.8);
     mix(A.sun, B.sun, sun.color);
     mix(A.orb, B.orb, orb.material.color);
     const night = A.stars * (1 - k) + B.stars * k;

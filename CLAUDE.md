@@ -546,6 +546,16 @@ There is no test runner. What works:
   libx264 at 6 Mbps, E-AC-3 5.1, 8 minutes ≈ 400 MB). The movie screen
   (CallContext's `playFilm`) is tested on a temporary route that calls
   `useCall().playFilm(file)`; `window.__film()` is its Sound check.
+- **A film's decoders are replaced as they go** (`renew` in `playSound`,
+  `retireShared`, `within` in `filmSound.js`): the sound once stopped
+  mid-film and stayed gone after the film was closed and opened again —
+  the one ffmpeg kept for every film had died (it keeps memory from every
+  piece) and went on being used. Now nothing waits on a decoder for ever,
+  one that answers with nothing twice (or not at all) is swapped at once,
+  every decoder is swapped after `FRESH` pieces, and `openFilm` throws a
+  dead kept decoder away and loads another. `stats().renewed` counts the
+  swaps (the Sound check's "swapped"). Not reproduced: written from the
+  user's report.
 - **Subtitles come a stretch at a time** (`F.subtitles(n, { where, onPart,
   alive })` in `filmSound.js`): reading them means reading the film, and
   the whole of a 2 GB film took minutes on a phone with nothing on the

@@ -223,7 +223,7 @@ function SoundCheck({ diag }) {
       <div>video: {d.video.t}s {d.video.paused ? "paused" : "playing"} · muted {String(d.video.muted)} · browser decoded {String(d.video.decoded)}</div>
       <div>sending to call: {d.sending}</div>
       {s ? (<>
-        <div>decoder: {s.pieces} pieces ok, {s.failed} failed, last {s.ms} ms · loudest {s.peak.toFixed(2)} · audio engine {s.ctx} · player {s.player} · restarts {s.restarts} · decoders {s.workers} · ready ahead {s.ahead} · queued {s.queued} · {s.waiting ? "waiting" : s.playing ? "playing" : "idle"} · volume {s.vol.toFixed(2)}</div>
+        <div>decoder: {s.pieces} pieces ok, {s.failed} failed, last {s.ms} ms · loudest {s.peak.toFixed(2)} · audio engine {s.ctx} · player {s.player} · restarts {s.restarts} · decoders {s.workers} (swapped {s.renewed || 0}) · ready ahead {s.ahead} · queued {s.queued} · {s.waiting ? "waiting" : s.playing ? "playing" : "idle"} · volume {s.vol.toFixed(2)}</div>
         <div>in step: sound {Math.abs(s.off || 0)} ms {(s.off || 0) >= 0 ? "ahead of" : "behind"} the picture (worst {s.worst || 0}) · phone's delay {s.lat || 0} ms · pulled back {s.nudges || 0}× · restarted {s.resyncs || 0}× · picture stalled {s.stalls || 0}× · waited for sound {s.holds || 0}× (ran out {s.ranOut || 0}×) · a 10 s piece takes {s.est || "?"} ms{s.io ? ` · reading the file: ${s.io.n} reads, ${s.io.mb} MB, ${s.io.ms} ms` : ""}</div>
       </>) : <div>decoder: not playing</div>}
       {s && s.errs.map((e, i) => <div key={"e" + i} className="bad">{e}</div>)}

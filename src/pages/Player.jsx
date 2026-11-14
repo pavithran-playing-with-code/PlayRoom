@@ -412,7 +412,7 @@ export default function Player() {
                 <div>picture: {diag.v}</div>
                 {diag.s ? (
                   <div>
-                    decoder: {diag.s.pieces} pieces ok, {diag.s.failed} failed, last {diag.s.ms} ms · loudest {diag.s.peak.toFixed(2)} · sound engine {diag.s.ctx} · player {diag.s.player} · decoders {diag.s.workers} · ready ahead {diag.s.ahead} · {diag.s.waiting ? "waiting" : diag.s.playing ? "playing" : "idle"} · volume {Math.round(diag.s.vol * 100)}% · off {diag.s.off} ms
+                    decoder: {diag.s.pieces} pieces ok, {diag.s.failed} failed, last {diag.s.ms} ms · loudest {diag.s.peak.toFixed(2)} · sound engine {diag.s.ctx} · player {diag.s.player} · decoders {diag.s.workers} (swapped {diag.s.renewed || 0}) · ready ahead {diag.s.ahead} · {diag.s.waiting ? "waiting" : diag.s.playing ? "playing" : "idle"} · volume {Math.round(diag.s.vol * 100)}% · off {diag.s.off} ms
                     {diag.s.errs && diag.s.errs.length ? <div>ffmpeg: {diag.s.errs.join(" | ")}</div> : null}
                   </div>
                 ) : <div>decoded sound: not in use (the phone plays the file's own sound)</div>}

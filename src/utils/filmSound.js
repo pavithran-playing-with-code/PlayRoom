@@ -95,6 +95,25 @@ const getFF = () => {
 // it does one thing at a time
 let chain = Promise.resolve();
 const queued = (fn) => { const p = chain.then(fn, fn); chain = p.catch(() => {}); return p; };
+// A decoder can die in the middle of a film: ffmpeg in the browser keeps a
+// little memory from every piece it decodes, and after enough of them it runs
+// out and stops answering (or answers with nothing). The one decoder kept for
+// every film was then dead for good — sound gone mid-film, and still gone
+// after closing the film and opening it again, until the app was restarted.
+// So: nothing waits on a decoder for ever (`within`), one that has died is
+// thrown away and the next film loads a new one (`retireShared`), and a
+// film's decoders are swapped for fresh ones as they go (`renew`, below).
+const within = (p, ms) => new Promise((res, rej) => {
+  const t = setTimeout(() => rej(new Error("the decoder didn't answer")), ms);
+  p.then((v) => { clearTimeout(t); res(v); }, (e) => { clearTimeout(t); rej(e); });
+});
+function retireShared(ff) {
+  const mine = ffLoad;
+  if (mine) mine.then((x) => { if (x === ff && ffLoad === mine) ffLoad = null; }).catch(() => {});
+  chain = Promise.resolve();        // whatever was queued behind it is never coming back
+  try { ff.terminate(); } catch { /* gone already */ }
+}
+const FRESH = 60;                 // pieces a decoder decodes before it is swapped for a new one
 let mountN = 0;
 
 // Does the browser actually play this video's sound? Asked once it has
@@ -190,14 +209,28 @@ function parseVTT(txt) {
 }
 
 export async function openFilm(file) {
-  const ff = await getFF();
-  const dir = `/film${++mountN}`, path = `${dir}/${file.name}`;
-  await queued(async () => { await ff.createDir(dir); await ff.mount("WORKERFS", { files: [file] }, dir); });
-  const log = [];
-  const onLog = ({ message }) => log.push(message);
-  ff.on("log", onLog);
-  await queued(() => ff.exec(["-hide_banner", "-i", path]).catch(() => {}));
-  ff.off("log", onLog);
+  let ff = await getFF();
+  let dir = `/film${++mountN}`, path = `${dir}/${file.name}`;
+  let log = [];
+  // mount the file and ask what is in it. `sure`: no answer at all means the decoder is dead
+  const read = async (sure) => {
+    log = [];
+    const onLog = ({ message }) => log.push(message);
+    const f = ff, d = dir, pth = path;
+    await within(queued(async () => { await f.createDir(d); await f.mount("WORKERFS", { files: [file] }, d); }), 20000);
+    f.on("log", onLog);
+    try { await within(queued(() => f.exec(["-hide_banner", "-i", pth]).catch(() => {})), 45000); }
+    finally { try { f.off("log", onLog); } catch { /* gone */ } }
+    if (sure && !log.some((l) => /Input #/.test(l))) throw new Error("the decoder gave no answer");
+  };
+  try { await read(true); }
+  catch {
+    // the kept decoder has died (see retireShared): a new one, and once more
+    retireShared(ff);
+    ff = await getFF();
+    dir = `/film${++mountN}`; path = `${dir}/${file.name}`;
+    await read(false);
+  }
   const info = parseStreams(log);
   const F = {
     ...info,
@@ -361,7 +394,40 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
   const dur = () => (Number.isFinite(v.duration) ? v.duration : Infinity);
 
   // the decoders: this film's ffmpeg, and a second one of our own
-  const workers = [{ ff, path, busy: false }];
+  const workers = [{ ff, path, busy: false, n: 0, bad: 0 }];
+  const idle = (x) => !x.busy && !x.gone;
+  // A new decoder in this one's place. `dead`: it has stopped working (it is
+  // not used again, and its pieces go to the other one meanwhile); otherwise
+  // it has simply done FRESH pieces and is swapped before it runs out of
+  // memory — the old one works on until the new one is loaded.
+  const renew = (w, dead) => {
+    if (w.renewing || !file || !alive) return;
+    if (!dead && workers.some((x) => x.renewing)) return;                       // one at a time: the sound keeps coming
+    if (dead && !w.gone && w.renewedAt && performance.now() - w.renewedAt < 60000) return;   // (a film's last pieces come out short: not a reason to keep swapping)
+    w.renewing = true;
+    if (dead) w.gone = true;
+    st.renewed = (st.renewed || 0) + 1;
+    (async () => {
+      let f2 = null, ok = false;
+      try {
+        f2 = await newFF();
+        const d2 = `/w${tag}_${++mountN}`;
+        await f2.createDir(d2); await f2.mount("WORKERFS", { files: [file] }, d2);
+        while (alive && w.busy && !w.gone) await new Promise((r) => setTimeout(r, 120));   // let it finish the piece it is on
+        if (alive) {
+          const old = w.ff, wasOwn = w.own;
+          w.ff = f2; w.path = `${d2}/${file.name}`; w.own = true; w.n = 0; w.bad = 0; w.gone = false; w.renewedAt = performance.now();
+          ok = true;
+          if (wasOwn) { try { old.terminate(); } catch { /* gone */ } }
+          else if (dead) retireShared(old);              // the decoder kept for every film: the next film gets a new one
+        }
+      } catch { /* no new decoder this time */ }
+      if (!ok && f2) { try { f2.terminate(); } catch { /* gone */ } }
+      w.renewing = false;
+      if (!ok && alive && w.gone) setTimeout(() => renew(w, true), 5000);       // try again: it has no decoder at all
+      pump();
+    })();
+  };
   let second = null;
   const addSecond = () => {
     if (second || !file) return;
@@ -371,7 +437,7 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
       if (!alive) { f2.terminate(); return; }
       const dir = `/w${tag}`;
       await f2.createDir(dir); await f2.mount("WORKERFS", { files: [file] }, dir);
-      workers.push({ ff: f2, path: `${dir}/${file.name}`, busy: false, own: true });
+      workers.push({ ff: f2, path: `${dir}/${file.name}`, busy: false, own: true, n: 0, bad: 0 });
       st.workers = workers.length;
       pump();
     })().catch(() => {});
@@ -382,16 +448,26 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
     const o = `/s${tag}_${name}.raw`;
     // for tests: a decoder as slow as a phone's (window.__slowFF: ms of work per second of sound)
     if (typeof window !== "undefined" && window.__slowFF) await new Promise((r) => setTimeout(r, secs * window.__slowFF));
-    await w.ff.exec(["-hide_banner", "-loglevel", "error", "-probesize", "2000000", "-analyzeduration", "1000000",
+    const used = w.ff;
+    let hung = false;
+    await within(used.exec(["-hide_banner", "-loglevel", "error", "-probesize", "2000000", "-analyzeduration", "1000000",
       "-ss", String(from), "-i", w.path, "-t", String(secs),
       "-map", `0:a:${n}`, "-vn", "-sn", "-dn",
       // raw samples carry no times: a track that starts late, or has a hole in
       // it, would come out short and early. Fill those with silence.
       "-af", "aresample=async=1:first_pts=0",
-      "-ac", "2", "-ar", String(RATE), "-f", "s16le", o]).catch(() => {});
-    let data;
-    try { data = await w.ff.readFile(o); await w.ff.deleteFile(o); } catch { data = null; }
-    return data ? new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2)) : new Int16Array(0);
+      "-ac", "2", "-ar", String(RATE), "-f", "s16le", o]).catch(() => {}), Math.max(30000, secs * 6000)).catch(() => { hung = true; });
+    let data = null;
+    if (!hung) { try { data = await within(used.readFile(o), 10000); used.deleteFile(o).catch(() => {}); } catch { data = null; } }
+    const out = data ? new Int16Array(data.buffer, data.byteOffset, Math.floor(data.byteLength / 2)) : new Int16Array(0);
+    if (w.ff === used) {
+      // how this decoder is doing: nothing back twice running (or no answer at all) and it is replaced
+      w.n = (w.n || 0) + 1;
+      w.bad = out.length < RATE ? (w.bad || 0) + 1 : 0;
+      if (hung || w.bad >= 2) renew(w, true);
+      else if (w.n >= FRESH) renew(w, false);
+    }
+    return out;
   };
   // `room`: make it at least this many samples long (the rest silence)
   const toBuffer = (f, len, room = 0) => {
@@ -450,12 +526,12 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
     // first of all, the quick pieces for where the film is
     if (head) for (const part of head.parts) {
       if (part.buf || part.busy) continue;
-      const w = workers.find((x) => !x.busy);
+      const w = workers.find(idle);
       if (!w) break;
       startPart(head, part, w);
     }
     for (const w of workers) {
-      if (w.busy || !jobs.size) continue;
+      if (!idle(w) || !jobs.size) continue;
       let best = null, bs = Infinity;
       for (const k of jobs.keys()) { const sc = k >= cur ? k - cur : 100 + cur - k; if (sc < bs) { bs = sc; best = k; } }
       jobs.delete(best); busy.add(best); w.busy = true;

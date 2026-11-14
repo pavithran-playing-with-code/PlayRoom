@@ -19,10 +19,12 @@ import { api } from "../../utils/api";
 
 export const SETTLE_MS = 1200;
 
-export async function finalSync(roomCode, payload) {
+// `settle` false: I'm leaving a match that is still going (Quit) — nobody else
+// is reporting a last score at this instant, so there is nothing to wait for.
+export async function finalSync(roomCode, payload, settle = true) {
   if (!roomCode) return;
   try {
     await api.patch(`/api/rooms/${roomCode}/score`, payload);
   } catch { /* the stored score stands */ }
-  await new Promise((r) => setTimeout(r, SETTLE_MS));
+  if (settle) await new Promise((r) => setTimeout(r, SETTLE_MS));
 }

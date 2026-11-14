@@ -94,10 +94,34 @@ export default function GameFrame({
   // max 0: an unlimited match — no countdown, it ends when you leave
   const endless = !!timer && timer.max === 0;
   const [help, setHelp] = useState(false);          // the ? card: how to play
+  // Quit saves the score and asks the server for the result before the page
+  // changes: a second or so with nothing happening felt like a hang. So the
+  // tap is answered at once — a card over the game — and the work goes on
+  // behind it. (It lifts by itself if for some reason we're still here.)
+  const [leaving, setLeaving] = useState(false);
+  const leaveT = useRef(0);
+  useLayoutEffect(() => () => clearTimeout(leaveT.current), []);
+  const quit = () => {
+    if (leaving) return;
+    setLeaving(true);
+    clearTimeout(leaveT.current);
+    leaveT.current = setTimeout(() => setLeaving(false), 9000);
+    if (onQuit) onQuit();
+  };
 
   return (
     <div className={`gameshell${landscape ? " land" : ""}${bare ? " bare" : ""}`}>
       {landscape && <Sideways />}
+      {leaving && (
+        <div className="gf-bye" role="status" aria-live="polite">
+          <div className="gf-bye-card">
+            <span className="gf-bye-door" aria-hidden="true">🚪</span>
+            <b>{isSpectator ? "See you!" : "Good game!"}</b>
+            <small>{isSpectator ? "Heading back…" : "Saving your score…"}</small>
+            <span className="gf-bye-dots" aria-hidden="true"><i /><i /><i /></span>
+          </div>
+        </div>
+      )}
       {/* Full screen: the clock and the buttons float over the game */}
       {bare && (
         <div className="gf-float">
@@ -107,7 +131,7 @@ export default function GameFrame({
           )}
           {floatExtra}
           {howToFor(gameName) && !noHelp && <button type="button" className="gf-btn" onClick={() => setHelp(true)} aria-label="How to play">?</button>}
-          {!helpOnly && <button type="button" className="gf-btn gf-leave" onClick={onQuit} aria-label="Leave">✕ Leave</button>}
+          {!helpOnly && <button type="button" className="gf-btn gf-leave" onClick={quit} aria-label="Leave">✕ Leave</button>}
         </div>
       )}
       {/* Header: one row on a phone, roomier on bigger screens */}
@@ -145,7 +169,7 @@ export default function GameFrame({
             <button className="press p-white sm gb-help" onClick={() => setHelp(true)} aria-label="How to play">?</button>
           )}
           <FriendsDock max={compact ? 2 : 3} size={compact ? 26 : 30} />
-          <button className="press p-white sm gb-quit" onClick={onQuit} aria-label={isSpectator ? "Leave" : "Quit"}>
+          <button className="press p-white sm gb-quit" onClick={quit} aria-label={isSpectator ? "Leave" : "Quit"}>
             <span className="gb-quit-ic">{isSpectator ? "← " : "🚪 "}</span>{isSpectator ? "Leave" : "Quit"}
           </button>
         </div>

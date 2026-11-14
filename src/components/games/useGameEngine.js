@@ -274,7 +274,9 @@ export default function useGameEngine({
     endingRef.current = true;
     const p = payload();
     if (isOnline && !isSpectator) {
-      if (!finalRef.current) finalRef.current = finalSync(roomCode, p);
+      // Quit while the clock is still running: save and go, no pause (it made
+      // every Quit take two seconds). A match that has ended waits as before.
+      if (!finalRef.current) finalRef.current = finalSync(roomCode, p, overRef.current);
       await finalRef.current;
     }
     onGameEnd && onGameEnd(p.score, p.pairs_matched || 0, p.moves, wonRef.current);

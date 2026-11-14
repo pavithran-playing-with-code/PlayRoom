@@ -539,6 +539,23 @@ input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:tex
 .gf-btn:active{transform:skewX(-8deg) translateY(1px)}
 .gf-btn:focus-visible{outline:3px solid #37c8e6;outline-offset:2px}
 .gf-leave{color:#fff;background:rgba(224,69,44,.85);border-color:#e0452c}
+/* Quit tapped: a card over the game at once, while the score is saved */
+.gf-bye{position:absolute;inset:0;z-index:60;display:grid;place-items:center;background:rgba(27,18,48,.55);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);animation:gfByeIn .14s ease-out both}
+.gf-bye-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:18px 30px 16px;border-radius:24px;
+  background:var(--sun);color:var(--ink);border:3px solid var(--ink);box-shadow:0 6px 0 var(--ink);text-align:center;
+  animation:gfByePop .32s cubic-bezier(.3,1.5,.5,1) both}
+.gf-bye-card b{font-family:Fredoka,Nunito,sans-serif;font-size:1.35rem;line-height:1.1}
+.gf-bye-card small{font-size:.85rem;font-weight:700;opacity:.8}
+.gf-bye-door{font-size:2.4rem;line-height:1;animation:gfByeDoor .9s ease-in-out infinite}
+.gf-bye-dots{display:flex;gap:6px;margin-top:6px}
+.gf-bye-dots i{width:9px;height:9px;border-radius:50%;background:var(--ink);animation:gfByeDot .9s ease-in-out infinite}
+.gf-bye-dots i:nth-child(2){animation-delay:.15s}
+.gf-bye-dots i:nth-child(3){animation-delay:.3s}
+@keyframes gfByeIn{from{opacity:0}to{opacity:1}}
+@keyframes gfByePop{from{transform:scale(.6)}to{transform:scale(1)}}
+@keyframes gfByeDoor{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg) translateY(-4px)}}
+@keyframes gfByeDot{0%,100%{transform:translateY(0);opacity:.35}50%{transform:translateY(-6px);opacity:1}}
 .gf-clock{font-variant-numeric:tabular-nums;min-width:68px}
 .gf-clock.low{color:#fff;background:rgba(224,69,44,.9);border-color:#ffc83d}
 .gamefoot{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;flex-shrink:0;

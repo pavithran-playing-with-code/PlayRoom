@@ -400,6 +400,13 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
   // not used again, and its pieces go to the other one meanwhile); otherwise
   // it has simply done FRESH pieces and is swapped before it runs out of
   // memory — the old one works on until the new one is loaded.
+  // the new decoder goes in (the old one is not in the middle of a piece)
+  const swapIn = (w, nx, dead) => {
+    const old = w.ff, wasOwn = w.own;
+    w.ff = nx.ff; w.path = nx.path; w.next = null; w.own = true; w.n = 0; w.bad = 0; w.gone = false; w.renewing = false; w.renewedAt = performance.now();
+    if (wasOwn) { try { old.terminate(); } catch { /* gone */ } }
+    else if (dead) retireShared(old);                // the decoder kept for every film: the next film gets a new one
+  };
   const renew = (w, dead) => {
     if (w.renewing || !file || !alive) return;
     if (!dead && workers.some((x) => x.renewing)) return;                       // one at a time: the sound keeps coming
@@ -413,18 +420,19 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
         f2 = await newFF();
         const d2 = `/w${tag}_${++mountN}`;
         await f2.createDir(d2); await f2.mount("WORKERFS", { files: [file] }, d2);
-        while (alive && w.busy && !w.gone) await new Promise((r) => setTimeout(r, 120));   // let it finish the piece it is on
         if (alive) {
-          const old = w.ff, wasOwn = w.own;
-          w.ff = f2; w.path = `${d2}/${file.name}`; w.own = true; w.n = 0; w.bad = 0; w.gone = false; w.renewedAt = performance.now();
+          const nx = { ff: f2, path: `${d2}/${file.name}` };
           ok = true;
-          if (wasOwn) { try { old.terminate(); } catch { /* gone */ } }
-          else if (dead) retireShared(old);              // the decoder kept for every film: the next film gets a new one
+          // a dead one, or one doing nothing: now. One in the middle of a piece
+          // (on a slow phone it always is): as its next piece begins — `raw`.
+          if (w.gone || !w.busy) swapIn(w, nx, dead); else w.next = nx;
         }
       } catch { /* no new decoder this time */ }
-      if (!ok && f2) { try { f2.terminate(); } catch { /* gone */ } }
-      w.renewing = false;
-      if (!ok && alive && w.gone) setTimeout(() => renew(w, true), 5000);       // try again: it has no decoder at all
+      if (!ok) {
+        if (f2) { try { f2.terminate(); } catch { /* gone */ } }
+        w.renewing = false;
+        if (alive && w.gone) setTimeout(() => renew(w, true), 5000);            // try again: it has no decoder at all
+      }
       pump();
     })();
   };
@@ -448,6 +456,7 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
     const o = `/s${tag}_${name}.raw`;
     // for tests: a decoder as slow as a phone's (window.__slowFF: ms of work per second of sound)
     if (typeof window !== "undefined" && window.__slowFF) await new Promise((r) => setTimeout(r, secs * window.__slowFF));
+    if (w.next) swapIn(w, w.next, false);            // a fresh decoder was waiting for this moment
     const used = w.ff;
     let hung = false;
     await within(used.exec(["-hide_banner", "-loglevel", "error", "-probesize", "2000000", "-analyzeduration", "1000000",
@@ -776,7 +785,10 @@ async function playSound(ff, path, n, v, { onWait, file, start = false } = {}) {
       document.removeEventListener("pointerdown", wake, true);
       stopAll(); cache.clear(); jobs.clear();
       waitFlag(false);
-      for (const w of workers) if (w.own) { try { w.ff.terminate(); } catch { /* gone */ } }
+      for (const w of workers) {
+        if (w.own) { try { w.ff.terminate(); } catch { /* gone */ } }
+        if (w.next) { try { w.next.ff.terminate(); } catch { /* gone */ } w.next = null; }
+      }
       try { sink.pause(); sink.srcObject = null; sink.remove(); } catch { /* gone */ }
       ac.close().catch(() => {});
     },

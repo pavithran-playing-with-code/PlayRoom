@@ -224,6 +224,10 @@ export function CallProvider({ children }) {
   const [facing, setFacing] = useState("user");
   const [notice, setNotice] = useState(null);      // a short line after a call: { text, n }
   const [expanded, setExpanded] = useState(true);  // the full call screen, or the bubble
+  // Asked for from outside the call screen (a movie room's own button): open
+  // the call screen on its YouTube picker. A count, so each ask is a new one.
+  const [ytWant, setYtWant] = useState(0);
+  const askYt = useCallback(() => { setExpanded(true); setYtWant((n) => n + 1); }, []);
   const [screen, setScreen] = useState(null);      // the screen I'm sharing
   // A video of mine playing to the call: it plays here and goes to everyone
   // as my shared screen (picture and sound), so they need nothing.
@@ -1324,10 +1328,10 @@ export function CallProvider({ children }) {
 
   const value = useMemo(() => ({
     call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, setShareHelp, onHold, turn, elsewhere, moveHere, setHeldTurn, mics, setMics, listMics, chooseMic,
-    startCall, joinRoom, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null),
+    startCall, joinRoom, accept, decline, hangUp, toggleMic, toggleCam, flip, share, setExpanded, sendChat, setChatOpen, clearNotice: () => setNotice(null), ytWant, askYt,
     watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs, filmDiag,
   }), [call, ring, local, peers, mic, cam, facing, notice, expanded, myId, screen, chat, unread, chatOpen, shareHelp, onHold, turn, elsewhere, moveHere, mics, listMics, chooseMic,
-    startCall, joinRoom, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs, filmDiag]);
+    startCall, joinRoom, accept, decline, hangUp, toggleMic, toggleCam, flip, share, sendChat, setChatOpen, watch, watchFile, sendWatch, pickWatchFile, serverNow, say, film, playFilm, hideFilm, filmWait, filmVolume, filmTracks, filmAudio, filmSubs, filmDiag, ytWant, askYt]);
 
   return <CallContext.Provider value={value}>{children}</CallContext.Provider>;
 }

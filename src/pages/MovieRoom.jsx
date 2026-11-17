@@ -40,6 +40,19 @@ export default function MovieRoom({ code, room, players, user, onLeave }) {
     const link = `${window.location.origin}/room/${code}`;
     try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* shown on screen anyway */ }
   };
+  // YouTube together runs over the room's call (everyone's own YouTube player,
+  // kept in step), so it needs a second person here. It was only reachable
+  // from the Share button inside the call screen — nobody found it.
+  const [ytLater, setYtLater] = useState(false);     // asked for before the call was joined
+  const [ytNote, setYtNote] = useState(false);
+  const askYt = C.askYt;
+  const youtube = () => {
+    if (inCall) { askYt(); return; }
+    if (together) { setYtLater(true); C.joinRoom(code); return; }
+    setYtNote(true);
+  };
+  useEffect(() => { if (ytLater && inCall) { setYtLater(false); askYt(); } }, [ytLater, inCall, askYt]);
+  useEffect(() => { if (together) setYtNote(false); }, [together]);
   const chose = (e) => {
     const f = e.target.files && e.target.files[0];
     e.target.value = "";
@@ -62,13 +75,15 @@ export default function MovieRoom({ code, room, players, user, onLeave }) {
           <h2>{C.film ? C.film.name : "Movie room"}</h2>
           <p>{C.film
             ? (together ? "Playing for everyone here." : "Playing. When a friend walks in, they watch it with you.")
-            : together ? "Pick a movie from your phone and everyone here watches it with you, sound and all."
+            : together ? "Pick a movie from your phone and everyone here watches it with you, sound and all. Or watch YouTube together."
               : "Pick a movie from your phone and watch. When a friend walks in, they see it with you and you can talk."}</p>
           <div className="mn-btns">
             {C.film && <button className="press p-sun lg full" onClick={() => C.setExpanded(true)}>▶ Back to the movie</button>}
             <button className={`press ${C.film ? "p-white" : "p-sun lg"} full`} onClick={() => pick.current && pick.current.click()}>
               🎬 {C.film ? "Play a different movie" : "Pick a movie"}
             </button>
+            <button className="press p-white full" onClick={youtube}>▶️ YouTube together</button>
+            {ytNote && <p className="muted" style={{ fontSize: ".85rem", margin: "2px 0 0" }}>YouTube together starts once a friend is in the room: send them the link below, then tap it again.</p>}
             {together && !inCall && <button className="press p-white full" onClick={() => C.joinRoom(code)}>🎧 Join the others</button>}
             {inCall && !C.film && <button className="press p-white full" onClick={() => C.setExpanded(true)}>📺 Open the screen</button>}
           </div>

@@ -435,6 +435,9 @@ export default function CallLayer() {
   const [tapForSound, setTapForSound] = useState(false);
   const [shareMenu, setShareMenu] = useState(false); // 🎬 a video together, ▶️ YouTube, 🖥️ my screen
   const [ytOpen, setYtOpen] = useState(false);       // finding a YouTube video to watch together
+  // a movie room's "YouTube together" button asks for the picker from outside
+  const ytSeen = useRef(C.ytWant);
+  useEffect(() => { if (C.ytWant !== ytSeen.current) { ytSeen.current = C.ytWant; setYtOpen(true); } }, [C.ytWant]);
   const [picking, setPicking] = useState(false);   // the "add a friend" list
   const [swapped, setSwapped] = useState(false);   // one-to-one: me big, them in the corner (tap the corner to swap, like WhatsApp)
   const meDrag = useDrag(), chatDrag = useDrag();
